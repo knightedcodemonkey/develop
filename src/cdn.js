@@ -93,6 +93,46 @@ export const cdnImportSpecs = {
     esm: '@parcel/css-wasm',
     jspmGa: 'npm:@parcel/css-wasm',
   },
+  codemirrorState: {
+    importMap: '@codemirror/state',
+    esm: '@codemirror/state',
+    jspmGa: 'npm:@codemirror/state@6.5.2',
+  },
+  codemirrorView: {
+    importMap: '@codemirror/view',
+    esm: '@codemirror/view',
+    jspmGa: 'npm:@codemirror/view@6.38.6',
+  },
+  codemirrorCommands: {
+    importMap: '@codemirror/commands',
+    esm: '@codemirror/commands',
+    jspmGa: 'npm:@codemirror/commands@6.10.0',
+  },
+  codemirrorAutocomplete: {
+    importMap: '@codemirror/autocomplete',
+    esm: '@codemirror/autocomplete',
+    jspmGa: 'npm:@codemirror/autocomplete@6.20.0',
+  },
+  codemirrorLanguage: {
+    importMap: '@codemirror/language',
+    esm: '@codemirror/language',
+    jspmGa: 'npm:@codemirror/language@6.11.3',
+  },
+  codemirrorLezerHighlight: {
+    importMap: '@lezer/highlight',
+    esm: '@lezer/highlight',
+    jspmGa: 'npm:@lezer/highlight@1.2.3',
+  },
+  codemirrorLangJavascript: {
+    importMap: '@codemirror/lang-javascript',
+    esm: '@codemirror/lang-javascript',
+    jspmGa: 'npm:@codemirror/lang-javascript@6.2.4',
+  },
+  codemirrorLangCss: {
+    importMap: '@codemirror/lang-css',
+    esm: '@codemirror/lang-css',
+    jspmGa: 'npm:@codemirror/lang-css@6.3.1',
+  },
 }
 
 const getProviderPriority = () => {

@@ -87,6 +87,10 @@ npm run preview
 
 ## Notes
 
+Related docs:
+
+- `docs/code-mirror.md` for CodeMirror CDN integration rules, fallback behavior, and validation checklist.
+
 - In production, the preferred/default mode is import-map-based resolution (`window.__KNIGHTED_PRIMARY_CDN__ = "importMap"`).
 - In `importMap` mode, runtime resolution is import-map first; if a specifier is missing from the generated map, runtime falls back through the CDN
   provider chain configured in `src/cdn.js`.
