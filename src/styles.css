@@ -1,7 +1,7 @@
 :root {
   color-scheme: dark light;
   font-family:
-    "Inter",
+    'Inter',
     system-ui,
     -apple-system,
     sans-serif;
@@ -66,8 +66,8 @@ body {
   display: grid;
   grid-template-columns: repeat(2, minmax(320px, 1fr));
   grid-template-areas:
-    "component styles"
-    "preview preview";
+    'component styles'
+    'preview preview';
   gap: 18px;
   padding: 24px;
 }
@@ -88,9 +88,9 @@ body {
   .app-grid {
     grid-template-columns: minmax(0, 1fr);
     grid-template-areas:
-      "component"
-      "styles"
-      "preview";
+      'component'
+      'styles'
+      'preview';
   }
 }
 
@@ -172,7 +172,7 @@ textarea {
   color: #e8ebf3;
   border: none;
   padding: 16px 18px;
-  font-family: "JetBrains Mono", "Fira Code", monospace;
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
   font-size: 0.9rem;
   resize: none;
 }
@@ -194,8 +194,8 @@ textarea:focus {
   position: relative;
 }
 
-.preview-host[data-style-compiling="true"]::before {
-  content: "Compiling styles…";
+.preview-host[data-style-compiling='true']::before {
+  content: 'Compiling styles…';
   position: absolute;
   inset: 0;
   display: grid;
@@ -209,8 +209,8 @@ textarea:focus {
   z-index: 2;
 }
 
-.preview-host[data-style-compiling="true"]::after {
-  content: "";
+.preview-host[data-style-compiling='true']::after {
+  content: '';
   position: absolute;
   left: 50%;
   top: calc(50% - 18px);

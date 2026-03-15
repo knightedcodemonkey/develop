@@ -39,9 +39,7 @@
               <input id="auto-render" type="checkbox" checked />
               Auto render
             </label>
-            <button class="render-button" id="render-button" type="button">
-              Render
-            </button>
+            <button class="render-button" id="render-button" type="button">Render</button>
           </div>
         </div>
         <textarea id="jsx-editor" spellcheck="false"></textarea>
@@ -97,18 +95,6 @@
       </div>
     </div>
 
-    <script type="importmap">
-      {
-        "imports": {
-          "@knighted/jsx": "https://esm.sh/@knighted/jsx",
-          "@knighted/jsx/react": "https://esm.sh/@knighted/jsx/react",
-          "@knighted/jsx/transpile": "https://esm.sh/@knighted/jsx/transpile",
-          "property-information": "https://esm.sh/property-information@7.1.0",
-          "react": "https://esm.sh/react@19",
-          "react-dom/client": "https://esm.sh/react-dom@19/client"
-        }
-      }
-    </script>
-    <script type="module" src="app.js"></script>
+    <script type="module" src="bootstrap.js"></script>
   </body>
 </html>
