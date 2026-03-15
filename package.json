@@ -25,6 +25,7 @@
   },
   "devDependencies": {
     "http-server": "^14.1.1",
+    "jspm": "^4.4.0",
     "oxlint": "^1.55.0",
     "prettier": "^3.8.1"
   },

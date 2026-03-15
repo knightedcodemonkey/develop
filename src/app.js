@@ -1,6 +1,4 @@
-import { cssFromSource } from '@knighted/css/browser'
-import { jsx } from '@knighted/jsx'
-import { transpileJsxSource } from '@knighted/jsx/transpile'
+import { cdnImports, importFromCdnWithFallback } from './cdn.js'
 
 const statusNode = document.getElementById('status')
 const renderMode = document.getElementById('render-mode')
@@ -73,6 +71,7 @@ let reactRuntime = null
 let sassCompiler = null
 let lessCompiler = null
 let lightningCssWasm = null
+let coreRuntime = null
 let compiledStylesCache = {
   key: null,
   value: null,
@@ -84,6 +83,44 @@ const styleLabels = {
   module: 'CSS Modules',
   less: 'Less',
   sass: 'Sass',
+}
+
+const ensureCoreRuntime = async () => {
+  if (coreRuntime) return coreRuntime
+
+  try {
+    const [cssBrowser, jsxDom, jsxTranspile] = await Promise.all([
+      importFromCdnWithFallback(cdnImports.cssBrowser),
+      importFromCdnWithFallback(cdnImports.jsxDom),
+      importFromCdnWithFallback(cdnImports.jsxTranspile),
+    ])
+
+    if (typeof cssBrowser.module.cssFromSource !== 'function') {
+      throw new Error(`cssFromSource export was not found from ${cssBrowser.url}`)
+    }
+
+    if (typeof jsxDom.module.jsx !== 'function') {
+      throw new Error(`jsx export was not found from ${jsxDom.url}`)
+    }
+
+    if (typeof jsxTranspile.module.transpileJsxSource !== 'function') {
+      throw new Error(`transpileJsxSource export was not found from ${jsxTranspile.url}`)
+    }
+
+    coreRuntime = {
+      cssFromSource: cssBrowser.module.cssFromSource,
+      jsx: jsxDom.module.jsx,
+      transpileJsxSource: jsxTranspile.module.transpileJsxSource,
+    }
+
+    return coreRuntime
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : 'Unknown runtime module loading failure'
+    throw new Error(`Unable to load core runtime from CDN: ${message}`, {
+      cause: error,
+    })
+  }
 }
 
 const setStatus = text => {
@@ -284,8 +321,7 @@ const isSassCompiler = candidate =>
       typeof candidate.compile === 'function'),
   )
 
-const loadSassCompilerFrom = async url => {
-  const module = await import(url)
+const loadSassCompilerFrom = async (module, url) => {
   const candidates = [module.default, module, module.Sass, module.default?.Sass].filter(
     Boolean,
   )
@@ -303,33 +339,31 @@ const ensureSassCompiler = async () => {
   if (sassCompiler) return sassCompiler
 
   try {
-    sassCompiler = await loadSassCompilerFrom(
-      'https://esm.sh/sass@1.93.2?conditions=browser',
-    )
+    const loaded = await importFromCdnWithFallback(cdnImports.sass)
+    sassCompiler = await loadSassCompilerFrom(loaded.module, loaded.url)
     return sassCompiler
-  } catch (firstError) {
-    try {
-      sassCompiler = await loadSassCompilerFrom('https://jspm.dev/sass')
-      return sassCompiler
-    } catch (secondError) {
-      const message =
-        secondError instanceof Error
-          ? secondError.message
-          : firstError instanceof Error
-            ? firstError.message
-            : 'Unknown Sass module loading failure'
-      throw new Error(`Unable to load Sass compiler for browser usage: ${message}`, {
-        cause: secondError,
-      })
-    }
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : 'Unknown Sass module loading failure'
+    throw new Error(`Unable to load Sass compiler for browser usage: ${message}`, {
+      cause: error,
+    })
   }
 }
 
 const ensureLessCompiler = async () => {
   if (lessCompiler) return lessCompiler
-  const module = await import('https://esm.sh/less')
-  lessCompiler = module.default ?? module
-  return lessCompiler
+  try {
+    const loaded = await importFromCdnWithFallback(cdnImports.less)
+    lessCompiler = loaded.module.default ?? loaded.module
+    return lessCompiler
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : 'Unknown Less module loading failure'
+    throw new Error(`Unable to load Less compiler for browser usage: ${message}`, {
+      cause: error,
+    })
+  }
 }
 
 const resolveLightningTransform = module => {
@@ -344,8 +378,7 @@ const resolveLightningTransform = module => {
   return null
 }
 
-const tryLoadLightningCssWasm = async url => {
-  const module = await import(url)
+const tryLoadLightningCssWasm = async ({ module, url }) => {
   const hasNamedInit = typeof module.init === 'function'
   const hasNamedTransform = typeof module.transform === 'function'
 
@@ -368,33 +401,27 @@ const ensureLightningCssWasm = async () => {
   if (lightningCssWasm) return lightningCssWasm
 
   try {
-    lightningCssWasm = await tryLoadLightningCssWasm('https://esm.sh/@parcel/css-wasm')
+    const loaded = await importFromCdnWithFallback(cdnImports.lightningCssWasm)
+    lightningCssWasm = await tryLoadLightningCssWasm(loaded)
     return lightningCssWasm
-  } catch (firstError) {
-    try {
-      lightningCssWasm = await tryLoadLightningCssWasm('https://esm.sh/lightningcss-wasm')
-      return lightningCssWasm
-    } catch (secondError) {
-      if (secondError instanceof Error) {
-        throw new Error(`Unable to load Lightning CSS WASM: ${secondError.message}`, {
-          cause: secondError,
-        })
-      }
-      if (firstError instanceof Error) {
-        throw new Error(`Unable to load Lightning CSS WASM: ${firstError.message}`, {
-          cause: secondError,
-        })
-      }
-
-      throw new Error(
-        'Unable to load Lightning CSS WASM: Unknown module loading failure.',
-        { cause: secondError },
-      )
+  } catch (error) {
+    if (error instanceof Error) {
+      throw new Error(`Unable to load Lightning CSS WASM: ${error.message}`, {
+        cause: error,
+      })
     }
+
+    throw new Error(
+      'Unable to load Lightning CSS WASM: Unknown module loading failure.',
+      {
+        cause: error,
+      },
+    )
   }
 }
 
 const compileStyles = async () => {
+  const { cssFromSource } = await ensureCoreRuntime()
   const dialect = styleMode.value
   const cacheKey = `${dialect}\u0000${cssEditor.value}`
   if (compiledStylesCache.key === cacheKey && compiledStylesCache.value) {
@@ -458,6 +485,7 @@ const compileStyles = async () => {
 }
 
 const evaluateUserModule = async (helpers = {}) => {
+  const { jsx, transpileJsxSource } = await ensureCoreRuntime()
   const userCode = jsxEditor.value
     .replace(/^\s*export\s+default\s+function\b/gm, '__defaultExport = function')
     .replace(/^\s*export\s+default\s+class\b/gm, '__defaultExport = class')
@@ -488,17 +516,41 @@ const evaluateUserModule = async (helpers = {}) => {
 
 const ensureReactRuntime = async () => {
   if (reactRuntime) return reactRuntime
-  const [{ reactJsx }, React, { createRoot }] = await Promise.all([
-    import('@knighted/jsx/react'),
-    import('react'),
-    import('react-dom/client'),
-  ])
 
-  reactRuntime = { reactJsx, React, createRoot }
-  return reactRuntime
+  try {
+    const [jsxReact, react, reactDomClient] = await Promise.all([
+      importFromCdnWithFallback(cdnImports.jsxReact),
+      importFromCdnWithFallback(cdnImports.react),
+      importFromCdnWithFallback(cdnImports.reactDomClient),
+    ])
+
+    const reactJsx = jsxReact.module.reactJsx
+    const React = react.module.default ?? react.module
+    const createRoot = reactDomClient.module.createRoot
+
+    if (typeof reactJsx !== 'function') {
+      throw new Error(`reactJsx export was not found from ${jsxReact.url}`)
+    }
+    if (!React || typeof React.isValidElement !== 'function') {
+      throw new Error(`React runtime export was not found from ${react.url}`)
+    }
+    if (typeof createRoot !== 'function') {
+      throw new Error(`createRoot export was not found from ${reactDomClient.url}`)
+    }
+
+    reactRuntime = { reactJsx, React, createRoot }
+    return reactRuntime
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : 'Unknown React module loading failure'
+    throw new Error(`Unable to load React runtime from CDN: ${message}`, {
+      cause: error,
+    })
+  }
 }
 
 const renderDom = async () => {
+  const { jsx } = await ensureCoreRuntime()
   const target = getShadowRoot()
   clearTarget(target)
   const compiledStyles = await compileStyles()
