@@ -1,5 +1,6 @@
 {
   "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "plugins": ["import"],
   "categories": {
     "correctness": "error",
     "suspicious": "warn",
@@ -10,10 +11,15 @@
   "rules": {
     "no-console": "error",
     "no-unused-vars": "error",
-    "no-shadow": "error"
+    "no-shadow": "error",
+    "import/no-cycle": "error",
+    "import/no-duplicates": "error",
+    "import/no-self-import": "error",
+    "import/no-unresolved": "error"
   },
   "ignorePatterns": [
     "dist/**",
+    ".tmp-jspm-sass/**",
     "coverage/**",
     "vendor/**",
     "test/snapshots/**",

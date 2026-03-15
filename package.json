@@ -14,14 +14,17 @@
   "type": "module",
   "main": "index.js",
   "scripts": {
-    "dev": "http-server . -c-1 -o src/index.html",
+    "dev": "http-server . -a localhost -c-1 -o src/index.html",
+    "build:prepare": "node scripts/build-prepare.js",
+    "build:importmap": "node scripts/build-importmap.js",
+    "build": "npm run build:prepare && npm run build:importmap",
+    "build:esm": "KNIGHTED_PRIMARY_CDN=esm npm run build",
+    "build:jspm": "KNIGHTED_PRIMARY_CDN=jspmGa npm run build",
+    "build:importmap-mode": "KNIGHTED_PRIMARY_CDN=importMap npm run build",
+    "preview": "http-server dist -a localhost -c-1 -o index.html",
     "test": "echo \"Error: no test specified\" && exit 1",
     "prettier": "prettier --write .",
-    "lint": "oxlint"
-  },
-  "dependencies": {
-    "@knighted/css": "^1.2.0",
-    "@knighted/jsx": "^1.8.0"
+    "lint": "oxlint src scripts"
   },
   "devDependencies": {
     "http-server": "^14.1.1",

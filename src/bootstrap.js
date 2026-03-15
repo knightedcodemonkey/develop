@@ -15,6 +15,9 @@ const preloadImportKeys = [
   'reactDomClient',
 ]
 
+const isImportMapPrimary =
+  typeof globalThis !== 'undefined' && globalThis.__KNIGHTED_PRIMARY_CDN__ === 'importMap'
+
 const ensureModulePreloadLinks = hrefs => {
   for (const href of hrefs) {
     const existing = document.head.querySelector(
@@ -33,6 +36,8 @@ const ensureModulePreloadLinks = hrefs => {
   }
 }
 
-ensureModulePreloadLinks(getPrimaryCdnImportUrls(preloadImportKeys))
+if (!isImportMapPrimary) {
+  ensureModulePreloadLinks(getPrimaryCdnImportUrls(preloadImportKeys))
+}
 
 await import('./app.js')
