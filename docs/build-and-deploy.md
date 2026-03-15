@@ -87,9 +87,10 @@ npm run preview
 
 ## Notes
 
-- Runtime resolution is import-map first in production (`window.__KNIGHTED_PRIMARY_CDN__ = "importMap"`).
-- If a specifier is missing from the generated map, runtime falls back through the CDN
+- In production, the preferred/default mode is import-map-based resolution (`window.__KNIGHTED_PRIMARY_CDN__ = "importMap"`).
+- In `importMap` mode, runtime resolution is import-map first; if a specifier is missing from the generated map, runtime falls back through the CDN
   provider chain configured in `src/cdn.js`.
+- In `esm` and `jspmGa` modes, runtime resolution is handled entirely by the CDN provider chain configured in `src/cdn.js` without an import map.
 
 ### Sass Loading Gotchas
 
