@@ -1,0 +1,31 @@
+{
+  "name": "@knighted/develop",
+  "version": "0.1.0",
+  "description": "Develop UI components directly in the browser.",
+  "keywords": [
+    "ui",
+    "components",
+    "realtime",
+    "browser",
+    "development"
+  ],
+  "license": "MIT",
+  "author": "KCM <knightedcodemonkey@gmail.com>",
+  "type": "module",
+  "main": "index.js",
+  "scripts": {
+    "dev": "http-server . -c-1 -o src/index.html",
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "prettier": "prettier --write .",
+    "lint": "oxlint"
+  },
+  "dependencies": {
+    "@knighted/css": "^1.2.0",
+    "@knighted/jsx": "^1.8.0"
+  },
+  "devDependencies": {
+    "http-server": "^14.1.1",
+    "oxlint": "^1.55.0",
+    "prettier": "^3.8.1"
+  }
+}

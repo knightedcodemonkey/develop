@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>@knighted/develop</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <header class="app-header">
+      <div>
+        <h1>
+          <a
+            class="brand-link"
+            href="https://github.com/knightedcodemonkey/develop"
+            target="_blank"
+            rel="noreferrer"
+            >@knighted/develop</a
+          >
+        </h1>
+        <p>Develop UI components directly in the browser with live previews.</p>
+      </div>
+      <div class="status" id="status">Idle</div>
+    </header>
+
+    <main class="app-grid">
+      <section class="panel component-panel">
+        <div class="panel-header">
+          <h2>Component</h2>
+          <div class="controls">
+            <label>
+              Render mode
+              <select id="render-mode">
+                <option value="dom" selected>DOM (default)</option>
+                <option value="react">React</option>
+              </select>
+            </label>
+            <label class="toggle">
+              <input id="auto-render" type="checkbox" checked />
+              Auto render
+            </label>
+            <button class="render-button" id="render-button" type="button">
+              Render
+            </button>
+          </div>
+        </div>
+        <textarea id="jsx-editor" spellcheck="false"></textarea>
+      </section>
+
+      <section class="panel styles-panel">
+        <div class="panel-header">
+          <h2>Styles</h2>
+          <div class="controls">
+            <label>
+              Style mode
+              <select id="style-mode">
+                <option value="css" selected>Native CSS</option>
+                <option value="module">CSS Modules</option>
+                <option value="less">Less</option>
+                <option value="sass">Sass</option>
+              </select>
+            </label>
+          </div>
+        </div>
+        <textarea id="css-editor" spellcheck="false"></textarea>
+        <div class="panel-footer" id="style-warning"></div>
+      </section>
+
+      <section class="panel preview preview-panel">
+        <div class="panel-header">
+          <h2>Preview</h2>
+          <div class="controls">
+            <label class="toggle">
+              <input id="shadow-toggle" type="checkbox" checked />
+              ShadowRoot (open)
+            </label>
+          </div>
+        </div>
+        <div class="preview-host" id="preview-host"></div>
+      </section>
+    </main>
+
+    <footer class="app-footer">
+      <div>
+        Uses @knighted/jsx runtime with browser WASM parser from CDN and
+        @knighted/css/browser for in-browser CSS, CSS Modules, Less, and Sass.
+      </div>
+    </footer>
+
+    <div class="cdn-loading" id="cdn-loading" role="status" aria-live="polite">
+      <div class="cdn-loading-card">
+        <div class="cdn-loading-spinner" aria-hidden="true"></div>
+        <p class="cdn-loading-title">Loading playground assets…</p>
+        <p class="cdn-loading-copy">
+          Fetching runtimes and compilers from CDN. This can take a moment.
+        </p>
+      </div>
+    </div>
+
+    <script type="importmap">
+      {
+        "imports": {
+          "@knighted/jsx": "https://esm.sh/@knighted/jsx",
+          "@knighted/jsx/react": "https://esm.sh/@knighted/jsx/react",
+          "@knighted/jsx/transpile": "https://esm.sh/@knighted/jsx/transpile",
+          "property-information": "https://esm.sh/property-information@7.1.0",
+          "react": "https://esm.sh/react@19",
+          "react-dom/client": "https://esm.sh/react-dom@19/client"
+        }
+      }
+    </script>
+    <script type="module" src="app.js"></script>
+  </body>
+</html>
