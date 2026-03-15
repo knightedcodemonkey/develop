@@ -27,5 +27,11 @@
     "http-server": "^14.1.1",
     "oxlint": "^1.55.0",
     "prettier": "^3.8.1"
+  },
+  "prettier": {
+    "arrowParens": "avoid",
+    "printWidth": 90,
+    "semi": false,
+    "singleQuote": true
   }
 }

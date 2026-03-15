@@ -10,7 +10,13 @@
   "rules": {
     "no-console": "error",
     "no-unused-vars": "error",
-    "no-shadow": "error",
+    "no-shadow": "error"
   },
-  "ignorePatterns": ["dist/**", "coverage/**", "vendor/**", "test/snapshots/**", "node_modules/**"]
+  "ignorePatterns": [
+    "dist/**",
+    "coverage/**",
+    "vendor/**",
+    "test/snapshots/**",
+    "node_modules/**"
+  ]
 }
