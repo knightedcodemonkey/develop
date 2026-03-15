@@ -47,18 +47,22 @@ export const cdnImportSpecs = {
   cssBrowser: {
     importMap: '@knighted/css/browser',
     esm: '@knighted/css/browser',
+    jspmGa: 'npm:@knighted/css/browser',
   },
   jsxDom: {
     importMap: '@knighted/jsx',
     esm: '@knighted/jsx',
+    jspmGa: 'npm:@knighted/jsx',
   },
   jsxTranspile: {
     importMap: '@knighted/jsx/transpile',
     esm: '@knighted/jsx/transpile',
+    jspmGa: 'npm:@knighted/jsx/transpile',
   },
   jsxReact: {
     importMap: '@knighted/jsx/react',
     esm: '@knighted/jsx/react',
+    jspmGa: 'npm:@knighted/jsx/react',
   },
   react: {
     importMap: 'react',
@@ -77,14 +81,17 @@ export const cdnImportSpecs = {
       'sass@1.93.2/sass.default?conditions=browser',
     ],
     unpkg: 'sass@1.93.2/sass.default.js?module',
+    jspmGa: 'npm:sass@1.93.2/sass.default.js',
   },
   less: {
     importMap: 'less',
     esm: 'less',
+    jspmGa: 'npm:less',
   },
   lightningCssWasm: {
     importMap: '@parcel/css-wasm',
     esm: '@parcel/css-wasm',
+    jspmGa: 'npm:@parcel/css-wasm',
   },
 }
 

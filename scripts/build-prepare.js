@@ -72,10 +72,11 @@ await createProdImportsModule()
 const html = await readFile(distIndexHtml, 'utf8')
 
 if (!html.includes(productionRuntimeScript)) {
-  const moduleScriptTag = '<script type="module" src="bootstrap.js"></script>'
+  const bootstrapModuleScriptRegex =
+    /<script\b(?=[^>]*\btype=(['"])module\1)(?=[^>]*\bsrc=(['"])bootstrap\.js\2)[^>]*>\s*<\/script>/i
   const updatedHtml = html.replace(
-    moduleScriptTag,
-    `${productionRuntimeScript}\n    ${moduleScriptTag}`,
+    bootstrapModuleScriptRegex,
+    match => `${productionRuntimeScript}\n    ${match}`,
   )
 
   if (updatedHtml === html) {
