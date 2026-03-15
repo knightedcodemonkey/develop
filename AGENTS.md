@@ -44,6 +44,7 @@ Repository structure:
 - Preserve progressive loading behavior (lazy-load optional compilers/runtime pieces where possible).
 - Do not introduce bundler-only assumptions into src/ runtime code.
 - Prefer async/await over promise chains.
+- Do not use IIFE, find another pattern instead.
 
 ## CDN and runtime expectations
 

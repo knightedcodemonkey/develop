@@ -12,6 +12,13 @@
     "no-console": "error",
     "no-unused-vars": "error",
     "no-shadow": "error",
+    "no-restricted-syntax": [
+      "error",
+      {
+        "selector": "CallExpression[callee.type='MemberExpression'][callee.property.name=/^(then|catch|finally)$/]",
+        "message": "Prefer async/await over promise chains (.then/.catch/.finally)."
+      }
+    ],
     "import/no-cycle": "error",
     "import/no-duplicates": "error",
     "import/no-self-import": "error",

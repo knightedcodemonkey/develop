@@ -1,6 +1,7 @@
 import { cdnImports, importFromCdnWithFallback } from './cdn.js'
 
 let codeMirrorRuntime = null
+let codeMirrorRuntimePromise = null
 
 const resolveLanguageExtension = (runtime, language) => {
   if (language === 'javascript-jsx') {
@@ -18,9 +19,7 @@ const resolveLanguageExtension = (runtime, language) => {
   return runtime.css()
 }
 
-const ensureCodeMirrorRuntime = async () => {
-  if (codeMirrorRuntime) return codeMirrorRuntime
-
+const loadCodeMirrorRuntime = async () => {
   const [
     state,
     view,
@@ -92,8 +91,23 @@ const ensureCodeMirrorRuntime = async () => {
     throw new Error('CodeMirror runtime did not expose expected APIs.')
   }
 
-  codeMirrorRuntime = runtime
   return runtime
+}
+
+const ensureCodeMirrorRuntime = async () => {
+  if (codeMirrorRuntime) return codeMirrorRuntime
+  if (!codeMirrorRuntimePromise) {
+    codeMirrorRuntimePromise = loadCodeMirrorRuntime()
+  }
+
+  try {
+    const runtime = await codeMirrorRuntimePromise
+    codeMirrorRuntime = runtime
+    return runtime
+  } catch (error) {
+    codeMirrorRuntimePromise = null
+    throw error
+  }
 }
 
 export const createCodeMirrorEditor = async ({
