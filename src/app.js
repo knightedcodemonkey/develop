@@ -1,4 +1,5 @@
 import { cdnImports, importFromCdnWithFallback } from './cdn.js'
+import { createCodeMirrorEditor } from './editor-codemirror.js'
 
 const statusNode = document.getElementById('status')
 const renderMode = document.getElementById('render-mode')
@@ -65,6 +66,10 @@ button:focus-visible {
 jsxEditor.value = defaultJsx
 cssEditor.value = defaultCss
 
+let jsxCodeEditor = null
+let cssCodeEditor = null
+let getJsxSource = () => jsxEditor.value
+let getCssSource = () => cssEditor.value
 let scheduled = null
 let reactRoot = null
 let reactRuntime = null
@@ -83,6 +88,54 @@ const styleLabels = {
   module: 'CSS Modules',
   less: 'Less',
   sass: 'Sass',
+}
+
+const getStyleEditorLanguage = mode => {
+  if (mode === 'less') return 'less'
+  if (mode === 'sass') return 'sass'
+  return 'css'
+}
+
+const createEditorHost = textarea => {
+  const host = document.createElement('div')
+  host.className = 'editor-host'
+  textarea.before(host)
+  return host
+}
+
+const initializeCodeEditors = async () => {
+  const jsxHost = createEditorHost(jsxEditor)
+  const cssHost = createEditorHost(cssEditor)
+
+  try {
+    const [nextJsxEditor, nextCssEditor] = await Promise.all([
+      createCodeMirrorEditor({
+        parent: jsxHost,
+        value: defaultJsx,
+        language: 'javascript-jsx',
+        onChange: maybeRender,
+      }),
+      createCodeMirrorEditor({
+        parent: cssHost,
+        value: defaultCss,
+        language: getStyleEditorLanguage(styleMode.value),
+        onChange: maybeRender,
+      }),
+    ])
+
+    jsxCodeEditor = nextJsxEditor
+    cssCodeEditor = nextCssEditor
+    getJsxSource = () => jsxCodeEditor.getValue()
+    getCssSource = () => cssCodeEditor.getValue()
+
+    jsxEditor.classList.add('source-textarea--hidden')
+    cssEditor.classList.add('source-textarea--hidden')
+  } catch (error) {
+    jsxHost.remove()
+    cssHost.remove()
+    const message = error instanceof Error ? error.message : String(error)
+    setStatus(`Editor fallback: ${message}`)
+  }
 }
 
 const ensureCoreRuntime = async () => {
@@ -423,7 +476,8 @@ const ensureLightningCssWasm = async () => {
 const compileStyles = async () => {
   const { cssFromSource } = await ensureCoreRuntime()
   const dialect = styleMode.value
-  const cacheKey = `${dialect}\u0000${cssEditor.value}`
+  const cssSource = getCssSource()
+  const cacheKey = `${dialect}\u0000${cssSource}`
   if (compiledStylesCache.key === cacheKey && compiledStylesCache.value) {
     return compiledStylesCache.value
   }
@@ -432,7 +486,7 @@ const compileStyles = async () => {
   setStyleCompiling(shouldShowSpinner)
 
   if (!shouldShowSpinner) {
-    const output = { css: cssEditor.value, moduleExports: null }
+    const output = { css: cssSource, moduleExports: null }
     compiledStylesCache = {
       key: cacheKey,
       value: output,
@@ -459,7 +513,7 @@ const compileStyles = async () => {
       options.lightningcss = await ensureLightningCssWasm()
     }
 
-    const result = await cssFromSource(cssEditor.value, options)
+    const result = await cssFromSource(cssSource, options)
     if (!result.ok) {
       throw new Error(result.error.message)
     }
@@ -486,7 +540,7 @@ const compileStyles = async () => {
 
 const evaluateUserModule = async (helpers = {}) => {
   const { jsx, transpileJsxSource } = await ensureCoreRuntime()
-  const userCode = jsxEditor.value
+  const userCode = getJsxSource()
     .replace(/^\s*export\s+default\s+function\b/gm, '__defaultExport = function')
     .replace(/^\s*export\s+default\s+class\b/gm, '__defaultExport = class')
     .replace(/^\s*export\s+default\s+/gm, '__defaultExport = ')
@@ -633,7 +687,12 @@ const maybeRender = () => {
 }
 
 renderMode.addEventListener('change', maybeRender)
-styleMode.addEventListener('change', maybeRender)
+styleMode.addEventListener('change', () => {
+  if (cssCodeEditor) {
+    cssCodeEditor.setLanguage(getStyleEditorLanguage(styleMode.value))
+  }
+  maybeRender()
+})
 shadowToggle.addEventListener('change', maybeRender)
 autoRenderToggle.addEventListener('change', () => {
   if (autoRenderToggle.checked) {
@@ -646,4 +705,5 @@ cssEditor.addEventListener('input', maybeRender)
 
 setStyleCompiling(false)
 setCdnLoading(true)
+void initializeCodeEditors()
 renderPreview()
