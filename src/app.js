@@ -5,6 +5,7 @@ import { defaultCss, defaultJsx } from './defaults.js'
 const statusNode = document.getElementById('status')
 const appGrid = document.querySelector('.app-grid')
 const appGridLayoutButtons = document.querySelectorAll('[data-app-grid-layout]')
+const appThemeButtons = document.querySelectorAll('[data-app-theme]')
 const renderMode = document.getElementById('render-mode')
 const autoRenderToggle = document.getElementById('auto-render')
 const renderButton = document.getElementById('render-button')
@@ -45,8 +46,10 @@ let compiledStylesCache = {
 let pendingClearAction = null
 let hasCompletedInitialRender = false
 let previewBackgroundColor = null
+let previewBackgroundCustomized = false
 const clipboardSupported = Boolean(navigator.clipboard?.writeText)
 const appGridLayoutStorageKey = 'knighted-develop:app-grid-layout'
+const appThemeStorageKey = 'knighted-develop:theme'
 
 const styleLabels = {
   css: 'Native CSS',
@@ -180,6 +183,41 @@ const getInitialAppGridLayout = () => {
   }
 
   return 'default'
+}
+
+const applyTheme = (theme, { persist = true } = {}) => {
+  if (!['dark', 'light'].includes(theme)) {
+    return
+  }
+
+  document.documentElement.dataset.theme = theme
+  syncPreviewBackgroundPickerFromTheme()
+
+  for (const button of appThemeButtons) {
+    const isActive = button.dataset.appTheme === theme
+    button.setAttribute('aria-pressed', isActive ? 'true' : 'false')
+  }
+
+  if (persist) {
+    try {
+      localStorage.setItem(appThemeStorageKey, theme)
+    } catch {
+      /* Ignore storage write errors in restricted browsing modes. */
+    }
+  }
+}
+
+const getInitialTheme = () => {
+  try {
+    const value = localStorage.getItem(appThemeStorageKey)
+    if (value === 'dark' || value === 'light') {
+      return value
+    }
+  } catch {
+    /* Ignore storage read errors in restricted browsing modes. */
+  }
+
+  return 'dark'
 }
 
 const setCdnLoading = isLoading => {
@@ -326,7 +364,24 @@ const applyPreviewBackgroundColor = color => {
     return
   }
 
-  previewHost.style.backgroundColor = color
+  if (typeof color === 'string' && color.length > 0) {
+    previewHost.style.backgroundColor = color
+    return
+  }
+
+  previewHost.style.removeProperty('background-color')
+}
+
+const syncPreviewBackgroundPickerFromTheme = () => {
+  if (!previewBgColorInput || !previewHost || previewBackgroundCustomized) {
+    return
+  }
+
+  previewBackgroundColor = null
+  applyPreviewBackgroundColor(null)
+  previewBgColorInput.value = normalizeColorToHex(
+    getComputedStyle(previewHost).backgroundColor,
+  )
 }
 
 const initializePreviewBackgroundPicker = () => {
@@ -335,12 +390,14 @@ const initializePreviewBackgroundPicker = () => {
   }
 
   const initialColor = normalizeColorToHex(getComputedStyle(previewHost).backgroundColor)
-  previewBackgroundColor = initialColor
+  previewBackgroundColor = null
+  previewBackgroundCustomized = false
   previewBgColorInput.value = initialColor
-  applyPreviewBackgroundColor(initialColor)
+  applyPreviewBackgroundColor(null)
 
   previewBgColorInput.addEventListener('input', () => {
     previewBackgroundColor = previewBgColorInput.value
+    previewBackgroundCustomized = true
     applyPreviewBackgroundColor(previewBackgroundColor)
   })
 }
@@ -352,9 +409,7 @@ const recreatePreviewHost = () => {
   previewHost.replaceWith(nextHost)
   previewHost = nextHost
 
-  if (previewBackgroundColor) {
-    applyPreviewBackgroundColor(previewBackgroundColor)
-  }
+  applyPreviewBackgroundColor(previewBackgroundColor)
 }
 
 const getRenderTarget = () => {
@@ -942,7 +997,18 @@ for (const button of appGridLayoutButtons) {
   })
 }
 
+for (const button of appThemeButtons) {
+  button.addEventListener('click', () => {
+    const nextTheme = button.dataset.appTheme
+    if (!nextTheme) {
+      return
+    }
+    applyTheme(nextTheme)
+  })
+}
+
 applyAppGridLayout(getInitialAppGridLayout(), { persist: false })
+applyTheme(getInitialTheme(), { persist: false })
 
 updateRenderButtonVisibility()
 setStyleCompiling(false)

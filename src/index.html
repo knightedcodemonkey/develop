@@ -70,6 +70,43 @@
             <rect x="13" y="13" width="8" height="8" rx="1"></rect>
           </svg>
         </button>
+
+        <div class="app-grid-theme-controls" role="group" aria-label="Theme">
+          <button
+            class="layout-toggle"
+            id="theme-dark"
+            type="button"
+            data-app-theme="dark"
+            aria-pressed="true"
+            title="Use dark theme"
+            aria-label="Use dark theme"
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M21 13.5A8.5 8.5 0 1 1 10.5 3 6.8 6.8 0 0 0 21 13.5z"></path>
+            </svg>
+          </button>
+          <button
+            class="layout-toggle"
+            id="theme-light"
+            type="button"
+            data-app-theme="light"
+            aria-pressed="false"
+            title="Use light theme"
+            aria-label="Use light theme"
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <circle cx="12" cy="12" r="4"></circle>
+              <path d="M12 2v3"></path>
+              <path d="M12 19v3"></path>
+              <path d="M2 12h3"></path>
+              <path d="M19 12h3"></path>
+              <path d="m4.93 4.93 2.12 2.12"></path>
+              <path d="m16.95 16.95 2.12 2.12"></path>
+              <path d="m19.07 4.93-2.12 2.12"></path>
+              <path d="m7.05 16.95-2.12 2.12"></path>
+            </svg>
+          </button>
+        </div>
       </div>
 
       <section class="panel component-panel">

@@ -118,17 +118,49 @@ export const createCodeMirrorEditor = async ({
   onFocus,
 }) => {
   const runtime = await ensureCodeMirrorRuntime()
+  const editorColors = {
+    keyword: 'var(--cm-keyword)',
+    name: 'var(--cm-name)',
+    property: 'var(--cm-property)',
+    fn: 'var(--cm-function)',
+    constant: 'var(--cm-constant)',
+    definition: 'var(--cm-definition)',
+    type: 'var(--cm-type)',
+    number: 'var(--cm-number)',
+    operator: 'var(--cm-operator)',
+    string: 'var(--cm-string)',
+    comment: 'var(--cm-comment)',
+    link: 'var(--cm-link)',
+    heading: 'var(--cm-heading)',
+    atom: 'var(--cm-atom)',
+    invalid: 'var(--cm-invalid)',
+    text: 'var(--cm-text)',
+    caret: 'var(--cm-caret)',
+    gutterBg: 'var(--cm-gutter-bg)',
+    gutterBorder: 'var(--cm-gutter-border)',
+    gutterText: 'var(--cm-gutter-text)',
+    selection: 'var(--cm-selection)',
+    activeLine: 'var(--cm-active-line)',
+    focusRing: 'var(--cm-focus-ring)',
+    tooltipBg: 'var(--cm-tooltip-bg)',
+    tooltipText: 'var(--cm-tooltip-text)',
+    tooltipBorder: 'var(--cm-tooltip-border)',
+    tooltipItem: 'var(--cm-tooltip-item)',
+    tooltipItemSelectedBg: 'var(--cm-tooltip-item-selected-bg)',
+    tooltipItemSelectedText: 'var(--cm-tooltip-item-selected-text)',
+  }
+
   const languageCompartment = new runtime.Compartment()
   const editorHighlightStyle = runtime.HighlightStyle.define([
-    { tag: runtime.tags.keyword, color: '#ff7fb3', fontWeight: '600' },
-    { tag: [runtime.tags.name, runtime.tags.deleted], color: '#e7ecf9' },
+    { tag: runtime.tags.keyword, color: editorColors.keyword, fontWeight: '600' },
+    { tag: [runtime.tags.name, runtime.tags.deleted], color: editorColors.name },
     {
       tag: [runtime.tags.character, runtime.tags.propertyName, runtime.tags.macroName],
-      color: '#3fd6a6',
+      color: editorColors.property,
     },
     {
       tag: [runtime.tags.function(runtime.tags.variableName), runtime.tags.labelName],
-      color: '#8dc8ff',
+      color: editorColors.fn,
     },
     {
       tag: [
@@ -136,15 +168,15 @@ export const createCodeMirrorEditor = async ({
         runtime.tags.constant(runtime.tags.name),
         runtime.tags.standard(runtime.tags.name),
       ],
-      color: '#7fd7ff',
+      color: editorColors.constant,
     },
     {
       tag: [runtime.tags.definition(runtime.tags.name), runtime.tags.separator],
-      color: '#dce4f6',
+      color: editorColors.definition,
     },
     {
       tag: [runtime.tags.className, runtime.tags.typeName],
-      color: '#8eb8ff',
+      color: editorColors.type,
       fontWeight: '600',
     },
     {
@@ -156,19 +188,19 @@ export const createCodeMirrorEditor = async ({
         runtime.tags.self,
         runtime.tags.namespace,
       ],
-      color: '#ffcb82',
+      color: editorColors.number,
     },
     {
       tag: [runtime.tags.operator, runtime.tags.operatorKeyword],
-      color: '#d5def0',
+      color: editorColors.operator,
     },
     {
       tag: [runtime.tags.string, runtime.tags.special(runtime.tags.string)],
-      color: '#ffd38e',
+      color: editorColors.string,
     },
     {
       tag: [runtime.tags.meta, runtime.tags.comment],
-      color: '#94a2bb',
+      color: editorColors.comment,
       fontStyle: 'italic',
     },
     {
@@ -181,12 +213,12 @@ export const createCodeMirrorEditor = async ({
     },
     {
       tag: runtime.tags.link,
-      color: '#88b6ff',
+      color: editorColors.link,
       textDecoration: 'underline',
     },
     {
       tag: runtime.tags.heading,
-      color: '#f2f5ff',
+      color: editorColors.heading,
       fontWeight: '700',
     },
     {
@@ -195,19 +227,19 @@ export const createCodeMirrorEditor = async ({
         runtime.tags.bool,
         runtime.tags.special(runtime.tags.variableName),
       ],
-      color: '#b8a8ff',
+      color: editorColors.atom,
     },
     {
       tag: runtime.tags.invalid,
-      color: '#ff8fa1',
-      textDecoration: 'underline wavy #ff8fa1',
+      color: editorColors.invalid,
+      textDecoration: `underline wavy ${editorColors.invalid}`,
     },
   ])
   const editorTheme = runtime.EditorView.theme({
     '&': {
       height: '100%',
       backgroundColor: 'transparent',
-      color: '#edf2ff',
+      color: editorColors.text,
       fontSize: '0.9rem',
       fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
     },
@@ -218,39 +250,39 @@ export const createCodeMirrorEditor = async ({
     '.cm-content': {
       padding: '16px 18px',
       minHeight: '100%',
-      caretColor: '#f1f5ff',
+      caretColor: editorColors.caret,
     },
     '.cm-gutters': {
-      backgroundColor: 'rgba(255, 255, 255, 0.045)',
-      borderRight: '1px solid rgba(255, 255, 255, 0.13)',
-      color: '#98a8c4',
+      backgroundColor: editorColors.gutterBg,
+      borderRight: `1px solid ${editorColors.gutterBorder}`,
+      color: editorColors.gutterText,
     },
     '.cm-lineNumbers .cm-gutterElement': {
       padding: '0 10px 0 14px',
     },
     '&.cm-focused .cm-cursor': {
-      borderLeftColor: '#f1f5ff',
+      borderLeftColor: editorColors.caret,
     },
     '&.cm-focused .cm-selectionBackground, ::selection': {
-      backgroundColor: 'rgba(122, 107, 255, 0.36)',
+      backgroundColor: editorColors.selection,
     },
     '&.cm-focused .cm-activeLine': {
-      backgroundColor: 'rgba(255, 255, 255, 0.08)',
+      backgroundColor: editorColors.activeLine,
     },
     '&.cm-focused': {
-      outline: '1px solid rgba(122, 107, 255, 0.62)',
+      outline: `1px solid ${editorColors.focusRing}`,
     },
     '.cm-tooltip': {
-      backgroundColor: '#1b2233',
-      color: '#edf2ff',
-      border: '1px solid rgba(152, 168, 196, 0.32)',
+      backgroundColor: editorColors.tooltipBg,
+      color: editorColors.tooltipText,
+      border: `1px solid ${editorColors.tooltipBorder}`,
     },
     '.cm-tooltip-autocomplete > ul > li': {
-      color: '#dce6fa',
+      color: editorColors.tooltipItem,
     },
     '.cm-tooltip-autocomplete > ul > li[aria-selected]': {
-      backgroundColor: 'rgba(122, 107, 255, 0.34)',
-      color: '#f4f7ff',
+      backgroundColor: editorColors.tooltipItemSelectedBg,
+      color: editorColors.tooltipItemSelectedText,
     },
   })
   const updateListener = runtime.EditorView.updateListener.of(update => {
