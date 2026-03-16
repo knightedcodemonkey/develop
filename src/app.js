@@ -5,11 +5,14 @@ const statusNode = document.getElementById('status')
 const renderMode = document.getElementById('render-mode')
 const autoRenderToggle = document.getElementById('auto-render')
 const renderButton = document.getElementById('render-button')
+const copyComponentButton = document.getElementById('copy-component')
+const clearComponentButton = document.getElementById('clear-component')
 const styleMode = document.getElementById('style-mode')
+const copyStylesButton = document.getElementById('copy-styles')
+const clearStylesButton = document.getElementById('clear-styles')
 const shadowToggle = document.getElementById('shadow-toggle')
 const jsxEditor = document.getElementById('jsx-editor')
 const cssEditor = document.getElementById('css-editor')
-const previewHost = document.getElementById('preview-host')
 const styleWarning = document.getElementById('style-warning')
 const cdnLoading = document.getElementById('cdn-loading')
 
@@ -66,6 +69,7 @@ button:focus-visible {
 jsxEditor.value = defaultJsx
 cssEditor.value = defaultCss
 
+let previewHost = document.getElementById('preview-host')
 let jsxCodeEditor = null
 let cssCodeEditor = null
 let getJsxSource = () => jsxEditor.value
@@ -196,7 +200,87 @@ const debounceRender = () => {
   scheduled = setTimeout(renderPreview, 200)
 }
 
-const getShadowRoot = () => {
+const setJsxSource = value => {
+  if (jsxCodeEditor) {
+    jsxCodeEditor.setValue(value)
+  }
+  jsxEditor.value = value
+}
+
+const setCssSource = value => {
+  if (cssCodeEditor) {
+    cssCodeEditor.setValue(value)
+  }
+  cssEditor.value = value
+}
+
+const clearComponentSource = () => {
+  setJsxSource('')
+  maybeRender()
+}
+
+const clearStylesSource = () => {
+  setCssSource('')
+  maybeRender()
+}
+
+const copyTextToClipboard = async text => {
+  if (navigator.clipboard?.writeText) {
+    await navigator.clipboard.writeText(text)
+    return
+  }
+
+  const fallbackInput = document.createElement('textarea')
+  fallbackInput.value = text
+  fallbackInput.setAttribute('readonly', 'true')
+  fallbackInput.style.position = 'absolute'
+  fallbackInput.style.left = '-9999px'
+  document.body.append(fallbackInput)
+  fallbackInput.select()
+  const ok = document.execCommand('copy')
+  fallbackInput.remove()
+
+  if (!ok) {
+    throw new Error('Clipboard copy is not available in this browser context.')
+  }
+}
+
+const copyComponentSource = async () => {
+  try {
+    await copyTextToClipboard(getJsxSource())
+    setStatus('Component copied')
+  } catch {
+    setStatus('Copy failed')
+  }
+}
+
+const copyStylesSource = async () => {
+  try {
+    await copyTextToClipboard(getCssSource())
+    setStatus('Styles copied')
+  } catch {
+    setStatus('Copy failed')
+  }
+}
+
+const recreatePreviewHost = () => {
+  const nextHost = document.createElement('div')
+  nextHost.id = 'preview-host'
+  nextHost.className = previewHost.className
+  previewHost.replaceWith(nextHost)
+  previewHost = nextHost
+}
+
+const getRenderTarget = () => {
+  if (!shadowToggle.checked && previewHost.shadowRoot) {
+    /* ShadowRoot cannot be detached, so recreate the host for light DOM mode. */
+    if (reactRoot) {
+      reactRoot.unmount()
+      reactRoot = null
+    }
+    recreatePreviewHost()
+  }
+
   if (shadowToggle.checked) {
     if (!previewHost.shadowRoot) {
       previewHost.attachShadow({ mode: 'open' })
@@ -605,7 +689,7 @@ const ensureReactRuntime = async () => {
 
 const renderDom = async () => {
   const { jsx } = await ensureCoreRuntime()
-  const target = getShadowRoot()
+  const target = getRenderTarget()
   clearTarget(target)
   const compiledStyles = await compileStyles()
   applyStyles(target, compiledStyles.css)
@@ -627,7 +711,7 @@ const renderDom = async () => {
 }
 
 const renderReact = async () => {
-  const target = getShadowRoot()
+  const target = getRenderTarget()
   clearTarget(target)
   const compiledStyles = await compileStyles()
   applyStyles(target, compiledStyles.css)
@@ -666,7 +750,7 @@ const renderPreview = async () => {
     setStatus('Rendered')
   } catch (error) {
     setStatus('Error')
-    const target = getShadowRoot()
+    const target = getRenderTarget()
     clearTarget(target)
     const message = document.createElement('pre')
     message.textContent = error instanceof Error ? error.message : String(error)
@@ -686,6 +770,10 @@ const maybeRender = () => {
   }
 }
 
+const updateRenderButtonVisibility = () => {
+  renderButton.hidden = autoRenderToggle.checked
+}
+
 renderMode.addEventListener('change', maybeRender)
 styleMode.addEventListener('change', () => {
   if (cssCodeEditor) {
@@ -695,14 +783,24 @@ styleMode.addEventListener('change', () => {
 })
 shadowToggle.addEventListener('change', maybeRender)
 autoRenderToggle.addEventListener('change', () => {
+  updateRenderButtonVisibility()
   if (autoRenderToggle.checked) {
     renderPreview()
   }
 })
 renderButton.addEventListener('click', renderPreview)
+copyComponentButton.addEventListener('click', () => {
+  void copyComponentSource()
+})
+clearComponentButton.addEventListener('click', clearComponentSource)
+copyStylesButton.addEventListener('click', () => {
+  void copyStylesSource()
+})
+clearStylesButton.addEventListener('click', clearStylesSource)
 jsxEditor.addEventListener('input', maybeRender)
 cssEditor.addEventListener('input', maybeRender)
 
+updateRenderButtonVisibility()
 setStyleCompiling(false)
 setCdnLoading(true)
 void initializeCodeEditors()

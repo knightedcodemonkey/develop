@@ -1,13 +1,17 @@
 {
   "name": "@knighted/develop",
   "version": "0.1.0",
-  "description": "Develop UI components directly in the browser.",
+  "description": "Develop UI components directly in the browser using JSX and CSS.",
   "keywords": [
     "ui",
     "components",
     "realtime",
     "browser",
-    "development"
+    "development",
+    "jsx",
+    "css",
+    "importmap",
+    "cdn"
   ],
   "license": "MIT",
   "author": "KCM <knightedcodemonkey@gmail.com>",

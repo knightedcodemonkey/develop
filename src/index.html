@@ -25,39 +25,115 @@
 
     <main class="app-grid">
       <section class="panel component-panel">
-        <div class="panel-header">
-          <h2>Component</h2>
-          <div class="controls">
-            <label>
-              Render mode
-              <select id="render-mode">
-                <option value="dom" selected>DOM (default)</option>
-                <option value="react">React</option>
-              </select>
-            </label>
-            <label class="toggle">
-              <input id="auto-render" type="checkbox" checked />
-              Auto render
-            </label>
-            <button class="render-button" id="render-button" type="button">Render</button>
+        <div class="panel-header panel-header--stack">
+          <div class="panel-header-row">
+            <h2>Component</h2>
+          </div>
+          <div class="panel-header-row panel-header-row--quick-actions">
+            <div class="controls controls--actions controls--quick-actions">
+              <button
+                class="icon-button"
+                id="copy-component"
+                type="button"
+                title="Copy component source"
+                aria-label="Copy component source"
+              >
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <rect x="9" y="9" width="10" height="10" rx="2"></rect>
+                  <path
+                    d="M6 15H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v1"
+                  ></path>
+                </svg>
+              </button>
+              <button
+                class="icon-button"
+                id="clear-component"
+                type="button"
+                title="Clear component source"
+                aria-label="Clear component source"
+              >
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M4 7h16"></path>
+                  <path d="M10 11v6"></path>
+                  <path d="M14 11v6"></path>
+                  <path d="M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12"></path>
+                  <path d="M9 7V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v3"></path>
+                </svg>
+              </button>
+            </div>
+          </div>
+          <div class="panel-header-row panel-header-row--actions">
+            <div class="controls controls--actions">
+              <button class="render-button" id="render-button" type="button">
+                Render
+              </button>
+              <label class="toggle">
+                <input id="auto-render" type="checkbox" checked />
+                Auto render
+              </label>
+              <label>
+                <span class="sr-only">Render mode</span>
+                <select id="render-mode">
+                  <option value="dom" selected>DOM</option>
+                  <option value="react">React</option>
+                </select>
+              </label>
+            </div>
           </div>
         </div>
         <textarea id="jsx-editor" spellcheck="false"></textarea>
       </section>
 
       <section class="panel styles-panel">
-        <div class="panel-header">
-          <h2>Styles</h2>
-          <div class="controls">
-            <label>
-              Style mode
-              <select id="style-mode">
-                <option value="css" selected>Native CSS</option>
-                <option value="module">CSS Modules</option>
-                <option value="less">Less</option>
-                <option value="sass">Sass</option>
-              </select>
-            </label>
+        <div class="panel-header panel-header--stack">
+          <div class="panel-header-row">
+            <h2>Styles</h2>
+          </div>
+          <div class="panel-header-row panel-header-row--quick-actions">
+            <div class="controls controls--actions controls--quick-actions">
+              <button
+                class="icon-button"
+                id="copy-styles"
+                type="button"
+                title="Copy styles source"
+                aria-label="Copy styles source"
+              >
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <rect x="9" y="9" width="10" height="10" rx="2"></rect>
+                  <path
+                    d="M6 15H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v1"
+                  ></path>
+                </svg>
+              </button>
+              <button
+                class="icon-button"
+                id="clear-styles"
+                type="button"
+                title="Clear styles source"
+                aria-label="Clear styles source"
+              >
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M4 7h16"></path>
+                  <path d="M10 11v6"></path>
+                  <path d="M14 11v6"></path>
+                  <path d="M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12"></path>
+                  <path d="M9 7V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v3"></path>
+                </svg>
+              </button>
+            </div>
+          </div>
+          <div class="panel-header-row panel-header-row--actions">
+            <div class="controls controls--actions">
+              <label>
+                <span class="sr-only">Style mode</span>
+                <select id="style-mode">
+                  <option value="css" selected>Native CSS</option>
+                  <option value="module">CSS Modules</option>
+                  <option value="less">Less</option>
+                  <option value="sass">Sass</option>
+                </select>
+              </label>
+            </div>
           </div>
         </div>
         <textarea id="css-editor" spellcheck="false"></textarea>
