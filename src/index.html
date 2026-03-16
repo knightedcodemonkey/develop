@@ -144,10 +144,22 @@
         <div class="panel-header">
           <h2>Preview</h2>
           <div class="controls">
+            <label class="color-control" for="preview-bg-color">
+              Background
+              <input id="preview-bg-color" type="color" value="#12141c" />
+            </label>
             <label class="toggle">
               <input id="shadow-toggle" type="checkbox" checked />
               ShadowRoot (open)
             </label>
+            <button
+              class="hint-icon shadow-hint"
+              type="button"
+              aria-label="About ShadowRoot mode"
+              data-tooltip="Turning ShadowRoot off renders the preview in light DOM, so @knighted/develop styles can affect preview output."
+            >
+              i
+            </button>
           </div>
         </div>
         <div class="preview-host" id="preview-host"></div>
