@@ -256,7 +256,12 @@
       </div>
     </div>
 
-    <dialog id="clear-confirm-dialog" class="confirm-dialog">
+    <dialog
+      id="clear-confirm-dialog"
+      class="confirm-dialog"
+      aria-labelledby="clear-confirm-title"
+      aria-describedby="clear-confirm-copy"
+    >
       <form method="dialog" class="confirm-dialog__form">
         <h3 id="clear-confirm-title">Clear source?</h3>
         <p id="clear-confirm-copy">This action will remove all text from the editor.</p>

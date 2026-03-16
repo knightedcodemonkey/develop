@@ -38,7 +38,6 @@
   --shadow-elev-1: rgba(0, 0, 0, 0.45);
   --shadow-elev-2: rgba(0, 0, 0, 0.35);
   --loading-spinner-border: rgba(255, 255, 255, 0.24);
-  --select-arrow-color: #d6def0;
   --select-text: #f1f5ff;
   --select-option-text: #eef3ff;
   --select-option-disabled: #95a1b9;
@@ -130,7 +129,6 @@
   --shadow-elev-1: rgba(15, 23, 42, 0.2);
   --shadow-elev-2: rgba(15, 23, 42, 0.16);
   --loading-spinner-border: rgba(15, 23, 42, 0.24);
-  --select-arrow-color: #334155;
   --select-text: #111827;
   --select-option-text: #111827;
   --select-option-disabled: #64748b;
