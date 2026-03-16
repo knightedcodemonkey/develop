@@ -22,6 +22,34 @@ npm run dev
 
 Then open the URL printed by the dev server (it should open `src/index.html`).
 
+## End-to-end tests
+
+Install Playwright browsers once before your first local run:
+
+```bash
+npx playwright install
+```
+
+If your environment needs system dependencies too (for example Linux CI-like containers), use:
+
+```bash
+npx playwright install --with-deps
+```
+
+Run local Playwright tests (Chromium):
+
+```bash
+npm run test:e2e
+```
+
+Run locally with headed browser:
+
+```bash
+npm run test:e2e:headed
+```
+
+CI runs Playwright on Chromium and WebKit.
+
 ## Notes
 
 - This is currently a development playground, not a stable product.
