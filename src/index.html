@@ -143,13 +143,30 @@
           </div>
           <div class="panel-header-main-actions">
             <div class="controls controls--actions">
-              <button class="render-button" id="render-button" type="button">
-                Render
-              </button>
-              <label class="toggle">
-                <input id="auto-render" type="checkbox" checked />
-                Auto render
-              </label>
+              <div class="control-stack">
+                <label class="toggle">
+                  <input id="auto-render" type="checkbox" checked />
+                  Auto render
+                </label>
+                <button class="render-button" id="render-button" type="button">
+                  Render
+                </button>
+              </div>
+              <div class="control-stack">
+                <label class="toggle">
+                  <input id="typecheck-enabled" type="checkbox" />
+                  Type check
+                </label>
+                <button
+                  class="render-button"
+                  id="typecheck-button"
+                  type="button"
+                  disabled
+                  hidden
+                >
+                  Typecheck
+                </button>
+              </div>
               <label>
                 <span class="sr-only">Render mode</span>
                 <select id="render-mode">
@@ -161,6 +178,7 @@
           </div>
         </div>
         <textarea id="jsx-editor" spellcheck="false"></textarea>
+        <div class="panel-footer panel-footer--muted" id="type-diagnostics" hidden></div>
       </section>
 
       <section class="panel styles-panel">

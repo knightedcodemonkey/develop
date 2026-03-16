@@ -93,6 +93,11 @@ export const cdnImportSpecs = {
     esm: '@parcel/css-wasm',
     jspmGa: 'npm:@parcel/css-wasm',
   },
+  typescript: {
+    importMap: 'typescript',
+    esm: 'typescript@5.9.3/lib/typescript.js',
+    jspmGa: 'npm:typescript@5.9.3/lib/typescript.js',
+  },
   codemirrorState: {
     importMap: '@codemirror/state',
     esm: '@codemirror/state',

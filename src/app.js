@@ -8,6 +8,8 @@ const appGridLayoutButtons = document.querySelectorAll('[data-app-grid-layout]')
 const appThemeButtons = document.querySelectorAll('[data-app-theme]')
 const renderMode = document.getElementById('render-mode')
 const autoRenderToggle = document.getElementById('auto-render')
+const typecheckToggle = document.getElementById('typecheck-enabled')
+const typecheckButton = document.getElementById('typecheck-button')
 const renderButton = document.getElementById('render-button')
 const copyComponentButton = document.getElementById('copy-component')
 const clearComponentButton = document.getElementById('clear-component')
@@ -18,6 +20,7 @@ const shadowToggle = document.getElementById('shadow-toggle')
 const jsxEditor = document.getElementById('jsx-editor')
 const cssEditor = document.getElementById('css-editor')
 const styleWarning = document.getElementById('style-warning')
+const typeDiagnostics = document.getElementById('type-diagnostics')
 const cdnLoading = document.getElementById('cdn-loading')
 const previewBgColorInput = document.getElementById('preview-bg-color')
 const clearConfirmDialog = document.getElementById('clear-confirm-dialog')
@@ -39,6 +42,7 @@ let sassCompiler = null
 let lessCompiler = null
 let lightningCssWasm = null
 let coreRuntime = null
+let typeScriptCompiler = null
 let compiledStylesCache = {
   key: null,
   value: null,
@@ -47,6 +51,8 @@ let pendingClearAction = null
 let hasCompletedInitialRender = false
 let previewBackgroundColor = null
 let previewBackgroundCustomized = false
+let typeCheckRunId = 0
+let lastTypeErrorCount = 0
 const clipboardSupported = Boolean(navigator.clipboard?.writeText)
 const appGridLayoutStorageKey = 'knighted-develop:app-grid-layout'
 const appThemeStorageKey = 'knighted-develop:theme'
@@ -81,7 +87,10 @@ const initializeCodeEditors = async () => {
         parent: jsxHost,
         value: defaultJsx,
         language: 'javascript-jsx',
-        onChange: maybeRender,
+        onChange: () => {
+          maybeRender()
+          markTypeDiagnosticsStale()
+        },
       }),
       createCodeMirrorEditor({
         parent: cssHost,
@@ -146,6 +155,246 @@ const ensureCoreRuntime = async () => {
 
 const setStatus = text => {
   statusNode.textContent = text
+}
+
+const updateTypecheckButtonState = () => {
+  if (!typecheckButton) {
+    return
+  }
+
+  const enabled = Boolean(typecheckToggle?.checked)
+  typecheckButton.hidden = !enabled
+  typecheckButton.disabled = !enabled
+}
+
+const setTypeDiagnostics = (text, level = 'muted') => {
+  if (!typeDiagnostics) {
+    return
+  }
+
+  typeDiagnostics.classList.remove(
+    'panel-footer--muted',
+    'panel-footer--ok',
+    'panel-footer--error',
+  )
+
+  if (!text) {
+    typeDiagnostics.hidden = true
+    typeDiagnostics.textContent = ''
+    return
+  }
+
+  typeDiagnostics.hidden = false
+  typeDiagnostics.textContent = text
+
+  if (level === 'ok') {
+    typeDiagnostics.classList.add('panel-footer--ok')
+    return
+  }
+
+  if (level === 'error') {
+    typeDiagnostics.classList.add('panel-footer--error')
+    return
+  }
+
+  typeDiagnostics.classList.add('panel-footer--muted')
+}
+
+const setRenderedStatus = () => {
+  if (lastTypeErrorCount > 0) {
+    setStatus(`Rendered (Type errors: ${lastTypeErrorCount})`)
+    return
+  }
+
+  if (statusNode.textContent.startsWith('Rendered (Type errors:')) {
+    setStatus('Rendered')
+  }
+}
+
+const flattenTypeDiagnosticMessage = (compiler, messageText) => {
+  if (typeof compiler.flattenDiagnosticMessageText === 'function') {
+    return compiler.flattenDiagnosticMessageText(messageText, '\n')
+  }
+
+  if (typeof messageText === 'string') {
+    return messageText
+  }
+
+  if (messageText && typeof messageText.messageText === 'string') {
+    return messageText.messageText
+  }
+
+  return 'Unknown TypeScript diagnostic'
+}
+
+const formatTypeDiagnostic = (compiler, diagnostic) => {
+  const message = flattenTypeDiagnosticMessage(compiler, diagnostic.messageText)
+
+  if (!diagnostic.file || typeof diagnostic.start !== 'number') {
+    return message
+  }
+
+  const position = diagnostic.file.getLineAndCharacterOfPosition(diagnostic.start)
+  return `L${position.line + 1}:${position.character + 1} ${message}`
+}
+
+const ensureTypeScriptCompiler = async () => {
+  if (typeScriptCompiler) {
+    return typeScriptCompiler
+  }
+
+  try {
+    const loaded = await importFromCdnWithFallback(cdnImports.typescript)
+    typeScriptCompiler = loaded.module.default ?? loaded.module
+
+    if (typeof typeScriptCompiler.transpileModule !== 'function') {
+      throw new Error(`transpileModule export was not found from ${loaded.url}`)
+    }
+
+    return typeScriptCompiler
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : 'Unknown TypeScript module loading failure'
+    throw new Error(
+      `Unable to load TypeScript diagnostics runtime from CDN: ${message}`,
+      {
+        cause: error,
+      },
+    )
+  }
+}
+
+const shouldIgnoreTypeDiagnostic = diagnostic => {
+  const ignoredCodes = new Set([2318, 6053])
+  return ignoredCodes.has(diagnostic.code)
+}
+
+const collectTypeDiagnostics = (compiler, sourceText) => {
+  const sourceFileName = 'component.tsx'
+  const jsxTypesFileName = 'knighted-jsx-runtime.d.ts'
+  const jsxTypes =
+    'declare namespace JSX {\n' +
+    '  interface Element {}\n' +
+    '  interface IntrinsicElements { [elemName: string]: any }\n' +
+    '}\n'
+
+  const files = new Map([
+    [sourceFileName, sourceText],
+    [jsxTypesFileName, jsxTypes],
+  ])
+
+  const options = {
+    jsx: compiler.JsxEmit?.Preserve,
+    target: compiler.ScriptTarget?.ES2022,
+    module: compiler.ModuleKind?.ESNext,
+    strict: true,
+    noEmit: true,
+    noLib: true,
+    skipLibCheck: true,
+  }
+
+  const host = {
+    fileExists: fileName => files.has(fileName),
+    readFile: fileName => files.get(fileName),
+    getSourceFile: (fileName, languageVersion) => {
+      const text = files.get(fileName)
+      if (typeof text !== 'string') {
+        return undefined
+      }
+
+      const scriptKind = fileName.endsWith('.tsx')
+        ? compiler.ScriptKind?.TSX
+        : compiler.ScriptKind?.TS
+
+      return compiler.createSourceFile(fileName, text, languageVersion, true, scriptKind)
+    },
+    getDefaultLibFileName: () => 'lib.d.ts',
+    writeFile: () => {},
+    getCurrentDirectory: () => '/',
+    getDirectories: () => [],
+    getCanonicalFileName: fileName => fileName,
+    useCaseSensitiveFileNames: () => true,
+    getNewLine: () => '\n',
+  }
+
+  const program = compiler.createProgram({
+    rootNames: [sourceFileName, jsxTypesFileName],
+    options,
+    host,
+  })
+
+  return compiler
+    .getPreEmitDiagnostics(program)
+    .filter(diagnostic => !shouldIgnoreTypeDiagnostic(diagnostic))
+}
+
+const runTypeDiagnostics = async runId => {
+  if (!typecheckToggle?.checked) {
+    return
+  }
+
+  setTypeDiagnostics('Type checking…', 'muted')
+
+  try {
+    const compiler = await ensureTypeScriptCompiler()
+    if (runId !== typeCheckRunId || !typecheckToggle.checked) {
+      return
+    }
+
+    const diagnostics = collectTypeDiagnostics(compiler, getJsxSource())
+    const errorCategory = compiler.DiagnosticCategory?.Error
+    const errors = diagnostics.filter(diagnostic => diagnostic.category === errorCategory)
+    lastTypeErrorCount = errors.length
+
+    if (errors.length === 0) {
+      setTypeDiagnostics('Type checking enabled. No TypeScript errors found.', 'ok')
+    } else {
+      const preview = errors
+        .slice(0, 3)
+        .map(diagnostic => formatTypeDiagnostic(compiler, diagnostic))
+      const remainder =
+        errors.length > preview.length
+          ? `\n...and ${errors.length - preview.length} more`
+          : ''
+
+      setTypeDiagnostics(
+        `TypeScript found ${errors.length} error${errors.length === 1 ? '' : 's'}:\n${preview.join('\n')}${remainder}`,
+        'error',
+      )
+    }
+
+    if (
+      statusNode.textContent === 'Rendered' ||
+      statusNode.textContent.startsWith('Rendered (Type errors:')
+    ) {
+      setRenderedStatus()
+    }
+  } catch (error) {
+    if (runId !== typeCheckRunId || !typecheckToggle?.checked) {
+      return
+    }
+
+    lastTypeErrorCount = 0
+    const message = error instanceof Error ? error.message : String(error)
+    setTypeDiagnostics(`Type diagnostics unavailable: ${message}`, 'error')
+
+    if (statusNode.textContent.startsWith('Rendered (Type errors:')) {
+      setStatus('Rendered')
+    }
+  }
+}
+
+const markTypeDiagnosticsStale = () => {
+  if (!typecheckToggle?.checked) {
+    return
+  }
+
+  lastTypeErrorCount = 0
+  setTypeDiagnostics('Source changed. Click Check types to update diagnostics.', 'muted')
+
+  if (statusNode.textContent.startsWith('Rendered (Type errors:')) {
+    setStatus('Rendered')
+  }
 }
 
 const appGridLayouts = ['default', 'preview-right', 'preview-left']
@@ -253,6 +502,7 @@ const setCssSource = value => {
 const clearComponentSource = () => {
   setJsxSource('')
   setStatus('Component cleared')
+  markTypeDiagnosticsStale()
   if (!jsxCodeEditor) {
     maybeRender()
   }
@@ -927,6 +1177,9 @@ const renderPreview = async () => {
       await renderDom()
     }
     setStatus('Rendered')
+    if (typecheckToggle?.checked) {
+      setRenderedStatus()
+    }
   } catch (error) {
     setStatus('Error')
     const target = getRenderTarget()
@@ -967,6 +1220,35 @@ autoRenderToggle.addEventListener('change', () => {
     renderPreview()
   }
 })
+if (typecheckToggle) {
+  typecheckToggle.addEventListener('change', () => {
+    updateTypecheckButtonState()
+
+    if (typecheckToggle.checked) {
+      setTypeDiagnostics(
+        'Type checking enabled. Click Check types to run diagnostics.',
+        'muted',
+      )
+      return
+    }
+
+    lastTypeErrorCount = 0
+    setTypeDiagnostics('')
+    if (statusNode.textContent.startsWith('Rendered (Type errors:')) {
+      setStatus('Rendered')
+    }
+  })
+}
+if (typecheckButton) {
+  typecheckButton.addEventListener('click', () => {
+    if (!typecheckToggle?.checked) {
+      return
+    }
+
+    typeCheckRunId += 1
+    void runTypeDiagnostics(typeCheckRunId)
+  })
+}
 renderButton.addEventListener('click', renderPreview)
 if (clipboardSupported) {
   copyComponentButton.addEventListener('click', () => {
@@ -1002,6 +1284,7 @@ clearStylesButton.addEventListener('click', () => {
   })
 })
 jsxEditor.addEventListener('input', maybeRender)
+jsxEditor.addEventListener('input', markTypeDiagnosticsStale)
 cssEditor.addEventListener('input', maybeRender)
 
 for (const button of appGridLayoutButtons) {
@@ -1027,7 +1310,13 @@ for (const button of appThemeButtons) {
 applyAppGridLayout(getInitialAppGridLayout(), { persist: false })
 applyTheme(getInitialTheme(), { persist: false })
 
+if (typecheckToggle) {
+  typecheckToggle.checked = false
+}
+
 updateRenderButtonVisibility()
+updateTypecheckButtonState()
+setTypeDiagnostics('')
 setStyleCompiling(false)
 setCdnLoading(true)
 initializePreviewBackgroundPicker()
