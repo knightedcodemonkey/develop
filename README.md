@@ -1,6 +1,6 @@
 # @knighted/develop
 
-A small in-browser playground for experimenting with `@knighted/jsx` and `@knighted/css`.
+Compiler-as-a-Service (at the edge of your browser) with `@knighted/jsx` and `@knighted/css`.
 
 > ⚠️ Early project status: this package is pre-`1.0.0` and still actively evolving.
 

@@ -18,51 +18,130 @@
             >@knighted/develop</a
           >
         </h1>
-        <p>Develop UI components directly in the browser with live previews.</p>
+        <p>Compiler-as-a-Service (at the edge of your browser).</p>
       </div>
       <div class="status" id="status">Idle</div>
     </header>
 
     <main class="app-grid">
+      <div class="app-grid-layout-controls" role="group" aria-label="App grid layout">
+        <button
+          class="layout-toggle"
+          id="layout-default"
+          type="button"
+          data-app-grid-layout="default"
+          aria-pressed="true"
+          title="Component + Styles on top, Preview below"
+          aria-label="Use stacked preview layout"
+        >
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <rect x="3" y="3" width="8" height="7" rx="1"></rect>
+            <rect x="13" y="3" width="8" height="7" rx="1"></rect>
+            <rect x="3" y="12" width="18" height="9" rx="1"></rect>
+          </svg>
+        </button>
+        <button
+          class="layout-toggle"
+          id="layout-preview-right"
+          type="button"
+          data-app-grid-layout="preview-right"
+          aria-pressed="false"
+          title="Component + Styles on left, Preview on right"
+          aria-label="Use side preview layout"
+        >
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <rect x="3" y="3" width="8" height="8" rx="1"></rect>
+            <rect x="3" y="13" width="8" height="8" rx="1"></rect>
+            <rect x="13" y="3" width="8" height="18" rx="1"></rect>
+          </svg>
+        </button>
+        <button
+          class="layout-toggle"
+          id="layout-preview-left"
+          type="button"
+          data-app-grid-layout="preview-left"
+          aria-pressed="false"
+          title="Preview on left, Component + Styles on right"
+          aria-label="Use left preview layout"
+        >
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <rect x="3" y="3" width="8" height="18" rx="1"></rect>
+            <rect x="13" y="3" width="8" height="8" rx="1"></rect>
+            <rect x="13" y="13" width="8" height="8" rx="1"></rect>
+          </svg>
+        </button>
+
+        <div class="app-grid-theme-controls" role="group" aria-label="Theme">
+          <button
+            class="layout-toggle"
+            id="theme-dark"
+            type="button"
+            data-app-theme="dark"
+            aria-pressed="true"
+            title="Use dark theme"
+            aria-label="Use dark theme"
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M21 13.5A8.5 8.5 0 1 1 10.5 3 6.8 6.8 0 0 0 21 13.5z"></path>
+            </svg>
+          </button>
+          <button
+            class="layout-toggle"
+            id="theme-light"
+            type="button"
+            data-app-theme="light"
+            aria-pressed="false"
+            title="Use light theme"
+            aria-label="Use light theme"
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <circle cx="12" cy="12" r="4"></circle>
+              <path d="M12 2v3"></path>
+              <path d="M12 19v3"></path>
+              <path d="M2 12h3"></path>
+              <path d="M19 12h3"></path>
+              <path d="m4.93 4.93 2.12 2.12"></path>
+              <path d="m16.95 16.95 2.12 2.12"></path>
+              <path d="m19.07 4.93-2.12 2.12"></path>
+              <path d="m7.05 16.95-2.12 2.12"></path>
+            </svg>
+          </button>
+        </div>
+      </div>
+
       <section class="panel component-panel">
-        <div class="panel-header panel-header--stack">
-          <div class="panel-header-row">
-            <h2>Component</h2>
+        <div class="panel-header panel-header--grid">
+          <h2>Component</h2>
+          <div class="controls controls--quick-actions panel-header-quick-actions">
+            <button
+              class="icon-button"
+              id="copy-component"
+              type="button"
+              title="Copy component source"
+              aria-label="Copy component source"
+            >
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <rect x="9" y="9" width="10" height="10" rx="2"></rect>
+                <path d="M6 15H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v1"></path>
+              </svg>
+            </button>
+            <button
+              class="icon-button"
+              id="clear-component"
+              type="button"
+              title="Clear component source"
+              aria-label="Clear component source"
+            >
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M4 7h16"></path>
+                <path d="M10 11v6"></path>
+                <path d="M14 11v6"></path>
+                <path d="M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12"></path>
+                <path d="M9 7V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v3"></path>
+              </svg>
+            </button>
           </div>
-          <div class="panel-header-row panel-header-row--quick-actions">
-            <div class="controls controls--actions controls--quick-actions">
-              <button
-                class="icon-button"
-                id="copy-component"
-                type="button"
-                title="Copy component source"
-                aria-label="Copy component source"
-              >
-                <svg viewBox="0 0 24 24" aria-hidden="true">
-                  <rect x="9" y="9" width="10" height="10" rx="2"></rect>
-                  <path
-                    d="M6 15H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v1"
-                  ></path>
-                </svg>
-              </button>
-              <button
-                class="icon-button"
-                id="clear-component"
-                type="button"
-                title="Clear component source"
-                aria-label="Clear component source"
-              >
-                <svg viewBox="0 0 24 24" aria-hidden="true">
-                  <path d="M4 7h16"></path>
-                  <path d="M10 11v6"></path>
-                  <path d="M14 11v6"></path>
-                  <path d="M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12"></path>
-                  <path d="M9 7V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v3"></path>
-                </svg>
-              </button>
-            </div>
-          </div>
-          <div class="panel-header-row panel-header-row--actions">
+          <div class="panel-header-main-actions">
             <div class="controls controls--actions">
               <button class="render-button" id="render-button" type="button">
                 Render
@@ -85,44 +164,38 @@
       </section>
 
       <section class="panel styles-panel">
-        <div class="panel-header panel-header--stack">
-          <div class="panel-header-row">
-            <h2>Styles</h2>
+        <div class="panel-header panel-header--grid">
+          <h2>Styles</h2>
+          <div class="controls controls--quick-actions panel-header-quick-actions">
+            <button
+              class="icon-button"
+              id="copy-styles"
+              type="button"
+              title="Copy styles source"
+              aria-label="Copy styles source"
+            >
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <rect x="9" y="9" width="10" height="10" rx="2"></rect>
+                <path d="M6 15H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v1"></path>
+              </svg>
+            </button>
+            <button
+              class="icon-button"
+              id="clear-styles"
+              type="button"
+              title="Clear styles source"
+              aria-label="Clear styles source"
+            >
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M4 7h16"></path>
+                <path d="M10 11v6"></path>
+                <path d="M14 11v6"></path>
+                <path d="M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12"></path>
+                <path d="M9 7V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v3"></path>
+              </svg>
+            </button>
           </div>
-          <div class="panel-header-row panel-header-row--quick-actions">
-            <div class="controls controls--actions controls--quick-actions">
-              <button
-                class="icon-button"
-                id="copy-styles"
-                type="button"
-                title="Copy styles source"
-                aria-label="Copy styles source"
-              >
-                <svg viewBox="0 0 24 24" aria-hidden="true">
-                  <rect x="9" y="9" width="10" height="10" rx="2"></rect>
-                  <path
-                    d="M6 15H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v1"
-                  ></path>
-                </svg>
-              </button>
-              <button
-                class="icon-button"
-                id="clear-styles"
-                type="button"
-                title="Clear styles source"
-                aria-label="Clear styles source"
-              >
-                <svg viewBox="0 0 24 24" aria-hidden="true">
-                  <path d="M4 7h16"></path>
-                  <path d="M10 11v6"></path>
-                  <path d="M14 11v6"></path>
-                  <path d="M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12"></path>
-                  <path d="M9 7V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v3"></path>
-                </svg>
-              </button>
-            </div>
-          </div>
-          <div class="panel-header-row panel-header-row--actions">
+          <div class="panel-header-main-actions">
             <div class="controls controls--actions">
               <label>
                 <span class="sr-only">Style mode</span>
@@ -182,6 +255,33 @@
         </p>
       </div>
     </div>
+
+    <dialog
+      id="clear-confirm-dialog"
+      class="confirm-dialog"
+      aria-labelledby="clear-confirm-title"
+      aria-describedby="clear-confirm-copy"
+    >
+      <form method="dialog" class="confirm-dialog__form">
+        <h3 id="clear-confirm-title">Clear source?</h3>
+        <p id="clear-confirm-copy">This action will remove all text from the editor.</p>
+        <menu class="confirm-dialog__actions">
+          <button
+            class="confirm-dialog__button confirm-dialog__button--secondary"
+            value="cancel"
+            autofocus
+          >
+            Cancel
+          </button>
+          <button
+            class="confirm-dialog__button confirm-dialog__button--danger"
+            value="confirm"
+          >
+            Clear
+          </button>
+        </menu>
+      </form>
+    </dialog>
 
     <script type="module" src="bootstrap.js"></script>
   </body>

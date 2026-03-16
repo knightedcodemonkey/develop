@@ -17,8 +17,13 @@
   "author": "KCM <knightedcodemonkey@gmail.com>",
   "type": "module",
   "main": "index.js",
+  "engines": {
+    "node": ">=22.22.1"
+  },
+  "engineStrict": true,
   "scripts": {
     "dev": "http-server . -a localhost -c-1 -o src/index.html",
+    "prepare": "husky",
     "build:prepare": "node scripts/build-prepare.js",
     "build:importmap": "node scripts/build-importmap.js",
     "build": "npm run build:prepare && npm run build:importmap",
@@ -32,9 +37,19 @@
   },
   "devDependencies": {
     "http-server": "^14.1.1",
+    "husky": "^9.1.7",
     "jspm": "^4.4.0",
+    "lint-staged": "^16.4.0",
     "oxlint": "^1.55.0",
     "prettier": "^3.8.1"
+  },
+  "lint-staged": {
+    "**/*": [
+      "prettier --write --ignore-unknown"
+    ],
+    "{src,scripts}/**/*.{js,mjs,cjs,jsx,ts,tsx}": [
+      "oxlint"
+    ]
   },
   "prettier": {
     "arrowParens": "avoid",

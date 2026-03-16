@@ -3,6 +3,9 @@ import { createCodeMirrorEditor } from './editor-codemirror.js'
 import { defaultCss, defaultJsx } from './defaults.js'
 
 const statusNode = document.getElementById('status')
+const appGrid = document.querySelector('.app-grid')
+const appGridLayoutButtons = document.querySelectorAll('[data-app-grid-layout]')
+const appThemeButtons = document.querySelectorAll('[data-app-theme]')
 const renderMode = document.getElementById('render-mode')
 const autoRenderToggle = document.getElementById('auto-render')
 const renderButton = document.getElementById('render-button')
@@ -17,6 +20,9 @@ const cssEditor = document.getElementById('css-editor')
 const styleWarning = document.getElementById('style-warning')
 const cdnLoading = document.getElementById('cdn-loading')
 const previewBgColorInput = document.getElementById('preview-bg-color')
+const clearConfirmDialog = document.getElementById('clear-confirm-dialog')
+const clearConfirmTitle = document.getElementById('clear-confirm-title')
+const clearConfirmCopy = document.getElementById('clear-confirm-copy')
 
 jsxEditor.value = defaultJsx
 cssEditor.value = defaultCss
@@ -37,9 +43,13 @@ let compiledStylesCache = {
   key: null,
   value: null,
 }
+let pendingClearAction = null
 let hasCompletedInitialRender = false
 let previewBackgroundColor = null
+let previewBackgroundCustomized = false
 const clipboardSupported = Boolean(navigator.clipboard?.writeText)
+const appGridLayoutStorageKey = 'knighted-develop:app-grid-layout'
+const appThemeStorageKey = 'knighted-develop:theme'
 
 const styleLabels = {
   css: 'Native CSS',
@@ -138,6 +148,78 @@ const setStatus = text => {
   statusNode.textContent = text
 }
 
+const appGridLayouts = ['default', 'preview-right', 'preview-left']
+
+const applyAppGridLayout = (layout, { persist = true } = {}) => {
+  if (!appGrid || !appGridLayouts.includes(layout)) {
+    return
+  }
+
+  appGrid.classList.toggle('app-grid--preview-right', layout === 'preview-right')
+  appGrid.classList.toggle('app-grid--preview-left', layout === 'preview-left')
+
+  for (const button of appGridLayoutButtons) {
+    const isActive = button.dataset.appGridLayout === layout
+    button.setAttribute('aria-pressed', isActive ? 'true' : 'false')
+  }
+
+  if (persist) {
+    try {
+      localStorage.setItem(appGridLayoutStorageKey, layout)
+    } catch {
+      /* Ignore storage write errors in restricted browsing modes. */
+    }
+  }
+}
+
+const getInitialAppGridLayout = () => {
+  try {
+    const value = localStorage.getItem(appGridLayoutStorageKey)
+    if (appGridLayouts.includes(value)) {
+      return value
+    }
+  } catch {
+    /* Ignore storage read errors in restricted browsing modes. */
+  }
+
+  return 'default'
+}
+
+const applyTheme = (theme, { persist = true } = {}) => {
+  if (!['dark', 'light'].includes(theme)) {
+    return
+  }
+
+  document.documentElement.dataset.theme = theme
+  syncPreviewBackgroundPickerFromTheme()
+
+  for (const button of appThemeButtons) {
+    const isActive = button.dataset.appTheme === theme
+    button.setAttribute('aria-pressed', isActive ? 'true' : 'false')
+  }
+
+  if (persist) {
+    try {
+      localStorage.setItem(appThemeStorageKey, theme)
+    } catch {
+      /* Ignore storage write errors in restricted browsing modes. */
+    }
+  }
+}
+
+const getInitialTheme = () => {
+  try {
+    const value = localStorage.getItem(appThemeStorageKey)
+    if (value === 'dark' || value === 'light') {
+      return value
+    }
+  } catch {
+    /* Ignore storage read errors in restricted browsing modes. */
+  }
+
+  return 'dark'
+}
+
 const setCdnLoading = isLoading => {
   if (!cdnLoading) return
   cdnLoading.hidden = !isLoading
@@ -170,6 +252,7 @@ const setCssSource = value => {
 
 const clearComponentSource = () => {
   setJsxSource('')
+  setStatus('Component cleared')
   if (!jsxCodeEditor) {
     maybeRender()
   }
@@ -177,9 +260,43 @@ const clearComponentSource = () => {
 
 const clearStylesSource = () => {
   setCssSource('')
+  setStatus('Styles cleared')
   if (!cssCodeEditor) {
     maybeRender()
   }
+}
+
+const confirmClearSource = ({ label, onConfirm }) => {
+  const supportsModalDialog =
+    clearConfirmDialog instanceof HTMLDialogElement &&
+    typeof clearConfirmDialog.showModal === 'function'
+
+  if (!supportsModalDialog) {
+    if (
+      window.confirm(
+        `Clear ${label.toLowerCase()} source? This action will remove all text from the editor.`,
+      )
+    ) {
+      onConfirm()
+    }
+    return
+  }
+
+  if (clearConfirmDialog.open) {
+    return
+  }
+
+  if (clearConfirmTitle) {
+    clearConfirmTitle.textContent = `Clear ${label} source?`
+  }
+
+  if (clearConfirmCopy) {
+    clearConfirmCopy.textContent =
+      'This action will remove all text from the editor. This cannot be undone.'
+  }
+
+  pendingClearAction = onConfirm
+  clearConfirmDialog.showModal()
 }
 
 const copyTextToClipboard = async text => {
@@ -247,7 +364,24 @@ const applyPreviewBackgroundColor = color => {
     return
   }
 
-  previewHost.style.backgroundColor = color
+  if (typeof color === 'string' && color.length > 0) {
+    previewHost.style.backgroundColor = color
+    return
+  }
+
+  previewHost.style.removeProperty('background-color')
+}
+
+const syncPreviewBackgroundPickerFromTheme = () => {
+  if (!previewBgColorInput || !previewHost || previewBackgroundCustomized) {
+    return
+  }
+
+  previewBackgroundColor = null
+  applyPreviewBackgroundColor(null)
+  previewBgColorInput.value = normalizeColorToHex(
+    getComputedStyle(previewHost).backgroundColor,
+  )
 }
 
 const initializePreviewBackgroundPicker = () => {
@@ -256,12 +390,14 @@ const initializePreviewBackgroundPicker = () => {
   }
 
   const initialColor = normalizeColorToHex(getComputedStyle(previewHost).backgroundColor)
-  previewBackgroundColor = initialColor
+  previewBackgroundColor = null
+  previewBackgroundCustomized = false
   previewBgColorInput.value = initialColor
-  applyPreviewBackgroundColor(initialColor)
+  applyPreviewBackgroundColor(null)
 
   previewBgColorInput.addEventListener('input', () => {
     previewBackgroundColor = previewBgColorInput.value
+    previewBackgroundCustomized = true
     applyPreviewBackgroundColor(previewBackgroundColor)
   })
 }
@@ -273,9 +409,7 @@ const recreatePreviewHost = () => {
   previewHost.replaceWith(nextHost)
   previewHost = nextHost
 
-  if (previewBackgroundColor) {
-    applyPreviewBackgroundColor(previewBackgroundColor)
-  }
+  applyPreviewBackgroundColor(previewBackgroundColor)
 }
 
 const getRenderTarget = () => {
@@ -828,10 +962,53 @@ if (clipboardSupported) {
   copyComponentButton.hidden = true
   copyStylesButton.hidden = true
 }
-clearComponentButton.addEventListener('click', clearComponentSource)
-clearStylesButton.addEventListener('click', clearStylesSource)
+if (clearConfirmDialog instanceof HTMLDialogElement) {
+  clearConfirmDialog.addEventListener('close', () => {
+    if (clearConfirmDialog.returnValue === 'confirm') {
+      pendingClearAction?.()
+    }
+    pendingClearAction = null
+  })
+}
+
+clearComponentButton.addEventListener('click', () => {
+  confirmClearSource({
+    label: 'Component',
+    onConfirm: clearComponentSource,
+  })
+})
+
+clearStylesButton.addEventListener('click', () => {
+  confirmClearSource({
+    label: 'Styles',
+    onConfirm: clearStylesSource,
+  })
+})
 jsxEditor.addEventListener('input', maybeRender)
 cssEditor.addEventListener('input', maybeRender)
+
+for (const button of appGridLayoutButtons) {
+  button.addEventListener('click', () => {
+    const nextLayout = button.dataset.appGridLayout
+    if (!nextLayout) {
+      return
+    }
+    applyAppGridLayout(nextLayout)
+  })
+}
+
+for (const button of appThemeButtons) {
+  button.addEventListener('click', () => {
+    const nextTheme = button.dataset.appTheme
+    if (!nextTheme) {
+      return
+    }
+    applyTheme(nextTheme)
+  })
+}
+
+applyAppGridLayout(getInitialAppGridLayout(), { persist: false })
+applyTheme(getInitialTheme(), { persist: false })
 
 updateRenderButtonVisibility()
 setStyleCompiling(false)
