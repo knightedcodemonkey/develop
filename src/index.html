@@ -171,6 +171,28 @@
       </div>
     </div>
 
+    <dialog id="clear-confirm-dialog" class="confirm-dialog">
+      <form method="dialog" class="confirm-dialog__form">
+        <h3 id="clear-confirm-title">Clear source?</h3>
+        <p id="clear-confirm-copy">This action will remove all text from the editor.</p>
+        <menu class="confirm-dialog__actions">
+          <button
+            class="confirm-dialog__button confirm-dialog__button--secondary"
+            value="cancel"
+            autofocus
+          >
+            Cancel
+          </button>
+          <button
+            class="confirm-dialog__button confirm-dialog__button--danger"
+            value="confirm"
+          >
+            Clear
+          </button>
+        </menu>
+      </form>
+    </dialog>
+
     <script type="module" src="bootstrap.js"></script>
   </body>
 </html>

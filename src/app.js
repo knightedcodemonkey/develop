@@ -17,6 +17,9 @@ const cssEditor = document.getElementById('css-editor')
 const styleWarning = document.getElementById('style-warning')
 const cdnLoading = document.getElementById('cdn-loading')
 const previewBgColorInput = document.getElementById('preview-bg-color')
+const clearConfirmDialog = document.getElementById('clear-confirm-dialog')
+const clearConfirmTitle = document.getElementById('clear-confirm-title')
+const clearConfirmCopy = document.getElementById('clear-confirm-copy')
 
 jsxEditor.value = defaultJsx
 cssEditor.value = defaultCss
@@ -37,6 +40,7 @@ let compiledStylesCache = {
   key: null,
   value: null,
 }
+let pendingClearAction = null
 let hasCompletedInitialRender = false
 let previewBackgroundColor = null
 const clipboardSupported = Boolean(navigator.clipboard?.writeText)
@@ -170,6 +174,7 @@ const setCssSource = value => {
 
 const clearComponentSource = () => {
   setJsxSource('')
+  setStatus('Component cleared')
   if (!jsxCodeEditor) {
     maybeRender()
   }
@@ -177,9 +182,43 @@ const clearComponentSource = () => {
 
 const clearStylesSource = () => {
   setCssSource('')
+  setStatus('Styles cleared')
   if (!cssCodeEditor) {
     maybeRender()
   }
+}
+
+const confirmClearSource = ({ label, onConfirm }) => {
+  const supportsModalDialog =
+    clearConfirmDialog instanceof HTMLDialogElement &&
+    typeof clearConfirmDialog.showModal === 'function'
+
+  if (!supportsModalDialog) {
+    if (
+      window.confirm(
+        `Clear ${label.toLowerCase()} source? This action will remove all text from the editor.`,
+      )
+    ) {
+      onConfirm()
+    }
+    return
+  }
+
+  if (clearConfirmDialog.open) {
+    return
+  }
+
+  if (clearConfirmTitle) {
+    clearConfirmTitle.textContent = `Clear ${label} source?`
+  }
+
+  if (clearConfirmCopy) {
+    clearConfirmCopy.textContent =
+      'This action will remove all text from the editor. This cannot be undone.'
+  }
+
+  pendingClearAction = onConfirm
+  clearConfirmDialog.showModal()
 }
 
 const copyTextToClipboard = async text => {
@@ -828,8 +867,28 @@ if (clipboardSupported) {
   copyComponentButton.hidden = true
   copyStylesButton.hidden = true
 }
-clearComponentButton.addEventListener('click', clearComponentSource)
-clearStylesButton.addEventListener('click', clearStylesSource)
+if (clearConfirmDialog instanceof HTMLDialogElement) {
+  clearConfirmDialog.addEventListener('close', () => {
+    if (clearConfirmDialog.returnValue === 'confirm') {
+      pendingClearAction?.()
+    }
+    pendingClearAction = null
+  })
+}
+
+clearComponentButton.addEventListener('click', () => {
+  confirmClearSource({
+    label: 'Component',
+    onConfirm: clearComponentSource,
+  })
+})
+
+clearStylesButton.addEventListener('click', () => {
+  confirmClearSource({
+    label: 'Styles',
+    onConfirm: clearStylesSource,
+  })
+})
 jsxEditor.addEventListener('input', maybeRender)
 cssEditor.addEventListener('input', maybeRender)
 
