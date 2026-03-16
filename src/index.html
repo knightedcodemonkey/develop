@@ -25,6 +25,18 @@
 
     <main class="app-grid">
       <div class="app-grid-layout-controls" role="group" aria-label="App grid layout">
+        <div class="app-grid-diagnostics-controls" role="group" aria-label="Diagnostics">
+          <button
+            class="diagnostics-toggle"
+            id="diagnostics-toggle"
+            type="button"
+            aria-expanded="false"
+            aria-controls="diagnostics-drawer"
+          >
+            Diagnostics
+          </button>
+        </div>
+
         <button
           class="layout-toggle"
           id="layout-default"
@@ -143,30 +155,16 @@
           </div>
           <div class="panel-header-main-actions">
             <div class="controls controls--actions">
-              <div class="control-stack">
-                <label class="toggle">
-                  <input id="auto-render" type="checkbox" checked />
-                  Auto render
-                </label>
-                <button class="render-button" id="render-button" type="button">
-                  Render
-                </button>
-              </div>
-              <div class="control-stack">
-                <label class="toggle">
-                  <input id="typecheck-enabled" type="checkbox" />
-                  Type check
-                </label>
-                <button
-                  class="render-button"
-                  id="typecheck-button"
-                  type="button"
-                  disabled
-                  hidden
-                >
-                  Typecheck
-                </button>
-              </div>
+              <label class="toggle">
+                <input id="auto-render" type="checkbox" checked />
+                Auto render
+              </label>
+              <button class="render-button" id="render-button" type="button">
+                Render
+              </button>
+              <button class="render-button" id="typecheck-button" type="button">
+                Typecheck
+              </button>
               <label>
                 <span class="sr-only">Render mode</span>
                 <select id="render-mode">
@@ -178,7 +176,6 @@
           </div>
         </div>
         <textarea id="jsx-editor" spellcheck="false"></textarea>
-        <div class="panel-footer panel-footer--muted" id="type-diagnostics" hidden></div>
       </section>
 
       <section class="panel styles-panel">
@@ -255,6 +252,40 @@
         </div>
         <div class="preview-host" id="preview-host"></div>
       </section>
+
+      <aside class="diagnostics-drawer" id="diagnostics-drawer" hidden>
+        <div class="diagnostics-drawer__header">
+          <h2>Diagnostics</h2>
+          <button
+            class="icon-button"
+            id="diagnostics-close"
+            type="button"
+            aria-label="Close diagnostics drawer"
+            title="Close diagnostics drawer"
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M6 6 18 18"></path>
+              <path d="M18 6 6 18"></path>
+            </svg>
+          </button>
+        </div>
+        <div class="diagnostics-drawer__actions">
+          <button class="render-button" id="diagnostics-clear-component" type="button">
+            Clear component
+          </button>
+          <button class="render-button" id="diagnostics-clear-all" type="button">
+            Clear all
+          </button>
+        </div>
+        <section class="diagnostics-group" data-diagnostics-scope="component">
+          <h3>Component</h3>
+          <div class="diagnostics-scope" id="diagnostics-component"></div>
+        </section>
+        <section class="diagnostics-group" data-diagnostics-scope="styles">
+          <h3>Styles</h3>
+          <div class="diagnostics-scope" id="diagnostics-styles"></div>
+        </section>
+      </aside>
     </main>
 
     <footer class="app-footer">

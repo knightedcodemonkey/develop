@@ -1,4 +1,4 @@
-import { cdnImports, importFromCdnWithFallback } from './cdn.js'
+import { cdnImports, getTypeScriptLibUrls, importFromCdnWithFallback } from './cdn.js'
 import { createCodeMirrorEditor } from './editor-codemirror.js'
 import { defaultCss, defaultJsx } from './defaults.js'
 
@@ -8,7 +8,6 @@ const appGridLayoutButtons = document.querySelectorAll('[data-app-grid-layout]')
 const appThemeButtons = document.querySelectorAll('[data-app-theme]')
 const renderMode = document.getElementById('render-mode')
 const autoRenderToggle = document.getElementById('auto-render')
-const typecheckToggle = document.getElementById('typecheck-enabled')
 const typecheckButton = document.getElementById('typecheck-button')
 const renderButton = document.getElementById('render-button')
 const copyComponentButton = document.getElementById('copy-component')
@@ -20,7 +19,13 @@ const shadowToggle = document.getElementById('shadow-toggle')
 const jsxEditor = document.getElementById('jsx-editor')
 const cssEditor = document.getElementById('css-editor')
 const styleWarning = document.getElementById('style-warning')
-const typeDiagnostics = document.getElementById('type-diagnostics')
+const diagnosticsToggle = document.getElementById('diagnostics-toggle')
+const diagnosticsDrawer = document.getElementById('diagnostics-drawer')
+const diagnosticsClose = document.getElementById('diagnostics-close')
+const diagnosticsClearComponent = document.getElementById('diagnostics-clear-component')
+const diagnosticsClearAll = document.getElementById('diagnostics-clear-all')
+const diagnosticsComponent = document.getElementById('diagnostics-component')
+const diagnosticsStyles = document.getElementById('diagnostics-styles')
 const cdnLoading = document.getElementById('cdn-loading')
 const previewBgColorInput = document.getElementById('preview-bg-color')
 const clearConfirmDialog = document.getElementById('clear-confirm-dialog')
@@ -43,6 +48,7 @@ let lessCompiler = null
 let lightningCssWasm = null
 let coreRuntime = null
 let typeScriptCompiler = null
+let typeScriptLibFiles = null
 let compiledStylesCache = {
   key: null,
   value: null,
@@ -53,9 +59,16 @@ let previewBackgroundColor = null
 let previewBackgroundCustomized = false
 let typeCheckRunId = 0
 let lastTypeErrorCount = 0
+let hasUnresolvedTypeErrors = false
+let scheduledTypeRecheck = null
+let activeTypeDiagnosticsRuns = 0
+let diagnosticsDrawerOpen = false
+let suppressEditorChangeSideEffects = false
+let statusLevel = 'neutral'
 const clipboardSupported = Boolean(navigator.clipboard?.writeText)
 const appGridLayoutStorageKey = 'knighted-develop:app-grid-layout'
 const appThemeStorageKey = 'knighted-develop:theme'
+const defaultTypeScriptLibFileName = 'lib.esnext.full.d.ts'
 
 const styleLabels = {
   css: 'Native CSS',
@@ -88,6 +101,9 @@ const initializeCodeEditors = async () => {
         value: defaultJsx,
         language: 'javascript-jsx',
         onChange: () => {
+          if (suppressEditorChangeSideEffects) {
+            return
+          }
           maybeRender()
           markTypeDiagnosticsStale()
         },
@@ -96,7 +112,12 @@ const initializeCodeEditors = async () => {
         parent: cssHost,
         value: defaultCss,
         language: getStyleEditorLanguage(styleMode.value),
-        onChange: maybeRender,
+        onChange: () => {
+          if (suppressEditorChangeSideEffects) {
+            return
+          }
+          maybeRender()
+        },
       }),
     ])
 
@@ -153,51 +174,231 @@ const ensureCoreRuntime = async () => {
   }
 }
 
-const setStatus = text => {
-  statusNode.textContent = text
+const inferStatusLevel = text => {
+  if (text === 'Rendering…' || text === 'Loading CDN assets…') {
+    return 'pending'
+  }
+
+  if (
+    text === 'Error' ||
+    text === 'Copy failed' ||
+    text.startsWith('Rendered (Type errors:')
+  ) {
+    return 'error'
+  }
+
+  return 'neutral'
 }
 
-const updateTypecheckButtonState = () => {
+const setStatus = (text, level = inferStatusLevel(text)) => {
+  statusNode.textContent = text
+  statusLevel = level
+  updateUiIssueIndicators()
+}
+
+const getDiagnosticsErrorCount = () => {
+  const componentErrors =
+    diagnosticsByScope.component.level === 'error'
+      ? diagnosticsByScope.component.lines.length
+      : 0
+  const styleErrors =
+    diagnosticsByScope.styles.level === 'error'
+      ? diagnosticsByScope.styles.lines.length
+      : 0
+  return componentErrors + styleErrors
+}
+
+const getDiagnosticsIssueLevel = () => {
+  if (getDiagnosticsErrorCount() > 0) {
+    return 'error'
+  }
+
+  if (activeTypeDiagnosticsRuns > 0) {
+    return 'pending'
+  }
+
+  return 'neutral'
+}
+
+const updateUiIssueIndicators = () => {
+  const diagnosticsLevel = getDiagnosticsIssueLevel()
+
+  statusNode.classList.remove('status--neutral', 'status--pending', 'status--error')
+  statusNode.classList.add(`status--${statusLevel}`)
+
+  if (diagnosticsToggle) {
+    diagnosticsToggle.classList.remove(
+      'diagnostics-toggle--neutral',
+      'diagnostics-toggle--pending',
+      'diagnostics-toggle--error',
+    )
+    diagnosticsToggle.classList.add(`diagnostics-toggle--${diagnosticsLevel}`)
+  }
+}
+
+const diagnosticsByScope = {
+  component: {
+    headline: '',
+    lines: [],
+    level: 'muted',
+  },
+  styles: {
+    headline: '',
+    lines: [],
+    level: 'muted',
+  },
+}
+
+const getDiagnosticsScopeNode = scope => {
+  if (scope === 'component') {
+    return diagnosticsComponent
+  }
+
+  if (scope === 'styles') {
+    return diagnosticsStyles
+  }
+
+  return null
+}
+
+const renderDiagnosticsScope = scope => {
+  const root = getDiagnosticsScopeNode(scope)
+  const state = diagnosticsByScope[scope]
+  if (!root || !state) {
+    return
+  }
+
+  root.classList.remove('panel-footer--muted', 'panel-footer--ok', 'panel-footer--error')
+  root.replaceChildren()
+
+  const hasHeadline = typeof state.headline === 'string' && state.headline.length > 0
+  const hasLines = Array.isArray(state.lines) && state.lines.length > 0
+
+  if (!hasHeadline && !hasLines) {
+    const emptyNode = document.createElement('div')
+    emptyNode.className = 'diagnostics-empty'
+    emptyNode.textContent = 'No diagnostics yet.'
+    root.append(emptyNode)
+    root.classList.add('panel-footer--muted')
+    return
+  }
+
+  if (hasHeadline) {
+    const headingNode = document.createElement('div')
+    headingNode.className = 'type-diagnostics-heading'
+    headingNode.textContent = state.headline
+    root.append(headingNode)
+  }
+
+  if (hasLines) {
+    const listNode = document.createElement('ol')
+    listNode.className = 'type-diagnostics-list'
+    for (const line of state.lines) {
+      const itemNode = document.createElement('li')
+      itemNode.textContent = line
+      listNode.append(itemNode)
+    }
+    root.append(listNode)
+  }
+
+  if (state.level === 'ok') {
+    root.classList.add('panel-footer--ok')
+    return
+  }
+
+  if (state.level === 'error') {
+    root.classList.add('panel-footer--error')
+    return
+  }
+
+  root.classList.add('panel-footer--muted')
+}
+
+const updateDiagnosticsToggleLabel = () => {
+  if (!diagnosticsToggle) {
+    return
+  }
+
+  const totalErrors = getDiagnosticsErrorCount()
+  diagnosticsToggle.textContent =
+    totalErrors > 0 ? `Diagnostics (${totalErrors})` : 'Diagnostics'
+}
+
+const setDiagnosticsDrawerOpen = isOpen => {
+  diagnosticsDrawerOpen = Boolean(isOpen)
+
+  if (diagnosticsDrawer) {
+    diagnosticsDrawer.hidden = !diagnosticsDrawerOpen
+  }
+
+  if (diagnosticsToggle) {
+    diagnosticsToggle.setAttribute(
+      'aria-expanded',
+      diagnosticsDrawerOpen ? 'true' : 'false',
+    )
+  }
+}
+
+const setDiagnosticsScope = (scope, { headline = '', lines = [], level = 'muted' }) => {
+  if (!diagnosticsByScope[scope]) {
+    return
+  }
+
+  diagnosticsByScope[scope] = {
+    headline,
+    lines,
+    level,
+  }
+
+  renderDiagnosticsScope(scope)
+  updateDiagnosticsToggleLabel()
+  updateUiIssueIndicators()
+}
+
+const clearDiagnosticsScope = scope => {
+  setDiagnosticsScope(scope, { headline: '', lines: [], level: 'muted' })
+}
+
+const clearAllDiagnostics = () => {
+  clearDiagnosticsScope('component')
+  clearDiagnosticsScope('styles')
+}
+
+const setTypeDiagnosticsDetails = ({ headline, lines = [], level = 'muted' }) => {
+  setDiagnosticsScope('component', { headline, lines, level })
+}
+
+const setTypecheckButtonLoading = isLoading => {
   if (!typecheckButton) {
     return
   }
 
-  const enabled = Boolean(typecheckToggle?.checked)
-  typecheckButton.hidden = !enabled
-  typecheckButton.disabled = !enabled
+  typecheckButton.classList.toggle('render-button--loading', isLoading)
+  typecheckButton.setAttribute('aria-busy', isLoading ? 'true' : 'false')
+  typecheckButton.disabled = isLoading
 }
 
-const setTypeDiagnostics = (text, level = 'muted') => {
-  if (!typeDiagnostics) {
+const clearTypeRecheckTimer = () => {
+  if (!scheduledTypeRecheck) {
     return
   }
 
-  typeDiagnostics.classList.remove(
-    'panel-footer--muted',
-    'panel-footer--ok',
-    'panel-footer--error',
-  )
+  clearTimeout(scheduledTypeRecheck)
+  scheduledTypeRecheck = null
+}
 
-  if (!text) {
-    typeDiagnostics.hidden = true
-    typeDiagnostics.textContent = ''
+const scheduleTypeRecheck = () => {
+  clearTypeRecheckTimer()
+
+  if (!hasUnresolvedTypeErrors) {
     return
   }
 
-  typeDiagnostics.hidden = false
-  typeDiagnostics.textContent = text
-
-  if (level === 'ok') {
-    typeDiagnostics.classList.add('panel-footer--ok')
-    return
-  }
-
-  if (level === 'error') {
-    typeDiagnostics.classList.add('panel-footer--error')
-    return
-  }
-
-  typeDiagnostics.classList.add('panel-footer--muted')
+  scheduledTypeRecheck = setTimeout(() => {
+    scheduledTypeRecheck = null
+    typeCheckRunId += 1
+    void runTypeDiagnostics(typeCheckRunId)
+  }, 450)
 }
 
 const setRenderedStatus = () => {
@@ -231,11 +432,11 @@ const formatTypeDiagnostic = (compiler, diagnostic) => {
   const message = flattenTypeDiagnosticMessage(compiler, diagnostic.messageText)
 
   if (!diagnostic.file || typeof diagnostic.start !== 'number') {
-    return message
+    return `TS${diagnostic.code}: ${message}`
   }
 
   const position = diagnostic.file.getLineAndCharacterOfPosition(diagnostic.start)
-  return `L${position.line + 1}:${position.character + 1} ${message}`
+  return `L${position.line + 1}:${position.character + 1} TS${diagnostic.code}: ${message}`
 }
 
 const ensureTypeScriptCompiler = async () => {
@@ -269,18 +470,103 @@ const shouldIgnoreTypeDiagnostic = diagnostic => {
   return ignoredCodes.has(diagnostic.code)
 }
 
-const collectTypeDiagnostics = (compiler, sourceText) => {
+const normalizeVirtualFileName = fileName =>
+  typeof fileName === 'string' && fileName.startsWith('/') ? fileName.slice(1) : fileName
+
+const fetchTypeScriptLibText = async fileName => {
+  const attempts = getTypeScriptLibUrls(fileName).map(async url => {
+    const response = await fetch(url)
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status} from ${url}`)
+    }
+
+    return response.text()
+  })
+
+  try {
+    return await Promise.any(attempts)
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    throw new Error(`Unable to fetch TypeScript lib file ${fileName}: ${message}`, {
+      cause: error,
+    })
+  }
+}
+
+const parseTypeScriptLibReferences = sourceText => {
+  const references = new Set()
+  const libReferencePattern = /\/\/\/\s*<reference\s+lib="([^"]+)"\s*\/>/g
+  const pathReferencePattern = /\/\/\/\s*<reference\s+path="([^"]+)"\s*\/>/g
+
+  for (const match of sourceText.matchAll(libReferencePattern)) {
+    const libName = match[1]?.trim()
+    if (libName) {
+      references.add(`lib.${libName}.d.ts`)
+    }
+  }
+
+  for (const match of sourceText.matchAll(pathReferencePattern)) {
+    const pathName = match[1]?.trim()
+    if (pathName) {
+      references.add(pathName.replace(/^\.\//, ''))
+    }
+  }
+
+  return [...references]
+}
+
+const hydrateTypeScriptLibFiles = async (pendingFileNames, loaded) => {
+  const batch = [...new Set(pendingFileNames.map(normalizeVirtualFileName))].filter(
+    fileName =>
+      typeof fileName === 'string' && fileName.length > 0 && !loaded.has(fileName),
+  )
+
+  if (batch.length === 0) {
+    return
+  }
+
+  const discoveredReferences = await Promise.all(
+    batch.map(async fileName => {
+      const sourceText = await fetchTypeScriptLibText(fileName)
+      loaded.set(fileName, sourceText)
+      return parseTypeScriptLibReferences(sourceText).map(normalizeVirtualFileName)
+    }),
+  )
+
+  await hydrateTypeScriptLibFiles(discoveredReferences.flat(), loaded)
+}
+
+const ensureTypeScriptLibFiles = async () => {
+  if (typeScriptLibFiles) {
+    return typeScriptLibFiles
+  }
+
+  const loaded = new Map()
+  await hydrateTypeScriptLibFiles([defaultTypeScriptLibFileName], loaded)
+  typeScriptLibFiles = loaded
+  return typeScriptLibFiles
+}
+
+const collectTypeDiagnostics = async (compiler, sourceText) => {
   const sourceFileName = 'component.tsx'
   const jsxTypesFileName = 'knighted-jsx-runtime.d.ts'
+  const libFiles = await ensureTypeScriptLibFiles()
   const jsxTypes =
+    'declare namespace React {\n' +
+    '  type Key = string | number\n' +
+    '  interface Attributes { key?: Key | null }\n' +
+    '}\n' +
     'declare namespace JSX {\n' +
-    '  interface Element {}\n' +
-    '  interface IntrinsicElements { [elemName: string]: any }\n' +
+    '  type Element = unknown\n' +
+    '  interface ElementChildrenAttribute { children: unknown }\n' +
+    '  interface IntrinsicAttributes extends React.Attributes {}\n' +
+    '  interface IntrinsicElements { [elemName: string]: Record<string, unknown> }\n' +
     '}\n'
 
   const files = new Map([
     [sourceFileName, sourceText],
     [jsxTypesFileName, jsxTypes],
+    ...libFiles.entries(),
   ])
 
   const options = {
@@ -289,30 +575,38 @@ const collectTypeDiagnostics = (compiler, sourceText) => {
     module: compiler.ModuleKind?.ESNext,
     strict: true,
     noEmit: true,
-    noLib: true,
     skipLibCheck: true,
   }
 
   const host = {
-    fileExists: fileName => files.has(fileName),
-    readFile: fileName => files.get(fileName),
+    fileExists: fileName => files.has(normalizeVirtualFileName(fileName)),
+    readFile: fileName => files.get(normalizeVirtualFileName(fileName)),
     getSourceFile: (fileName, languageVersion) => {
-      const text = files.get(fileName)
+      const normalizedFileName = normalizeVirtualFileName(fileName)
+      const text = files.get(normalizedFileName)
       if (typeof text !== 'string') {
         return undefined
       }
 
-      const scriptKind = fileName.endsWith('.tsx')
+      const scriptKind = normalizedFileName.endsWith('.tsx')
         ? compiler.ScriptKind?.TSX
-        : compiler.ScriptKind?.TS
+        : normalizedFileName.endsWith('.d.ts')
+          ? compiler.ScriptKind?.TS
+          : compiler.ScriptKind?.TS
 
-      return compiler.createSourceFile(fileName, text, languageVersion, true, scriptKind)
+      return compiler.createSourceFile(
+        normalizedFileName,
+        text,
+        languageVersion,
+        true,
+        scriptKind,
+      )
     },
-    getDefaultLibFileName: () => 'lib.d.ts',
+    getDefaultLibFileName: () => defaultTypeScriptLibFileName,
     writeFile: () => {},
     getCurrentDirectory: () => '/',
     getDirectories: () => [],
-    getCanonicalFileName: fileName => fileName,
+    getCanonicalFileName: fileName => normalizeVirtualFileName(fileName),
     useCaseSensitiveFileNames: () => true,
     getNewLine: () => '\n',
   }
@@ -329,38 +623,38 @@ const collectTypeDiagnostics = (compiler, sourceText) => {
 }
 
 const runTypeDiagnostics = async runId => {
-  if (!typecheckToggle?.checked) {
-    return
-  }
+  activeTypeDiagnosticsRuns += 1
+  setTypecheckButtonLoading(true)
 
-  setTypeDiagnostics('Type checking…', 'muted')
+  setTypeDiagnosticsDetails({
+    headline: 'Type checking…',
+    level: 'muted',
+  })
 
   try {
     const compiler = await ensureTypeScriptCompiler()
-    if (runId !== typeCheckRunId || !typecheckToggle.checked) {
+    if (runId !== typeCheckRunId) {
       return
     }
 
-    const diagnostics = collectTypeDiagnostics(compiler, getJsxSource())
+    const diagnostics = await collectTypeDiagnostics(compiler, getJsxSource())
     const errorCategory = compiler.DiagnosticCategory?.Error
     const errors = diagnostics.filter(diagnostic => diagnostic.category === errorCategory)
     lastTypeErrorCount = errors.length
+    hasUnresolvedTypeErrors = errors.length > 0
+    clearTypeRecheckTimer()
 
     if (errors.length === 0) {
-      setTypeDiagnostics('Type checking enabled. No TypeScript errors found.', 'ok')
+      setTypeDiagnosticsDetails({
+        headline: 'No TypeScript errors found.',
+        level: 'ok',
+      })
     } else {
-      const preview = errors
-        .slice(0, 3)
-        .map(diagnostic => formatTypeDiagnostic(compiler, diagnostic))
-      const remainder =
-        errors.length > preview.length
-          ? `\n...and ${errors.length - preview.length} more`
-          : ''
-
-      setTypeDiagnostics(
-        `TypeScript found ${errors.length} error${errors.length === 1 ? '' : 's'}:\n${preview.join('\n')}${remainder}`,
-        'error',
-      )
+      setTypeDiagnosticsDetails({
+        headline: `TypeScript found ${errors.length} error${errors.length === 1 ? '' : 's'}:`,
+        lines: errors.map(diagnostic => formatTypeDiagnostic(compiler, diagnostic)),
+        level: 'error',
+      })
     }
 
     if (
@@ -370,27 +664,43 @@ const runTypeDiagnostics = async runId => {
       setRenderedStatus()
     }
   } catch (error) {
-    if (runId !== typeCheckRunId || !typecheckToggle?.checked) {
+    if (runId !== typeCheckRunId) {
       return
     }
 
     lastTypeErrorCount = 0
+    hasUnresolvedTypeErrors = false
+    clearTypeRecheckTimer()
     const message = error instanceof Error ? error.message : String(error)
-    setTypeDiagnostics(`Type diagnostics unavailable: ${message}`, 'error')
+    setTypeDiagnosticsDetails({
+      headline: `Type diagnostics unavailable: ${message}`,
+      level: 'error',
+    })
 
     if (statusNode.textContent.startsWith('Rendered (Type errors:')) {
       setStatus('Rendered')
     }
+  } finally {
+    activeTypeDiagnosticsRuns = Math.max(0, activeTypeDiagnosticsRuns - 1)
+    setTypecheckButtonLoading(activeTypeDiagnosticsRuns > 0)
   }
 }
 
 const markTypeDiagnosticsStale = () => {
-  if (!typecheckToggle?.checked) {
+  if (hasUnresolvedTypeErrors) {
+    setTypeDiagnosticsDetails({
+      headline: 'Source changed. Re-checking type errors…',
+      level: 'muted',
+    })
+    scheduleTypeRecheck()
     return
   }
 
   lastTypeErrorCount = 0
-  setTypeDiagnostics('Source changed. Click Check types to update diagnostics.', 'muted')
+  setTypeDiagnosticsDetails({
+    headline: 'Source changed. Click Typecheck to run diagnostics.',
+    level: 'muted',
+  })
 
   if (statusNode.textContent.startsWith('Rendered (Type errors:')) {
     setStatus('Rendered')
@@ -487,22 +797,36 @@ const debounceRender = () => {
 
 const setJsxSource = value => {
   if (jsxCodeEditor) {
-    jsxCodeEditor.setValue(value)
+    suppressEditorChangeSideEffects = true
+    try {
+      jsxCodeEditor.setValue(value)
+    } finally {
+      suppressEditorChangeSideEffects = false
+    }
   }
   jsxEditor.value = value
 }
 
 const setCssSource = value => {
   if (cssCodeEditor) {
-    cssCodeEditor.setValue(value)
+    suppressEditorChangeSideEffects = true
+    try {
+      cssCodeEditor.setValue(value)
+    } finally {
+      suppressEditorChangeSideEffects = false
+    }
   }
   cssEditor.value = value
 }
 
 const clearComponentSource = () => {
   setJsxSource('')
+  clearDiagnosticsScope('component')
+  lastTypeErrorCount = 0
+  hasUnresolvedTypeErrors = false
+  clearTypeRecheckTimer()
   setStatus('Component cleared')
-  markTypeDiagnosticsStale()
+
   if (!jsxCodeEditor) {
     maybeRender()
   }
@@ -510,6 +834,7 @@ const clearComponentSource = () => {
 
 const clearStylesSource = () => {
   setCssSource('')
+  clearDiagnosticsScope('styles')
   setStatus('Styles cleared')
   if (!cssCodeEditor) {
     maybeRender()
@@ -1177,9 +1502,7 @@ const renderPreview = async () => {
       await renderDom()
     }
     setStatus('Rendered')
-    if (typecheckToggle?.checked) {
-      setRenderedStatus()
-    }
+    setRenderedStatus()
   } catch (error) {
     setStatus('Error')
     const target = getRenderTarget()
@@ -1220,20 +1543,33 @@ autoRenderToggle.addEventListener('change', () => {
     renderPreview()
   }
 })
-if (typecheckToggle) {
-  typecheckToggle.addEventListener('change', () => {
-    updateTypecheckButtonState()
-
-    if (typecheckToggle.checked) {
-      setTypeDiagnostics(
-        'Type checking enabled. Click Check types to run diagnostics.',
-        'muted',
-      )
-      return
-    }
-
+if (diagnosticsToggle) {
+  diagnosticsToggle.addEventListener('click', () => {
+    setDiagnosticsDrawerOpen(!diagnosticsDrawerOpen)
+  })
+}
+if (diagnosticsClose) {
+  diagnosticsClose.addEventListener('click', () => {
+    setDiagnosticsDrawerOpen(false)
+  })
+}
+if (diagnosticsClearComponent) {
+  diagnosticsClearComponent.addEventListener('click', () => {
+    clearDiagnosticsScope('component')
     lastTypeErrorCount = 0
-    setTypeDiagnostics('')
+    hasUnresolvedTypeErrors = false
+    clearTypeRecheckTimer()
+    if (statusNode.textContent.startsWith('Rendered (Type errors:')) {
+      setStatus('Rendered')
+    }
+  })
+}
+if (diagnosticsClearAll) {
+  diagnosticsClearAll.addEventListener('click', () => {
+    clearAllDiagnostics()
+    lastTypeErrorCount = 0
+    hasUnresolvedTypeErrors = false
+    clearTypeRecheckTimer()
     if (statusNode.textContent.startsWith('Rendered (Type errors:')) {
       setStatus('Rendered')
     }
@@ -1241,10 +1577,6 @@ if (typecheckToggle) {
 }
 if (typecheckButton) {
   typecheckButton.addEventListener('click', () => {
-    if (!typecheckToggle?.checked) {
-      return
-    }
-
     typeCheckRunId += 1
     void runTypeDiagnostics(typeCheckRunId)
   })
@@ -1310,13 +1642,13 @@ for (const button of appThemeButtons) {
 applyAppGridLayout(getInitialAppGridLayout(), { persist: false })
 applyTheme(getInitialTheme(), { persist: false })
 
-if (typecheckToggle) {
-  typecheckToggle.checked = false
-}
-
 updateRenderButtonVisibility()
-updateTypecheckButtonState()
-setTypeDiagnostics('')
+renderDiagnosticsScope('component')
+renderDiagnosticsScope('styles')
+updateDiagnosticsToggleLabel()
+updateUiIssueIndicators()
+setDiagnosticsDrawerOpen(false)
+setTypeDiagnosticsDetails({ headline: '' })
 setStyleCompiling(false)
 setCdnLoading(true)
 initializePreviewBackgroundPicker()

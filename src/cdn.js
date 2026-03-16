@@ -226,3 +226,23 @@ const importFromCdnCandidateAt = async (importCandidates, index, firstError = nu
 
 export const importFromCdnWithFallback = importCandidates =>
   importFromCdnCandidateAt(importCandidates, 0)
+
+const typeScriptVersion = '5.9.3'
+const typeScriptLibBaseByProvider = {
+  esm: `https://esm.sh/typescript@${typeScriptVersion}/lib`,
+  unpkg: `https://unpkg.com/typescript@${typeScriptVersion}/lib`,
+}
+
+const typeScriptLibStableFallbackBase = `https://cdn.jsdelivr.net/npm/typescript@${typeScriptVersion}/lib`
+
+export const getTypeScriptLibUrls = fileName => {
+  const providerOrderedBases = getProviderPriority()
+    .map(provider => typeScriptLibBaseByProvider[provider])
+    .filter(Boolean)
+
+  if (!providerOrderedBases.includes(typeScriptLibStableFallbackBase)) {
+    providerOrderedBases.push(typeScriptLibStableFallbackBase)
+  }
+
+  return providerOrderedBases.map(baseUrl => `${baseUrl}/${fileName}`)
+}

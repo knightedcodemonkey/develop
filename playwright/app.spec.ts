@@ -70,7 +70,9 @@ test('transpiles TypeScript annotations in component source', async ({ page }) =
   await expect(page.locator('#preview-host button')).toContainText('typed')
 })
 
-test('shows error status when component source is cleared', async ({ page }) => {
+test('clearing component source reports clear action without error status', async ({
+  page,
+}) => {
   await waitForInitialRender(page)
 
   const dialog = page.locator('#clear-confirm-dialog')
@@ -78,9 +80,27 @@ test('shows error status when component source is cleared', async ({ page }) => 
   await expect(dialog).toHaveAttribute('open', '')
   await dialog.getByRole('button', { name: 'Clear' }).click()
 
+  await expect(page.locator('#status')).toHaveText('Component cleared')
+  await expect(page.locator('#status')).toHaveClass(/status--neutral/)
+  await expect(page.locator('#preview-host pre')).toHaveCount(0)
+})
+
+test('jsx syntax errors affect status but not diagnostics toggle severity', async ({
+  page,
+}) => {
+  await waitForInitialRender(page)
+
+  await setComponentEditorSource(
+    page,
+    ['const App = () => <button', 'const value = 1'].join('\n'),
+  )
+
   await expect(page.locator('#status')).toHaveText('Error')
-  await expect(page.locator('#preview-host pre')).toContainText(
-    'Expected a render() function or a component named App/View.',
+  await expect(page.locator('#status')).toHaveClass(/status--error/)
+  await expect(page.locator('#preview-host pre')).toContainText('[jsx]')
+  await expect(page.locator('#diagnostics-toggle')).toHaveText('Diagnostics')
+  await expect(page.locator('#diagnostics-toggle')).toHaveClass(
+    /diagnostics-toggle--neutral/,
   )
 })
 
@@ -185,4 +205,38 @@ test('clear styles action opens confirm dialog and clears on confirm', async ({
   await expect(dialog).not.toHaveAttribute('open', '')
   await expect(cssEditor).toHaveValue('')
   await expect(page.locator('#status')).toHaveText('Styles cleared')
+})
+
+test('clearing styles keeps diagnostics error state but resets status styling', async ({
+  page,
+}) => {
+  await waitForInitialRender(page)
+
+  await setComponentEditorSource(
+    page,
+    ["const count: number = 'oops'", 'const App = () => <button>ready</button>'].join(
+      '\n',
+    ),
+  )
+
+  await page.getByRole('button', { name: 'Typecheck' }).click()
+
+  await expect(page.locator('#status')).toHaveText(/Rendered \(Type errors: [1-9]\d*\)/)
+  await expect(page.locator('#status')).toHaveClass(/status--error/)
+  await expect(page.locator('#diagnostics-toggle')).toHaveText(/Diagnostics \([1-9]\d*\)/)
+  await expect(page.locator('#diagnostics-toggle')).toHaveClass(
+    /diagnostics-toggle--error/,
+  )
+
+  const dialog = page.locator('#clear-confirm-dialog')
+  await page.getByLabel('Clear styles source').click()
+  await expect(dialog).toHaveAttribute('open', '')
+  await dialog.getByRole('button', { name: 'Clear' }).click()
+
+  await expect(page.locator('#status')).toHaveText('Styles cleared')
+  await expect(page.locator('#status')).toHaveClass(/status--neutral/)
+  await expect(page.locator('#diagnostics-toggle')).toHaveClass(
+    /diagnostics-toggle--error/,
+  )
+  await expect(page.locator('#diagnostics-toggle')).toHaveText(/Diagnostics \([1-9]\d*\)/)
 })
