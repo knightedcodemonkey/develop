@@ -23,10 +23,10 @@ if (isCI) {
 
 export default defineConfig({
   testDir: 'playwright',
-  timeout: 45_000,
+  timeout: isCI ? 120_000 : 20_000,
   retries: isCI ? 1 : 0,
   expect: {
-    timeout: 15_000,
+    timeout: isCI ? 90_000 : 15_000,
   },
   reporter: isCI ? 'github' : 'list',
   use: {

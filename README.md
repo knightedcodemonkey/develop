@@ -24,6 +24,18 @@ Then open the URL printed by the dev server (it should open `src/index.html`).
 
 ## End-to-end tests
 
+Install Playwright browsers once before your first local run:
+
+```bash
+npx playwright install
+```
+
+If your environment needs system dependencies too (for example Linux CI-like containers), use:
+
+```bash
+npx playwright install --with-deps
+```
+
 Run local Playwright tests (Chromium):
 
 ```bash

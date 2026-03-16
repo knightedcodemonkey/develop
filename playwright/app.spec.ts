@@ -4,7 +4,7 @@ import type { Page } from '@playwright/test'
 const waitForInitialRender = async (page: Page) => {
   await page.goto('/src/index.html')
   await expect(page.getByRole('heading', { name: '@knighted/develop' })).toBeVisible()
-  await expect(page.locator('#status')).toHaveText('Rendered', { timeout: 90_000 })
+  await expect(page.locator('#status')).toHaveText('Rendered')
   await expect(page.locator('#cdn-loading')).toHaveAttribute('hidden', '')
 }
 
@@ -42,7 +42,7 @@ test('renders in react mode with css modules', async ({ page }) => {
   await page.getByLabel('ShadowRoot (open)').uncheck()
   await page.locator('#render-mode').selectOption('react')
   await page.locator('#style-mode').selectOption('module')
-  await expect(page.locator('#status')).toHaveText('Rendered', { timeout: 90_000 })
+  await expect(page.locator('#status')).toHaveText('Rendered')
 
   const previewItems = page.locator('#preview-host li')
   await expect(previewItems).toHaveCount(3)
@@ -79,7 +79,7 @@ test('requires render button when auto render is disabled', async ({ page }) => 
   await expect(styleWarning).toHaveText('')
 
   await renderButton.click()
-  await expect(page.locator('#status')).toHaveText('Rendered', { timeout: 90_000 })
+  await expect(page.locator('#status')).toHaveText('Rendered')
   await expect(styleWarning).toContainText('CSS Modules are compiled in-browser')
 })
 
@@ -103,7 +103,7 @@ test('renders with less style mode', async ({ page }) => {
 
   await page.getByLabel('ShadowRoot (open)').uncheck()
   await page.locator('#style-mode').selectOption('less')
-  await expect(page.locator('#status')).toHaveText('Rendered', { timeout: 90_000 })
+  await expect(page.locator('#status')).toHaveText('Rendered')
   await expect(page.locator('#style-warning')).toContainText(
     'Less is compiled in-browser via @knighted/css/browser.',
   )
@@ -118,7 +118,7 @@ test('renders with sass style mode', async ({ page }) => {
 
   await page.getByLabel('ShadowRoot (open)').uncheck()
   await page.locator('#style-mode').selectOption('sass')
-  await expect(page.locator('#status')).toHaveText('Rendered', { timeout: 90_000 })
+  await expect(page.locator('#status')).toHaveText('Rendered')
   await expect(page.locator('#style-warning')).toContainText(
     'Sass is compiled in-browser via @knighted/css/browser.',
   )
