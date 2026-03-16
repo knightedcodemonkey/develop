@@ -510,13 +510,21 @@ textarea:focus {
 }
 
 .preview-host {
-  flex: 1 1 auto;
-  min-height: 180px;
-  padding: 18px;
-  overflow: auto;
-  position: relative;
+  --preview-host-display: block;
+  --preview-host-flex: 1 1 auto;
+  --preview-host-min-height: 180px;
+  --preview-host-padding: 18px;
+  --preview-host-overflow: auto;
+  --preview-host-position: relative;
+  --preview-host-z-index: 1;
+  display: var(--preview-host-display);
+  flex: var(--preview-host-flex);
+  min-height: var(--preview-host-min-height);
+  padding: var(--preview-host-padding);
+  overflow: var(--preview-host-overflow);
+  position: var(--preview-host-position);
   background: var(--surface-preview);
-  z-index: 1;
+  z-index: var(--preview-host-z-index);
 }
 
 .preview-host[data-style-compiling='true']::before {
@@ -613,7 +621,6 @@ textarea:focus {
   padding: 0;
 }
 
-.shadow-hint::before,
 .shadow-hint::after {
   opacity: 0;
   visibility: hidden;
@@ -622,18 +629,6 @@ textarea:focus {
     opacity 120ms ease,
     transform 120ms ease,
     visibility 120ms ease;
-}
-
-.shadow-hint::before {
-  content: '';
-  position: absolute;
-  top: calc(100% + 4px);
-  right: 4px;
-  border-left: 6px solid transparent;
-  border-right: 6px solid transparent;
-  border-bottom: 6px solid var(--surface-tooltip);
-  transform: translateY(-4px);
-  z-index: 31;
 }
 
 .shadow-hint::after {
@@ -656,9 +651,7 @@ textarea:focus {
   z-index: 30;
 }
 
-.shadow-hint:hover::before,
 .shadow-hint:hover::after,
-.shadow-hint:focus-visible::before,
 .shadow-hint:focus-visible::after {
   opacity: 1;
   visibility: visible;
