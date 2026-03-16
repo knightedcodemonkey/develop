@@ -594,8 +594,7 @@ const remapReactClassNames = (value, moduleExports, React) => {
   return React.cloneElement(value, nextProps)
 }
 
-const looksLikeJsxSyntaxError = error =>
-  error instanceof SyntaxError && /Unexpected token ['"]?</.test(error.message)
+const shouldAttemptTranspileFallback = error => error instanceof SyntaxError
 
 const createUserModuleFactory = source =>
   new Function(
@@ -794,7 +793,7 @@ const evaluateUserModule = async (helpers = {}) => {
     const moduleFactory = createUserModuleFactory(userCode)
     return moduleFactory(helpers.jsx ?? jsx, helpers.reactJsx, helpers.React)
   } catch (error) {
-    if (!looksLikeJsxSyntaxError(error)) {
+    if (!shouldAttemptTranspileFallback(error)) {
       throw error
     }
 
@@ -804,11 +803,13 @@ const evaluateUserModule = async (helpers = {}) => {
         sourceType: 'script',
         createElement: 'jsx.createElement',
         fragment: 'jsx.Fragment',
+        typescript: 'strip',
       },
       react: {
         sourceType: 'script',
         createElement: 'React.createElement',
         fragment: 'React.Fragment',
+        typescript: 'strip',
       },
     }
     const transpiledUserCode = transpileJsxSource(

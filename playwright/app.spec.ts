@@ -8,6 +8,11 @@ const waitForInitialRender = async (page: Page) => {
   await expect(page.locator('#cdn-loading')).toHaveAttribute('hidden', '')
 }
 
+const setComponentEditorSource = async (page: Page, source: string) => {
+  const editorContent = page.locator('.component-panel .cm-content').first()
+  await editorContent.fill(source)
+}
+
 test('renders default playground preview', async ({ page }) => {
   await waitForInitialRender(page)
 
@@ -47,6 +52,22 @@ test('renders in react mode with css modules', async ({ page }) => {
   const previewItems = page.locator('#preview-host li')
   await expect(previewItems).toHaveCount(3)
   await expect(previewItems.first()).toContainText('apple')
+})
+
+test('transpiles TypeScript annotations in component source', async ({ page }) => {
+  await waitForInitialRender(page)
+
+  await page.getByLabel('ShadowRoot (open)').uncheck()
+  await setComponentEditorSource(
+    page,
+    [
+      'const Button = ({ label }: { label: string }): unknown => <button>{label}</button>',
+      'const App = () => <Button label="typed" />',
+    ].join('\n'),
+  )
+
+  await expect(page.locator('#status')).toHaveText('Rendered')
+  await expect(page.locator('#preview-host button')).toContainText('typed')
 })
 
 test('shows error status when component source is cleared', async ({ page }) => {
