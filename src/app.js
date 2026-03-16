@@ -3,6 +3,8 @@ import { createCodeMirrorEditor } from './editor-codemirror.js'
 import { defaultCss, defaultJsx } from './defaults.js'
 
 const statusNode = document.getElementById('status')
+const appGrid = document.querySelector('.app-grid')
+const appGridLayoutButtons = document.querySelectorAll('[data-app-grid-layout]')
 const renderMode = document.getElementById('render-mode')
 const autoRenderToggle = document.getElementById('auto-render')
 const renderButton = document.getElementById('render-button')
@@ -44,6 +46,7 @@ let pendingClearAction = null
 let hasCompletedInitialRender = false
 let previewBackgroundColor = null
 const clipboardSupported = Boolean(navigator.clipboard?.writeText)
+const appGridLayoutStorageKey = 'knighted-develop:app-grid-layout'
 
 const styleLabels = {
   css: 'Native CSS',
@@ -140,6 +143,43 @@ const ensureCoreRuntime = async () => {
 
 const setStatus = text => {
   statusNode.textContent = text
+}
+
+const appGridLayouts = ['default', 'preview-right', 'preview-left']
+
+const applyAppGridLayout = (layout, { persist = true } = {}) => {
+  if (!appGrid || !appGridLayouts.includes(layout)) {
+    return
+  }
+
+  appGrid.classList.toggle('app-grid--preview-right', layout === 'preview-right')
+  appGrid.classList.toggle('app-grid--preview-left', layout === 'preview-left')
+
+  for (const button of appGridLayoutButtons) {
+    const isActive = button.dataset.appGridLayout === layout
+    button.setAttribute('aria-pressed', isActive ? 'true' : 'false')
+  }
+
+  if (persist) {
+    try {
+      localStorage.setItem(appGridLayoutStorageKey, layout)
+    } catch {
+      /* Ignore storage write errors in restricted browsing modes. */
+    }
+  }
+}
+
+const getInitialAppGridLayout = () => {
+  try {
+    const value = localStorage.getItem(appGridLayoutStorageKey)
+    if (appGridLayouts.includes(value)) {
+      return value
+    }
+  } catch {
+    /* Ignore storage read errors in restricted browsing modes. */
+  }
+
+  return 'default'
 }
 
 const setCdnLoading = isLoading => {
@@ -891,6 +931,18 @@ clearStylesButton.addEventListener('click', () => {
 })
 jsxEditor.addEventListener('input', maybeRender)
 cssEditor.addEventListener('input', maybeRender)
+
+for (const button of appGridLayoutButtons) {
+  button.addEventListener('click', () => {
+    const nextLayout = button.dataset.appGridLayout
+    if (!nextLayout) {
+      return
+    }
+    applyAppGridLayout(nextLayout)
+  })
+}
+
+applyAppGridLayout(getInitialAppGridLayout(), { persist: false })
 
 updateRenderButtonVisibility()
 setStyleCompiling(false)

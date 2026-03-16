@@ -78,10 +78,67 @@ body {
   display: grid;
   grid-template-columns: repeat(2, minmax(320px, 1fr));
   grid-template-areas:
+    'layout-controls layout-controls'
     'component styles'
     'preview preview';
   gap: 18px;
   padding: 24px;
+}
+
+.app-grid--preview-right {
+  grid-template-areas:
+    'layout-controls layout-controls'
+    'component preview'
+    'styles preview';
+}
+
+.app-grid--preview-left {
+  grid-template-areas:
+    'layout-controls layout-controls'
+    'preview component'
+    'preview styles';
+}
+
+.app-grid-layout-controls {
+  grid-area: layout-controls;
+  display: inline-flex;
+  justify-self: end;
+  gap: 10px;
+}
+
+.layout-toggle {
+  display: inline-grid;
+  place-content: center;
+  width: 36px;
+  height: 36px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.06);
+  color: #d8e0ef;
+  cursor: pointer;
+}
+
+.layout-toggle svg {
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.5;
+}
+
+.layout-toggle:hover {
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.layout-toggle[aria-pressed='true'] {
+  border-color: rgba(122, 107, 255, 0.65);
+  background: rgba(122, 107, 255, 0.2);
+  color: #f1f5ff;
+}
+
+.layout-toggle:focus-visible {
+  outline: 2px solid rgba(122, 107, 255, 0.85);
+  outline-offset: 2px;
 }
 
 .component-panel {
@@ -105,9 +162,14 @@ body {
   .app-grid {
     grid-template-columns: minmax(0, 1fr);
     grid-template-areas:
+      'layout-controls'
       'component'
       'styles'
       'preview';
+  }
+
+  .app-grid-layout-controls {
+    justify-self: start;
   }
 }
 
@@ -271,7 +333,7 @@ textarea:focus {
 }
 
 .preview-host {
-  flex: 0 1 auto;
+  flex: 1 1 auto;
   min-height: 180px;
   padding: 18px;
   overflow: auto;
