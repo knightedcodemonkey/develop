@@ -31,17 +31,27 @@
     "build:jspm": "KNIGHTED_PRIMARY_CDN=jspmGa npm run build",
     "build:importmap-mode": "KNIGHTED_PRIMARY_CDN=importMap npm run build",
     "preview": "http-server dist -a localhost -c-1 -o index.html",
+    "check-types": "tsc -p tsconfig.json",
+    "lint:playwright": "eslint playwright playwright.config.ts",
+    "test:e2e": "playwright test",
+    "test:e2e:headed": "playwright test --headed",
     "test": "echo \"Error: no test specified\" && exit 1",
     "prettier": "prettier --write .",
-    "lint": "oxlint src scripts"
+    "lint": "oxlint src scripts && npm run lint:playwright"
   },
   "devDependencies": {
+    "@playwright/test": "^1.58.2",
+    "@types/node": "^25.5.0",
+    "@typescript-eslint/parser": "^8.57.1",
+    "eslint": "^10.0.3",
+    "eslint-plugin-playwright": "^2.10.0",
     "http-server": "^14.1.1",
     "husky": "^9.1.7",
     "jspm": "^4.4.0",
     "lint-staged": "^16.4.0",
     "oxlint": "^1.55.0",
-    "prettier": "^3.8.1"
+    "prettier": "^3.8.1",
+    "typescript": "^5.9.3"
   },
   "lint-staged": {
     "**/*": [

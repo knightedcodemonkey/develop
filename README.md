@@ -22,6 +22,22 @@ npm run dev
 
 Then open the URL printed by the dev server (it should open `src/index.html`).
 
+## End-to-end tests
+
+Run local Playwright tests (Chromium):
+
+```bash
+npm run test:e2e
+```
+
+Run locally with headed browser:
+
+```bash
+npm run test:e2e:headed
+```
+
+CI runs Playwright on Chromium and WebKit.
+
 ## Notes
 
 - This is currently a development playground, not a stable product.
