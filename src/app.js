@@ -464,6 +464,8 @@ const shadowPreviewBaseStyles = `
   padding: var(--preview-host-padding, 18px);
   overflow: var(--preview-host-overflow, auto);
   position: var(--preview-host-position, relative);
+  background: var(--surface-preview);
+  color-scheme: var(--control-color-scheme, dark);
   z-index: var(--preview-host-z-index, 1);
   box-sizing: border-box;
 }
