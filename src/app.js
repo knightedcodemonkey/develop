@@ -1,71 +1,27 @@
 import { cdnImports, importFromCdnWithFallback } from './cdn.js'
 import { createCodeMirrorEditor } from './editor-codemirror.js'
+import { defaultCss, defaultJsx } from './defaults.js'
 
 const statusNode = document.getElementById('status')
 const renderMode = document.getElementById('render-mode')
 const autoRenderToggle = document.getElementById('auto-render')
 const renderButton = document.getElementById('render-button')
+const copyComponentButton = document.getElementById('copy-component')
+const clearComponentButton = document.getElementById('clear-component')
 const styleMode = document.getElementById('style-mode')
+const copyStylesButton = document.getElementById('copy-styles')
+const clearStylesButton = document.getElementById('clear-styles')
 const shadowToggle = document.getElementById('shadow-toggle')
 const jsxEditor = document.getElementById('jsx-editor')
 const cssEditor = document.getElementById('css-editor')
-const previewHost = document.getElementById('preview-host')
 const styleWarning = document.getElementById('style-warning')
 const cdnLoading = document.getElementById('cdn-loading')
-
-const defaultJsx = [
-  'const Button = ({ onClick }) => {',
-  '  return <button onClick={onClick}>click me</button>',
-  '}',
-  '',
-  'const App = () => {',
-  '  const onClick = () => {',
-  "    alert('clicked!')",
-  '  }',
-  '',
-  '  return <Button onClick={onClick} />',
-  '}',
-  '',
-].join('\n')
-
-const defaultCss = `button {
-  appearance: none;
-  border: 1px solid rgba(122, 107, 255, 0.55);
-  background: linear-gradient(135deg, #7a6bff, #5f4dff);
-  color: #fff;
-  padding: 10px 16px;
-  border-radius: 10px;
-  font-weight: 700;
-  letter-spacing: 0.01em;
-  cursor: pointer;
-  transition:
-    transform 120ms ease,
-    box-shadow 120ms ease,
-    filter 120ms ease;
-  box-shadow:
-    0 8px 20px rgba(95, 77, 255, 0.28),
-    inset 0 1px 0 rgba(255, 255, 255, 0.18);
-}
-
-button:hover {
-  transform: translateY(-1px);
-  filter: brightness(1.06);
-}
-
-button:active {
-  transform: translateY(0);
-  filter: brightness(0.98);
-}
-
-button:focus-visible {
-  outline: 2px solid #9d91ff;
-  outline-offset: 2px;
-}
-`
+const previewBgColorInput = document.getElementById('preview-bg-color')
 
 jsxEditor.value = defaultJsx
 cssEditor.value = defaultCss
 
+let previewHost = document.getElementById('preview-host')
 let jsxCodeEditor = null
 let cssCodeEditor = null
 let getJsxSource = () => jsxEditor.value
@@ -82,6 +38,8 @@ let compiledStylesCache = {
   value: null,
 }
 let hasCompletedInitialRender = false
+let previewBackgroundColor = null
+const clipboardSupported = Boolean(navigator.clipboard?.writeText)
 
 const styleLabels = {
   css: 'Native CSS',
@@ -196,7 +154,140 @@ const debounceRender = () => {
   scheduled = setTimeout(renderPreview, 200)
 }
 
-const getShadowRoot = () => {
+const setJsxSource = value => {
+  if (jsxCodeEditor) {
+    jsxCodeEditor.setValue(value)
+  }
+  jsxEditor.value = value
+}
+
+const setCssSource = value => {
+  if (cssCodeEditor) {
+    cssCodeEditor.setValue(value)
+  }
+  cssEditor.value = value
+}
+
+const clearComponentSource = () => {
+  setJsxSource('')
+  if (!jsxCodeEditor) {
+    maybeRender()
+  }
+}
+
+const clearStylesSource = () => {
+  setCssSource('')
+  if (!cssCodeEditor) {
+    maybeRender()
+  }
+}
+
+const copyTextToClipboard = async text => {
+  if (!clipboardSupported) {
+    throw new Error('Clipboard API is not available in this browser context.')
+  }
+
+  await navigator.clipboard.writeText(text)
+}
+
+const copyComponentSource = async () => {
+  try {
+    await copyTextToClipboard(getJsxSource())
+    setStatus('Component copied')
+  } catch {
+    setStatus('Copy failed')
+  }
+}
+
+const copyStylesSource = async () => {
+  try {
+    await copyTextToClipboard(getCssSource())
+    setStatus('Styles copied')
+  } catch {
+    setStatus('Copy failed')
+  }
+}
+
+const toHexChannel = value => value.toString(16).padStart(2, '0')
+
+const normalizeColorToHex = colorValue => {
+  if (typeof colorValue !== 'string' || colorValue.length === 0) {
+    return '#12141c'
+  }
+
+  if (/^#[\da-f]{6}$/i.test(colorValue)) {
+    return colorValue.toLowerCase()
+  }
+
+  if (/^#[\da-f]{3}$/i.test(colorValue)) {
+    return colorValue
+      .slice(1)
+      .split('')
+      .map(channel => channel + channel)
+      .join('')
+      .replace(/^/, '#')
+      .toLowerCase()
+  }
+
+  const channels = colorValue.match(/\d+/g)
+  if (!channels || channels.length < 3) {
+    return '#12141c'
+  }
+
+  const [red, green, blue] = channels.slice(0, 3).map(value => Number.parseInt(value, 10))
+  if ([red, green, blue].some(value => Number.isNaN(value))) {
+    return '#12141c'
+  }
+
+  return `#${toHexChannel(red)}${toHexChannel(green)}${toHexChannel(blue)}`
+}
+
+const applyPreviewBackgroundColor = color => {
+  if (!previewHost) {
+    return
+  }
+
+  previewHost.style.backgroundColor = color
+}
+
+const initializePreviewBackgroundPicker = () => {
+  if (!previewBgColorInput || !previewHost) {
+    return
+  }
+
+  const initialColor = normalizeColorToHex(getComputedStyle(previewHost).backgroundColor)
+  previewBackgroundColor = initialColor
+  previewBgColorInput.value = initialColor
+  applyPreviewBackgroundColor(initialColor)
+
+  previewBgColorInput.addEventListener('input', () => {
+    previewBackgroundColor = previewBgColorInput.value
+    applyPreviewBackgroundColor(previewBackgroundColor)
+  })
+}
+
+const recreatePreviewHost = () => {
+  const nextHost = document.createElement('div')
+  nextHost.id = 'preview-host'
+  nextHost.className = previewHost.className
+  previewHost.replaceWith(nextHost)
+  previewHost = nextHost
+
+  if (previewBackgroundColor) {
+    applyPreviewBackgroundColor(previewBackgroundColor)
+  }
+}
+
+const getRenderTarget = () => {
+  if (!shadowToggle.checked && previewHost.shadowRoot) {
+    /* ShadowRoot cannot be detached, so recreate the host for light DOM mode. */
+    if (reactRoot) {
+      reactRoot.unmount()
+      reactRoot = null
+    }
+    recreatePreviewHost()
+  }
+
   if (shadowToggle.checked) {
     if (!previewHost.shadowRoot) {
       previewHost.attachShadow({ mode: 'open' })
@@ -234,7 +325,10 @@ const applyStyles = (target, cssText) => {
   if (!target) return
 
   const styleTag = document.createElement('style')
-  styleTag.textContent = cssText
+  const isShadowTarget = target instanceof ShadowRoot
+  styleTag.textContent = isShadowTarget
+    ? cssText
+    : `@scope (#preview-host) {\n${cssText}\n}`
   target.append(styleTag)
 }
 
@@ -554,12 +648,30 @@ const evaluateUserModule = async (helpers = {}) => {
       throw error
     }
 
-    const transpiledUserCode = transpileJsxSource(userCode, {
-      sourceType: 'script',
-    }).code
+    const transpileMode = helpers.React && helpers.reactJsx ? 'react' : 'dom'
+    const transpileOptionsByMode = {
+      dom: {
+        sourceType: 'script',
+        createElement: 'jsx.createElement',
+        fragment: 'jsx.Fragment',
+      },
+      react: {
+        sourceType: 'script',
+        createElement: 'React.createElement',
+        fragment: 'React.Fragment',
+      },
+    }
+    const transpiledUserCode = transpileJsxSource(
+      userCode,
+      transpileOptionsByMode[transpileMode],
+    ).code
     const moduleFactory = createUserModuleFactory(transpiledUserCode)
 
     if (helpers.React && helpers.reactJsx) {
+      return moduleFactory(helpers.jsx ?? jsx, helpers.reactJsx, helpers.React)
+    }
+
+    if (transpileMode === 'dom') {
       return moduleFactory(helpers.jsx ?? jsx, helpers.reactJsx, helpers.React)
     }
 
@@ -605,7 +717,7 @@ const ensureReactRuntime = async () => {
 
 const renderDom = async () => {
   const { jsx } = await ensureCoreRuntime()
-  const target = getShadowRoot()
+  const target = getRenderTarget()
   clearTarget(target)
   const compiledStyles = await compileStyles()
   applyStyles(target, compiledStyles.css)
@@ -627,13 +739,13 @@ const renderDom = async () => {
 }
 
 const renderReact = async () => {
-  const target = getShadowRoot()
+  const target = getRenderTarget()
   clearTarget(target)
   const compiledStyles = await compileStyles()
   applyStyles(target, compiledStyles.css)
 
   const { reactJsx, createRoot, React } = await ensureReactRuntime()
-  const renderFn = await evaluateUserModule({ jsx: reactJsx, reactJsx })
+  const renderFn = await evaluateUserModule({ jsx: reactJsx, reactJsx, React })
   if (!renderFn) {
     throw new Error('Expected a render() function or a component named App/View.')
   }
@@ -666,7 +778,7 @@ const renderPreview = async () => {
     setStatus('Rendered')
   } catch (error) {
     setStatus('Error')
-    const target = getShadowRoot()
+    const target = getRenderTarget()
     clearTarget(target)
     const message = document.createElement('pre')
     message.textContent = error instanceof Error ? error.message : String(error)
@@ -686,6 +798,10 @@ const maybeRender = () => {
   }
 }
 
+const updateRenderButtonVisibility = () => {
+  renderButton.hidden = autoRenderToggle.checked
+}
+
 renderMode.addEventListener('change', maybeRender)
 styleMode.addEventListener('change', () => {
   if (cssCodeEditor) {
@@ -695,15 +811,31 @@ styleMode.addEventListener('change', () => {
 })
 shadowToggle.addEventListener('change', maybeRender)
 autoRenderToggle.addEventListener('change', () => {
+  updateRenderButtonVisibility()
   if (autoRenderToggle.checked) {
     renderPreview()
   }
 })
 renderButton.addEventListener('click', renderPreview)
+if (clipboardSupported) {
+  copyComponentButton.addEventListener('click', () => {
+    void copyComponentSource()
+  })
+  copyStylesButton.addEventListener('click', () => {
+    void copyStylesSource()
+  })
+} else {
+  copyComponentButton.hidden = true
+  copyStylesButton.hidden = true
+}
+clearComponentButton.addEventListener('click', clearComponentSource)
+clearStylesButton.addEventListener('click', clearStylesSource)
 jsxEditor.addEventListener('input', maybeRender)
 cssEditor.addEventListener('input', maybeRender)
 
+updateRenderButtonVisibility()
 setStyleCompiling(false)
 setCdnLoading(true)
+initializePreviewBackgroundPicker()
 void initializeCodeEditors()
 renderPreview()
