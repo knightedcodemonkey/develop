@@ -455,13 +455,29 @@ const updateStyleWarning = () => {
   styleWarning.textContent = `${styleLabels[mode]} is compiled in-browser via @knighted/css/browser.`
 }
 
+const shadowPreviewBaseStyles = `
+:host {
+  all: initial;
+  display: var(--preview-host-display, block);
+  flex: var(--preview-host-flex, 1 1 auto);
+  min-height: var(--preview-host-min-height, 180px);
+  padding: var(--preview-host-padding, 18px);
+  overflow: var(--preview-host-overflow, auto);
+  position: var(--preview-host-position, relative);
+  background: var(--surface-preview);
+  color-scheme: var(--control-color-scheme, dark);
+  z-index: var(--preview-host-z-index, 1);
+  box-sizing: border-box;
+}
+`
+
 const applyStyles = (target, cssText) => {
   if (!target) return
 
   const styleTag = document.createElement('style')
   const isShadowTarget = target instanceof ShadowRoot
   styleTag.textContent = isShadowTarget
-    ? cssText
+    ? `${shadowPreviewBaseStyles}\n${cssText}`
     : `@scope (#preview-host) {\n${cssText}\n}`
   target.append(styleTag)
 }
