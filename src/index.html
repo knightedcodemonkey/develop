@@ -129,10 +129,26 @@
         </div>
       </div>
 
-      <section class="panel component-panel">
+      <section class="panel component-panel" id="component-panel">
         <div class="panel-header panel-header--grid">
           <h2>Component</h2>
           <div class="controls controls--quick-actions panel-header-quick-actions">
+            <button
+              class="panel-collapse-toggle"
+              id="collapse-component"
+              type="button"
+              data-panel-collapse="component"
+              data-collapse-axis="vertical"
+              data-collapsed="false"
+              aria-expanded="true"
+              aria-controls="component-panel"
+              title="Collapse component panel"
+            >
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="m6 9 6 6 6-6"></path>
+              </svg>
+              <span class="panel-collapse-toggle__label">Collapse</span>
+            </button>
             <button
               class="icon-button"
               id="copy-component"
@@ -186,10 +202,26 @@
         <textarea id="jsx-editor" spellcheck="false"></textarea>
       </section>
 
-      <section class="panel styles-panel">
+      <section class="panel styles-panel" id="styles-panel">
         <div class="panel-header panel-header--grid">
           <h2>Styles</h2>
           <div class="controls controls--quick-actions panel-header-quick-actions">
+            <button
+              class="panel-collapse-toggle"
+              id="collapse-styles"
+              type="button"
+              data-panel-collapse="styles"
+              data-collapse-axis="vertical"
+              data-collapsed="false"
+              aria-expanded="true"
+              aria-controls="styles-panel"
+              title="Collapse styles panel"
+            >
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="m6 9 6 6 6-6"></path>
+              </svg>
+              <span class="panel-collapse-toggle__label">Collapse</span>
+            </button>
             <button
               class="icon-button"
               id="copy-styles"
@@ -236,7 +268,7 @@
         <div class="panel-footer" id="style-warning"></div>
       </section>
 
-      <section class="panel preview preview-panel">
+      <section class="panel preview preview-panel" id="preview-panel">
         <div class="panel-header">
           <h2>Preview</h2>
           <div class="controls">
@@ -255,6 +287,22 @@
               data-tooltip="Turning ShadowRoot off renders the preview in light DOM, so @knighted/develop styles can affect preview output."
             >
               i
+            </button>
+            <button
+              class="panel-collapse-toggle"
+              id="collapse-preview"
+              type="button"
+              data-panel-collapse="preview"
+              data-collapse-axis="vertical"
+              data-collapsed="false"
+              aria-expanded="true"
+              aria-controls="preview-panel"
+              title="Collapse preview panel"
+            >
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="m6 9 6 6 6-6"></path>
+              </svg>
+              <span class="panel-collapse-toggle__label">Collapse</span>
             </button>
           </div>
         </div>
