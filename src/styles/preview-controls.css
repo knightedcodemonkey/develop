@@ -1,0 +1,220 @@
+.preview-host {
+  --preview-host-display: block;
+  --preview-host-flex: 1 1 auto;
+  --preview-host-min-height: 180px;
+  --preview-host-padding: 18px;
+  --preview-host-overflow: auto;
+  --preview-host-position: relative;
+  --preview-host-z-index: 1;
+  display: var(--preview-host-display);
+  flex: var(--preview-host-flex);
+  min-height: var(--preview-host-min-height);
+  padding: var(--preview-host-padding);
+  overflow: var(--preview-host-overflow);
+  position: var(--preview-host-position);
+  background: var(--surface-preview);
+  z-index: var(--preview-host-z-index);
+}
+
+.preview-host[data-style-compiling='true']::before {
+  content: 'Compiling styles…';
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-content: center;
+  padding-top: 34px;
+  background: var(--surface-overlay);
+  backdrop-filter: blur(2px);
+  color: var(--panel-text);
+  font-size: 0.88rem;
+  letter-spacing: 0.01em;
+  z-index: 2;
+}
+
+.preview-host[data-style-compiling='true']::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: calc(50% - 18px);
+  width: 20px;
+  height: 20px;
+  margin-left: -10px;
+  border-radius: 50%;
+  border: 2px solid var(--loading-spinner-border);
+  border-top-color: var(--preview-spinner);
+  animation: preview-spin 0.7s linear infinite;
+  z-index: 3;
+}
+
+@keyframes preview-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.controls label.toggle {
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+}
+
+.controls label.color-control {
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+}
+
+.controls input[type='color'] {
+  width: 34px;
+  height: 24px;
+  padding: 0;
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  background: transparent;
+  cursor: pointer;
+}
+
+.controls input[type='color']::-webkit-color-swatch-wrapper {
+  padding: 0;
+}
+
+.controls input[type='color']::-webkit-color-swatch {
+  border: none;
+  border-radius: 6px;
+}
+
+.toggle input {
+  accent-color: var(--accent);
+}
+
+.hint-icon {
+  display: inline-grid;
+  place-content: center;
+  width: 16px;
+  height: 16px;
+  border-radius: 999px;
+  border: 1px solid var(--border-strong);
+  color: var(--hint-icon);
+  font-size: 0.68rem;
+  font-weight: 700;
+  line-height: 1;
+  opacity: 0.9;
+  background: transparent;
+}
+
+.shadow-hint {
+  position: relative;
+  cursor: help;
+  border-width: 1px;
+  padding: 0;
+}
+
+.shadow-hint::after {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition:
+    opacity 120ms ease,
+    transform 120ms ease,
+    visibility 120ms ease;
+}
+
+.shadow-hint::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  top: calc(100% + 10px);
+  right: 0;
+  width: min(320px, calc(100vw - 36px));
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--border-tooltip);
+  background: var(--surface-tooltip);
+  color: var(--tooltip-text);
+  font-size: 0.78rem;
+  font-weight: 500;
+  line-height: 1.35;
+  text-align: left;
+  box-shadow: 0 12px 24px var(--shadow-elev-1);
+  transform: translateY(-4px);
+  z-index: 30;
+}
+
+.shadow-hint:hover::after,
+.shadow-hint:focus-visible::after {
+  opacity: 1;
+  visibility: visible;
+  transform: translateY(0);
+}
+
+.shadow-hint:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+.render-button {
+  border: 1px solid var(--border-subtle);
+  background: var(--accent-soft);
+  color: var(--select-text);
+  padding: 6px 14px;
+  border-radius: 999px;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.render-button:hover {
+  background: var(--accent-soft-hover);
+}
+
+.render-button--loading {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.render-button--loading::before {
+  content: '';
+  width: 12px;
+  height: 12px;
+  border-radius: 999px;
+  border: 2px solid var(--loading-spinner-border);
+  border-top-color: var(--preview-spinner);
+  animation: preview-spin 0.7s linear infinite;
+}
+
+.render-button:disabled {
+  opacity: 0.78;
+  cursor: wait;
+}
+
+.icon-button {
+  border: 1px solid var(--border-control);
+  background: var(--surface-control);
+  color: var(--icon-color);
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border-radius: 999px;
+  cursor: pointer;
+  display: inline-grid;
+  place-content: center;
+}
+
+.icon-button:hover {
+  background: var(--surface-control-hover);
+}
+
+.icon-button:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 1px;
+}
+
+.icon-button svg {
+  width: 16px;
+  height: 16px;
+  stroke: currentColor;
+  fill: none;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}

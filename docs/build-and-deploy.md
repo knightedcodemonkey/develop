@@ -3,7 +3,7 @@
 This project uses two runtime modes:
 
 - Local development mode: dynamic CDN resolution from `src/cdn.js` with esm.sh as default.
-- Production mode: JSPM-generated import map injected into `dist/index.html` and hosted on GitHub Pages.
+- Production mode: CDN-first build artifacts in `dist`, with `build:esm` as the current preferred deploy build.
 
 ## Local Development
 
@@ -51,8 +51,8 @@ npm run build:importmap-mode
 
 Mode notes:
 
-- `importMap`: Preferred production mode when JSPM has indexed the required graph.
-- `esm`: Stable fallback mode while waiting on JSPM indexing.
+- `importMap`: Import-map mode when JSPM has indexed the required graph.
+- `esm`: Current preferred deploy build mode.
 - `jspmGa`: Direct ga.jspm.io URL mode without import-map generation.
 
 This runs two steps:
@@ -80,6 +80,14 @@ Preview the built site locally:
 npm run preview
 ```
 
+End-to-end tests run against a preview build by default:
+
+```sh
+npm run test:e2e
+```
+
+This command builds with `build:esm` first, then runs Playwright against the preview server.
+
 ## CI And Deployment
 
 - CI workflow (`.github/workflows/ci.yml`) installs dependencies, runs lint, and runs `npm run build`.
@@ -91,7 +99,7 @@ Related docs:
 
 - `docs/code-mirror.md` for CodeMirror CDN integration rules, fallback behavior, and validation checklist.
 
-- In production, the preferred/default mode is import-map-based resolution (`window.__KNIGHTED_PRIMARY_CDN__ = "importMap"`).
+- In production, the current preferred deploy mode is ESM resolution (`window.__KNIGHTED_PRIMARY_CDN__ = "esm"`).
 - In `importMap` mode, runtime resolution is import-map first; if a specifier is missing from the generated map, runtime falls back through the CDN
   provider chain configured in `src/cdn.js`.
 - In `esm` and `jspmGa` modes, runtime resolution is handled entirely by the CDN provider chain configured in `src/cdn.js` without an import map.

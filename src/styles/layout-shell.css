@@ -1,0 +1,183 @@
+.app-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 20px 28px;
+  border-bottom: 1px solid var(--border-subtle);
+  background: var(--surface-app-header);
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  backdrop-filter: blur(8px);
+}
+
+.app-header h1 {
+  margin: 0 0 6px;
+  font-size: 1.4rem;
+}
+
+.brand-link {
+  color: inherit;
+  text-decoration: none;
+}
+
+.brand-link:hover {
+  text-decoration: underline;
+}
+
+.app-header p {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 0.95rem;
+}
+
+.status {
+  font-size: 0.9rem;
+  padding: 8px 12px;
+  border-radius: 999px;
+  background: var(--surface-chip);
+  color: var(--text-subtle);
+}
+
+.status--neutral {
+  background: var(--surface-chip);
+  color: var(--text-subtle);
+}
+
+.status--pending {
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
+  color: color-mix(in srgb, var(--panel-text) 72%, var(--accent));
+}
+
+.status--error {
+  background: color-mix(in srgb, rgb(var(--danger-rgb)) 20%, transparent);
+  color: color-mix(in srgb, rgb(var(--danger-rgb)) 85%, var(--panel-text));
+}
+
+.app-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(320px, 1fr));
+  grid-template-areas:
+    'layout-controls layout-controls'
+    'component styles'
+    'preview preview';
+  gap: 18px;
+  padding: 24px;
+}
+
+.app-grid--preview-right {
+  grid-template-areas:
+    'layout-controls layout-controls'
+    'component preview'
+    'styles preview';
+}
+
+.app-grid--preview-left {
+  grid-template-areas:
+    'layout-controls layout-controls'
+    'preview component'
+    'preview styles';
+}
+
+.app-grid-layout-controls {
+  grid-area: layout-controls;
+  display: inline-flex;
+  align-items: center;
+  justify-self: end;
+  gap: 10px;
+}
+
+.app-grid-theme-controls {
+  display: inline-flex;
+  gap: 10px;
+  margin-left: 8px;
+  padding-left: 10px;
+  border-left: 1px solid var(--border-subtle);
+}
+
+.app-grid-diagnostics-controls {
+  display: inline-flex;
+  align-items: center;
+  margin-right: 8px;
+  padding-right: 10px;
+  border-right: 1px solid var(--border-subtle);
+}
+
+.layout-toggle {
+  display: inline-grid;
+  place-content: center;
+  width: 36px;
+  height: 36px;
+  border: 1px solid var(--border-control);
+  border-radius: 10px;
+  background: var(--surface-control);
+  color: var(--icon-color);
+  cursor: pointer;
+}
+
+.layout-toggle svg {
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.5;
+}
+
+.layout-toggle:hover {
+  background: var(--surface-control-hover);
+}
+
+.layout-toggle[aria-pressed='true'] {
+  border-color: color-mix(in srgb, var(--accent) 65%, transparent);
+  background: var(--accent-soft);
+  color: var(--select-text);
+}
+
+.layout-toggle:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+.component-panel {
+  grid-area: component;
+  max-height: min(64vh, 620px);
+  min-height: 0;
+}
+
+.styles-panel {
+  grid-area: styles;
+  max-height: min(64vh, 620px);
+  min-height: 0;
+}
+
+.preview-panel {
+  grid-area: preview;
+  position: relative;
+}
+
+@media (max-width: 900px) {
+  .app-grid {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas:
+      'layout-controls'
+      'component'
+      'styles'
+      'preview';
+  }
+
+  .app-grid-layout-controls {
+    justify-self: start;
+  }
+
+  .app-grid-theme-controls {
+    margin-left: 0;
+    padding-left: 0;
+    border-left: none;
+  }
+
+  .app-grid-diagnostics-controls {
+    margin-right: 0;
+    padding-right: 0;
+    border-right: none;
+  }
+}

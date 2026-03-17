@@ -1,6 +1,6 @@
 {
   "name": "@knighted/develop",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Develop UI components directly in the browser using JSX and CSS.",
   "keywords": [
     "ui",
@@ -16,7 +16,6 @@
   "license": "MIT",
   "author": "KCM <knightedcodemonkey@gmail.com>",
   "type": "module",
-  "main": "index.js",
   "engines": {
     "node": ">=22.22.1"
   },
@@ -25,16 +24,18 @@
     "dev": "http-server . -a localhost -c-1 -o src/index.html",
     "prepare": "husky",
     "build:prepare": "node scripts/build-prepare.js",
+    "build:css": "node scripts/build-css.js",
     "build:importmap": "node scripts/build-importmap.js",
-    "build": "npm run build:prepare && npm run build:importmap",
+    "build": "npm run build:prepare && npm run build:css && npm run build:importmap",
     "build:esm": "KNIGHTED_PRIMARY_CDN=esm npm run build",
     "build:jspm": "KNIGHTED_PRIMARY_CDN=jspmGa npm run build",
     "build:importmap-mode": "KNIGHTED_PRIMARY_CDN=importMap npm run build",
-    "preview": "http-server dist -a localhost -c-1 -o index.html",
+    "preview": "http-server dist -a localhost -p 8081 -c-1 -o index.html",
     "check-types": "tsc -p tsconfig.json",
     "lint:playwright": "eslint playwright playwright.config.ts",
-    "test:e2e": "playwright test",
-    "test:e2e:headed": "playwright test --headed",
+    "test:e2e": "npm run build:esm && PLAYWRIGHT_WEB_SERVER_MODE=preview PLAYWRIGHT_PORT=8081 playwright test",
+    "test:e2e:dev": "playwright test",
+    "test:e2e:headed": "npm run build:esm && PLAYWRIGHT_WEB_SERVER_MODE=preview PLAYWRIGHT_PORT=8081 playwright test --headed",
     "test": "echo \"Error: no test specified\" && exit 1",
     "prettier": "prettier --write .",
     "lint": "oxlint src scripts && npm run lint:playwright"
@@ -48,6 +49,7 @@
     "http-server": "^14.1.1",
     "husky": "^9.1.7",
     "jspm": "^4.4.0",
+    "lightningcss": "^1.32.0",
     "lint-staged": "^16.4.0",
     "oxlint": "^1.55.0",
     "prettier": "^3.8.1",
