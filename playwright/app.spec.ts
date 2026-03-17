@@ -29,29 +29,6 @@ const setStylesEditorSource = async (page: Page, source: string) => {
   await editorContent.fill(source)
 }
 
-const getLongListComponentSource = (count = 1200) =>
-  [
-    'const App = () => {',
-    `  const items = Array.from({ length: ${count} }, (_, index) => ({`,
-    '    id: index + 1,',
-    '    title: `List item ${index + 1}`',
-    '  }))',
-    '',
-    '  return (',
-    "    <section style={{ padding: '12px', fontFamily: 'system-ui, sans-serif' }}>",
-    "      <h2 style={{ margin: '0 0 12px', fontSize: '1rem' }}>Long Preview List</h2>",
-    "      <ul style={{ margin: 0, paddingLeft: '1.25rem' }}>",
-    '        {items.map(item => (',
-    "          <li key={item.id} style={{ marginBottom: '8px' }}>",
-    '            <strong>{item.title}</strong>',
-    '          </li>',
-    '        ))}',
-    '      </ul>',
-    '    </section>',
-    '  )',
-    '}',
-  ].join('\n')
-
 const getCollapseButton = (page: Page, panelName: 'component' | 'styles' | 'preview') =>
   page.locator(`#collapse-${panelName}`)
 

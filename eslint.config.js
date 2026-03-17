@@ -20,6 +20,9 @@ export default [
       sourceType: 'module',
       ecmaVersion: 'latest',
     },
+    rules: {
+      'no-unused-vars': 'error',
+    },
   },
   {
     ...playwrightConfig,

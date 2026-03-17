@@ -214,6 +214,13 @@ textarea:focus {
   overflow: auto;
 }
 
+.panel-content {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
 .panel.panel--collapsed-vertical {
   min-height: auto;
 }
@@ -232,7 +239,10 @@ textarea:focus {
 .styles-panel.panel--collapsed-vertical .editor-host,
 .styles-panel.panel--collapsed-vertical textarea,
 .styles-panel.panel--collapsed-vertical .panel-footer,
-.preview-panel.panel--collapsed-vertical .preview-host {
+.preview-panel.panel--collapsed-vertical .preview-host,
+.component-panel.panel--collapsed-vertical .panel-content,
+.styles-panel.panel--collapsed-vertical .panel-content,
+.preview-panel.panel--collapsed-vertical .panel-content {
   display: none;
 }
 
@@ -262,6 +272,7 @@ textarea:focus {
 }
 
 .preview-panel.panel--collapsed-horizontal .preview-host,
+.preview-panel.panel--collapsed-horizontal .panel-content,
 .preview-panel.panel--collapsed-horizontal .controls label,
 .preview-panel.panel--collapsed-horizontal .controls .hint-icon {
   display: none;
@@ -303,10 +314,12 @@ textarea:focus {
 
 .component-panel.panel--collapsed-horizontal .editor-host,
 .component-panel.panel--collapsed-horizontal textarea,
+.component-panel.panel--collapsed-horizontal .panel-content,
 .component-panel.panel--collapsed-horizontal .panel-header-main-actions,
 .component-panel.panel--collapsed-horizontal .panel-header .icon-button,
 .styles-panel.panel--collapsed-horizontal .editor-host,
 .styles-panel.panel--collapsed-horizontal textarea,
+.styles-panel.panel--collapsed-horizontal .panel-content,
 .styles-panel.panel--collapsed-horizontal .panel-header-main-actions,
 .styles-panel.panel--collapsed-horizontal .panel-header .icon-button,
 .styles-panel.panel--collapsed-horizontal .panel-footer {

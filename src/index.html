@@ -142,7 +142,8 @@
                 data-collapse-axis="vertical"
                 data-collapsed="false"
                 aria-expanded="true"
-                aria-controls="component-panel"
+                aria-controls="component-panel-content"
+                aria-label="Collapse component panel"
                 title="Collapse component panel"
               >
                 <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -202,7 +203,9 @@
               </div>
             </div>
           </div>
-          <textarea id="jsx-editor" spellcheck="false"></textarea>
+          <div class="panel-content" id="component-panel-content">
+            <textarea id="jsx-editor" spellcheck="false"></textarea>
+          </div>
         </section>
 
         <section class="panel styles-panel" id="styles-panel">
@@ -217,7 +220,8 @@
                 data-collapse-axis="vertical"
                 data-collapsed="false"
                 aria-expanded="true"
-                aria-controls="styles-panel"
+                aria-controls="styles-panel-content"
+                aria-label="Collapse styles panel"
                 title="Collapse styles panel"
               >
                 <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -269,8 +273,10 @@
               </div>
             </div>
           </div>
-          <textarea id="css-editor" spellcheck="false"></textarea>
-          <div class="panel-footer" id="style-warning"></div>
+          <div class="panel-content" id="styles-panel-content">
+            <textarea id="css-editor" spellcheck="false"></textarea>
+            <div class="panel-footer" id="style-warning"></div>
+          </div>
         </section>
       </div>
 
@@ -302,7 +308,8 @@
               data-collapse-axis="vertical"
               data-collapsed="false"
               aria-expanded="true"
-              aria-controls="preview-panel"
+              aria-controls="preview-panel-content"
+              aria-label="Collapse preview panel"
               title="Collapse preview panel"
             >
               <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -312,7 +319,9 @@
             </button>
           </div>
         </div>
-        <div class="preview-host" id="preview-host"></div>
+        <div class="panel-content" id="preview-panel-content">
+          <div class="preview-host" id="preview-host"></div>
+        </div>
       </section>
 
       <aside class="diagnostics-drawer" id="diagnostics-drawer" hidden>

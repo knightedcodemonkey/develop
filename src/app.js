@@ -82,6 +82,8 @@ const panelMap = {
   preview: previewPanel,
 }
 
+const compactViewportMediaQuery = window.matchMedia('(max-width: 900px)')
+
 const getCurrentLayout = () => {
   if (appGrid.classList.contains('app-grid--preview-right')) {
     return 'preview-right'
@@ -94,7 +96,7 @@ const getCurrentLayout = () => {
   return 'default'
 }
 
-const isCompactViewport = () => window.matchMedia('(max-width: 900px)').matches
+const isCompactViewport = () => compactViewportMediaQuery.matches
 
 const getPanelCollapseAxis = panelName => {
   if (isCompactViewport()) {
@@ -680,9 +682,15 @@ for (const button of panelCollapseButtons) {
   })
 }
 
-window.addEventListener('resize', () => {
+const handleCompactViewportChange = () => {
   applyPanelCollapseState()
-})
+}
+
+if (typeof compactViewportMediaQuery.addEventListener === 'function') {
+  compactViewportMediaQuery.addEventListener('change', handleCompactViewportChange)
+} else {
+  compactViewportMediaQuery.onchange = handleCompactViewportChange
+}
 
 if (typeof ResizeObserver !== 'undefined' && editorsStack) {
   const sidePreviewHeightObserver = new ResizeObserver(() => {

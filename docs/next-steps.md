@@ -26,3 +26,8 @@ Focused follow-up work for `@knighted/develop`.
 6. **Panel sizing without JS height sync**
    - Revisit the current side-layout preview height calculation and investigate a pure CSS replacement.
    - Keep existing behavior constraints: preview should not exceed the combined editor stack height in side layouts, and preview content should scroll internally when it overflows.
+
+7. **CDN failure recovery UX**
+   - Detect transient CDN/module loading failures and surface a clear recovery action in-app.
+   - Add a user-triggered retry path (for example, Reload page / Force reload) when runtime bootstrap imports fail.
+   - Consider an optional automatic one-time retry before showing recovery controls, while avoiding infinite reload loops.
