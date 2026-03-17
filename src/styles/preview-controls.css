@@ -1,7 +1,7 @@
 .preview-host {
   --preview-host-display: block;
-  --preview-host-flex: 1 1 auto;
-  --preview-host-min-height: 180px;
+  --preview-host-flex: 1 1 0%;
+  --preview-host-min-height: 0;
   --preview-host-padding: 18px;
   --preview-host-overflow: auto;
   --preview-host-position: relative;
@@ -9,6 +9,7 @@
   display: var(--preview-host-display);
   flex: var(--preview-host-flex);
   min-height: var(--preview-host-min-height);
+  max-height: 100%;
   padding: var(--preview-host-padding);
   overflow: var(--preview-host-overflow);
   position: var(--preview-host-position);

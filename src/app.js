@@ -15,6 +15,11 @@ const statusNode = document.getElementById('status')
 const appGrid = document.querySelector('.app-grid')
 const appGridLayoutButtons = document.querySelectorAll('[data-app-grid-layout]')
 const appThemeButtons = document.querySelectorAll('[data-app-theme]')
+const editorToolsButtons = document.querySelectorAll('[data-editor-tools-toggle]')
+const panelCollapseButtons = document.querySelectorAll('[data-panel-collapse]')
+const componentPanel = document.getElementById('component-panel')
+const stylesPanel = document.getElementById('styles-panel')
+const previewPanel = document.getElementById('preview-panel')
 const renderMode = document.getElementById('render-mode')
 const autoRenderToggle = document.getElementById('auto-render')
 const typecheckButton = document.getElementById('typecheck-button')
@@ -27,7 +32,6 @@ const clearStylesButton = document.getElementById('clear-styles')
 const shadowToggle = document.getElementById('shadow-toggle')
 const jsxEditor = document.getElementById('jsx-editor')
 const cssEditor = document.getElementById('css-editor')
-const styleWarning = document.getElementById('style-warning')
 const diagnosticsToggle = document.getElementById('diagnostics-toggle')
 const diagnosticsDrawer = document.getElementById('diagnostics-drawer')
 const diagnosticsClose = document.getElementById('diagnostics-close')
@@ -70,6 +74,206 @@ const layoutTheme = createLayoutThemeController({
 
 const { applyAppGridLayout, applyTheme, getInitialAppGridLayout, getInitialTheme } =
   layoutTheme
+
+const compactViewportMediaQuery = window.matchMedia('(max-width: 900px)')
+
+const getCurrentLayout = () => {
+  if (appGrid.classList.contains('app-grid--preview-right')) {
+    return 'preview-right'
+  }
+
+  if (appGrid.classList.contains('app-grid--preview-left')) {
+    return 'preview-left'
+  }
+
+  return 'default'
+}
+
+const isCompactViewport = () => compactViewportMediaQuery.matches
+
+const getPanelCollapseAxis = panelName => {
+  if (isCompactViewport()) {
+    return 'vertical'
+  }
+
+  const layout = getCurrentLayout()
+
+  if (panelName === 'preview') {
+    return layout === 'default' ? 'vertical' : 'horizontal'
+  }
+
+  if (panelName === 'component' || panelName === 'styles') {
+    return layout === 'default' ? 'horizontal' : 'vertical'
+  }
+
+  return 'vertical'
+}
+
+const getPanelCollapseDirection = panelName => {
+  const axis = getPanelCollapseAxis(panelName)
+  if (axis !== 'horizontal') {
+    return 'none'
+  }
+
+  const layout = getCurrentLayout()
+
+  if (panelName === 'preview') {
+    return layout === 'preview-left' ? 'left' : 'right'
+  }
+
+  if (panelName === 'component') {
+    return 'left'
+  }
+
+  if (panelName === 'styles') {
+    return 'right'
+  }
+
+  return 'right'
+}
+
+const panelCollapseState = {
+  component: false,
+  styles: false,
+  preview: false,
+}
+
+const panelToolsState = {
+  component: false,
+  styles: false,
+}
+
+const applyEditorToolsVisibility = () => {
+  componentPanel?.classList.toggle('panel--tools-hidden', !panelToolsState.component)
+  stylesPanel?.classList.toggle('panel--tools-hidden', !panelToolsState.styles)
+
+  for (const button of editorToolsButtons) {
+    const panelName = button.dataset.editorToolsToggle
+    if (!panelName || !Object.hasOwn(panelToolsState, panelName)) {
+      continue
+    }
+
+    const isVisible = panelToolsState[panelName]
+    button.setAttribute('aria-pressed', isVisible ? 'true' : 'false')
+    button.setAttribute('aria-label', `${isVisible ? 'Hide' : 'Show'} ${panelName} tools`)
+    button.setAttribute('title', `${isVisible ? 'Hide' : 'Show'} ${panelName} tools`)
+  }
+}
+
+const normalizePanelCollapseState = () => {
+  const collapsedPanels = Object.entries(panelCollapseState)
+    .filter(([, isCollapsed]) => isCollapsed)
+    .map(([panelName]) => panelName)
+
+  if (collapsedPanels.length === Object.keys(panelCollapseState).length) {
+    panelCollapseState.preview = false
+  }
+}
+
+const syncPanelCollapseButtons = () => {
+  const collapsedCount = Object.values(panelCollapseState).filter(Boolean).length
+
+  for (const button of panelCollapseButtons) {
+    const panelName = button.dataset.panelCollapse
+    if (!panelName || !Object.hasOwn(panelCollapseState, panelName)) {
+      continue
+    }
+
+    const axis = getPanelCollapseAxis(panelName)
+    const direction = getPanelCollapseDirection(panelName)
+    const isCollapsed = panelCollapseState[panelName] === true
+    const panelTitle = `${panelName.charAt(0).toUpperCase()}${panelName.slice(1)}`
+    const canCollapse = isCollapsed || collapsedCount < 2
+
+    button.dataset.collapseAxis = axis
+    button.dataset.collapseDirection = direction
+    button.dataset.collapsed = isCollapsed ? 'true' : 'false'
+    button.setAttribute('aria-expanded', isCollapsed ? 'false' : 'true')
+    button.disabled = !canCollapse
+    button.setAttribute('aria-disabled', canCollapse ? 'false' : 'true')
+    button.setAttribute(
+      'aria-label',
+      `${isCollapsed ? 'Expand' : 'Collapse'} ${panelTitle.toLowerCase()} panel`,
+    )
+    button.setAttribute(
+      'title',
+      canCollapse
+        ? `${isCollapsed ? 'Expand' : 'Collapse'} ${panelTitle.toLowerCase()} panel`
+        : 'At least one panel must remain expanded.',
+    )
+  }
+}
+
+const applyPanelCollapseState = () => {
+  normalizePanelCollapseState()
+
+  const previewAxis = getPanelCollapseAxis('preview')
+  const componentAxis = getPanelCollapseAxis('component')
+  const stylesAxis = getPanelCollapseAxis('styles')
+
+  if (componentPanel) {
+    const isCollapsed = panelCollapseState.component
+    componentPanel.classList.toggle(
+      'panel--collapsed-vertical',
+      isCollapsed && componentAxis === 'vertical',
+    )
+    componentPanel.classList.toggle(
+      'panel--collapsed-horizontal',
+      isCollapsed && componentAxis === 'horizontal',
+    )
+  }
+
+  if (stylesPanel) {
+    const isCollapsed = panelCollapseState.styles
+    stylesPanel.classList.toggle(
+      'panel--collapsed-vertical',
+      isCollapsed && stylesAxis === 'vertical',
+    )
+    stylesPanel.classList.toggle(
+      'panel--collapsed-horizontal',
+      isCollapsed && stylesAxis === 'horizontal',
+    )
+  }
+
+  if (previewPanel) {
+    const isCollapsed = panelCollapseState.preview
+    previewPanel.classList.toggle(
+      'panel--collapsed-vertical',
+      isCollapsed && previewAxis === 'vertical',
+    )
+    previewPanel.classList.toggle(
+      'panel--collapsed-horizontal',
+      isCollapsed && previewAxis === 'horizontal',
+    )
+  }
+
+  appGrid.classList.toggle(
+    'app-grid--preview-collapsed-horizontal',
+    panelCollapseState.preview && previewAxis === 'horizontal',
+  )
+  appGrid.classList.toggle('app-grid--preview-collapsed', panelCollapseState.preview)
+  appGrid.classList.toggle('app-grid--component-collapsed', panelCollapseState.component)
+  appGrid.classList.toggle('app-grid--styles-collapsed', panelCollapseState.styles)
+  appGrid.classList.toggle(
+    'app-grid--component-collapsed-horizontal',
+    panelCollapseState.component && componentAxis === 'horizontal',
+  )
+  appGrid.classList.toggle(
+    'app-grid--styles-collapsed-horizontal',
+    panelCollapseState.styles && stylesAxis === 'horizontal',
+  )
+
+  syncPanelCollapseButtons()
+}
+
+const togglePanelCollapse = panelName => {
+  if (!Object.hasOwn(panelCollapseState, panelName)) {
+    return
+  }
+
+  panelCollapseState[panelName] = !panelCollapseState[panelName]
+  applyPanelCollapseState()
+}
 
 const diagnosticsUi = createDiagnosticsUiController({
   diagnosticsToggle,
@@ -222,7 +426,6 @@ renderRuntime = createRenderRuntimeController({
   renderMode,
   styleMode,
   shadowToggle,
-  styleWarning,
   getCssSource: () => getCssSource(),
   getJsxSource: () => getJsxSource(),
   getPreviewHost: () => previewHost,
@@ -451,6 +654,7 @@ for (const button of appGridLayoutButtons) {
       return
     }
     applyAppGridLayout(nextLayout)
+    applyPanelCollapseState()
   })
 }
 
@@ -464,8 +668,43 @@ for (const button of appThemeButtons) {
   })
 }
 
+for (const button of editorToolsButtons) {
+  button.addEventListener('click', () => {
+    const panelName = button.dataset.editorToolsToggle
+    if (!panelName || !Object.hasOwn(panelToolsState, panelName)) {
+      return
+    }
+
+    panelToolsState[panelName] = !panelToolsState[panelName]
+    applyEditorToolsVisibility()
+  })
+}
+
+for (const button of panelCollapseButtons) {
+  button.addEventListener('click', () => {
+    const panelName = button.dataset.panelCollapse
+    if (!panelName) {
+      return
+    }
+
+    togglePanelCollapse(panelName)
+  })
+}
+
+const handleCompactViewportChange = () => {
+  applyPanelCollapseState()
+}
+
+if (typeof compactViewportMediaQuery.addEventListener === 'function') {
+  compactViewportMediaQuery.addEventListener('change', handleCompactViewportChange)
+} else {
+  compactViewportMediaQuery.onchange = handleCompactViewportChange
+}
+
 applyAppGridLayout(getInitialAppGridLayout(), { persist: false })
 applyTheme(getInitialTheme(), { persist: false })
+applyEditorToolsVisibility()
+applyPanelCollapseState()
 
 updateRenderButtonVisibility()
 renderDiagnosticsScope('component')

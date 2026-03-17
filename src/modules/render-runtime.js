@@ -4,7 +4,6 @@ export const createRenderRuntimeController = ({
   renderMode,
   styleMode,
   shadowToggle,
-  styleWarning,
   getCssSource,
   getJsxSource,
   getPreviewHost,
@@ -30,13 +29,6 @@ export const createRenderRuntimeController = ({
     value: null,
   }
   let hasCompletedInitialRender = false
-
-  const styleLabels = {
-    css: 'Native CSS',
-    module: 'CSS Modules',
-    less: 'Less',
-    sass: 'Sass',
-  }
 
   const setStyleCompiling = isCompiling => {
     const previewHost = getPreviewHost()
@@ -128,21 +120,6 @@ export const createRenderRuntimeController = ({
       reactRoot = null
     }
     target.innerHTML = ''
-  }
-
-  const updateStyleWarning = () => {
-    const mode = styleMode.value
-    if (mode === 'css') {
-      styleWarning.textContent = ''
-      return
-    }
-    if (mode === 'module') {
-      styleWarning.textContent =
-        'CSS Modules are compiled in-browser and class names are remapped automatically.'
-      return
-    }
-
-    styleWarning.textContent = `${styleLabels[mode]} is compiled in-browser via @knighted/css/browser.`
   }
 
   const shadowPreviewBaseStyles = `
@@ -622,7 +599,6 @@ export const createRenderRuntimeController = ({
 
   const renderPreview = async () => {
     scheduled = null
-    updateStyleWarning()
     setStatus(hasCompletedInitialRender ? 'Rendering…' : 'Loading CDN assets…', 'pending')
 
     try {
@@ -661,7 +637,6 @@ export const createRenderRuntimeController = ({
   return {
     renderPreview,
     scheduleRender,
-    updateStyleWarning,
     setStyleCompiling,
   }
 }

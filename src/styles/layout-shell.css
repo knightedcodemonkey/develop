@@ -68,28 +68,146 @@
 }
 
 .app-grid {
+  --expanded-panel-min-height: 360px;
+  --editors-row-flex: 1.25fr;
+  --preview-row-flex: 0.75fr;
   display: grid;
   grid-template-columns: repeat(2, minmax(320px, 1fr));
+  grid-template-rows: auto minmax(0, var(--editors-row-flex)) minmax(
+      0,
+      var(--preview-row-flex)
+    );
   grid-template-areas:
     'layout-controls layout-controls'
-    'component styles'
+    'editors editors'
     'preview preview';
   gap: 18px;
   padding: 24px;
+  min-height: 0;
+  height: 100%;
+  overflow: hidden;
+}
+
+.panels-stack {
+  min-width: 0;
+}
+
+.panels-stack--editors {
+  grid-area: editors;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(320px, 1fr));
+  grid-template-rows: minmax(0, 1fr);
+  gap: 18px;
+  min-width: 0;
+  min-height: 0;
+}
+
+.app-grid.app-grid--component-collapsed-horizontal:not(.app-grid--preview-right):not(
+    .app-grid--preview-left
+  )
+  .panels-stack--editors {
+  grid-template-columns: 72px minmax(320px, 1fr);
+}
+
+.app-grid.app-grid--styles-collapsed-horizontal:not(.app-grid--preview-right):not(
+    .app-grid--preview-left
+  )
+  .panels-stack--editors {
+  grid-template-columns: minmax(320px, 1fr) 72px;
+}
+
+.app-grid.app-grid--component-collapsed-horizontal.app-grid--styles-collapsed-horizontal:not(
+    .app-grid--preview-right
+  ):not(.app-grid--preview-left) {
+  grid-template-rows: auto auto minmax(0, 1fr);
+  grid-template-areas:
+    'layout-controls layout-controls'
+    'editors editors'
+    'preview preview';
+}
+
+.app-grid.app-grid--component-collapsed-horizontal.app-grid--styles-collapsed-horizontal:not(
+    .app-grid--preview-right
+  ):not(.app-grid--preview-left)
+  .panels-stack--editors {
+  grid-template-columns: 72px 72px;
+  justify-content: start;
+}
+
+.app-grid.app-grid--preview-collapsed:not(.app-grid--preview-right):not(
+    .app-grid--preview-left
+  ) {
+  grid-template-rows: auto minmax(0, 1fr) auto;
 }
 
 .app-grid--preview-right {
+  grid-template-columns: repeat(2, minmax(320px, 1fr));
+  grid-template-rows: auto minmax(0, 1fr);
   grid-template-areas:
     'layout-controls layout-controls'
-    'component preview'
-    'styles preview';
+    'editors preview';
+}
+
+.app-grid--preview-right .panels-stack--editors {
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr) minmax(0, 1fr);
+  height: 100%;
+  min-height: 0;
+}
+
+.app-grid--preview-right.app-grid--component-collapsed:not(.app-grid--styles-collapsed)
+  .panels-stack--editors {
+  grid-template-rows: auto minmax(0, 1fr);
+}
+
+.app-grid--preview-right.app-grid--styles-collapsed:not(.app-grid--component-collapsed)
+  .panels-stack--editors {
+  grid-template-rows: minmax(0, 1fr) auto;
+}
+
+.app-grid--preview-right.app-grid--component-collapsed.app-grid--styles-collapsed
+  .panels-stack--editors {
+  grid-template-rows: auto auto;
+  align-content: start;
+}
+
+.app-grid--preview-right.app-grid--preview-collapsed-horizontal {
+  grid-template-columns: minmax(320px, 1fr) 72px;
 }
 
 .app-grid--preview-left {
+  grid-template-columns: repeat(2, minmax(320px, 1fr));
+  grid-template-rows: auto minmax(0, 1fr);
   grid-template-areas:
     'layout-controls layout-controls'
-    'preview component'
-    'preview styles';
+    'preview editors';
+}
+
+.app-grid--preview-left .panels-stack--editors {
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr) minmax(0, 1fr);
+  height: 100%;
+  min-height: 0;
+}
+
+.app-grid--preview-left.app-grid--component-collapsed:not(.app-grid--styles-collapsed)
+  .panels-stack--editors {
+  grid-template-rows: auto minmax(0, 1fr);
+}
+
+.app-grid--preview-left.app-grid--styles-collapsed:not(.app-grid--component-collapsed)
+  .panels-stack--editors {
+  grid-template-rows: minmax(0, 1fr) auto;
+}
+
+.app-grid--preview-left.app-grid--component-collapsed.app-grid--styles-collapsed
+  .panels-stack--editors {
+  grid-template-rows: auto auto;
+  align-content: start;
+}
+
+.app-grid--preview-left.app-grid--preview-collapsed-horizontal {
+  grid-template-columns: 72px minmax(320px, 1fr);
 }
 
 .app-grid-layout-controls {
@@ -152,30 +270,116 @@
 }
 
 .component-panel {
-  grid-area: component;
-  max-height: min(64vh, 620px);
+  height: 100%;
+  min-height: var(--expanded-panel-min-height);
+}
+
+.component-panel.panel--collapsed-horizontal,
+.component-panel.panel--collapsed-vertical {
   min-height: 0;
 }
 
 .styles-panel {
-  grid-area: styles;
-  max-height: min(64vh, 620px);
+  height: 100%;
+  min-height: var(--expanded-panel-min-height);
+}
+
+.styles-panel.panel--collapsed-horizontal,
+.styles-panel.panel--collapsed-vertical {
   min-height: 0;
 }
 
 .preview-panel {
   grid-area: preview;
   position: relative;
+  height: 100%;
+  min-height: var(--expanded-panel-min-height);
+  max-height: 100%;
+  overflow: hidden;
+}
+
+.preview-panel .panel-content {
+  min-height: 0;
+  max-height: 100%;
+  overflow: hidden;
+}
+
+.preview-panel.panel--collapsed-horizontal,
+.preview-panel.panel--collapsed-vertical {
+  min-height: 0;
+}
+
+.app-grid--preview-right .preview-panel,
+.app-grid--preview-left .preview-panel {
+  min-height: 0;
+  height: 100%;
+  max-height: none;
+  overflow: hidden;
+}
+
+.app-grid--preview-right .preview-host,
+.app-grid--preview-left .preview-host {
+  min-height: 0;
+}
+
+.app-grid--preview-right .component-panel,
+.app-grid--preview-right .styles-panel,
+.app-grid--preview-left .component-panel,
+.app-grid--preview-left .styles-panel {
+  height: 100%;
+  min-height: 0;
+  max-height: none;
 }
 
 @media (max-width: 900px) {
   .app-grid {
     grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto auto auto;
+    height: auto;
     grid-template-areas:
       'layout-controls'
-      'component'
-      'styles'
+      'editors'
       'preview';
+  }
+
+  .component-panel,
+  .styles-panel,
+  .preview-panel,
+  .app-grid--preview-right .component-panel,
+  .app-grid--preview-right .styles-panel,
+  .app-grid--preview-right .preview-panel,
+  .app-grid--preview-left .component-panel,
+  .app-grid--preview-left .styles-panel,
+  .app-grid--preview-left .preview-panel {
+    height: auto;
+    min-height: var(--expanded-panel-min-height);
+  }
+
+  .component-panel.panel--collapsed-horizontal,
+  .component-panel.panel--collapsed-vertical,
+  .styles-panel.panel--collapsed-horizontal,
+  .styles-panel.panel--collapsed-vertical,
+  .preview-panel.panel--collapsed-horizontal,
+  .preview-panel.panel--collapsed-vertical {
+    min-height: 0;
+  }
+
+  .panels-stack--editors {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto;
+    height: auto;
+  }
+
+  .app-grid--preview-right.app-grid--preview-collapsed-horizontal,
+  .app-grid--preview-left.app-grid--preview-collapsed-horizontal {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto;
+    min-height: 0;
+  }
+
+  .app-grid.app-grid--component-collapsed-horizontal.app-grid--styles-collapsed-horizontal {
+    grid-template-rows: auto;
+    min-height: 0;
   }
 
   .app-grid-layout-controls {

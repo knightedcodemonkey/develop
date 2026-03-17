@@ -8,10 +8,6 @@
   overflow: hidden;
 }
 
-.panel.preview {
-  min-height: 280px;
-}
-
 .panel-header {
   display: flex;
   align-items: center;
@@ -57,6 +53,18 @@
   justify-content: flex-start;
 }
 
+.component-panel.panel--tools-hidden .panel-header-main-actions,
+.styles-panel.panel--tools-hidden .panel-header-main-actions {
+  display: none;
+}
+
+.component-panel.panel--tools-hidden .panel-header--grid,
+.styles-panel.panel--tools-hidden .panel-header--grid {
+  grid-template-areas: 'title quick';
+  align-items: center;
+  row-gap: 0;
+}
+
 .controls {
   display: flex;
   gap: 12px;
@@ -72,6 +80,95 @@
 
 .controls--quick-actions {
   gap: 10px;
+}
+
+.editor-tools-toggle {
+  opacity: 0.72;
+}
+
+.editor-tools-toggle svg {
+  width: 15px;
+  height: 15px;
+  fill: currentColor;
+  stroke: none;
+}
+
+.editor-tools-toggle[aria-pressed='true'] {
+  opacity: 1;
+  border-color: color-mix(in srgb, var(--accent) 65%, transparent);
+  background: var(--accent-soft);
+  color: var(--select-text);
+}
+
+.panel-collapse-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--border-control);
+  background: var(--surface-control);
+  color: var(--icon-color);
+  border-radius: 999px;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  cursor: pointer;
+}
+
+.panel-collapse-toggle:hover {
+  background: var(--surface-control-hover);
+}
+
+.panel-collapse-toggle:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.panel-collapse-toggle:disabled:hover {
+  background: var(--surface-control);
+}
+
+.panel-collapse-toggle:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 1px;
+}
+
+.panel-collapse-toggle svg {
+  width: 14px;
+  height: 14px;
+  stroke: currentColor;
+  fill: none;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  transform: rotate(180deg);
+}
+
+.panel-collapse-toggle[data-collapse-axis='vertical'][data-collapsed='true'] svg {
+  transform: rotate(0deg);
+}
+
+.panel-collapse-toggle[data-collapse-axis='horizontal'][data-collapse-direction='right'][data-collapsed='false']
+  svg {
+  transform: rotate(-90deg);
+}
+
+.panel-collapse-toggle[data-collapse-axis='horizontal'][data-collapse-direction='right'][data-collapsed='true']
+  svg {
+  transform: rotate(90deg);
+}
+
+.panel-collapse-toggle[data-collapse-axis='horizontal'][data-collapse-direction='left'][data-collapsed='false']
+  svg {
+  transform: rotate(90deg);
+}
+
+.panel-collapse-toggle[data-collapse-axis='horizontal'][data-collapse-direction='left'][data-collapsed='true']
+  svg {
+  transform: rotate(-90deg);
+}
+
+.panel-collapse-toggle__label {
+  display: none;
 }
 
 .controls label {
@@ -143,7 +240,153 @@ textarea:focus {
   overflow: auto;
 }
 
+.panel-content {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.panel.panel--collapsed-vertical {
+  min-height: auto;
+}
+
+.component-panel.panel--collapsed-vertical,
+.styles-panel.panel--collapsed-vertical {
+  align-self: start;
+}
+
+.panel.preview.panel--collapsed-vertical {
+  min-height: 0;
+}
+
+.component-panel.panel--collapsed-vertical .editor-host,
+.component-panel.panel--collapsed-vertical textarea,
+.styles-panel.panel--collapsed-vertical .editor-host,
+.styles-panel.panel--collapsed-vertical textarea,
+.preview-panel.panel--collapsed-vertical .preview-host,
+.component-panel.panel--collapsed-vertical .panel-content,
+.styles-panel.panel--collapsed-vertical .panel-content,
+.preview-panel.panel--collapsed-vertical .panel-content {
+  display: none;
+}
+
+.component-panel.panel--collapsed-vertical .panel-header-main-actions,
+.styles-panel.panel--collapsed-vertical .panel-header-main-actions,
+.component-panel.panel--collapsed-vertical .panel-header .icon-button,
+.styles-panel.panel--collapsed-vertical .panel-header .icon-button,
+.preview-panel.panel--collapsed-vertical .controls label,
+.preview-panel.panel--collapsed-vertical .controls .hint-icon {
+  display: none;
+}
+
+.component-panel.panel--collapsed-vertical .panel-header--grid,
+.styles-panel.panel--collapsed-vertical .panel-header--grid {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.preview-panel.panel--collapsed-vertical .panel-header .controls {
+  justify-content: center;
+}
+
+.preview-panel.panel--collapsed-horizontal {
+  min-height: auto;
+}
+
+.preview-panel.panel--collapsed-horizontal .preview-host,
+.preview-panel.panel--collapsed-horizontal .panel-content,
+.preview-panel.panel--collapsed-horizontal .controls label,
+.preview-panel.panel--collapsed-horizontal .controls .hint-icon {
+  display: none;
+}
+
+.preview-panel.panel--collapsed-horizontal .panel-header {
+  height: 100%;
+  padding: 12px 8px;
+  flex-direction: column;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.preview-panel.panel--collapsed-horizontal .panel-header h2 {
+  writing-mode: vertical-rl;
+  transform: rotate(180deg);
+  font-size: 0.8rem;
+}
+
+.preview-panel.panel--collapsed-horizontal .panel-header .controls {
+  width: 100%;
+  justify-content: center;
+}
+
+.preview-panel.panel--collapsed-horizontal .panel-collapse-toggle {
+  width: 100%;
+  min-width: 0;
+  justify-content: center;
+}
+
+.preview-panel.panel--collapsed-horizontal .panel-collapse-toggle__label {
+  display: none;
+}
+
+.component-panel.panel--collapsed-horizontal,
+.styles-panel.panel--collapsed-horizontal {
+  min-height: auto;
+}
+
+.component-panel.panel--collapsed-horizontal .editor-host,
+.component-panel.panel--collapsed-horizontal textarea,
+.component-panel.panel--collapsed-horizontal .panel-content,
+.component-panel.panel--collapsed-horizontal .panel-header-main-actions,
+.component-panel.panel--collapsed-horizontal .panel-header .icon-button,
+.styles-panel.panel--collapsed-horizontal .editor-host,
+.styles-panel.panel--collapsed-horizontal textarea,
+.styles-panel.panel--collapsed-horizontal .panel-content,
+.styles-panel.panel--collapsed-horizontal .panel-header-main-actions,
+.styles-panel.panel--collapsed-horizontal .panel-header .icon-button {
+  display: none;
+}
+
+.component-panel.panel--collapsed-horizontal .panel-header,
+.styles-panel.panel--collapsed-horizontal .panel-header {
+  height: 100%;
+  padding: 12px 8px;
+  border-bottom: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.component-panel.panel--collapsed-horizontal .panel-header h2,
+.styles-panel.panel--collapsed-horizontal .panel-header h2 {
+  writing-mode: vertical-rl;
+  transform: rotate(180deg);
+  font-size: 0.8rem;
+}
+
+.component-panel.panel--collapsed-horizontal .panel-header-quick-actions,
+.styles-panel.panel--collapsed-horizontal .panel-header-quick-actions {
+  width: 100%;
+  justify-content: center;
+}
+
+.component-panel.panel--collapsed-horizontal .panel-collapse-toggle,
+.styles-panel.panel--collapsed-horizontal .panel-collapse-toggle {
+  width: 100%;
+  min-width: 0;
+}
+
 @media (max-width: 900px) {
+  .panel-collapse-toggle {
+    width: 32px;
+    height: 32px;
+  }
+
   .component-panel,
   .styles-panel {
     max-height: none;

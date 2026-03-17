@@ -22,3 +22,8 @@ Focused follow-up work for `@knighted/develop`.
 5. **In-browser component testing**
    - Explore authoring and running component-focused tests in-browser (for example, a Vitest-compatible flow) using CDN-delivered tooling.
    - Define a lightweight test UX that supports writing tests, running them on demand, and displaying results in-app.
+
+6. **CDN failure recovery UX**
+   - Detect transient CDN/module loading failures and surface a clear recovery action in-app.
+   - Add a user-triggered retry path (for example, Reload page / Force reload) when runtime bootstrap imports fail.
+   - Consider an optional automatic one-time retry before showing recovery controls, while avoiding infinite reload loops.
