@@ -17,8 +17,21 @@
 }
 
 .brand-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
   color: inherit;
   text-decoration: none;
+}
+
+.brand-logo {
+  display: block;
+  border-radius: 6px;
+  flex: none;
+}
+
+.brand-text {
+  line-height: 1;
 }
 
 .brand-link:hover {
