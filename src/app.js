@@ -16,7 +16,6 @@ const appGrid = document.querySelector('.app-grid')
 const appGridLayoutButtons = document.querySelectorAll('[data-app-grid-layout]')
 const appThemeButtons = document.querySelectorAll('[data-app-theme]')
 const panelCollapseButtons = document.querySelectorAll('[data-panel-collapse]')
-const editorsStack = document.querySelector('.panels-stack--editors')
 const componentPanel = document.getElementById('component-panel')
 const stylesPanel = document.getElementById('styles-panel')
 const previewPanel = document.getElementById('preview-panel')
@@ -189,23 +188,6 @@ const syncPanelCollapseButtons = () => {
   }
 }
 
-const syncSidePreviewHeight = () => {
-  if (!appGrid || !editorsStack) {
-    return
-  }
-
-  const layout = getCurrentLayout()
-  if (layout !== 'preview-right' && layout !== 'preview-left') {
-    appGrid.style.removeProperty('--side-editors-height')
-    return
-  }
-
-  const height = Math.round(editorsStack.getBoundingClientRect().height)
-  if (height > 0) {
-    appGrid.style.setProperty('--side-editors-height', `${height}px`)
-  }
-}
-
 const applyPanelCollapseState = () => {
   normalizePanelCollapseState()
 
@@ -253,6 +235,7 @@ const applyPanelCollapseState = () => {
     'app-grid--preview-collapsed-horizontal',
     panelCollapseState.preview && previewAxis === 'horizontal',
   )
+  appGrid.classList.toggle('app-grid--preview-collapsed', panelCollapseState.preview)
   appGrid.classList.toggle('app-grid--component-collapsed', panelCollapseState.component)
   appGrid.classList.toggle('app-grid--styles-collapsed', panelCollapseState.styles)
   appGrid.classList.toggle(
@@ -265,7 +248,6 @@ const applyPanelCollapseState = () => {
   )
 
   syncPanelCollapseButtons()
-  syncSidePreviewHeight()
 }
 
 const togglePanelCollapse = panelName => {
@@ -690,13 +672,6 @@ if (typeof compactViewportMediaQuery.addEventListener === 'function') {
   compactViewportMediaQuery.addEventListener('change', handleCompactViewportChange)
 } else {
   compactViewportMediaQuery.onchange = handleCompactViewportChange
-}
-
-if (typeof ResizeObserver !== 'undefined' && editorsStack) {
-  const sidePreviewHeightObserver = new ResizeObserver(() => {
-    syncSidePreviewHeight()
-  })
-  sidePreviewHeightObserver.observe(editorsStack)
 }
 
 applyAppGridLayout(getInitialAppGridLayout(), { persist: false })

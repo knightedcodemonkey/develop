@@ -141,7 +141,7 @@ test('side layout config keeps preview scrolling inside preview host', async ({
   expect(scrollConfig?.minHeight).toBe('0px')
 })
 
-test('expanded component and styles min-height stay consistent in side layouts', async ({
+test('expanded component and styles can shrink consistently in side layouts', async ({
   page,
 }) => {
   await waitForInitialRender(page)
@@ -160,8 +160,8 @@ test('expanded component and styles min-height stay consistent in side layouts',
       }
     })
 
-    expect(minHeights.component).toBeGreaterThan(0)
-    expect(minHeights.styles).toBeGreaterThan(0)
+    expect(minHeights.component).toBeGreaterThanOrEqual(0)
+    expect(minHeights.styles).toBeGreaterThanOrEqual(0)
     expect(Math.abs(minHeights.component - minHeights.styles)).toBeLessThanOrEqual(1)
   }
 })

@@ -8,10 +8,6 @@
   overflow: hidden;
 }
 
-.panel.preview {
-  min-height: 280px;
-}
-
 .panel-header {
   display: flex;
   align-items: center;
