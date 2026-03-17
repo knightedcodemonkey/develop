@@ -29,6 +29,62 @@ const setStylesEditorSource = async (page: Page, source: string) => {
   await editorContent.fill(source)
 }
 
+const getLongListComponentSource = (count = 1200) =>
+  [
+    'const App = () => {',
+    `  const items = Array.from({ length: ${count} }, (_, index) => ({`,
+    '    id: index + 1,',
+    '    title: `List item ${index + 1}`',
+    '  }))',
+    '',
+    '  return (',
+    "    <section style={{ padding: '12px', fontFamily: 'system-ui, sans-serif' }}>",
+    "      <h2 style={{ margin: '0 0 12px', fontSize: '1rem' }}>Long Preview List</h2>",
+    "      <ul style={{ margin: 0, paddingLeft: '1.25rem' }}>",
+    '        {items.map(item => (',
+    "          <li key={item.id} style={{ marginBottom: '8px' }}>",
+    '            <strong>{item.title}</strong>',
+    '          </li>',
+    '        ))}',
+    '      </ul>',
+    '    </section>',
+    '  )',
+    '}',
+  ].join('\n')
+
+const getCollapseButton = (page: Page, panelName: 'component' | 'styles' | 'preview') =>
+  page.locator(`#collapse-${panelName}`)
+
+const expectCollapseButtonState = async (
+  page: Page,
+  panelName: 'component' | 'styles' | 'preview',
+  {
+    axis,
+    direction,
+    collapsed,
+    disabled,
+  }: {
+    axis: 'vertical' | 'horizontal'
+    direction: 'left' | 'right' | 'none'
+    collapsed: boolean
+    disabled?: boolean
+  },
+) => {
+  const button = getCollapseButton(page, panelName)
+
+  await expect(button).toHaveAttribute('data-collapse-axis', axis)
+  await expect(button).toHaveAttribute('data-collapse-direction', direction)
+  await expect(button).toHaveAttribute('data-collapsed', collapsed ? 'true' : 'false')
+
+  if (disabled !== undefined) {
+    if (disabled) {
+      await expect(button).toBeDisabled()
+    } else {
+      await expect(button).toBeEnabled()
+    }
+  }
+}
+
 test('renders default playground preview', async ({ page }) => {
   await waitForInitialRender(page)
 
@@ -52,6 +108,182 @@ test('supports layout and theme toggles', async ({ page }) => {
     'background-color',
     'rgb(36, 86, 168)',
   )
+})
+
+test('side layout keeps preview panel height within editor stack height', async ({
+  page,
+}) => {
+  await waitForInitialRender(page)
+
+  await page.getByLabel('Use side preview layout').click()
+  await expect(page.locator('.app-grid')).toHaveClass(/app-grid--preview-right/)
+
+  const metrics = await page.evaluate(() => {
+    const stack = document.querySelector('.panels-stack--editors')
+    const previewPanel = document.getElementById('preview-panel')
+    const stackHeight = stack?.getBoundingClientRect().height ?? 0
+    const previewHeight = previewPanel?.getBoundingClientRect().height ?? 0
+    const previewOverflowY = previewPanel ? getComputedStyle(previewPanel).overflowY : ''
+    return { stackHeight, previewHeight, previewOverflowY }
+  })
+
+  expect(metrics.stackHeight).toBeGreaterThan(0)
+  expect(metrics.previewHeight).toBeGreaterThan(0)
+  expect(metrics.previewHeight).toBeLessThanOrEqual(metrics.stackHeight + 2)
+  expect(metrics.previewOverflowY).toBe('hidden')
+})
+
+test('side layout config keeps preview scrolling inside preview host', async ({
+  page,
+}) => {
+  await waitForInitialRender(page)
+
+  await page.getByLabel('Use side preview layout').click()
+
+  const scrollConfig = await page.evaluate(() => {
+    const previewPanel = document.getElementById('preview-panel')
+    const previewHost = document.getElementById('preview-host')
+    if (!previewPanel || !previewHost) {
+      return null
+    }
+
+    const panelStyles = getComputedStyle(previewPanel)
+    const styles = getComputedStyle(previewHost)
+    return {
+      panelOverflowY: panelStyles.overflowY,
+      panelOverflowX: panelStyles.overflowX,
+      overflowY: styles.overflowY,
+      minHeight: styles.minHeight,
+    }
+  })
+
+  expect(scrollConfig).not.toBeNull()
+  expect(scrollConfig?.panelOverflowY).toBe('hidden')
+  expect(scrollConfig?.panelOverflowX).toBe('hidden')
+  expect(['auto', 'scroll']).toContain(scrollConfig?.overflowY)
+  expect(scrollConfig?.minHeight).toBe('0px')
+})
+
+test('expanded component and styles min-height stay consistent in side layouts', async ({
+  page,
+}) => {
+  await waitForInitialRender(page)
+
+  for (const layoutLabel of ['Use side preview layout', 'Use left preview layout']) {
+    await page.getByLabel(layoutLabel).click()
+
+    const minHeights = await page.evaluate(() => {
+      const component = document.getElementById('component-panel')
+      const styles = document.getElementById('styles-panel')
+      return {
+        component: component
+          ? Number.parseFloat(getComputedStyle(component).minHeight)
+          : 0,
+        styles: styles ? Number.parseFloat(getComputedStyle(styles).minHeight) : 0,
+      }
+    })
+
+    expect(minHeights.component).toBeGreaterThan(0)
+    expect(minHeights.styles).toBeGreaterThan(0)
+    expect(Math.abs(minHeights.component - minHeights.styles)).toBeLessThanOrEqual(1)
+  }
+})
+
+test('panel collapse axis and direction adapt to active layout', async ({ page }) => {
+  await waitForInitialRender(page)
+  await expect(page.locator('.app-grid')).toHaveClass(/app-grid/)
+
+  await expectCollapseButtonState(page, 'component', {
+    axis: 'horizontal',
+    direction: 'left',
+    collapsed: false,
+  })
+  await expectCollapseButtonState(page, 'styles', {
+    axis: 'horizontal',
+    direction: 'right',
+    collapsed: false,
+  })
+  await expectCollapseButtonState(page, 'preview', {
+    axis: 'vertical',
+    direction: 'none',
+    collapsed: false,
+  })
+
+  await page.getByLabel('Use side preview layout').click()
+  await expectCollapseButtonState(page, 'preview', {
+    axis: 'horizontal',
+    direction: 'right',
+    collapsed: false,
+  })
+  await expectCollapseButtonState(page, 'component', {
+    axis: 'vertical',
+    direction: 'none',
+    collapsed: false,
+  })
+
+  await page.getByLabel('Use left preview layout').click()
+  await expectCollapseButtonState(page, 'preview', {
+    axis: 'horizontal',
+    direction: 'left',
+    collapsed: false,
+  })
+})
+
+test('prevents collapsing all three panels at once', async ({ page }) => {
+  await waitForInitialRender(page)
+
+  await getCollapseButton(page, 'component').click()
+  await getCollapseButton(page, 'styles').click()
+
+  await expect(page.locator('#component-panel')).toHaveClass(
+    /panel--collapsed-horizontal/,
+  )
+  await expect(page.locator('#styles-panel')).toHaveClass(/panel--collapsed-horizontal/)
+
+  await expectCollapseButtonState(page, 'preview', {
+    axis: 'vertical',
+    direction: 'none',
+    collapsed: false,
+    disabled: true,
+  })
+  await expect(getCollapseButton(page, 'preview')).toHaveAttribute(
+    'title',
+    'At least one panel must remain expanded.',
+  )
+
+  await getCollapseButton(page, 'component').click()
+  await expectCollapseButtonState(page, 'preview', {
+    axis: 'vertical',
+    direction: 'none',
+    collapsed: false,
+    disabled: false,
+  })
+})
+
+test('does not persist panel collapse state across reload', async ({ page }) => {
+  await waitForInitialRender(page)
+
+  await getCollapseButton(page, 'component').click()
+  await expect(page.locator('#component-panel')).toHaveClass(
+    /panel--collapsed-horizontal/,
+  )
+  await expectCollapseButtonState(page, 'component', {
+    axis: 'horizontal',
+    direction: 'left',
+    collapsed: true,
+  })
+
+  await page.reload()
+  await waitForInitialRender(page)
+
+  await expect(page.locator('#component-panel')).not.toHaveClass(
+    /panel--collapsed-horizontal|panel--collapsed-vertical/,
+  )
+  await expectCollapseButtonState(page, 'component', {
+    axis: 'horizontal',
+    direction: 'left',
+    collapsed: false,
+  })
 })
 
 test('renders in react mode with css modules', async ({ page }) => {

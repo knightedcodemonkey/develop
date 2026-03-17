@@ -22,3 +22,7 @@ Focused follow-up work for `@knighted/develop`.
 5. **In-browser component testing**
    - Explore authoring and running component-focused tests in-browser (for example, a Vitest-compatible flow) using CDN-delivered tooling.
    - Define a lightweight test UX that supports writing tests, running them on demand, and displaying results in-app.
+
+6. **Panel sizing without JS height sync**
+   - Revisit the current side-layout preview height calculation and investigate a pure CSS replacement.
+   - Keep existing behavior constraints: preview should not exceed the combined editor stack height in side layouts, and preview content should scroll internally when it overflows.
