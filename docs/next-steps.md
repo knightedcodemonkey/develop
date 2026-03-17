@@ -15,8 +15,9 @@ Focused follow-up work for `@knighted/develop`.
    - Prefer CDN-delivered tooling where possible and preserve graceful fallback behavior when unavailable.
 
 4. **In-browser component type checking**
-   - Explore TypeScript/JSX type checking for component source in-browser using CDN-delivered tooling.
-   - Keep diagnostics responsive and surface clear inline/editor feedback without blocking the preview loop.
+   - Add editor-linked diagnostics navigation so each issue can jump to the exact line/column in the component source.
+   - Surface line/column context directly in the diagnostics UI (not just message text) to speed up triage.
+   - Continue improving typecheck performance for first-run and large sources while keeping the preview loop non-blocking.
 
 5. **In-browser component testing**
    - Explore authoring and running component-focused tests in-browser (for example, a Vitest-compatible flow) using CDN-delivered tooling.

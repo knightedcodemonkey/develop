@@ -263,3 +263,61 @@ test('clearing styles keeps diagnostics error state but resets status styling', 
   )
   await expect(page.locator('#diagnostics-toggle')).toHaveText(/Diagnostics \([1-9]\d*\)/)
 })
+
+test('clear component diagnostics removes type errors and restores rendered status', async ({
+  page,
+}) => {
+  await waitForInitialRender(page)
+
+  await setComponentEditorSource(
+    page,
+    ["const count: number = 'oops'", 'const App = () => <button>ready</button>'].join(
+      '\n',
+    ),
+  )
+
+  await page.getByRole('button', { name: 'Typecheck' }).click()
+  await expect(page.locator('#diagnostics-toggle')).toHaveClass(
+    /diagnostics-toggle--error/,
+  )
+  await expect(page.locator('#status')).toHaveText(/Rendered \(Type errors: [1-9]\d*\)/)
+
+  await page.locator('#diagnostics-toggle').click()
+  await page.locator('#diagnostics-clear-component').click()
+
+  await expect(page.locator('#diagnostics-component')).toContainText(
+    'No diagnostics yet.',
+  )
+  await expect(page.locator('#diagnostics-toggle')).toHaveText('Diagnostics')
+  await expect(page.locator('#diagnostics-toggle')).toHaveClass(
+    /diagnostics-toggle--neutral/,
+  )
+  await expect(page.locator('#status')).toHaveText('Rendered')
+  await expect(page.locator('#status')).toHaveClass(/status--neutral/)
+})
+
+test('clear all diagnostics removes style compile diagnostics', async ({ page }) => {
+  await waitForInitialRender(page)
+
+  await page.locator('#style-mode').selectOption('sass')
+  await setStylesEditorSource(page, '.card { color: $missing; }')
+
+  await expect(page.locator('#diagnostics-toggle')).toHaveClass(
+    /diagnostics-toggle--error/,
+  )
+
+  await page.locator('#diagnostics-toggle').click()
+  await expect(page.locator('#diagnostics-styles')).toContainText(
+    'Style compilation failed.',
+  )
+
+  await page.locator('#diagnostics-clear-all').click()
+  await expect(page.locator('#diagnostics-component')).toContainText(
+    'No diagnostics yet.',
+  )
+  await expect(page.locator('#diagnostics-styles')).toContainText('No diagnostics yet.')
+  await expect(page.locator('#diagnostics-toggle')).toHaveText('Diagnostics')
+  await expect(page.locator('#diagnostics-toggle')).toHaveClass(
+    /diagnostics-toggle--neutral/,
+  )
+})
