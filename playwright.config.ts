@@ -1,12 +1,18 @@
 import { defineConfig, devices } from '@playwright/test'
 
-const env = (globalThis as { process?: { env?: Record<string, string | undefined> } })
-  .process?.env
-
+const env = process.env
 const isCI = env?.CI === 'true'
 const HOST = env?.PLAYWRIGHT_HOST ?? '127.0.0.1'
 const PORT = Number(env?.PLAYWRIGHT_PORT ?? 4174)
 const baseURL = env?.PLAYWRIGHT_BASE_URL ?? `http://${HOST}:${PORT}`
+const webServerMode = env?.PLAYWRIGHT_WEB_SERVER_MODE ?? 'dev'
+const usePreviewServer = webServerMode === 'preview'
+const webServerCommand = usePreviewServer
+  ? `npx http-server dist -a ${HOST} -p ${PORT} -c-1`
+  : `npx http-server . -a ${HOST} -p ${PORT} -c-1`
+const webServerReadyUrl = usePreviewServer
+  ? `${baseURL}/index.html`
+  : `${baseURL}/src/index.html`
 const projects = [
   {
     name: 'chromium',
@@ -36,8 +42,8 @@ export default defineConfig({
     video: 'retain-on-failure',
   },
   webServer: {
-    command: `npx http-server . -a ${HOST} -p ${PORT} -c-1`,
-    url: `${baseURL}/src/index.html`,
+    command: webServerCommand,
+    url: webServerReadyUrl,
     reuseExistingServer: !isCI,
     timeout: 120_000,
   },

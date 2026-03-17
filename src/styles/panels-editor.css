@@ -1,0 +1,152 @@
+.panel {
+  background: var(--surface-panel);
+  border: 1px solid var(--border-subtle);
+  border-radius: 14px;
+  display: flex;
+  flex-direction: column;
+  min-height: 360px;
+  overflow: hidden;
+}
+
+.panel.preview {
+  min-height: 280px;
+}
+
+.panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 18px;
+  border-bottom: 1px solid var(--border-subtle);
+  background: var(--surface-panel-header);
+  position: relative;
+  z-index: 2;
+}
+
+.panel-header h2 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.panel-header--grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas:
+    'title quick'
+    'actions actions';
+  align-items: start;
+  column-gap: 12px;
+  row-gap: 10px;
+}
+
+.panel-header--grid h2 {
+  grid-area: title;
+}
+
+.panel-header-quick-actions {
+  grid-area: quick;
+  justify-self: center;
+}
+
+.panel-header-main-actions {
+  grid-area: actions;
+  justify-self: start;
+}
+
+.panel-header-main-actions .controls {
+  justify-content: flex-start;
+}
+
+.controls {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  font-size: 0.85rem;
+  color: var(--text-controls);
+  flex-wrap: wrap;
+}
+
+.controls--actions {
+  justify-content: flex-start;
+}
+
+.controls--quick-actions {
+  gap: 10px;
+}
+
+.controls label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.controls select {
+  appearance: none;
+  -webkit-appearance: none;
+  background-color: var(--surface-select);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath fill='currentColor' d='M1.2 0 5 3.8 8.8 0 10 1.2 5 6 0 1.2z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+  color: var(--select-text);
+  border: 1px solid var(--border-control);
+  border-radius: 8px;
+  padding: 6px 30px 6px 10px;
+  color-scheme: var(--control-color-scheme);
+}
+
+.controls select:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 1px;
+}
+
+.controls select option,
+.controls select optgroup {
+  background: var(--surface-select-option);
+  color: var(--select-option-text);
+}
+
+.controls select option:disabled {
+  color: var(--select-option-disabled);
+}
+
+textarea {
+  flex: 1;
+  background: transparent;
+  color: var(--panel-text);
+  border: none;
+  padding: 16px 18px;
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+  font-size: 0.9rem;
+  resize: none;
+}
+
+textarea:focus {
+  outline: none;
+}
+
+.source-textarea--hidden {
+  display: none;
+}
+
+.editor-host {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.editor-host .cm-editor {
+  height: 100%;
+}
+
+.editor-host .cm-scroller {
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+  overflow: auto;
+}
+
+@media (max-width: 900px) {
+  .component-panel,
+  .styles-panel {
+    max-height: none;
+    min-height: 360px;
+  }
+}

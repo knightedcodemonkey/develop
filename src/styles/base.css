@@ -1,0 +1,197 @@
+:root {
+  color-scheme: dark;
+  --app-bg-start: #0f1115;
+  --app-bg-end: #12141b;
+  --shell-text: #e6e7eb;
+  --text-muted: #9aa3b2;
+  --text-subtle: #cdd4df;
+  --text-controls: #b9c1cf;
+  --panel-text: #e8ebf3;
+  --surface-app-header: rgba(16, 18, 24, 0.9);
+  --surface-panel: rgba(18, 20, 28, 0.9);
+  --surface-panel-header: rgba(15, 17, 23, 0.9);
+  --surface-chip: rgba(255, 255, 255, 0.08);
+  --surface-control: rgba(255, 255, 255, 0.06);
+  --surface-control-hover: rgba(255, 255, 255, 0.12);
+  --surface-select: rgba(255, 255, 255, 0.08);
+  --surface-select-option: #151a25;
+  --surface-preview: #12141c;
+  --surface-overlay: rgba(10, 12, 18, 0.72);
+  --surface-tooltip: rgba(9, 12, 20, 0.96);
+  --surface-dialog: rgba(13, 16, 24, 0.97);
+  --surface-loading: rgba(7, 10, 16, 0.82);
+  --surface-loading-card: rgba(13, 16, 24, 0.96);
+  --border-subtle: rgba(255, 255, 255, 0.08);
+  --border-control: rgba(255, 255, 255, 0.16);
+  --border-strong: rgba(255, 255, 255, 0.18);
+  --border-tooltip: rgba(255, 255, 255, 0.12);
+  --border-loading-card: rgba(255, 255, 255, 0.12);
+  --accent: #7a6bff;
+  --accent-rgb: 122, 107, 255;
+  --accent-soft: rgba(122, 107, 255, 0.2);
+  --accent-soft-hover: rgba(122, 107, 255, 0.35);
+  --accent-strong: rgba(122, 107, 255, 0.8);
+  --focus-ring: rgba(122, 107, 255, 0.85);
+  --danger-rgb: 250, 126, 138;
+  --danger-text: #ffe7ea;
+  --warning: #f6b56a;
+  --shadow-elev-1: rgba(0, 0, 0, 0.45);
+  --shadow-elev-2: rgba(0, 0, 0, 0.35);
+  --loading-spinner-border: rgba(255, 255, 255, 0.24);
+  --select-text: #f1f5ff;
+  --select-option-text: #eef3ff;
+  --select-option-disabled: #95a1b9;
+  --tooltip-text: #dfe6f7;
+  --dialog-text: #e7edf9;
+  --dialog-muted: #b8c3d9;
+  --loading-title: #edf1ff;
+  --loading-copy: #b7c1d4;
+  --icon-color: #d8e0ef;
+  --hint-icon: #dbe5ff;
+  --preview-spinner: #8f83ff;
+  --cm-keyword: #ff7fb3;
+  --cm-name: #e7ecf9;
+  --cm-property: #3fd6a6;
+  --cm-function: #8dc8ff;
+  --cm-constant: #7fd7ff;
+  --cm-definition: #dce4f6;
+  --cm-type: #8eb8ff;
+  --cm-number: #ffcb82;
+  --cm-operator: #d5def0;
+  --cm-string: #ffd38e;
+  --cm-comment: #94a2bb;
+  --cm-link: #88b6ff;
+  --cm-heading: #f2f5ff;
+  --cm-atom: #b8a8ff;
+  --cm-invalid: #ff8fa1;
+  --cm-text: #edf2ff;
+  --cm-caret: #f1f5ff;
+  --cm-gutter-bg: rgba(255, 255, 255, 0.045);
+  --cm-gutter-border: rgba(255, 255, 255, 0.13);
+  --cm-gutter-text: #98a8c4;
+  --cm-selection: rgba(122, 107, 255, 0.36);
+  --cm-active-line: rgba(255, 255, 255, 0.08);
+  --cm-focus-ring: rgba(122, 107, 255, 0.62);
+  --cm-tooltip-bg: #1b2233;
+  --cm-tooltip-text: #edf2ff;
+  --cm-tooltip-border: rgba(152, 168, 196, 0.32);
+  --cm-tooltip-item: #dce6fa;
+  --cm-tooltip-item-selected-bg: rgba(122, 107, 255, 0.34);
+  --cm-tooltip-item-selected-text: #f4f7ff;
+  --control-color-scheme: dark;
+  font-family:
+    'Inter',
+    system-ui,
+    -apple-system,
+    sans-serif;
+  line-height: 1.4;
+  background: var(--app-bg-start);
+  color: var(--shell-text);
+}
+
+:root[data-theme='light'] {
+  color-scheme: light;
+  --app-bg-start: #f3f6fc;
+  --app-bg-end: #e8eef8;
+  --shell-text: #1f2937;
+  --text-muted: #475569;
+  --text-subtle: #334155;
+  --text-controls: #4b5563;
+  --panel-text: #1f2937;
+  --surface-app-header: rgba(245, 248, 255, 0.92);
+  --surface-panel: rgba(255, 255, 255, 0.92);
+  --surface-panel-header: rgba(248, 251, 255, 0.95);
+  --surface-chip: rgba(15, 23, 42, 0.08);
+  --surface-control: rgba(15, 23, 42, 0.06);
+  --surface-control-hover: rgba(15, 23, 42, 0.12);
+  --surface-select: rgba(15, 23, 42, 0.06);
+  --surface-select-option: #ffffff;
+  --surface-preview: #f6f9ff;
+  --surface-overlay: rgba(240, 245, 255, 0.84);
+  --surface-tooltip: rgba(22, 34, 52, 0.96);
+  --surface-dialog: rgba(255, 255, 255, 0.98);
+  --surface-loading: rgba(234, 241, 252, 0.78);
+  --surface-loading-card: rgba(255, 255, 255, 0.97);
+  --border-subtle: rgba(15, 23, 42, 0.12);
+  --border-control: rgba(15, 23, 42, 0.22);
+  --border-strong: rgba(15, 23, 42, 0.24);
+  --border-tooltip: rgba(203, 213, 225, 0.7);
+  --border-loading-card: rgba(148, 163, 184, 0.42);
+  --accent: #5f57f0;
+  --accent-rgb: 95, 87, 240;
+  --accent-soft: rgba(95, 87, 240, 0.16);
+  --accent-soft-hover: rgba(95, 87, 240, 0.26);
+  --accent-strong: rgba(95, 87, 240, 0.72);
+  --focus-ring: rgba(95, 87, 240, 0.7);
+  --danger-rgb: 225, 66, 86;
+  --danger-text: #7f1d1d;
+  --warning: #b45309;
+  --shadow-elev-1: rgba(15, 23, 42, 0.2);
+  --shadow-elev-2: rgba(15, 23, 42, 0.16);
+  --loading-spinner-border: rgba(15, 23, 42, 0.24);
+  --select-text: #111827;
+  --select-option-text: #111827;
+  --select-option-disabled: #64748b;
+  --tooltip-text: #f8fafc;
+  --dialog-text: #1e293b;
+  --dialog-muted: #475569;
+  --loading-title: #0f172a;
+  --loading-copy: #334155;
+  --icon-color: #334155;
+  --hint-icon: #334155;
+  --preview-spinner: #5f57f0;
+  --cm-keyword: #b42364;
+  --cm-name: #0f172a;
+  --cm-property: #047857;
+  --cm-function: #1d4ed8;
+  --cm-constant: #0e7490;
+  --cm-definition: #1e293b;
+  --cm-type: #4338ca;
+  --cm-number: #b45309;
+  --cm-operator: #334155;
+  --cm-string: #92400e;
+  --cm-comment: #64748b;
+  --cm-link: #1d4ed8;
+  --cm-heading: #0f172a;
+  --cm-atom: #7c3aed;
+  --cm-invalid: #be123c;
+  --cm-text: #0f172a;
+  --cm-caret: #0f172a;
+  --cm-gutter-bg: rgba(15, 23, 42, 0.05);
+  --cm-gutter-border: rgba(15, 23, 42, 0.16);
+  --cm-gutter-text: #64748b;
+  --cm-selection: rgba(95, 87, 240, 0.2);
+  --cm-active-line: rgba(15, 23, 42, 0.08);
+  --cm-focus-ring: rgba(95, 87, 240, 0.5);
+  --cm-tooltip-bg: #f8fafc;
+  --cm-tooltip-text: #0f172a;
+  --cm-tooltip-border: rgba(15, 23, 42, 0.18);
+  --cm-tooltip-item: #1e293b;
+  --cm-tooltip-item-selected-bg: rgba(95, 87, 240, 0.2);
+  --cm-tooltip-item-selected-text: #0f172a;
+  --control-color-scheme: light;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  min-height: 100vh;
+  background: linear-gradient(180deg, var(--app-bg-start) 0%, var(--app-bg-end) 100%);
+  color: var(--shell-text);
+}
