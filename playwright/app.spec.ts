@@ -347,6 +347,7 @@ test('clearing component source reports clear action without error status', asyn
   await expect(page.locator('#status')).toHaveText('Component cleared')
   await expect(page.locator('#status')).toHaveClass(/status--neutral/)
   await expect(page.locator('#preview-host pre')).toHaveCount(0)
+  await expect(page.locator('#preview-host button')).toHaveCount(0)
 })
 
 test('jsx syntax errors affect status but not diagnostics toggle severity', async ({
