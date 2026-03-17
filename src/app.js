@@ -15,6 +15,7 @@ const statusNode = document.getElementById('status')
 const appGrid = document.querySelector('.app-grid')
 const appGridLayoutButtons = document.querySelectorAll('[data-app-grid-layout]')
 const appThemeButtons = document.querySelectorAll('[data-app-theme]')
+const editorToolsButtons = document.querySelectorAll('[data-editor-tools-toggle]')
 const panelCollapseButtons = document.querySelectorAll('[data-panel-collapse]')
 const componentPanel = document.getElementById('component-panel')
 const stylesPanel = document.getElementById('styles-panel')
@@ -31,7 +32,6 @@ const clearStylesButton = document.getElementById('clear-styles')
 const shadowToggle = document.getElementById('shadow-toggle')
 const jsxEditor = document.getElementById('jsx-editor')
 const cssEditor = document.getElementById('css-editor')
-const styleWarning = document.getElementById('style-warning')
 const diagnosticsToggle = document.getElementById('diagnostics-toggle')
 const diagnosticsDrawer = document.getElementById('diagnostics-drawer')
 const diagnosticsClose = document.getElementById('diagnostics-close')
@@ -142,6 +142,28 @@ const panelCollapseState = {
   component: false,
   styles: false,
   preview: false,
+}
+
+const panelToolsState = {
+  component: false,
+  styles: false,
+}
+
+const applyEditorToolsVisibility = () => {
+  componentPanel?.classList.toggle('panel--tools-hidden', !panelToolsState.component)
+  stylesPanel?.classList.toggle('panel--tools-hidden', !panelToolsState.styles)
+
+  for (const button of editorToolsButtons) {
+    const panelName = button.dataset.editorToolsToggle
+    if (!panelName || !(panelName in panelToolsState)) {
+      continue
+    }
+
+    const isVisible = panelToolsState[panelName]
+    button.setAttribute('aria-pressed', isVisible ? 'true' : 'false')
+    button.setAttribute('aria-label', `${isVisible ? 'Hide' : 'Show'} ${panelName} tools`)
+    button.setAttribute('title', `${isVisible ? 'Hide' : 'Show'} ${panelName} tools`)
+  }
 }
 
 const normalizePanelCollapseState = () => {
@@ -410,7 +432,6 @@ renderRuntime = createRenderRuntimeController({
   renderMode,
   styleMode,
   shadowToggle,
-  styleWarning,
   getCssSource: () => getCssSource(),
   getJsxSource: () => getJsxSource(),
   getPreviewHost: () => previewHost,
@@ -653,6 +674,18 @@ for (const button of appThemeButtons) {
   })
 }
 
+for (const button of editorToolsButtons) {
+  button.addEventListener('click', () => {
+    const panelName = button.dataset.editorToolsToggle
+    if (!panelName || !(panelName in panelToolsState)) {
+      return
+    }
+
+    panelToolsState[panelName] = !panelToolsState[panelName]
+    applyEditorToolsVisibility()
+  })
+}
+
 for (const button of panelCollapseButtons) {
   button.addEventListener('click', () => {
     const panelName = button.dataset.panelCollapse
@@ -676,6 +709,7 @@ if (typeof compactViewportMediaQuery.addEventListener === 'function') {
 
 applyAppGridLayout(getInitialAppGridLayout(), { persist: false })
 applyTheme(getInitialTheme(), { persist: false })
+applyEditorToolsVisibility()
 applyPanelCollapseState()
 
 updateRenderButtonVisibility()

@@ -53,6 +53,18 @@
   justify-content: flex-start;
 }
 
+.component-panel.panel--tools-hidden .panel-header-main-actions,
+.styles-panel.panel--tools-hidden .panel-header-main-actions {
+  display: none;
+}
+
+.component-panel.panel--tools-hidden .panel-header--grid,
+.styles-panel.panel--tools-hidden .panel-header--grid {
+  grid-template-areas: 'title quick';
+  align-items: center;
+  row-gap: 0;
+}
+
 .controls {
   display: flex;
   gap: 12px;
@@ -68,6 +80,24 @@
 
 .controls--quick-actions {
   gap: 10px;
+}
+
+.editor-tools-toggle {
+  opacity: 0.72;
+}
+
+.editor-tools-toggle svg {
+  width: 15px;
+  height: 15px;
+  fill: currentColor;
+  stroke: none;
+}
+
+.editor-tools-toggle[aria-pressed='true'] {
+  opacity: 1;
+  border-color: color-mix(in srgb, var(--accent) 65%, transparent);
+  background: var(--accent-soft);
+  color: var(--select-text);
 }
 
 .panel-collapse-toggle {
@@ -234,7 +264,6 @@ textarea:focus {
 .component-panel.panel--collapsed-vertical textarea,
 .styles-panel.panel--collapsed-vertical .editor-host,
 .styles-panel.panel--collapsed-vertical textarea,
-.styles-panel.panel--collapsed-vertical .panel-footer,
 .preview-panel.panel--collapsed-vertical .preview-host,
 .component-panel.panel--collapsed-vertical .panel-content,
 .styles-panel.panel--collapsed-vertical .panel-content,
@@ -317,8 +346,7 @@ textarea:focus {
 .styles-panel.panel--collapsed-horizontal textarea,
 .styles-panel.panel--collapsed-horizontal .panel-content,
 .styles-panel.panel--collapsed-horizontal .panel-header-main-actions,
-.styles-panel.panel--collapsed-horizontal .panel-header .icon-button,
-.styles-panel.panel--collapsed-horizontal .panel-footer {
+.styles-panel.panel--collapsed-horizontal .panel-header .icon-button {
   display: none;
 }
 

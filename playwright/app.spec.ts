@@ -32,6 +32,17 @@ const setStylesEditorSource = async (page: Page, source: string) => {
 const getCollapseButton = (page: Page, panelName: 'component' | 'styles' | 'preview') =>
   page.locator(`#collapse-${panelName}`)
 
+const getToolsButton = (page: Page, panelName: 'component' | 'styles') =>
+  page.locator(`#tools-${panelName}`)
+
+const ensurePanelToolsVisible = async (page: Page, panelName: 'component' | 'styles') => {
+  const button = getToolsButton(page, panelName)
+  const isPressed = await button.getAttribute('aria-pressed')
+  if (isPressed !== 'true') {
+    await button.click()
+  }
+}
+
 const expectCollapseButtonState = async (
   page: Page,
   panelName: 'component' | 'styles' | 'preview',
@@ -263,8 +274,42 @@ test('does not persist panel collapse state across reload', async ({ page }) => 
   })
 })
 
+test('gear tools toggles default inactive and switch active/inactive per panel', async ({
+  page,
+}) => {
+  await waitForInitialRender(page)
+
+  const componentPanel = page.locator('#component-panel')
+  const stylesPanel = page.locator('#styles-panel')
+  const componentTools = getToolsButton(page, 'component')
+  const stylesTools = getToolsButton(page, 'styles')
+
+  await expect(componentPanel).toHaveClass(/panel--tools-hidden/)
+  await expect(stylesPanel).toHaveClass(/panel--tools-hidden/)
+  await expect(componentTools).toHaveAttribute('aria-pressed', 'false')
+  await expect(stylesTools).toHaveAttribute('aria-pressed', 'false')
+
+  await componentTools.click()
+  await expect(componentPanel).not.toHaveClass(/panel--tools-hidden/)
+  await expect(componentTools).toHaveAttribute('aria-pressed', 'true')
+  await expect(componentTools).toHaveAttribute('title', 'Hide component tools')
+
+  await componentTools.click()
+  await expect(componentPanel).toHaveClass(/panel--tools-hidden/)
+  await expect(componentTools).toHaveAttribute('aria-pressed', 'false')
+  await expect(componentTools).toHaveAttribute('title', 'Show component tools')
+
+  await stylesTools.click()
+  await expect(stylesPanel).not.toHaveClass(/panel--tools-hidden/)
+  await expect(stylesTools).toHaveAttribute('aria-pressed', 'true')
+  await expect(stylesTools).toHaveAttribute('title', 'Hide styles tools')
+})
+
 test('renders in react mode with css modules', async ({ page }) => {
   await waitForInitialRender(page)
+
+  await ensurePanelToolsVisible(page, 'component')
+  await ensurePanelToolsVisible(page, 'styles')
 
   await page.getByLabel('ShadowRoot (open)').uncheck()
   await page.locator('#render-mode').selectOption('react')
@@ -326,21 +371,21 @@ test('jsx syntax errors affect status but not diagnostics toggle severity', asyn
 test('requires render button when auto render is disabled', async ({ page }) => {
   await waitForInitialRender(page)
 
+  await ensurePanelToolsVisible(page, 'component')
+  await ensurePanelToolsVisible(page, 'styles')
+
   const autoRenderToggle = page.getByLabel('Auto render')
   const renderButton = page.getByRole('button', { name: 'Render' })
   const styleMode = page.locator('#style-mode')
-  const styleWarning = page.locator('#style-warning')
 
-  await expect(styleWarning).toHaveText('')
   await autoRenderToggle.uncheck()
   await expect(renderButton).toBeVisible()
 
   await styleMode.selectOption('module')
-  await expect(styleWarning).toHaveText('')
 
   await renderButton.click()
   await expect(page.locator('#status')).toHaveText('Rendered')
-  await expect(styleWarning).toContainText('CSS Modules are compiled in-browser')
+  await expect(page.locator('#preview-host pre')).toHaveCount(0)
 })
 
 test('persists layout and theme across reload', async ({ page }) => {
@@ -361,29 +406,29 @@ test('persists layout and theme across reload', async ({ page }) => {
 test('renders with less style mode', async ({ page }) => {
   await waitForInitialRender(page)
 
+  await ensurePanelToolsVisible(page, 'styles')
+
   await page.getByLabel('ShadowRoot (open)').uncheck()
   await page.locator('#style-mode').selectOption('less')
   await expect(page.locator('#status')).toHaveText('Rendered')
-  await expect(page.locator('#style-warning')).toContainText(
-    'Less is compiled in-browser via @knighted/css/browser.',
-  )
   await expectPreviewHasRenderedContent(page)
 })
 
 test('renders with sass style mode', async ({ page }) => {
   await waitForInitialRender(page)
 
+  await ensurePanelToolsVisible(page, 'styles')
+
   await page.getByLabel('ShadowRoot (open)').uncheck()
   await page.locator('#style-mode').selectOption('sass')
   await expect(page.locator('#status')).toHaveText('Rendered')
-  await expect(page.locator('#style-warning')).toContainText(
-    'Sass is compiled in-browser via @knighted/css/browser.',
-  )
   await expectPreviewHasRenderedContent(page)
 })
 
 test('style compilation errors populate styles diagnostics scope', async ({ page }) => {
   await waitForInitialRender(page)
+
+  await ensurePanelToolsVisible(page, 'styles')
 
   await page.locator('#style-mode').selectOption('sass')
   await setStylesEditorSource(page, '.card { color: $missing; }')
@@ -443,6 +488,8 @@ test('clearing styles keeps diagnostics error state but resets status styling', 
 }) => {
   await waitForInitialRender(page)
 
+  await ensurePanelToolsVisible(page, 'component')
+
   await setComponentEditorSource(
     page,
     ["const count: number = 'oops'", 'const App = () => <button>ready</button>'].join(
@@ -477,6 +524,8 @@ test('clear component diagnostics removes type errors and restores rendered stat
 }) => {
   await waitForInitialRender(page)
 
+  await ensurePanelToolsVisible(page, 'component')
+
   await setComponentEditorSource(
     page,
     ["const count: number = 'oops'", 'const App = () => <button>ready</button>'].join(
@@ -506,6 +555,8 @@ test('clear component diagnostics removes type errors and restores rendered stat
 
 test('clear all diagnostics removes style compile diagnostics', async ({ page }) => {
   await waitForInitialRender(page)
+
+  await ensurePanelToolsVisible(page, 'styles')
 
   await page.locator('#style-mode').selectOption('sass')
   await setStylesEditorSource(page, '.card { color: $missing; }')
