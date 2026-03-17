@@ -1,4 +1,4 @@
-import { cdnImports, importFromCdnWithFallback } from './cdn.js'
+import { cdnImports, getTypeScriptLibUrls, importFromCdnWithFallback } from './cdn.js'
 import { createCodeMirrorEditor } from './editor-codemirror.js'
 import { defaultCss, defaultJsx } from './defaults.js'
 
@@ -8,6 +8,7 @@ const appGridLayoutButtons = document.querySelectorAll('[data-app-grid-layout]')
 const appThemeButtons = document.querySelectorAll('[data-app-theme]')
 const renderMode = document.getElementById('render-mode')
 const autoRenderToggle = document.getElementById('auto-render')
+const typecheckButton = document.getElementById('typecheck-button')
 const renderButton = document.getElementById('render-button')
 const copyComponentButton = document.getElementById('copy-component')
 const clearComponentButton = document.getElementById('clear-component')
@@ -18,6 +19,13 @@ const shadowToggle = document.getElementById('shadow-toggle')
 const jsxEditor = document.getElementById('jsx-editor')
 const cssEditor = document.getElementById('css-editor')
 const styleWarning = document.getElementById('style-warning')
+const diagnosticsToggle = document.getElementById('diagnostics-toggle')
+const diagnosticsDrawer = document.getElementById('diagnostics-drawer')
+const diagnosticsClose = document.getElementById('diagnostics-close')
+const diagnosticsClearComponent = document.getElementById('diagnostics-clear-component')
+const diagnosticsClearAll = document.getElementById('diagnostics-clear-all')
+const diagnosticsComponent = document.getElementById('diagnostics-component')
+const diagnosticsStyles = document.getElementById('diagnostics-styles')
 const cdnLoading = document.getElementById('cdn-loading')
 const previewBgColorInput = document.getElementById('preview-bg-color')
 const clearConfirmDialog = document.getElementById('clear-confirm-dialog')
@@ -39,6 +47,9 @@ let sassCompiler = null
 let lessCompiler = null
 let lightningCssWasm = null
 let coreRuntime = null
+let typeScriptCompiler = null
+let typeScriptCompilerProvider = null
+let typeScriptLibFiles = null
 let compiledStylesCache = {
   key: null,
   value: null,
@@ -47,9 +58,18 @@ let pendingClearAction = null
 let hasCompletedInitialRender = false
 let previewBackgroundColor = null
 let previewBackgroundCustomized = false
+let typeCheckRunId = 0
+let lastTypeErrorCount = 0
+let hasUnresolvedTypeErrors = false
+let scheduledTypeRecheck = null
+let activeTypeDiagnosticsRuns = 0
+let diagnosticsDrawerOpen = false
+let suppressEditorChangeSideEffects = false
+let statusLevel = 'neutral'
 const clipboardSupported = Boolean(navigator.clipboard?.writeText)
 const appGridLayoutStorageKey = 'knighted-develop:app-grid-layout'
 const appThemeStorageKey = 'knighted-develop:theme'
+const defaultTypeScriptLibFileName = 'lib.esnext.full.d.ts'
 
 const styleLabels = {
   css: 'Native CSS',
@@ -81,13 +101,24 @@ const initializeCodeEditors = async () => {
         parent: jsxHost,
         value: defaultJsx,
         language: 'javascript-jsx',
-        onChange: maybeRender,
+        onChange: () => {
+          if (suppressEditorChangeSideEffects) {
+            return
+          }
+          maybeRender()
+          markTypeDiagnosticsStale()
+        },
       }),
       createCodeMirrorEditor({
         parent: cssHost,
         value: defaultCss,
         language: getStyleEditorLanguage(styleMode.value),
-        onChange: maybeRender,
+        onChange: () => {
+          if (suppressEditorChangeSideEffects) {
+            return
+          }
+          maybeRender()
+        },
       }),
     ])
 
@@ -102,7 +133,7 @@ const initializeCodeEditors = async () => {
     jsxHost.remove()
     cssHost.remove()
     const message = error instanceof Error ? error.message : String(error)
-    setStatus(`Editor fallback: ${message}`)
+    setStatus(`Editor fallback: ${message}`, 'neutral')
   }
 }
 
@@ -144,8 +175,540 @@ const ensureCoreRuntime = async () => {
   }
 }
 
-const setStatus = text => {
+const setStatus = (text, level) => {
   statusNode.textContent = text
+  statusLevel = level ?? 'neutral'
+  updateUiIssueIndicators()
+}
+
+const getDiagnosticsErrorCount = () => {
+  const componentErrors =
+    diagnosticsByScope.component.level === 'error'
+      ? diagnosticsByScope.component.lines.length
+      : 0
+  const styleErrors =
+    diagnosticsByScope.styles.level === 'error'
+      ? diagnosticsByScope.styles.lines.length
+      : 0
+  return componentErrors + styleErrors
+}
+
+const getDiagnosticsIssueLevel = () => {
+  if (getDiagnosticsErrorCount() > 0) {
+    return 'error'
+  }
+
+  if (activeTypeDiagnosticsRuns > 0) {
+    return 'pending'
+  }
+
+  return 'neutral'
+}
+
+const updateUiIssueIndicators = () => {
+  const diagnosticsLevel = getDiagnosticsIssueLevel()
+
+  statusNode.classList.remove('status--neutral', 'status--pending', 'status--error')
+  statusNode.classList.add(`status--${statusLevel}`)
+
+  if (diagnosticsToggle) {
+    diagnosticsToggle.classList.remove(
+      'diagnostics-toggle--neutral',
+      'diagnostics-toggle--pending',
+      'diagnostics-toggle--error',
+    )
+    diagnosticsToggle.classList.add(`diagnostics-toggle--${diagnosticsLevel}`)
+  }
+}
+
+const diagnosticsByScope = {
+  component: {
+    headline: '',
+    lines: [],
+    level: 'muted',
+  },
+  styles: {
+    headline: '',
+    lines: [],
+    level: 'muted',
+  },
+}
+
+const getDiagnosticsScopeNode = scope => {
+  if (scope === 'component') {
+    return diagnosticsComponent
+  }
+
+  if (scope === 'styles') {
+    return diagnosticsStyles
+  }
+
+  return null
+}
+
+const renderDiagnosticsScope = scope => {
+  const root = getDiagnosticsScopeNode(scope)
+  const state = diagnosticsByScope[scope]
+  if (!root || !state) {
+    return
+  }
+
+  root.classList.remove('panel-footer--muted', 'panel-footer--ok', 'panel-footer--error')
+  root.replaceChildren()
+
+  const hasHeadline = typeof state.headline === 'string' && state.headline.length > 0
+  const hasLines = Array.isArray(state.lines) && state.lines.length > 0
+
+  if (!hasHeadline && !hasLines) {
+    const emptyNode = document.createElement('div')
+    emptyNode.className = 'diagnostics-empty'
+    emptyNode.textContent = 'No diagnostics yet.'
+    root.append(emptyNode)
+    root.classList.add('panel-footer--muted')
+    return
+  }
+
+  if (hasHeadline) {
+    const headingNode = document.createElement('div')
+    headingNode.className = 'type-diagnostics-heading'
+    headingNode.textContent = state.headline
+    root.append(headingNode)
+  }
+
+  if (hasLines) {
+    const listNode = document.createElement('ol')
+    listNode.className = 'type-diagnostics-list'
+    for (const line of state.lines) {
+      const itemNode = document.createElement('li')
+      itemNode.textContent = line
+      listNode.append(itemNode)
+    }
+    root.append(listNode)
+  }
+
+  if (state.level === 'ok') {
+    root.classList.add('panel-footer--ok')
+    return
+  }
+
+  if (state.level === 'error') {
+    root.classList.add('panel-footer--error')
+    return
+  }
+
+  root.classList.add('panel-footer--muted')
+}
+
+const updateDiagnosticsToggleLabel = () => {
+  if (!diagnosticsToggle) {
+    return
+  }
+
+  const totalErrors = getDiagnosticsErrorCount()
+  diagnosticsToggle.textContent =
+    totalErrors > 0 ? `Diagnostics (${totalErrors})` : 'Diagnostics'
+}
+
+const setDiagnosticsDrawerOpen = isOpen => {
+  diagnosticsDrawerOpen = Boolean(isOpen)
+
+  if (diagnosticsDrawer) {
+    diagnosticsDrawer.hidden = !diagnosticsDrawerOpen
+  }
+
+  if (diagnosticsToggle) {
+    diagnosticsToggle.setAttribute(
+      'aria-expanded',
+      diagnosticsDrawerOpen ? 'true' : 'false',
+    )
+  }
+}
+
+const setDiagnosticsScope = (scope, { headline = '', lines = [], level = 'muted' }) => {
+  if (!diagnosticsByScope[scope]) {
+    return
+  }
+
+  diagnosticsByScope[scope] = {
+    headline,
+    lines,
+    level,
+  }
+
+  renderDiagnosticsScope(scope)
+  updateDiagnosticsToggleLabel()
+  updateUiIssueIndicators()
+}
+
+const clearDiagnosticsScope = scope => {
+  setDiagnosticsScope(scope, { headline: '', lines: [], level: 'muted' })
+}
+
+const clearAllDiagnostics = () => {
+  clearDiagnosticsScope('component')
+  clearDiagnosticsScope('styles')
+}
+
+const setTypeDiagnosticsDetails = ({ headline, lines = [], level = 'muted' }) => {
+  setDiagnosticsScope('component', { headline, lines, level })
+}
+
+const setStyleDiagnosticsDetails = ({ headline, lines = [], level = 'muted' }) => {
+  setDiagnosticsScope('styles', { headline, lines, level })
+}
+
+const setTypecheckButtonLoading = isLoading => {
+  if (!typecheckButton) {
+    return
+  }
+
+  typecheckButton.classList.toggle('render-button--loading', isLoading)
+  typecheckButton.setAttribute('aria-busy', isLoading ? 'true' : 'false')
+  typecheckButton.disabled = isLoading
+}
+
+const clearTypeRecheckTimer = () => {
+  if (!scheduledTypeRecheck) {
+    return
+  }
+
+  clearTimeout(scheduledTypeRecheck)
+  scheduledTypeRecheck = null
+}
+
+const scheduleTypeRecheck = () => {
+  clearTypeRecheckTimer()
+
+  if (!hasUnresolvedTypeErrors) {
+    return
+  }
+
+  scheduledTypeRecheck = setTimeout(() => {
+    scheduledTypeRecheck = null
+    typeCheckRunId += 1
+    void runTypeDiagnostics(typeCheckRunId)
+  }, 450)
+}
+
+const setRenderedStatus = () => {
+  if (lastTypeErrorCount > 0) {
+    setStatus(`Rendered (Type errors: ${lastTypeErrorCount})`, 'error')
+    return
+  }
+
+  if (statusNode.textContent.startsWith('Rendered (Type errors:')) {
+    setStatus('Rendered', 'neutral')
+  }
+}
+
+const flattenTypeDiagnosticMessage = (compiler, messageText) => {
+  if (typeof compiler.flattenDiagnosticMessageText === 'function') {
+    return compiler.flattenDiagnosticMessageText(messageText, '\n')
+  }
+
+  if (typeof messageText === 'string') {
+    return messageText
+  }
+
+  if (messageText && typeof messageText.messageText === 'string') {
+    return messageText.messageText
+  }
+
+  return 'Unknown TypeScript diagnostic'
+}
+
+const formatTypeDiagnostic = (compiler, diagnostic) => {
+  const message = flattenTypeDiagnosticMessage(compiler, diagnostic.messageText)
+
+  if (!diagnostic.file || typeof diagnostic.start !== 'number') {
+    return `TS${diagnostic.code}: ${message}`
+  }
+
+  const position = diagnostic.file.getLineAndCharacterOfPosition(diagnostic.start)
+  return `L${position.line + 1}:${position.character + 1} TS${diagnostic.code}: ${message}`
+}
+
+const ensureTypeScriptCompiler = async () => {
+  if (typeScriptCompiler) {
+    return typeScriptCompiler
+  }
+
+  try {
+    const loaded = await importFromCdnWithFallback(cdnImports.typescript)
+    typeScriptCompiler = loaded.module.default ?? loaded.module
+    typeScriptCompilerProvider = loaded.provider ?? null
+
+    if (typeof typeScriptCompiler.transpileModule !== 'function') {
+      throw new Error(`transpileModule export was not found from ${loaded.url}`)
+    }
+
+    return typeScriptCompiler
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : 'Unknown TypeScript module loading failure'
+    throw new Error(
+      `Unable to load TypeScript diagnostics runtime from CDN: ${message}`,
+      {
+        cause: error,
+      },
+    )
+  }
+}
+
+const shouldIgnoreTypeDiagnostic = diagnostic => {
+  const ignoredCodes = new Set([2318, 6053])
+  return ignoredCodes.has(diagnostic.code)
+}
+
+const normalizeVirtualFileName = fileName =>
+  typeof fileName === 'string' && fileName.startsWith('/') ? fileName.slice(1) : fileName
+
+const fetchTypeScriptLibText = async fileName => {
+  const urls = getTypeScriptLibUrls(fileName, {
+    typeScriptProvider: typeScriptCompilerProvider,
+  })
+
+  const attempts = urls.map(async url => {
+    const response = await fetch(url)
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status} from ${url}`)
+    }
+
+    return response.text()
+  })
+
+  try {
+    return await Promise.any(attempts)
+  } catch (error) {
+    let message = error instanceof Error ? error.message : String(error)
+
+    if (error instanceof AggregateError) {
+      const reasons = Array.from(error.errors ?? [])
+        .slice(0, 3)
+        .map(reason => (reason instanceof Error ? reason.message : String(reason)))
+      const reasonSummary = reasons.length ? ` Causes: ${reasons.join(' | ')}` : ''
+
+      message = `Tried URLs: ${urls.join(', ')}.${reasonSummary}`
+    }
+
+    throw new Error(`Unable to fetch TypeScript lib file ${fileName}: ${message}`, {
+      cause: error,
+    })
+  }
+}
+
+const parseTypeScriptLibReferences = sourceText => {
+  const references = new Set()
+  const libReferencePattern = /\/\/\/\s*<reference\s+lib="([^"]+)"\s*\/>/g
+  const pathReferencePattern = /\/\/\/\s*<reference\s+path="([^"]+)"\s*\/>/g
+
+  for (const match of sourceText.matchAll(libReferencePattern)) {
+    const libName = match[1]?.trim()
+    if (libName) {
+      references.add(`lib.${libName}.d.ts`)
+    }
+  }
+
+  for (const match of sourceText.matchAll(pathReferencePattern)) {
+    const pathName = match[1]?.trim()
+    if (pathName) {
+      references.add(pathName.replace(/^\.\//, ''))
+    }
+  }
+
+  return [...references]
+}
+
+const hydrateTypeScriptLibFiles = async (pendingFileNames, loaded) => {
+  const batch = [...new Set(pendingFileNames.map(normalizeVirtualFileName))].filter(
+    fileName =>
+      typeof fileName === 'string' && fileName.length > 0 && !loaded.has(fileName),
+  )
+
+  if (batch.length === 0) {
+    return
+  }
+
+  const discoveredReferences = await Promise.all(
+    batch.map(async fileName => {
+      const sourceText = await fetchTypeScriptLibText(fileName)
+      loaded.set(fileName, sourceText)
+      return parseTypeScriptLibReferences(sourceText).map(normalizeVirtualFileName)
+    }),
+  )
+
+  await hydrateTypeScriptLibFiles(discoveredReferences.flat(), loaded)
+}
+
+const ensureTypeScriptLibFiles = async () => {
+  if (typeScriptLibFiles) {
+    return typeScriptLibFiles
+  }
+
+  const loaded = new Map()
+  await hydrateTypeScriptLibFiles([defaultTypeScriptLibFileName], loaded)
+  typeScriptLibFiles = loaded
+  return typeScriptLibFiles
+}
+
+const collectTypeDiagnostics = async (compiler, sourceText) => {
+  const sourceFileName = 'component.tsx'
+  const jsxTypesFileName = 'knighted-jsx-runtime.d.ts'
+  const libFiles = await ensureTypeScriptLibFiles()
+  const jsxTypes =
+    'declare namespace React {\n' +
+    '  type Key = string | number\n' +
+    '  interface Attributes { key?: Key | null }\n' +
+    '}\n' +
+    'declare namespace JSX {\n' +
+    '  type Element = unknown\n' +
+    '  interface ElementChildrenAttribute { children: unknown }\n' +
+    '  interface IntrinsicAttributes extends React.Attributes {}\n' +
+    '  interface IntrinsicElements { [elemName: string]: Record<string, unknown> }\n' +
+    '}\n'
+
+  const files = new Map([
+    [sourceFileName, sourceText],
+    [jsxTypesFileName, jsxTypes],
+    ...libFiles.entries(),
+  ])
+
+  const options = {
+    jsx: compiler.JsxEmit?.Preserve,
+    target: compiler.ScriptTarget?.ES2022,
+    module: compiler.ModuleKind?.ESNext,
+    strict: true,
+    noEmit: true,
+    skipLibCheck: true,
+  }
+
+  const host = {
+    fileExists: fileName => files.has(normalizeVirtualFileName(fileName)),
+    readFile: fileName => files.get(normalizeVirtualFileName(fileName)),
+    getSourceFile: (fileName, languageVersion) => {
+      const normalizedFileName = normalizeVirtualFileName(fileName)
+      const text = files.get(normalizedFileName)
+      if (typeof text !== 'string') {
+        return undefined
+      }
+
+      const scriptKind = normalizedFileName.endsWith('.tsx')
+        ? compiler.ScriptKind?.TSX
+        : normalizedFileName.endsWith('.d.ts')
+          ? compiler.ScriptKind?.TS
+          : compiler.ScriptKind?.TS
+
+      return compiler.createSourceFile(
+        normalizedFileName,
+        text,
+        languageVersion,
+        true,
+        scriptKind,
+      )
+    },
+    getDefaultLibFileName: () => defaultTypeScriptLibFileName,
+    writeFile: () => {},
+    getCurrentDirectory: () => '/',
+    getDirectories: () => [],
+    getCanonicalFileName: fileName => normalizeVirtualFileName(fileName),
+    useCaseSensitiveFileNames: () => true,
+    getNewLine: () => '\n',
+  }
+
+  const program = compiler.createProgram({
+    rootNames: [sourceFileName, jsxTypesFileName],
+    options,
+    host,
+  })
+
+  return compiler
+    .getPreEmitDiagnostics(program)
+    .filter(diagnostic => !shouldIgnoreTypeDiagnostic(diagnostic))
+}
+
+const runTypeDiagnostics = async runId => {
+  activeTypeDiagnosticsRuns += 1
+  setTypecheckButtonLoading(true)
+
+  setTypeDiagnosticsDetails({
+    headline: 'Type checking…',
+    level: 'muted',
+  })
+
+  try {
+    const compiler = await ensureTypeScriptCompiler()
+    if (runId !== typeCheckRunId) {
+      return
+    }
+
+    const diagnostics = await collectTypeDiagnostics(compiler, getJsxSource())
+    const errorCategory = compiler.DiagnosticCategory?.Error
+    const errors = diagnostics.filter(diagnostic => diagnostic.category === errorCategory)
+    lastTypeErrorCount = errors.length
+    hasUnresolvedTypeErrors = errors.length > 0
+    clearTypeRecheckTimer()
+
+    if (errors.length === 0) {
+      setTypeDiagnosticsDetails({
+        headline: 'No TypeScript errors found.',
+        level: 'ok',
+      })
+    } else {
+      setTypeDiagnosticsDetails({
+        headline: `TypeScript found ${errors.length} error${errors.length === 1 ? '' : 's'}:`,
+        lines: errors.map(diagnostic => formatTypeDiagnostic(compiler, diagnostic)),
+        level: 'error',
+      })
+    }
+
+    if (
+      statusNode.textContent === 'Rendered' ||
+      statusNode.textContent.startsWith('Rendered (Type errors:')
+    ) {
+      setRenderedStatus()
+    }
+  } catch (error) {
+    if (runId !== typeCheckRunId) {
+      return
+    }
+
+    lastTypeErrorCount = 0
+    hasUnresolvedTypeErrors = false
+    clearTypeRecheckTimer()
+    const message = error instanceof Error ? error.message : String(error)
+    setTypeDiagnosticsDetails({
+      headline: `Type diagnostics unavailable: ${message}`,
+      level: 'error',
+    })
+
+    if (statusNode.textContent.startsWith('Rendered (Type errors:')) {
+      setStatus('Rendered', 'neutral')
+    }
+  } finally {
+    activeTypeDiagnosticsRuns = Math.max(0, activeTypeDiagnosticsRuns - 1)
+    setTypecheckButtonLoading(activeTypeDiagnosticsRuns > 0)
+  }
+}
+
+const markTypeDiagnosticsStale = () => {
+  if (hasUnresolvedTypeErrors) {
+    setTypeDiagnosticsDetails({
+      headline: 'Source changed. Re-checking type errors…',
+      level: 'muted',
+    })
+    scheduleTypeRecheck()
+    return
+  }
+
+  lastTypeErrorCount = 0
+  setTypeDiagnosticsDetails({
+    headline: 'Source changed. Click Typecheck to run diagnostics.',
+    level: 'muted',
+  })
+
+  if (statusNode.textContent.startsWith('Rendered (Type errors:')) {
+    setStatus('Rendered', 'neutral')
+  }
 }
 
 const appGridLayouts = ['default', 'preview-right', 'preview-left']
@@ -238,21 +801,36 @@ const debounceRender = () => {
 
 const setJsxSource = value => {
   if (jsxCodeEditor) {
-    jsxCodeEditor.setValue(value)
+    suppressEditorChangeSideEffects = true
+    try {
+      jsxCodeEditor.setValue(value)
+    } finally {
+      suppressEditorChangeSideEffects = false
+    }
   }
   jsxEditor.value = value
 }
 
 const setCssSource = value => {
   if (cssCodeEditor) {
-    cssCodeEditor.setValue(value)
+    suppressEditorChangeSideEffects = true
+    try {
+      cssCodeEditor.setValue(value)
+    } finally {
+      suppressEditorChangeSideEffects = false
+    }
   }
   cssEditor.value = value
 }
 
 const clearComponentSource = () => {
   setJsxSource('')
-  setStatus('Component cleared')
+  clearDiagnosticsScope('component')
+  lastTypeErrorCount = 0
+  hasUnresolvedTypeErrors = false
+  clearTypeRecheckTimer()
+  setStatus('Component cleared', 'neutral')
+
   if (!jsxCodeEditor) {
     maybeRender()
   }
@@ -260,7 +838,8 @@ const clearComponentSource = () => {
 
 const clearStylesSource = () => {
   setCssSource('')
-  setStatus('Styles cleared')
+  clearDiagnosticsScope('styles')
+  setStatus('Styles cleared', 'neutral')
   if (!cssCodeEditor) {
     maybeRender()
   }
@@ -310,18 +889,18 @@ const copyTextToClipboard = async text => {
 const copyComponentSource = async () => {
   try {
     await copyTextToClipboard(getJsxSource())
-    setStatus('Component copied')
+    setStatus('Component copied', 'neutral')
   } catch {
-    setStatus('Copy failed')
+    setStatus('Copy failed', 'error')
   }
 }
 
 const copyStylesSource = async () => {
   try {
     await copyTextToClipboard(getCssSource())
-    setStatus('Styles copied')
+    setStatus('Styles copied', 'neutral')
   } catch {
-    setStatus('Copy failed')
+    setStatus('Copy failed', 'error')
   }
 }
 
@@ -594,8 +1173,7 @@ const remapReactClassNames = (value, moduleExports, React) => {
   return React.cloneElement(value, nextProps)
 }
 
-const looksLikeJsxSyntaxError = error =>
-  error instanceof SyntaxError && /Unexpected token ['"]?</.test(error.message)
+const shouldAttemptTranspileFallback = error => error instanceof SyntaxError
 
 const createUserModuleFactory = source =>
   new Function(
@@ -730,6 +1308,7 @@ const compileStyles = async () => {
   setStyleCompiling(shouldShowSpinner)
 
   if (!shouldShowSpinner) {
+    clearDiagnosticsScope('styles')
     const output = { css: cssSource, moduleExports: null }
     compiledStylesCache = {
       key: cacheKey,
@@ -772,11 +1351,25 @@ const compileStyles = async () => {
       css: compiledCss,
       moduleExports,
     }
+    clearDiagnosticsScope('styles')
     compiledStylesCache = {
       key: cacheKey,
       value: output,
     }
     return output
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    const lines = message
+      .split('\n')
+      .map(line => line.trimEnd())
+      .filter(line => line.trim().length > 0)
+
+    setStyleDiagnosticsDetails({
+      headline: 'Style compilation failed.',
+      lines,
+      level: 'error',
+    })
+    throw error
   } finally {
     setStyleCompiling(false)
   }
@@ -794,7 +1387,7 @@ const evaluateUserModule = async (helpers = {}) => {
     const moduleFactory = createUserModuleFactory(userCode)
     return moduleFactory(helpers.jsx ?? jsx, helpers.reactJsx, helpers.React)
   } catch (error) {
-    if (!looksLikeJsxSyntaxError(error)) {
+    if (!shouldAttemptTranspileFallback(error)) {
       throw error
     }
 
@@ -804,11 +1397,13 @@ const evaluateUserModule = async (helpers = {}) => {
         sourceType: 'script',
         createElement: 'jsx.createElement',
         fragment: 'jsx.Fragment',
+        typescript: 'strip',
       },
       react: {
         sourceType: 'script',
         createElement: 'React.createElement',
         fragment: 'React.Fragment',
+        typescript: 'strip',
       },
     }
     const transpiledUserCode = transpileJsxSource(
@@ -917,7 +1512,7 @@ const renderReact = async () => {
 const renderPreview = async () => {
   scheduled = null
   updateStyleWarning()
-  setStatus(hasCompletedInitialRender ? 'Rendering…' : 'Loading CDN assets…')
+  setStatus(hasCompletedInitialRender ? 'Rendering…' : 'Loading CDN assets…', 'pending')
 
   try {
     if (renderMode.value === 'react') {
@@ -925,9 +1520,10 @@ const renderPreview = async () => {
     } else {
       await renderDom()
     }
-    setStatus('Rendered')
+    setStatus('Rendered', 'neutral')
+    setRenderedStatus()
   } catch (error) {
-    setStatus('Error')
+    setStatus('Error', 'error')
     const target = getRenderTarget()
     clearTarget(target)
     const message = document.createElement('pre')
@@ -966,6 +1562,44 @@ autoRenderToggle.addEventListener('change', () => {
     renderPreview()
   }
 })
+if (diagnosticsToggle) {
+  diagnosticsToggle.addEventListener('click', () => {
+    setDiagnosticsDrawerOpen(!diagnosticsDrawerOpen)
+  })
+}
+if (diagnosticsClose) {
+  diagnosticsClose.addEventListener('click', () => {
+    setDiagnosticsDrawerOpen(false)
+  })
+}
+if (diagnosticsClearComponent) {
+  diagnosticsClearComponent.addEventListener('click', () => {
+    clearDiagnosticsScope('component')
+    lastTypeErrorCount = 0
+    hasUnresolvedTypeErrors = false
+    clearTypeRecheckTimer()
+    if (statusNode.textContent.startsWith('Rendered (Type errors:')) {
+      setStatus('Rendered', 'neutral')
+    }
+  })
+}
+if (diagnosticsClearAll) {
+  diagnosticsClearAll.addEventListener('click', () => {
+    clearAllDiagnostics()
+    lastTypeErrorCount = 0
+    hasUnresolvedTypeErrors = false
+    clearTypeRecheckTimer()
+    if (statusNode.textContent.startsWith('Rendered (Type errors:')) {
+      setStatus('Rendered', 'neutral')
+    }
+  })
+}
+if (typecheckButton) {
+  typecheckButton.addEventListener('click', () => {
+    typeCheckRunId += 1
+    void runTypeDiagnostics(typeCheckRunId)
+  })
+}
 renderButton.addEventListener('click', renderPreview)
 if (clipboardSupported) {
   copyComponentButton.addEventListener('click', () => {
@@ -1001,6 +1635,7 @@ clearStylesButton.addEventListener('click', () => {
   })
 })
 jsxEditor.addEventListener('input', maybeRender)
+jsxEditor.addEventListener('input', markTypeDiagnosticsStale)
 cssEditor.addEventListener('input', maybeRender)
 
 for (const button of appGridLayoutButtons) {
@@ -1027,6 +1662,12 @@ applyAppGridLayout(getInitialAppGridLayout(), { persist: false })
 applyTheme(getInitialTheme(), { persist: false })
 
 updateRenderButtonVisibility()
+renderDiagnosticsScope('component')
+renderDiagnosticsScope('styles')
+updateDiagnosticsToggleLabel()
+updateUiIssueIndicators()
+setDiagnosticsDrawerOpen(false)
+setTypeDiagnosticsDetails({ headline: '' })
 setStyleCompiling(false)
 setCdnLoading(true)
 initializePreviewBackgroundPicker()

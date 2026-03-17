@@ -21,3 +21,9 @@ Focused follow-up work for `@knighted/develop`.
 5. **In-browser component testing**
    - Explore authoring and running component-focused tests in-browser (for example, a Vitest-compatible flow) using CDN-delivered tooling.
    - Define a lightweight test UX that supports writing tests, running them on demand, and displaying results in-app.
+
+6. **App runtime modularization**
+   - Plan a refactor that splits `src/app.js` into scoped modules organized by functionality (for example: diagnostics, render pipeline, editor integration, UI controls, and persistence).
+   - Preserve `src/app.js` as the main runtime orchestration entrypoint while moving implementation details into focused modules.
+   - Split stylesheet concerns into focused files (for example: layout/shell, panel controls, diagnostics, editor overrides, dialogs/overlays) while keeping `src/styles.css` as the single entrypoint via ordered `@import` directives.
+   - Define clear module boundaries and shared interfaces so behavior stays stable while maintainability and readability improve.
