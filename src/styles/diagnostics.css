@@ -20,6 +20,13 @@
   margin: 0;
 }
 
+.type-diagnostics-heading--ok::before {
+  content: '\2713';
+  color: #22c55e;
+  font-weight: 700;
+  margin-right: 6px;
+}
+
 .type-diagnostics-list {
   margin: 8px 0 0;
   padding-left: 0;
@@ -58,6 +65,17 @@
   border-color: var(--border-control);
   background: var(--surface-control);
   color: var(--shell-text);
+}
+
+.diagnostics-toggle--ok {
+  border-color: color-mix(in srgb, #22c55e 52%, var(--border-control));
+  background: color-mix(in srgb, #22c55e 14%, transparent);
+  color: color-mix(in srgb, #22c55e 88%, var(--panel-text));
+}
+
+.diagnostics-toggle--ok::after {
+  content: ' \2713';
+  font-weight: 700;
 }
 
 .diagnostics-toggle--pending {

@@ -1,114 +1,94 @@
 export const defaultJsx = [
-  'const Item = ({ value }) => <li>{value}</li>',
-  'const List = ({ items, onClick }) => (',
-  '  <ul onClick={onClick}>',
-  '    {items.map(item => <Item key={item} value={item} />)}',
-  '  </ul>',
+  'type CounterButtonProps = {',
+  '  label: string',
+  '  onClick: (event: MouseEvent) => void',
+  '}',
+  '',
+  'const CounterButton = ({ label, onClick }: CounterButtonProps) => (',
+  '  <button id="counter-button" type="button" onClick={onClick}>',
+  '    {label}',
+  '  </button>',
   ')',
-  'const Checkbox = ({ checked = false }) => <input type="checkbox" checked={checked} />',
+  '',
   'const App = () => {',
-  "  const items = ['apple', 'banana', 'orange']",
-  '  const checkbox = <Checkbox checked={true} />',
-  '  const onClickList = evt => {',
-  '    if (evt.target.contains(checkbox)) {',
-  '      checkbox.remove()',
-  '    } else {',
-  '      evt.target.appendChild(checkbox)',
-  '    }',
+  '  let count = 0',
+  '  const handleClick = (event: MouseEvent) => {',
+  '    count += 1',
+  '    const button = event.currentTarget as HTMLButtonElement',
+  '    button.textContent = `Clicks: ${count}`',
+  "    button.dataset.active = count % 2 === 0 ? 'false' : 'true'",
+  "    button.classList.toggle('is-even', count % 2 === 0)",
   '  }',
   '',
-  '  return <List items={items} onClick={onClickList} />',
+  "  return <CounterButton label='Clicks: 0' onClick={handleClick} />",
   '}',
   '',
 ].join('\n')
 
-export const defaultCss = `ul {
-  --list-bg: linear-gradient(160deg, #d4dcec 0%, #c4cfe6 100%);
-  --list-border: #a5b4d8;
-  --item-bg: #b9bcc4;
-  --item-hover: #c5c8cf;
-  --item-text: #1f2a44;
-  --item-accent: #3658c8;
-  --check-ring: #6d86d1;
+export const defaultReactJsx = [
+  'type CounterButtonProps = {',
+  '  label: string',
+  '  active: boolean',
+  '  onClick: (event: MouseEvent) => void',
+  '}',
+  '',
+  'const CounterButton = ({ label, active, onClick }: CounterButtonProps) => (',
+  '  <button',
+  '    id="counter-button"',
+  '    type="button"',
+  '    data-active={active ? "true" : "false"}',
+  '    className={active ? "is-even" : ""}',
+  '    onClick={onClick}',
+  '  >',
+  '    {label}',
+  '  </button>',
+  ')',
+  '',
+  'const App = () => {',
+  '  const { useState } = React',
+  '  const [count, setCount] = useState(0)',
+  '  const handleClick = (_event: MouseEvent) => {',
+  '    setCount(current => current + 1)',
+  '  }',
+  '',
+  '  return (',
+  '    <CounterButton',
+  '      label={`React clicks: ${count}`}',
+  '      active={count % 2 === 0}',
+  '      onClick={handleClick}',
+  '    />',
+  '  )',
+  '}',
+  '',
+].join('\n')
 
+export const defaultCss = `#counter-button {
   margin: 0;
-  padding: 14px;
-  list-style: none;
-  display: grid;
-  gap: 10px;
-  max-width: 340px;
-  border-radius: 16px;
-  border: 1px solid var(--list-border);
-  background: var(--list-bg);
-  box-shadow:
-    0 14px 30px rgba(17, 27, 56, 0.16),
-    inset 0 1px 0 rgba(255, 255, 255, 0.55);
-}
-
-li {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  min-height: 40px;
-  padding: 10px 12px;
-  border-radius: 12px;
-  border: 1px solid rgba(54, 88, 200, 0.24);
-  background: var(--item-bg);
-  color: var(--item-text);
-  font-weight: 650;
-  letter-spacing: 0.01em;
+  padding: 0.75rem 1rem;
+  border: 1px solid #3558b8;
+  border-radius: 0.5rem;
+  background: #e9efff;
+  color: #1a2a52;
+  font-weight: 600;
   cursor: pointer;
-  user-select: none;
-  transition:
-    transform 130ms ease,
-    background-color 130ms ease,
-    border-color 130ms ease,
-    box-shadow 130ms ease;
+  transition: background-color 120ms ease;
 }
 
-li:hover {
-  transform: translateY(-1px);
-  background: var(--item-hover);
-  border-color: rgba(54, 88, 200, 0.34);
-  box-shadow: 0 8px 18px rgba(24, 40, 95, 0.16);
+#counter-button:hover {
+  background: #dce6ff;
 }
 
-input[type='checkbox'] {
-  appearance: none;
-  width: 18px;
-  height: 18px;
-  margin: 0;
-  border-radius: 5px;
-  border: 1.5px solid #4a63b6;
-  background: #fff;
-  display: inline-grid;
-  place-items: center;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7);
+#counter-button[data-active='true'] {
+  background: #3558b8;
+  color: #fff;
 }
 
-input[type='checkbox']::after {
-  content: '';
-  width: 8px;
-  height: 4px;
-  border: 2px solid #fff;
-  border-top: 0;
-  border-right: 0;
-  transform: rotate(-45deg) scale(0);
-  transition: transform 120ms ease;
+#counter-button.is-even {
+  border-style: dashed;
 }
 
-input[type='checkbox']:checked {
-  background: linear-gradient(145deg, var(--item-accent), #345ee0);
-  border-color: var(--item-accent);
-}
-
-input[type='checkbox']:checked::after {
-  transform: rotate(-45deg) scale(1);
-}
-
-input[type='checkbox']:focus-visible {
-  outline: 2px solid var(--check-ring);
+#counter-button:focus-visible {
+  outline: 2px solid #6a84d8;
   outline-offset: 2px;
 }
 `
