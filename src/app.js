@@ -75,12 +75,6 @@ const layoutTheme = createLayoutThemeController({
 const { applyAppGridLayout, applyTheme, getInitialAppGridLayout, getInitialTheme } =
   layoutTheme
 
-const panelMap = {
-  component: componentPanel,
-  styles: stylesPanel,
-  preview: previewPanel,
-}
-
 const compactViewportMediaQuery = window.matchMedia('(max-width: 900px)')
 
 const getCurrentLayout = () => {
@@ -155,7 +149,7 @@ const applyEditorToolsVisibility = () => {
 
   for (const button of editorToolsButtons) {
     const panelName = button.dataset.editorToolsToggle
-    if (!panelName || !(panelName in panelToolsState)) {
+    if (!panelName || !Object.hasOwn(panelToolsState, panelName)) {
       continue
     }
 
@@ -181,7 +175,7 @@ const syncPanelCollapseButtons = () => {
 
   for (const button of panelCollapseButtons) {
     const panelName = button.dataset.panelCollapse
-    if (!panelName || !(panelName in panelMap)) {
+    if (!panelName || !Object.hasOwn(panelCollapseState, panelName)) {
       continue
     }
 
@@ -273,7 +267,7 @@ const applyPanelCollapseState = () => {
 }
 
 const togglePanelCollapse = panelName => {
-  if (!(panelName in panelCollapseState)) {
+  if (!Object.hasOwn(panelCollapseState, panelName)) {
     return
   }
 
@@ -677,7 +671,7 @@ for (const button of appThemeButtons) {
 for (const button of editorToolsButtons) {
   button.addEventListener('click', () => {
     const panelName = button.dataset.editorToolsToggle
-    if (!panelName || !(panelName in panelToolsState)) {
+    if (!panelName || !Object.hasOwn(panelToolsState, panelName)) {
       return
     }
 
