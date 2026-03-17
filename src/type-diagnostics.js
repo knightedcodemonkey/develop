@@ -1,3 +1,5 @@
+const ignoredTypeDiagnosticCodes = new Set([2318, 6053])
+
 export const createTypeDiagnosticsController = ({
   cdnImports,
   importFromCdnWithFallback,
@@ -88,8 +90,7 @@ export const createTypeDiagnosticsController = ({
   }
 
   const shouldIgnoreTypeDiagnostic = diagnostic => {
-    const ignoredCodes = new Set([2318, 6053])
-    return ignoredCodes.has(diagnostic.code)
+    return ignoredTypeDiagnosticCodes.has(diagnostic.code)
   }
 
   const normalizeVirtualFileName = fileName =>

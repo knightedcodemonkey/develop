@@ -1,8 +1,11 @@
 import { expect, test } from '@playwright/test'
 import type { Page } from '@playwright/test'
 
+const webServerMode = process.env.PLAYWRIGHT_WEB_SERVER_MODE ?? 'dev'
+const appEntryPath = webServerMode === 'preview' ? '/index.html' : '/src/index.html'
+
 const waitForInitialRender = async (page: Page) => {
-  await page.goto('/')
+  await page.goto(appEntryPath)
   await expect(page.getByRole('heading', { name: '@knighted/develop' })).toBeVisible()
   await expect(page.locator('#status')).toHaveText('Rendered')
   await expect(page.locator('#cdn-loading')).toHaveAttribute('hidden', '')
