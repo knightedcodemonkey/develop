@@ -1,11 +1,15 @@
-import { cdnImports, getTypeScriptLibUrls, importFromCdnWithFallback } from './cdn.js'
-import { createCodeMirrorEditor } from './editor-codemirror.js'
-import { defaultCss, defaultJsx } from './defaults.js'
-import { createDiagnosticsUiController } from './diagnostics-ui.js'
-import { createLayoutThemeController } from './layout-theme.js'
-import { createPreviewBackgroundController } from './preview-background.js'
-import { createRenderRuntimeController } from './render-runtime.js'
-import { createTypeDiagnosticsController } from './type-diagnostics.js'
+import {
+  cdnImports,
+  getTypeScriptLibUrls,
+  importFromCdnWithFallback,
+} from './modules/cdn.js'
+import { createCodeMirrorEditor } from './modules/editor-codemirror.js'
+import { defaultCss, defaultJsx, defaultReactJsx } from './modules/defaults.js'
+import { createDiagnosticsUiController } from './modules/diagnostics-ui.js'
+import { createLayoutThemeController } from './modules/layout-theme.js'
+import { createPreviewBackgroundController } from './modules/preview-background.js'
+import { createRenderRuntimeController } from './modules/render-runtime.js'
+import { createTypeDiagnosticsController } from './modules/type-diagnostics.js'
 
 const statusNode = document.getElementById('status')
 const appGrid = document.querySelector('.app-grid')
@@ -48,6 +52,7 @@ let getCssSource = () => cssEditor.value
 let renderRuntime = null
 let pendingClearAction = null
 let suppressEditorChangeSideEffects = false
+let hasAppliedReactModeDefault = false
 const clipboardSupported = Boolean(navigator.clipboard?.writeText)
 
 const previewBackground = createPreviewBackgroundController({
@@ -346,7 +351,15 @@ const updateRenderButtonVisibility = () => {
   renderButton.hidden = autoRenderToggle.checked
 }
 
-renderMode.addEventListener('change', maybeRender)
+renderMode.addEventListener('change', () => {
+  if (renderMode.value === 'react' && !hasAppliedReactModeDefault) {
+    hasAppliedReactModeDefault = true
+    setJsxSource(defaultReactJsx)
+    markTypeDiagnosticsStale()
+  }
+
+  maybeRender()
+})
 styleMode.addEventListener('change', () => {
   if (cssCodeEditor) {
     cssCodeEditor.setLanguage(getStyleEditorLanguage(styleMode.value))

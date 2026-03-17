@@ -1,10 +1,10 @@
-import { getPrimaryCdnImportUrls } from './cdn.js'
+import { getPrimaryCdnImportUrls } from './modules/cdn.js'
 
 /*
  * Preload only the modules needed for the initial render path.
  * - Included: core runtime + React runtime modules used immediately.
  * - Excluded: optional style compilers (sass/less/lightningCssWasm), which stay lazy.
- * Keep this list aligned with cdnImports keys in cdn.js.
+ * Keep this list aligned with cdnImports keys in modules/cdn.js.
  */
 const preloadImportKeys = [
   'cssBrowser',

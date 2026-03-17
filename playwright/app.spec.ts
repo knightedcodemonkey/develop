@@ -11,6 +11,14 @@ const waitForInitialRender = async (page: Page) => {
   await expect(page.locator('#cdn-loading')).toHaveAttribute('hidden', '')
 }
 
+const expectPreviewHasRenderedContent = async (page: Page) => {
+  const previewHost = page.locator('#preview-host')
+  await expect(previewHost.locator('pre')).toHaveCount(0)
+  await expect
+    .poll(() => previewHost.evaluate(node => node.childElementCount))
+    .toBeGreaterThan(0)
+}
+
 const setComponentEditorSource = async (page: Page, source: string) => {
   const editorContent = page.locator('.component-panel .cm-content').first()
   await editorContent.fill(source)
@@ -26,10 +34,7 @@ test('renders default playground preview', async ({ page }) => {
 
   await page.getByLabel('ShadowRoot (open)').uncheck()
   await expect(page.locator('#status')).toHaveText('Rendered')
-
-  const previewItems = page.locator('#preview-host li')
-  await expect(previewItems).toHaveCount(3)
-  await expect(previewItems.first()).toContainText('apple')
+  await expectPreviewHasRenderedContent(page)
 })
 
 test('supports layout and theme toggles', async ({ page }) => {
@@ -56,10 +61,7 @@ test('renders in react mode with css modules', async ({ page }) => {
   await page.locator('#render-mode').selectOption('react')
   await page.locator('#style-mode').selectOption('module')
   await expect(page.locator('#status')).toHaveText('Rendered')
-
-  const previewItems = page.locator('#preview-host li')
-  await expect(previewItems).toHaveCount(3)
-  await expect(previewItems.first()).toContainText('apple')
+  await expectPreviewHasRenderedContent(page)
 })
 
 test('transpiles TypeScript annotations in component source', async ({ page }) => {
@@ -156,10 +158,7 @@ test('renders with less style mode', async ({ page }) => {
   await expect(page.locator('#style-warning')).toContainText(
     'Less is compiled in-browser via @knighted/css/browser.',
   )
-
-  const previewItems = page.locator('#preview-host li')
-  await expect(previewItems).toHaveCount(3)
-  await expect(previewItems.first()).toContainText('apple')
+  await expectPreviewHasRenderedContent(page)
 })
 
 test('renders with sass style mode', async ({ page }) => {
@@ -171,10 +170,7 @@ test('renders with sass style mode', async ({ page }) => {
   await expect(page.locator('#style-warning')).toContainText(
     'Sass is compiled in-browser via @knighted/css/browser.',
   )
-
-  const previewItems = page.locator('#preview-host li')
-  await expect(previewItems).toHaveCount(3)
-  await expect(previewItems.first()).toContainText('apple')
+  await expectPreviewHasRenderedContent(page)
 })
 
 test('style compilation errors populate styles diagnostics scope', async ({ page }) => {

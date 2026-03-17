@@ -55,6 +55,10 @@ export const createDiagnosticsUiController = ({
       return 'pending'
     }
 
+    if (diagnosticsByScope.component.level === 'ok') {
+      return 'ok'
+    }
+
     return 'neutral'
   }
 
@@ -67,6 +71,7 @@ export const createDiagnosticsUiController = ({
     if (diagnosticsToggle) {
       diagnosticsToggle.classList.remove(
         'diagnostics-toggle--neutral',
+        'diagnostics-toggle--ok',
         'diagnostics-toggle--pending',
         'diagnostics-toggle--error',
       )
@@ -108,7 +113,10 @@ export const createDiagnosticsUiController = ({
 
     if (hasHeadline) {
       const headingNode = document.createElement('div')
-      headingNode.className = 'type-diagnostics-heading'
+      headingNode.className =
+        state.level === 'ok'
+          ? 'type-diagnostics-heading type-diagnostics-heading--ok'
+          : 'type-diagnostics-heading'
       headingNode.textContent = state.headline
       root.append(headingNode)
     }
