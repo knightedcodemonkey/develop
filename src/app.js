@@ -1,11 +1,15 @@
-import { cdnImports, getTypeScriptLibUrls, importFromCdnWithFallback } from './cdn.js'
-import { createCodeMirrorEditor } from './editor-codemirror.js'
-import { defaultCss, defaultJsx } from './defaults.js'
-import { createDiagnosticsUiController } from './diagnostics-ui.js'
-import { createLayoutThemeController } from './layout-theme.js'
-import { createPreviewBackgroundController } from './preview-background.js'
-import { createRenderRuntimeController } from './render-runtime.js'
-import { createTypeDiagnosticsController } from './type-diagnostics.js'
+import {
+  cdnImports,
+  getTypeScriptLibUrls,
+  importFromCdnWithFallback,
+} from './modules/cdn.js'
+import { createCodeMirrorEditor } from './modules/editor-codemirror.js'
+import { defaultCss, defaultJsx } from './modules/defaults.js'
+import { createDiagnosticsUiController } from './modules/diagnostics-ui.js'
+import { createLayoutThemeController } from './modules/layout-theme.js'
+import { createPreviewBackgroundController } from './modules/preview-background.js'
+import { createRenderRuntimeController } from './modules/render-runtime.js'
+import { createTypeDiagnosticsController } from './modules/type-diagnostics.js'
 
 const statusNode = document.getElementById('status')
 const appGrid = document.querySelector('.app-grid')
