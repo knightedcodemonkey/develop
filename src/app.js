@@ -48,6 +48,7 @@ let lessCompiler = null
 let lightningCssWasm = null
 let coreRuntime = null
 let typeScriptCompiler = null
+let typeScriptCompilerProvider = null
 let typeScriptLibFiles = null
 let compiledStylesCache = {
   key: null,
@@ -132,7 +133,7 @@ const initializeCodeEditors = async () => {
     jsxHost.remove()
     cssHost.remove()
     const message = error instanceof Error ? error.message : String(error)
-    setStatus(`Editor fallback: ${message}`)
+    setStatus(`Editor fallback: ${message}`, 'neutral')
   }
 }
 
@@ -174,25 +175,9 @@ const ensureCoreRuntime = async () => {
   }
 }
 
-const inferStatusLevel = text => {
-  if (text === 'Rendering…' || text === 'Loading CDN assets…') {
-    return 'pending'
-  }
-
-  if (
-    text === 'Error' ||
-    text === 'Copy failed' ||
-    text.startsWith('Rendered (Type errors:')
-  ) {
-    return 'error'
-  }
-
-  return 'neutral'
-}
-
-const setStatus = (text, level = inferStatusLevel(text)) => {
+const setStatus = (text, level) => {
   statusNode.textContent = text
-  statusLevel = level
+  statusLevel = level ?? 'neutral'
   updateUiIssueIndicators()
 }
 
@@ -368,6 +353,10 @@ const setTypeDiagnosticsDetails = ({ headline, lines = [], level = 'muted' }) =>
   setDiagnosticsScope('component', { headline, lines, level })
 }
 
+const setStyleDiagnosticsDetails = ({ headline, lines = [], level = 'muted' }) => {
+  setDiagnosticsScope('styles', { headline, lines, level })
+}
+
 const setTypecheckButtonLoading = isLoading => {
   if (!typecheckButton) {
     return
@@ -403,12 +392,12 @@ const scheduleTypeRecheck = () => {
 
 const setRenderedStatus = () => {
   if (lastTypeErrorCount > 0) {
-    setStatus(`Rendered (Type errors: ${lastTypeErrorCount})`)
+    setStatus(`Rendered (Type errors: ${lastTypeErrorCount})`, 'error')
     return
   }
 
   if (statusNode.textContent.startsWith('Rendered (Type errors:')) {
-    setStatus('Rendered')
+    setStatus('Rendered', 'neutral')
   }
 }
 
@@ -447,6 +436,7 @@ const ensureTypeScriptCompiler = async () => {
   try {
     const loaded = await importFromCdnWithFallback(cdnImports.typescript)
     typeScriptCompiler = loaded.module.default ?? loaded.module
+    typeScriptCompilerProvider = loaded.provider ?? null
 
     if (typeof typeScriptCompiler.transpileModule !== 'function') {
       throw new Error(`transpileModule export was not found from ${loaded.url}`)
@@ -474,7 +464,11 @@ const normalizeVirtualFileName = fileName =>
   typeof fileName === 'string' && fileName.startsWith('/') ? fileName.slice(1) : fileName
 
 const fetchTypeScriptLibText = async fileName => {
-  const attempts = getTypeScriptLibUrls(fileName).map(async url => {
+  const urls = getTypeScriptLibUrls(fileName, {
+    typeScriptProvider: typeScriptCompilerProvider,
+  })
+
+  const attempts = urls.map(async url => {
     const response = await fetch(url)
     if (!response.ok) {
       throw new Error(`HTTP ${response.status} from ${url}`)
@@ -486,7 +480,17 @@ const fetchTypeScriptLibText = async fileName => {
   try {
     return await Promise.any(attempts)
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error)
+    let message = error instanceof Error ? error.message : String(error)
+
+    if (error instanceof AggregateError) {
+      const reasons = Array.from(error.errors ?? [])
+        .slice(0, 3)
+        .map(reason => (reason instanceof Error ? reason.message : String(reason)))
+      const reasonSummary = reasons.length ? ` Causes: ${reasons.join(' | ')}` : ''
+
+      message = `Tried URLs: ${urls.join(', ')}.${reasonSummary}`
+    }
+
     throw new Error(`Unable to fetch TypeScript lib file ${fileName}: ${message}`, {
       cause: error,
     })
@@ -678,7 +682,7 @@ const runTypeDiagnostics = async runId => {
     })
 
     if (statusNode.textContent.startsWith('Rendered (Type errors:')) {
-      setStatus('Rendered')
+      setStatus('Rendered', 'neutral')
     }
   } finally {
     activeTypeDiagnosticsRuns = Math.max(0, activeTypeDiagnosticsRuns - 1)
@@ -703,7 +707,7 @@ const markTypeDiagnosticsStale = () => {
   })
 
   if (statusNode.textContent.startsWith('Rendered (Type errors:')) {
-    setStatus('Rendered')
+    setStatus('Rendered', 'neutral')
   }
 }
 
@@ -825,7 +829,7 @@ const clearComponentSource = () => {
   lastTypeErrorCount = 0
   hasUnresolvedTypeErrors = false
   clearTypeRecheckTimer()
-  setStatus('Component cleared')
+  setStatus('Component cleared', 'neutral')
 
   if (!jsxCodeEditor) {
     maybeRender()
@@ -835,7 +839,7 @@ const clearComponentSource = () => {
 const clearStylesSource = () => {
   setCssSource('')
   clearDiagnosticsScope('styles')
-  setStatus('Styles cleared')
+  setStatus('Styles cleared', 'neutral')
   if (!cssCodeEditor) {
     maybeRender()
   }
@@ -885,18 +889,18 @@ const copyTextToClipboard = async text => {
 const copyComponentSource = async () => {
   try {
     await copyTextToClipboard(getJsxSource())
-    setStatus('Component copied')
+    setStatus('Component copied', 'neutral')
   } catch {
-    setStatus('Copy failed')
+    setStatus('Copy failed', 'error')
   }
 }
 
 const copyStylesSource = async () => {
   try {
     await copyTextToClipboard(getCssSource())
-    setStatus('Styles copied')
+    setStatus('Styles copied', 'neutral')
   } catch {
-    setStatus('Copy failed')
+    setStatus('Copy failed', 'error')
   }
 }
 
@@ -1304,6 +1308,7 @@ const compileStyles = async () => {
   setStyleCompiling(shouldShowSpinner)
 
   if (!shouldShowSpinner) {
+    clearDiagnosticsScope('styles')
     const output = { css: cssSource, moduleExports: null }
     compiledStylesCache = {
       key: cacheKey,
@@ -1346,11 +1351,25 @@ const compileStyles = async () => {
       css: compiledCss,
       moduleExports,
     }
+    clearDiagnosticsScope('styles')
     compiledStylesCache = {
       key: cacheKey,
       value: output,
     }
     return output
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    const lines = message
+      .split('\n')
+      .map(line => line.trimEnd())
+      .filter(line => line.trim().length > 0)
+
+    setStyleDiagnosticsDetails({
+      headline: 'Style compilation failed.',
+      lines,
+      level: 'error',
+    })
+    throw error
   } finally {
     setStyleCompiling(false)
   }
@@ -1493,7 +1512,7 @@ const renderReact = async () => {
 const renderPreview = async () => {
   scheduled = null
   updateStyleWarning()
-  setStatus(hasCompletedInitialRender ? 'Rendering…' : 'Loading CDN assets…')
+  setStatus(hasCompletedInitialRender ? 'Rendering…' : 'Loading CDN assets…', 'pending')
 
   try {
     if (renderMode.value === 'react') {
@@ -1501,10 +1520,10 @@ const renderPreview = async () => {
     } else {
       await renderDom()
     }
-    setStatus('Rendered')
+    setStatus('Rendered', 'neutral')
     setRenderedStatus()
   } catch (error) {
-    setStatus('Error')
+    setStatus('Error', 'error')
     const target = getRenderTarget()
     clearTarget(target)
     const message = document.createElement('pre')
@@ -1560,7 +1579,7 @@ if (diagnosticsClearComponent) {
     hasUnresolvedTypeErrors = false
     clearTypeRecheckTimer()
     if (statusNode.textContent.startsWith('Rendered (Type errors:')) {
-      setStatus('Rendered')
+      setStatus('Rendered', 'neutral')
     }
   })
 }
@@ -1571,7 +1590,7 @@ if (diagnosticsClearAll) {
     hasUnresolvedTypeErrors = false
     clearTypeRecheckTimer()
     if (statusNode.textContent.startsWith('Rendered (Type errors:')) {
-      setStatus('Rendered')
+      setStatus('Rendered', 'neutral')
     }
   })
 }

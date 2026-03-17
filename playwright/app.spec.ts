@@ -13,6 +13,11 @@ const setComponentEditorSource = async (page: Page, source: string) => {
   await editorContent.fill(source)
 }
 
+const setStylesEditorSource = async (page: Page, source: string) => {
+  const editorContent = page.locator('.styles-panel .cm-content').first()
+  await editorContent.fill(source)
+}
+
 test('renders default playground preview', async ({ page }) => {
   await waitForInitialRender(page)
 
@@ -167,6 +172,24 @@ test('renders with sass style mode', async ({ page }) => {
   const previewItems = page.locator('#preview-host li')
   await expect(previewItems).toHaveCount(3)
   await expect(previewItems.first()).toContainText('apple')
+})
+
+test('style compilation errors populate styles diagnostics scope', async ({ page }) => {
+  await waitForInitialRender(page)
+
+  await page.locator('#style-mode').selectOption('sass')
+  await setStylesEditorSource(page, '.card { color: $missing; }')
+
+  await expect(page.locator('#status')).toHaveText('Error')
+  await expect(page.locator('#diagnostics-toggle')).toHaveClass(
+    /diagnostics-toggle--error/,
+  )
+
+  await page.locator('#diagnostics-toggle').click()
+  await expect(page.locator('#diagnostics-styles')).toContainText(
+    'Style compilation failed.',
+  )
+  await expect(page.locator('#diagnostics-styles')).toContainText('Undefined variable')
 })
 
 test('clear component action opens confirm dialog and can be canceled', async ({

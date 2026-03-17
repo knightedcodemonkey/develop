@@ -218,7 +218,7 @@ const importFromCdnCandidateAt = async (importCandidates, index, firstError = nu
 
   try {
     const module = await import(url)
-    return { module, url }
+    return { module, url, provider: importCandidates[index].provider }
   } catch (error) {
     return importFromCdnCandidateAt(importCandidates, index + 1, firstError ?? error)
   }
@@ -231,18 +231,36 @@ const typeScriptVersion = '5.9.3'
 const typeScriptLibBaseByProvider = {
   esm: `https://esm.sh/typescript@${typeScriptVersion}/lib`,
   unpkg: `https://unpkg.com/typescript@${typeScriptVersion}/lib`,
+  jsdelivr: `https://cdn.jsdelivr.net/npm/typescript@${typeScriptVersion}/lib`,
 }
 
-const typeScriptLibStableFallbackBase = `https://cdn.jsdelivr.net/npm/typescript@${typeScriptVersion}/lib`
+/*
+ * Keep a reliable fallback order for .d.ts files when the active module provider
+ * does not host TypeScript lib declarations consistently (e.g. import maps/jspmGa).
+ */
+const typeScriptLibFallbackProviderPriority = ['jsdelivr', 'unpkg', 'esm']
 
-export const getTypeScriptLibUrls = fileName => {
-  const providerOrderedBases = getProviderPriority()
+const getTypeScriptLibProviderPriority = typeScriptProvider => {
+  const ordered = []
+
+  if (
+    typeof typeScriptProvider === 'string' &&
+    typeScriptProvider in typeScriptLibBaseByProvider
+  ) {
+    ordered.push(typeScriptProvider)
+  }
+
+  for (const provider of typeScriptLibFallbackProviderPriority) {
+    ordered.push(provider)
+  }
+
+  return [...new Set(ordered)]
+}
+
+export const getTypeScriptLibUrls = (fileName, { typeScriptProvider } = {}) => {
+  const providerOrderedBases = getTypeScriptLibProviderPriority(typeScriptProvider)
     .map(provider => typeScriptLibBaseByProvider[provider])
     .filter(Boolean)
-
-  if (!providerOrderedBases.includes(typeScriptLibStableFallbackBase)) {
-    providerOrderedBases.push(typeScriptLibStableFallbackBase)
-  }
 
   return providerOrderedBases.map(baseUrl => `${baseUrl}/${fileName}`)
 }

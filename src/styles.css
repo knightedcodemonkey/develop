@@ -584,6 +584,11 @@ textarea:focus {
   background: var(--surface-control-hover);
 }
 
+.diagnostics-toggle:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
 .diagnostics-toggle--neutral {
   border-color: var(--border-control);
   background: var(--surface-control);
