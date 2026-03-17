@@ -548,12 +548,23 @@ export const createRenderRuntimeController = ({
     }
   }
 
+  const hasComponentSource = () => getJsxSource().trim().length > 0
+
+  const clearPreview = () => {
+    const target = getRenderTarget()
+    clearTarget(target)
+  }
+
   const renderDom = async () => {
     const { jsx } = await ensureCoreRuntime()
     const target = getRenderTarget()
     clearTarget(target)
     const compiledStyles = await compileStyles()
     applyStyles(target, compiledStyles.css)
+
+    if (!hasComponentSource()) {
+      return
+    }
 
     const renderFn = await evaluateUserModule()
     const output = renderFn ? renderFn(jsx) : null
@@ -576,6 +587,10 @@ export const createRenderRuntimeController = ({
     clearTarget(target)
     const compiledStyles = await compileStyles()
     applyStyles(target, compiledStyles.css)
+
+    if (!hasComponentSource()) {
+      return
+    }
 
     const { reactJsx, createRoot, React } = await ensureReactRuntime()
     const renderFn = await evaluateUserModule({ jsx: reactJsx, reactJsx, React })
@@ -635,6 +650,7 @@ export const createRenderRuntimeController = ({
   }
 
   return {
+    clearPreview,
     renderPreview,
     scheduleRender,
     setStyleCompiling,

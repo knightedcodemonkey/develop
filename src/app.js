@@ -472,19 +472,14 @@ const clearComponentSource = () => {
   clearDiagnosticsScope('component')
   typeDiagnostics.clearTypeDiagnosticsState()
   setStatus('Component cleared', 'neutral')
-
-  if (!jsxCodeEditor) {
-    maybeRender()
-  }
+  renderRuntime.clearPreview()
 }
 
 const clearStylesSource = () => {
   setCssSource('')
   clearDiagnosticsScope('styles')
   setStatus('Styles cleared', 'neutral')
-  if (!cssCodeEditor) {
-    maybeRender()
-  }
+  maybeRender()
 }
 
 const confirmClearSource = ({ label, onConfirm }) => {
