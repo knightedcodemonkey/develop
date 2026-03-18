@@ -376,6 +376,30 @@ test('react mode typecheck loads types without malformed URL fetches', async ({
   }
 })
 
+test('react mode executes default React import without TDZ runtime failure', async ({
+  page,
+}) => {
+  await waitForInitialRender(page)
+
+  await ensurePanelToolsVisible(page, 'component')
+
+  await page.getByLabel('ShadowRoot (open)').uncheck()
+  await page.locator('#render-mode').selectOption('react')
+  await setComponentEditorSource(
+    page,
+    [
+      "import React from 'react'",
+      'const App = () => <button>react default import works</button>',
+    ].join('\n'),
+  )
+
+  await expect(page.locator('#status')).toHaveText('Rendered')
+  await expect(page.locator('#preview-host button')).toContainText(
+    'react default import works',
+  )
+  await expect(page.locator('#preview-host pre')).toHaveCount(0)
+})
+
 test('clearing component source reports clear action without error status', async ({
   page,
 }) => {

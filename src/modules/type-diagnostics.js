@@ -681,11 +681,11 @@ export const createTypeDiagnosticsController = ({
       fileExists: fileName => files.has(normalizeVirtualFileName(fileName)),
       readFile: fileName => files.get(normalizeVirtualFileName(fileName)),
       directoryExists: directoryName => {
-        const normalized = normalizeRelativePath(directoryName)
+        const normalized = normalizeRelativePath(normalizeVirtualFileName(directoryName))
         return listVirtualDirectories(normalized).length > 0
       },
       getDirectories: directoryName => {
-        const normalized = normalizeRelativePath(directoryName)
+        const normalized = normalizeRelativePath(normalizeVirtualFileName(directoryName))
         return listVirtualDirectories(normalized)
       },
       realpath: fileName => normalizeVirtualFileName(fileName),

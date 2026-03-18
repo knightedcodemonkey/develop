@@ -305,6 +305,17 @@ export const createRenderRuntimeController = ({
     const preamble = []
     const unsupportedSources = new Set()
     let requiresReactRuntime = false
+    let hasReactRuntimeAlias = false
+
+    const ensureReactRuntimeAlias = () => {
+      if (hasReactRuntimeAlias) {
+        return '__knightedReactRuntime'
+      }
+
+      hasReactRuntimeAlias = true
+      preamble.push('const __knightedReactRuntime = React')
+      return '__knightedReactRuntime'
+    }
 
     for (const entry of imports) {
       if (!entry || entry.importKind !== 'value') {
@@ -324,15 +335,28 @@ export const createRenderRuntimeController = ({
         }
 
         if (binding.kind === 'default' || binding.kind === 'namespace') {
+          if (binding.local === 'React') {
+            continue
+          }
+
           preamble.push(`const ${binding.local} = React`)
           continue
         }
 
         if (binding.kind === 'named') {
           if (binding.imported === 'default') {
+            if (binding.local === 'React') {
+              continue
+            }
+
             preamble.push(`const ${binding.local} = React`)
           } else {
-            preamble.push(`const ${binding.local} = React.${binding.imported}`)
+            if (binding.local === 'React') {
+              const reactRuntimeAlias = ensureReactRuntimeAlias()
+              preamble.push(`const React = ${reactRuntimeAlias}.${binding.imported}`)
+            } else {
+              preamble.push(`const ${binding.local} = React.${binding.imported}`)
+            }
           }
         }
       }
