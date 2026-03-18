@@ -323,8 +323,9 @@ textarea:focus {
 }
 
 .preview-panel.panel--collapsed-horizontal .panel-collapse-toggle {
-  width: 100%;
-  min-width: 0;
+  width: 32px;
+  min-width: 32px;
+  height: 32px;
   justify-content: center;
 }
 
@@ -377,8 +378,9 @@ textarea:focus {
 
 .component-panel.panel--collapsed-horizontal .panel-collapse-toggle,
 .styles-panel.panel--collapsed-horizontal .panel-collapse-toggle {
-  width: 100%;
-  min-width: 0;
+  width: 32px;
+  min-width: 32px;
+  height: 32px;
 }
 
 @media (max-width: 900px) {

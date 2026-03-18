@@ -8,6 +8,7 @@
   --preview-host-z-index: 1;
   display: var(--preview-host-display);
   flex: var(--preview-host-flex);
+  height: 100%;
   min-height: var(--preview-host-min-height);
   max-height: 100%;
   padding: var(--preview-host-padding);
