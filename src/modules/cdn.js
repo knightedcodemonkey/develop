@@ -54,10 +54,10 @@ export const cdnImportSpecs = {
     esm: '@knighted/jsx',
     jspmGa: 'npm:@knighted/jsx',
   },
-  jsxTranspile: {
-    importMap: '@knighted/jsx/transpile',
-    esm: '@knighted/jsx/transpile',
-    jspmGa: 'npm:@knighted/jsx/transpile',
+  jsxTransform: {
+    importMap: '@knighted/jsx/transform',
+    esm: '@knighted/jsx/transform',
+    jspmGa: 'npm:@knighted/jsx/transform',
   },
   jsxReact: {
     importMap: '@knighted/jsx/react',
@@ -234,6 +234,16 @@ const typeScriptLibBaseByProvider = {
   jsdelivr: `https://cdn.jsdelivr.net/npm/typescript@${typeScriptVersion}/lib`,
 }
 
+const typePackageVersionByName = {
+  '@types/react': '19.2.2',
+  '@types/react-dom': '19.2.1',
+  '@types/prop-types': '15.7.15',
+  '@types/scheduler': '0.26.0',
+  csstype: '3.1.3',
+}
+
+const getTypePackageVersion = packageName => typePackageVersionByName[packageName]
+
 /*
  * Keep a reliable fallback order for .d.ts files when the active module provider
  * does not host TypeScript lib declarations consistently (e.g. import maps/jspmGa).
@@ -255,6 +265,47 @@ const getTypeScriptLibProviderPriority = typeScriptProvider => {
   }
 
   return [...new Set(ordered)]
+}
+
+const typePackageBaseByProvider = {
+  esm: packageName => {
+    const version = getTypePackageVersion(packageName)
+    const versionSegment = version ? `@${version}` : ''
+    return `https://esm.sh/${packageName}${versionSegment}`
+  },
+  unpkg: packageName => {
+    const version = getTypePackageVersion(packageName)
+    const versionSegment = version ? `@${version}` : ''
+    return `https://unpkg.com/${packageName}${versionSegment}`
+  },
+  jsdelivr: packageName => {
+    const version = getTypePackageVersion(packageName)
+    const versionSegment = version ? `@${version}` : ''
+    return `https://cdn.jsdelivr.net/npm/${packageName}${versionSegment}`
+  },
+}
+
+export const getTypePackageFileUrls = (
+  packageName,
+  fileName,
+  { typeScriptProvider } = {},
+) => {
+  const normalizedFileName =
+    typeof fileName === 'string' && fileName.length > 0 ? fileName : 'package.json'
+  const typePackageProviderPriority = [
+    'jsdelivr',
+    'unpkg',
+    ...(typeof typeScriptProvider === 'string' ? [typeScriptProvider] : []),
+    'esm',
+  ]
+  const providerOrderedBases = [...new Set(typePackageProviderPriority)]
+    .map(provider => {
+      const createBase = typePackageBaseByProvider[provider]
+      return typeof createBase === 'function' ? createBase(packageName) : null
+    })
+    .filter(Boolean)
+
+  return providerOrderedBases.map(baseUrl => `${baseUrl}/${normalizedFileName}`)
 }
 
 export const getTypeScriptLibUrls = (fileName, { typeScriptProvider } = {}) => {

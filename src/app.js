@@ -1,5 +1,6 @@
 import {
   cdnImports,
+  getTypePackageFileUrls,
   getTypeScriptLibUrls,
   importFromCdnWithFallback,
 } from './modules/cdn.js'
@@ -391,7 +392,9 @@ const typeDiagnostics = createTypeDiagnosticsController({
   cdnImports,
   importFromCdnWithFallback,
   getTypeScriptLibUrls,
+  getTypePackageFileUrls,
   getJsxSource: () => getJsxSource(),
+  getRenderMode: () => renderMode.value,
   setTypecheckButtonLoading,
   setTypeDiagnosticsDetails,
   setStatus,

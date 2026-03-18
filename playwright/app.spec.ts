@@ -334,6 +334,72 @@ test('transpiles TypeScript annotations in component source', async ({ page }) =
   await expect(page.locator('#preview-host button')).toContainText('typed')
 })
 
+test('react mode typecheck loads types without malformed URL fetches', async ({
+  page,
+}) => {
+  await waitForInitialRender(page)
+
+  await ensurePanelToolsVisible(page, 'component')
+
+  const typeRequestUrls: string[] = []
+  page.on('request', request => {
+    const url = request.url()
+    if (url.includes('@types/')) {
+      typeRequestUrls.push(url)
+    }
+  })
+
+  await page.locator('#render-mode').selectOption('react')
+  await page.getByRole('button', { name: 'Typecheck' }).click()
+
+  await page.locator('#diagnostics-toggle').click()
+  await expect(page.locator('#diagnostics-component')).toContainText(
+    'No TypeScript errors found.',
+  )
+
+  const diagnosticsText = await page.locator('#diagnostics-component').innerText()
+  expect(diagnosticsText).not.toContain("Cannot find type definition file for 'react'")
+  expect(diagnosticsText).not.toContain(
+    "Cannot find type definition file for 'react-dom'",
+  )
+
+  expect(typeRequestUrls.some(url => url.includes('@types/react'))).toBeTruthy()
+
+  const malformedTypeRequestPatterns = [
+    '/@types/global.d.ts/package.json',
+    '/user-context',
+    '/https:/',
+  ]
+
+  for (const pattern of malformedTypeRequestPatterns) {
+    expect(typeRequestUrls.some(url => url.includes(pattern))).toBeFalsy()
+  }
+})
+
+test('react mode executes default React import without TDZ runtime failure', async ({
+  page,
+}) => {
+  await waitForInitialRender(page)
+
+  await ensurePanelToolsVisible(page, 'component')
+
+  await page.getByLabel('ShadowRoot (open)').uncheck()
+  await page.locator('#render-mode').selectOption('react')
+  await setComponentEditorSource(
+    page,
+    [
+      "import React from 'react'",
+      'const App = () => <button>react default import works</button>',
+    ].join('\n'),
+  )
+
+  await expect(page.locator('#status')).toHaveText('Rendered')
+  await expect(page.locator('#preview-host button')).toContainText(
+    'react default import works',
+  )
+  await expect(page.locator('#preview-host pre')).toHaveCount(0)
+})
+
 test('clearing component source reports clear action without error status', async ({
   page,
 }) => {
