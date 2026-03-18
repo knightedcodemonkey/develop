@@ -43,10 +43,10 @@ export const createRenderRuntimeController = ({
     if (coreRuntime) return coreRuntime
 
     try {
-      const [cssBrowser, jsxDom, jsxTranspile] = await Promise.all([
+      const [cssBrowser, jsxDom, jsxTransform] = await Promise.all([
         importFromCdnWithFallback(cdnImports.cssBrowser),
         importFromCdnWithFallback(cdnImports.jsxDom),
-        importFromCdnWithFallback(cdnImports.jsxTranspile),
+        importFromCdnWithFallback(cdnImports.jsxTransform),
       ])
 
       if (typeof cssBrowser.module.cssFromSource !== 'function') {
@@ -57,16 +57,16 @@ export const createRenderRuntimeController = ({
         throw new Error(`jsx export was not found from ${jsxDom.url}`)
       }
 
-      if (typeof jsxTranspile.module.transpileJsxSource !== 'function') {
+      if (typeof jsxTransform.module.transformJsxSource !== 'function') {
         throw new Error(
-          `transpileJsxSource export was not found from ${jsxTranspile.url}`,
+          `transformJsxSource export was not found from ${jsxTransform.url}`,
         )
       }
 
       coreRuntime = {
         cssFromSource: cssBrowser.module.cssFromSource,
         jsx: jsxDom.module.jsx,
-        transpileJsxSource: jsxTranspile.module.transpileJsxSource,
+        transformJsxSource: jsxTransform.module.transformJsxSource,
       }
 
       return coreRuntime
@@ -261,7 +261,109 @@ export const createRenderRuntimeController = ({
     return React.cloneElement(value, nextProps)
   }
 
-  const shouldAttemptTranspileFallback = error => error instanceof SyntaxError
+  const shouldAttemptTranspileFallback = error => {
+    if (error instanceof SyntaxError) {
+      return true
+    }
+
+    if (!(error instanceof Error)) {
+      return false
+    }
+
+    return /Unexpected token|Cannot use import statement|Unexpected identifier/.test(
+      error.message,
+    )
+  }
+
+  const isImportRange = range =>
+    Array.isArray(range) &&
+    range.length === 2 &&
+    Number.isInteger(range[0]) &&
+    Number.isInteger(range[1])
+
+  const stripImportDeclarations = (code, imports) => {
+    const ranges = imports
+      .map(entry => entry?.range)
+      .filter(isImportRange)
+      .slice()
+      .sort((first, second) => second[0] - first[0])
+
+    let output = code
+
+    for (const [start, end] of ranges) {
+      if (start < 0 || end < start || end > output.length) {
+        continue
+      }
+
+      output = `${output.slice(0, start)}${output.slice(end)}`
+    }
+
+    return output
+  }
+
+  const buildRuntimeImportPlan = imports => {
+    const preamble = []
+    const unsupportedSources = new Set()
+    let requiresReactRuntime = false
+
+    for (const entry of imports) {
+      if (!entry || entry.importKind !== 'value') {
+        continue
+      }
+
+      if (entry.source !== 'react') {
+        unsupportedSources.add(entry.source)
+        continue
+      }
+
+      requiresReactRuntime = true
+
+      for (const binding of entry.bindings ?? []) {
+        if (!binding || binding.isTypeOnly) {
+          continue
+        }
+
+        if (binding.kind === 'default' || binding.kind === 'namespace') {
+          preamble.push(`const ${binding.local} = React`)
+          continue
+        }
+
+        if (binding.kind === 'named') {
+          if (binding.imported === 'default') {
+            preamble.push(`const ${binding.local} = React`)
+          } else {
+            preamble.push(`const ${binding.local} = React.${binding.imported}`)
+          }
+        }
+      }
+    }
+
+    return {
+      preamble,
+      requiresReactRuntime,
+      unsupportedSources: [...unsupportedSources],
+    }
+  }
+
+  const formatTransformDiagnosticsError = diagnostics => {
+    const firstDiagnostic = diagnostics?.[0]
+
+    if (!firstDiagnostic) {
+      return '[jsx] Failed to transform source.'
+    }
+
+    const lines = [`[jsx] ${firstDiagnostic.message}`]
+
+    if (firstDiagnostic.codeframe) {
+      lines.push(firstDiagnostic.codeframe)
+    }
+
+    if (firstDiagnostic.helpMessage) {
+      lines.push(firstDiagnostic.helpMessage)
+    }
+
+    return lines.join('\n')
+  }
 
   const createUserModuleFactory = source =>
     new Function(
@@ -464,7 +566,8 @@ export const createRenderRuntimeController = ({
   }
 
   const evaluateUserModule = async (helpers = {}) => {
-    const { jsx, transpileJsxSource } = await ensureCoreRuntime()
+    const { jsx, transformJsxSource } = await ensureCoreRuntime()
+    let runtimeHelpers = helpers
     const userCode = getJsxSource()
       .replace(/^\s*export\s+default\s+function\b/gm, '__defaultExport = function')
       .replace(/^\s*export\s+default\s+class\b/gm, '__defaultExport = class')
@@ -482,34 +585,97 @@ export const createRenderRuntimeController = ({
       const transpileMode = helpers.React && helpers.reactJsx ? 'react' : 'dom'
       const transpileOptionsByMode = {
         dom: {
-          sourceType: 'script',
+          sourceType: 'module',
           createElement: 'jsx.createElement',
           fragment: 'jsx.Fragment',
           typescript: 'strip',
         },
         react: {
-          sourceType: 'script',
+          sourceType: 'module',
           createElement: 'React.createElement',
           fragment: 'React.Fragment',
           typescript: 'strip',
         },
       }
-      const transpiledUserCode = transpileJsxSource(
+      const transformedResult = transformJsxSource(
         userCode,
         transpileOptionsByMode[transpileMode],
-      ).code
-      const moduleFactory = createUserModuleFactory(transpiledUserCode)
+      )
 
-      if (helpers.React && helpers.reactJsx) {
-        return moduleFactory(helpers.jsx ?? jsx, helpers.reactJsx, helpers.React)
+      if (transformedResult.diagnostics.length > 0) {
+        throw new Error(formatTransformDiagnosticsError(transformedResult.diagnostics), {
+          cause: error,
+        })
+      }
+
+      const importAnalysisResult = transformJsxSource(transformedResult.code, {
+        sourceType: 'module',
+        typescript: 'preserve',
+      })
+
+      if (importAnalysisResult.diagnostics.length > 0) {
+        throw new Error(
+          formatTransformDiagnosticsError(importAnalysisResult.diagnostics),
+          {
+            cause: error,
+          },
+        )
+      }
+
+      const runtimeImportPlan = buildRuntimeImportPlan(importAnalysisResult.imports)
+
+      if (runtimeImportPlan.unsupportedSources.length > 0) {
+        throw new Error(
+          `Unsupported runtime imports in playground execution: ${runtimeImportPlan.unsupportedSources
+            .map(specifier => `'${specifier}'`)
+            .join(', ')}.`,
+          {
+            cause: error,
+          },
+        )
+      }
+
+      if (runtimeImportPlan.requiresReactRuntime && !runtimeHelpers.React) {
+        const { React, reactJsx } = await ensureReactRuntime()
+        runtimeHelpers = {
+          ...runtimeHelpers,
+          React,
+          reactJsx: runtimeHelpers.reactJsx ?? reactJsx,
+        }
+      }
+
+      const runtimeCode = stripImportDeclarations(
+        transformedResult.code,
+        importAnalysisResult.imports,
+      )
+      const executableUserCode = runtimeImportPlan.preamble.length
+        ? `${runtimeImportPlan.preamble.join('\n')}\n${runtimeCode}`
+        : runtimeCode
+
+      const moduleFactory = createUserModuleFactory(executableUserCode)
+
+      if (runtimeHelpers.React && runtimeHelpers.reactJsx) {
+        return moduleFactory(
+          runtimeHelpers.jsx ?? jsx,
+          runtimeHelpers.reactJsx,
+          runtimeHelpers.React,
+        )
       }
 
       if (transpileMode === 'dom') {
-        return moduleFactory(helpers.jsx ?? jsx, helpers.reactJsx, helpers.React)
+        return moduleFactory(
+          runtimeHelpers.jsx ?? jsx,
+          runtimeHelpers.reactJsx,
+          runtimeHelpers.React,
+        )
       }
 
       const { React, reactJsx } = await ensureReactRuntime()
-      return moduleFactory(helpers.jsx ?? jsx, helpers.reactJsx ?? reactJsx, React)
+      return moduleFactory(
+        runtimeHelpers.jsx ?? jsx,
+        runtimeHelpers.reactJsx ?? reactJsx,
+        React,
+      )
     }
   }
 

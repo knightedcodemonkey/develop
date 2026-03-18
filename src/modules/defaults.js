@@ -26,6 +26,8 @@ export const defaultJsx = [
 ].join('\n')
 
 export const defaultReactJsx = [
+  "import { useState } from 'react'",
+  '',
   'type CounterButtonProps = {',
   '  label: string',
   '  active: boolean',
@@ -44,7 +46,6 @@ export const defaultReactJsx = [
   ')',
   '',
   'const App = () => {',
-  '  const { useState } = React',
   '  const [count, setCount] = useState(0)',
   '  const handleClick = (_event: MouseEvent) => {',
   '    setCount(current => current + 1)',

@@ -9,7 +9,7 @@ import { getPrimaryCdnImportUrls } from './modules/cdn.js'
 const preloadImportKeys = [
   'cssBrowser',
   'jsxDom',
-  'jsxTranspile',
+  'jsxTransform',
   'jsxReact',
   'react',
   'reactDomClient',

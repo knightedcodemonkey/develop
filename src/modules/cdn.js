@@ -54,10 +54,10 @@ export const cdnImportSpecs = {
     esm: '@knighted/jsx',
     jspmGa: 'npm:@knighted/jsx',
   },
-  jsxTranspile: {
-    importMap: '@knighted/jsx/transpile',
-    esm: '@knighted/jsx/transpile',
-    jspmGa: 'npm:@knighted/jsx/transpile',
+  jsxTransform: {
+    importMap: '@knighted/jsx/transform',
+    esm: '@knighted/jsx/transform',
+    jspmGa: 'npm:@knighted/jsx/transform',
   },
   jsxReact: {
     importMap: '@knighted/jsx/react',
