@@ -27,11 +27,12 @@ export const defaultJsx = [
 
 export const defaultReactJsx = [
   "import { useState } from 'react'",
+  "import type { MouseEvent } from 'react'",
   '',
   'type CounterButtonProps = {',
   '  label: string',
   '  active: boolean',
-  '  onClick: (event: MouseEvent) => void',
+  '  onClick: (event: MouseEvent<HTMLButtonElement>) => void',
   '}',
   '',
   'const CounterButton = ({ label, active, onClick }: CounterButtonProps) => (',
@@ -47,7 +48,7 @@ export const defaultReactJsx = [
   '',
   'const App = () => {',
   '  const [count, setCount] = useState(0)',
-  '  const handleClick = (_event: MouseEvent) => {',
+  '  const handleClick = (_event: MouseEvent<HTMLButtonElement>) => {',
   '    setCount(current => current + 1)',
   '  }',
   '',
