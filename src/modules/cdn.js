@@ -138,12 +138,11 @@ export const cdnImportSpecs = {
     esm: '@codemirror/lang-css',
     jspmGa: 'npm:@codemirror/lang-css@6.3.1',
   },
-  eslintRuntime: {
-    esm: ['eslint@10?bundle', 'eslint@10/use-at-your-own-risk?bundle'],
-  },
-  stylelintRuntime: {
-    esm: 'stylelint@17.4.0?bundle',
-    jspmGa: 'npm:stylelint@17.4.0/lib/index.mjs',
+  biomeWasmWeb: {
+    importMap: '@biomejs/wasm-web',
+    esm: '@biomejs/wasm-web@2.4.8',
+    unpkg: '@biomejs/wasm-web@2.4.8/biome_wasm.js',
+    jspmGa: 'npm:@biomejs/wasm-web@2.4.8/biome_wasm.js',
   },
 }
 

@@ -55,3 +55,11 @@ Focused follow-up work for `@knighted/develop`.
      - DOM mode still avoids React type graph hydration.
    - Suggested implementation prompt:
      - "Refactor `src/modules/type-diagnostics.js` to make TypeScript preprocessor parsing (`preProcessFile`) the source of truth for declaration graph discovery in the lazy React type loader. Keep current CDN fallback and lazy hydration semantics. Ensure references from comments are ignored, `*.d.ts`/relative path handling is correct, and candidate fetch ordering minimizes noisy failed requests. Add regression coverage for `global.d.ts` and commented `./user-context` examples. Validate with `npm run lint`, `npm run build:esm`, and targeted React/typecheck Playwright runs."
+
+6. **Deterministic E2E lane in CI**
+   - Add an integration-style E2E path that uses locally served/pinned copies of CDN runtime dependencies for test execution, while keeping production runtime behavior unchanged.
+   - Keep the current true CDN-backed E2E path as a separate smoke check, but make the deterministic lane the required gate for pull requests.
+   - Run this deterministic E2E suite on **every pull request** in CI.
+   - Ensure the deterministic lane still exercises the same user-facing flows (render, typecheck, lint, diagnostics drawer/button states), only swapping the source of runtime artifacts.
+   - Suggested implementation prompt:
+     - "Add a deterministic E2E execution mode for `@knighted/develop` that serves pinned runtime artifacts locally (instead of live CDN fetches) and wire it into CI as a required check on every PR. Keep a separate lightweight CDN-smoke E2E check for real-network coverage. Validate with `npm run lint`, deterministic Playwright PR checks, and one CDN-smoke Playwright run."
