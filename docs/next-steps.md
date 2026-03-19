@@ -2,25 +2,18 @@
 
 Focused follow-up work for `@knighted/develop`.
 
-1. **In-browser component/style linting**
-   - Replace the current ESLint/Stylelint worker direction with a Biome-first plan using `@biomejs/wasm-web` loaded from CDN.
-   - Remove lint-specific web worker plumbing and run lint directly on demand in the main runtime, while keeping lint execution isolated behind a small module boundary.
-   - Add a single lint service module that:
-     - lazily loads and initializes Biome WASM once,
-     - caches the initialized runtime,
-     - exposes `lintComponent(source, filename)` and `lintStyles(source, filename, styleMode)` entrypoints.
-   - Keep `src/modules/cdn.js` as the source of truth for Biome runtime candidates and provider fallbacks.
-   - Define an explicit style-mode strategy for non-CSS sources:
-     - CSS/CSS Modules: lint directly as CSS.
-     - Less/Sass: start with graceful "not yet supported" diagnostics, or optionally lint post-compiled CSS if output mapping quality is acceptable.
-   - Normalize Biome diagnostics into existing diagnostics UI shape (headline + line/column + severity + rule id), so no diagnostics drawer redesign is required.
-   - Preserve graceful degradation: if Biome fails to load/initialize, show a clear "Lint unavailable" message without breaking render/typecheck loops.
-   - Add Playwright coverage for:
-     - successful component lint run,
-     - successful CSS lint run,
-     - runtime-load failure path showing recovery-oriented messaging.
+1. **In-browser lint rules review and expansion**
+   - Review the currently active Biome lint configuration in `src/modules/lint-diagnostics.js`, including rule groups, severities, and any custom suppression behavior.
+   - Produce a recommended rule profile for component and style linting that balances signal quality with playground ergonomics.
+   - Evaluate additional Biome rules to enable (or elevate severity) for:
+     - correctness and suspicious patterns in component code,
+     - accessibility and style consistency in JSX output,
+     - CSS quality checks for style sources currently supported by Biome.
+   - Revisit existing exceptions (for example unused App/View/render bindings) and document clear criteria for when suppression is acceptable.
+   - Add/update regression coverage for the chosen rule profile in Playwright so diagnostics button/drawer behavior remains stable as rules evolve.
+   - Document the finalized lint rule strategy in project docs so contributors can reason about why each rule is enabled, disabled, or downgraded.
    - Suggested implementation prompt:
-     - "Refactor `@knighted/develop` in-browser linting to use `@biomejs/wasm-web` as the primary engine for component and style lint checks. Remove lint web worker plumbing, add a lazy-initialized Biome lint service, keep CDN provider fallback definitions in `src/modules/cdn.js`, and map Biome diagnostics into existing component/styles diagnostics UI. For Less/Sass, add an explicit temporary unsupported diagnostic (or post-compile CSS lint only if mapping remains readable). Validate with `npm run lint`, `npm run build:esm`, and targeted lint-button Playwright checks."
+     - "Audit the current Biome lint rules used by `@knighted/develop`, propose and apply a refined rule profile for component/styles linting, and add/update Playwright coverage to keep diagnostics UX stable under the new rules. Preserve intentional suppressions only when justified and document the reasoning. Validate with `npm run lint`, `npm run build:esm`, and targeted lint diagnostics Playwright tests."
 
 2. **In-browser component type checking**
    - Add editor-linked diagnostics navigation so each issue can jump to the exact line/column in the component source.
