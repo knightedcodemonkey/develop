@@ -2,9 +2,18 @@
 
 Focused follow-up work for `@knighted/develop`.
 
-1. **In-browser component/style linting**
-   - Explore running lint checks for component and style sources directly in the playground.
-   - Prefer CDN-delivered tooling where possible and preserve graceful fallback behavior when unavailable.
+1. **In-browser lint rules review and expansion**
+   - Review the currently active Biome lint configuration in `src/modules/lint-diagnostics.js`, including rule groups, severities, and any custom suppression behavior.
+   - Produce a recommended rule profile for component and style linting that balances signal quality with playground ergonomics.
+   - Evaluate additional Biome rules to enable (or elevate severity) for:
+     - correctness and suspicious patterns in component code,
+     - accessibility and style consistency in JSX output,
+     - CSS quality checks for style sources currently supported by Biome.
+   - Revisit existing exceptions (for example unused App/View/render bindings) and document clear criteria for when suppression is acceptable.
+   - Add/update regression coverage for the chosen rule profile in Playwright so diagnostics button/drawer behavior remains stable as rules evolve.
+   - Document the finalized lint rule strategy in project docs so contributors can reason about why each rule is enabled, disabled, or downgraded.
+   - Suggested implementation prompt:
+     - "Audit the current Biome lint rules used by `@knighted/develop`, propose and apply a refined rule profile for component/styles linting, and add/update Playwright coverage to keep diagnostics UX stable under the new rules. Preserve intentional suppressions only when justified and document the reasoning. Validate with `npm run lint`, `npm run build:esm`, and targeted lint diagnostics Playwright tests."
 
 2. **In-browser component type checking**
    - Add editor-linked diagnostics navigation so each issue can jump to the exact line/column in the component source.
@@ -39,3 +48,11 @@ Focused follow-up work for `@knighted/develop`.
      - DOM mode still avoids React type graph hydration.
    - Suggested implementation prompt:
      - "Refactor `src/modules/type-diagnostics.js` to make TypeScript preprocessor parsing (`preProcessFile`) the source of truth for declaration graph discovery in the lazy React type loader. Keep current CDN fallback and lazy hydration semantics. Ensure references from comments are ignored, `*.d.ts`/relative path handling is correct, and candidate fetch ordering minimizes noisy failed requests. Add regression coverage for `global.d.ts` and commented `./user-context` examples. Validate with `npm run lint`, `npm run build:esm`, and targeted React/typecheck Playwright runs."
+
+6. **Deterministic E2E lane in CI**
+   - Add an integration-style E2E path that uses locally served/pinned copies of CDN runtime dependencies for test execution, while keeping production runtime behavior unchanged.
+   - Keep the current true CDN-backed E2E path as a separate smoke check, but make the deterministic lane the required gate for pull requests.
+   - Run this deterministic E2E suite on **every pull request** in CI.
+   - Ensure the deterministic lane still exercises the same user-facing flows (render, typecheck, lint, diagnostics drawer/button states), only swapping the source of runtime artifacts.
+   - Suggested implementation prompt:
+     - "Add a deterministic E2E execution mode for `@knighted/develop` that serves pinned runtime artifacts locally (instead of live CDN fetches) and wire it into CI as a required check on every PR. Keep a separate lightweight CDN-smoke E2E check for real-network coverage. Validate with `npm run lint`, deterministic Playwright PR checks, and one CDN-smoke Playwright run."

@@ -84,6 +84,19 @@
   color: color-mix(in srgb, var(--panel-text) 72%, var(--accent));
 }
 
+.diagnostics-toggle--pending::after {
+  content: '';
+  display: inline-block;
+  width: 0.72em;
+  height: 0.72em;
+  margin-left: 8px;
+  border: 2px solid color-mix(in srgb, var(--accent) 70%, var(--panel-text));
+  border-right-color: transparent;
+  border-radius: 999px;
+  vertical-align: -1px;
+  animation: diagnostics-toggle-spin 0.7s linear infinite;
+}
+
 .diagnostics-toggle--error {
   border-color: color-mix(in srgb, rgb(var(--danger-rgb)) 60%, var(--border-control));
   background: color-mix(in srgb, rgb(var(--danger-rgb)) 18%, transparent);
@@ -146,6 +159,19 @@
 
 .diagnostics-empty {
   color: var(--text-muted);
+}
+
+@keyframes diagnostics-toggle-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .diagnostics-toggle--pending::after {
+    animation: none;
+    border-right-color: color-mix(in srgb, var(--accent) 70%, var(--panel-text));
+  }
 }
 
 @media (max-width: 900px) {

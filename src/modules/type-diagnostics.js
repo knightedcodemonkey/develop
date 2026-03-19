@@ -222,6 +222,7 @@ export const createTypeDiagnosticsController = ({
   defaultTypeScriptLibFileName = 'lib.esnext.full.d.ts',
   setTypecheckButtonLoading,
   setTypeDiagnosticsDetails,
+  setTypeDiagnosticsPending = () => {},
   setStatus,
   setRenderedStatus,
   isRenderedStatus,
@@ -790,7 +791,9 @@ export const createTypeDiagnosticsController = ({
 
   const runTypeDiagnostics = async runId => {
     incrementTypeDiagnosticsRuns()
+    setTypeDiagnosticsPending(false)
     setTypecheckButtonLoading(true)
+    setStatus('Type checking component...', 'pending')
 
     setTypeDiagnosticsDetails({
       headline: 'Type checking…',
@@ -817,12 +820,14 @@ export const createTypeDiagnosticsController = ({
           headline: 'No TypeScript errors found.',
           level: 'ok',
         })
+        setStatus('Rendered', 'neutral')
       } else {
         setTypeDiagnosticsDetails({
           headline: `TypeScript found ${errors.length} error${errors.length === 1 ? '' : 's'}:`,
           lines: errors.map(diagnostic => formatTypeDiagnostic(compiler, diagnostic)),
           level: 'error',
         })
+        setStatus(`Rendered (Type errors: ${errors.length})`, 'error')
       }
 
       if (isRenderedStatus()) {
@@ -841,11 +846,15 @@ export const createTypeDiagnosticsController = ({
         headline: `Type diagnostics unavailable: ${message}`,
         level: 'error',
       })
+      setStatus('Type diagnostics unavailable', 'error')
 
       if (isRenderedTypeErrorStatus()) {
         setStatus('Rendered', 'neutral')
       }
     } finally {
+      if (runId === typeCheckRunId) {
+        setTypeDiagnosticsPending(false)
+      }
       decrementTypeDiagnosticsRuns()
       setTypecheckButtonLoading(getActiveTypeDiagnosticsRuns() > 0)
     }
@@ -871,6 +880,7 @@ export const createTypeDiagnosticsController = ({
 
   const markTypeDiagnosticsStale = () => {
     if (hasUnresolvedTypeErrors) {
+      setTypeDiagnosticsPending(true)
       setTypeDiagnosticsDetails({
         headline: 'Source changed. Re-checking type errors…',
         level: 'muted',
@@ -880,6 +890,7 @@ export const createTypeDiagnosticsController = ({
     }
 
     lastTypeErrorCount = 0
+    setTypeDiagnosticsPending(false)
     setTypeDiagnosticsDetails({
       headline: 'Source changed. Click Typecheck to run diagnostics.',
       level: 'muted',
@@ -893,10 +904,18 @@ export const createTypeDiagnosticsController = ({
   const clearTypeDiagnosticsState = () => {
     lastTypeErrorCount = 0
     hasUnresolvedTypeErrors = false
+    setTypeDiagnosticsPending(false)
     clearTypeRecheckTimer()
   }
 
+  const cancelTypeDiagnostics = () => {
+    typeCheckRunId += 1
+    clearTypeDiagnosticsState()
+    setTypecheckButtonLoading(false)
+  }
+
   return {
+    cancelTypeDiagnostics,
     clearTypeDiagnosticsState,
     clearTypeRecheckTimer,
     getLastTypeErrorCount: () => lastTypeErrorCount,

@@ -8,6 +8,7 @@ import { createCodeMirrorEditor } from './modules/editor-codemirror.js'
 import { defaultCss, defaultJsx, defaultReactJsx } from './modules/defaults.js'
 import { createDiagnosticsUiController } from './modules/diagnostics-ui.js'
 import { createLayoutThemeController } from './modules/layout-theme.js'
+import { createLintDiagnosticsController } from './modules/lint-diagnostics.js'
 import { createPreviewBackgroundController } from './modules/preview-background.js'
 import { createRenderRuntimeController } from './modules/render-runtime.js'
 import { createTypeDiagnosticsController } from './modules/type-diagnostics.js'
@@ -24,6 +25,8 @@ const previewPanel = document.getElementById('preview-panel')
 const renderMode = document.getElementById('render-mode')
 const autoRenderToggle = document.getElementById('auto-render')
 const typecheckButton = document.getElementById('typecheck-button')
+const lintComponentButton = document.getElementById('lint-component-button')
+const lintStylesButton = document.getElementById('lint-styles-button')
 const renderButton = document.getElementById('render-button')
 const copyComponentButton = document.getElementById('copy-component')
 const clearComponentButton = document.getElementById('clear-component')
@@ -37,6 +40,7 @@ const diagnosticsToggle = document.getElementById('diagnostics-toggle')
 const diagnosticsDrawer = document.getElementById('diagnostics-drawer')
 const diagnosticsClose = document.getElementById('diagnostics-close')
 const diagnosticsClearComponent = document.getElementById('diagnostics-clear-component')
+const diagnosticsClearStyles = document.getElementById('diagnostics-clear-styles')
 const diagnosticsClearAll = document.getElementById('diagnostics-clear-all')
 const diagnosticsComponent = document.getElementById('diagnostics-component')
 const diagnosticsStyles = document.getElementById('diagnostics-styles')
@@ -287,12 +291,16 @@ const diagnosticsUi = createDiagnosticsUiController({
 const {
   clearAllDiagnostics,
   clearDiagnosticsScope,
+  decrementLintDiagnosticsRuns,
   decrementTypeDiagnosticsRuns,
   getActiveTypeDiagnosticsRuns,
   getDiagnosticsDrawerOpen,
+  incrementLintDiagnosticsRuns,
   incrementTypeDiagnosticsRuns,
   renderDiagnosticsScope,
   setDiagnosticsDrawerOpen,
+  setLintDiagnosticsPending,
+  setTypeDiagnosticsPending,
   setStatus,
   setStyleDiagnosticsDetails,
   setTypeDiagnosticsDetails,
@@ -329,6 +337,7 @@ const initializeCodeEditors = async () => {
           }
           maybeRender()
           markTypeDiagnosticsStale()
+          markComponentLintDiagnosticsStale()
         },
       }),
       createCodeMirrorEditor({
@@ -340,6 +349,7 @@ const initializeCodeEditors = async () => {
             return
           }
           maybeRender()
+          markStylesLintDiagnosticsStale()
         },
       }),
     ])
@@ -367,6 +377,16 @@ const setTypecheckButtonLoading = isLoading => {
   typecheckButton.classList.toggle('render-button--loading', isLoading)
   typecheckButton.setAttribute('aria-busy', isLoading ? 'true' : 'false')
   typecheckButton.disabled = isLoading
+}
+
+const setLintButtonLoading = ({ button, isLoading }) => {
+  if (!(button instanceof HTMLButtonElement)) {
+    return
+  }
+
+  button.classList.toggle('render-button--loading', isLoading)
+  button.setAttribute('aria-busy', isLoading ? 'true' : 'false')
+  button.disabled = isLoading
 }
 
 const setCdnLoading = isLoading => {
@@ -397,6 +417,7 @@ const typeDiagnostics = createTypeDiagnosticsController({
   getRenderMode: () => renderMode.value,
   setTypecheckButtonLoading,
   setTypeDiagnosticsDetails,
+  setTypeDiagnosticsPending,
   setStatus,
   setRenderedStatus,
   isRenderedStatus: () =>
@@ -409,8 +430,189 @@ const typeDiagnostics = createTypeDiagnosticsController({
   getActiveTypeDiagnosticsRuns,
 })
 
+const lintDiagnostics = createLintDiagnosticsController({
+  cdnImports,
+  importFromCdnWithFallback,
+  getComponentSource: () => getJsxSource(),
+  getStylesSource: () => getCssSource(),
+  getStyleMode: () => styleMode.value,
+  setComponentDiagnostics: setTypeDiagnosticsDetails,
+  setStyleDiagnostics: setStyleDiagnosticsDetails,
+  setStatus,
+})
+
+let activeComponentLintAbortController = null
+let activeStylesLintAbortController = null
+let lastComponentLintIssueCount = 0
+let lastStylesLintIssueCount = 0
+let scheduledComponentLintRecheck = null
+let scheduledStylesLintRecheck = null
+let componentLintPending = false
+let stylesLintPending = false
+
+const clearComponentLintRecheckTimer = () => {
+  if (scheduledComponentLintRecheck) {
+    clearTimeout(scheduledComponentLintRecheck)
+    scheduledComponentLintRecheck = null
+  }
+}
+
+const clearStylesLintRecheckTimer = () => {
+  if (scheduledStylesLintRecheck) {
+    clearTimeout(scheduledStylesLintRecheck)
+    scheduledStylesLintRecheck = null
+  }
+}
+
+const syncLintPendingState = () => {
+  setLintDiagnosticsPending(componentLintPending || stylesLintPending)
+}
+
+const runComponentLint = async () => {
+  activeComponentLintAbortController?.abort()
+  const controller = new AbortController()
+  activeComponentLintAbortController = controller
+  componentLintPending = false
+  syncLintPendingState()
+  incrementLintDiagnosticsRuns()
+
+  setLintButtonLoading({ button: lintComponentButton, isLoading: true })
+
+  try {
+    const result = await lintDiagnostics.lintComponent({
+      signal: controller.signal,
+    })
+    if (result) {
+      lastComponentLintIssueCount = result.issueCount
+    }
+  } finally {
+    decrementLintDiagnosticsRuns()
+    if (activeComponentLintAbortController === controller) {
+      activeComponentLintAbortController = null
+      setLintButtonLoading({ button: lintComponentButton, isLoading: false })
+    }
+  }
+}
+
+const runStylesLint = async () => {
+  activeStylesLintAbortController?.abort()
+  const controller = new AbortController()
+  activeStylesLintAbortController = controller
+  stylesLintPending = false
+  syncLintPendingState()
+  incrementLintDiagnosticsRuns()
+
+  setLintButtonLoading({ button: lintStylesButton, isLoading: true })
+
+  try {
+    const result = await lintDiagnostics.lintStyles({
+      signal: controller.signal,
+    })
+    if (result) {
+      lastStylesLintIssueCount = result.issueCount
+    }
+  } finally {
+    decrementLintDiagnosticsRuns()
+    if (activeStylesLintAbortController === controller) {
+      activeStylesLintAbortController = null
+      setLintButtonLoading({ button: lintStylesButton, isLoading: false })
+    }
+  }
+}
+
 const markTypeDiagnosticsStale = () => {
   typeDiagnostics.markTypeDiagnosticsStale()
+}
+
+const markComponentLintDiagnosticsStale = () => {
+  clearComponentLintRecheckTimer()
+
+  if (lastComponentLintIssueCount > 0) {
+    componentLintPending = true
+    syncLintPendingState()
+    setTypeDiagnosticsDetails({
+      headline: 'Source changed. Re-checking lint issues…',
+      level: 'muted',
+    })
+
+    scheduledComponentLintRecheck = setTimeout(() => {
+      scheduledComponentLintRecheck = null
+      void runComponentLint()
+    }, 450)
+    return
+  }
+
+  componentLintPending = false
+  syncLintPendingState()
+  setTypeDiagnosticsDetails({
+    headline: 'Source changed. Click Lint to run diagnostics.',
+    level: 'muted',
+  })
+
+  if (statusNode.textContent.startsWith('Rendered (Lint issues:')) {
+    setStatus('Rendered', 'neutral')
+  }
+}
+
+const markStylesLintDiagnosticsStale = () => {
+  clearStylesLintRecheckTimer()
+
+  if (lastStylesLintIssueCount > 0) {
+    stylesLintPending = true
+    syncLintPendingState()
+    setStyleDiagnosticsDetails({
+      headline: 'Source changed. Re-checking lint issues…',
+      level: 'muted',
+    })
+
+    scheduledStylesLintRecheck = setTimeout(() => {
+      scheduledStylesLintRecheck = null
+      void runStylesLint()
+    }, 450)
+    return
+  }
+
+  stylesLintPending = false
+  syncLintPendingState()
+  setStyleDiagnosticsDetails({
+    headline: 'Source changed. Click Lint to run diagnostics.',
+    level: 'muted',
+  })
+
+  if (statusNode.textContent.startsWith('Rendered (Lint issues:')) {
+    setStatus('Rendered', 'neutral')
+  }
+}
+
+const clearComponentLintDiagnosticsState = () => {
+  lastComponentLintIssueCount = 0
+  componentLintPending = false
+  clearComponentLintRecheckTimer()
+  syncLintPendingState()
+}
+
+const clearStylesLintDiagnosticsState = () => {
+  lastStylesLintIssueCount = 0
+  stylesLintPending = false
+  clearStylesLintRecheckTimer()
+  syncLintPendingState()
+}
+
+const resetDiagnosticsFlow = () => {
+  activeComponentLintAbortController?.abort()
+  activeStylesLintAbortController?.abort()
+  activeComponentLintAbortController = null
+  activeStylesLintAbortController = null
+
+  lintDiagnostics.cancelAll()
+  typeDiagnostics.cancelTypeDiagnostics()
+  clearComponentLintDiagnosticsState()
+  clearStylesLintDiagnosticsState()
+  clearAllDiagnostics()
+
+  setLintButtonLoading({ button: lintComponentButton, isLoading: false })
+  setLintButtonLoading({ button: lintStylesButton, isLoading: false })
+  setStatus('Rendered', 'neutral')
 }
 
 const renderPreview = async () => {
@@ -474,6 +676,7 @@ const clearComponentSource = () => {
   setJsxSource('')
   clearDiagnosticsScope('component')
   typeDiagnostics.clearTypeDiagnosticsState()
+  clearComponentLintDiagnosticsState()
   setStatus('Component cleared', 'neutral')
   renderRuntime.clearPreview()
 }
@@ -481,6 +684,7 @@ const clearComponentSource = () => {
 const clearStylesSource = () => {
   setCssSource('')
   clearDiagnosticsScope('styles')
+  clearStylesLintDiagnosticsState()
   setStatus('Styles cleared', 'neutral')
   maybeRender()
 }
@@ -553,17 +757,25 @@ const updateRenderButtonVisibility = () => {
 }
 
 renderMode.addEventListener('change', () => {
+  resetDiagnosticsFlow()
+
   if (renderMode.value === 'react' && !hasAppliedReactModeDefault) {
     hasAppliedReactModeDefault = true
     setJsxSource(defaultReactJsx)
-    markTypeDiagnosticsStale()
   }
 
   maybeRender()
 })
 styleMode.addEventListener('change', () => {
+  resetDiagnosticsFlow()
+
   if (cssCodeEditor) {
-    cssCodeEditor.setLanguage(getStyleEditorLanguage(styleMode.value))
+    suppressEditorChangeSideEffects = true
+    try {
+      cssCodeEditor.setLanguage(getStyleEditorLanguage(styleMode.value))
+    } finally {
+      suppressEditorChangeSideEffects = false
+    }
   }
   maybeRender()
 })
@@ -588,15 +800,24 @@ if (diagnosticsClearComponent) {
   diagnosticsClearComponent.addEventListener('click', () => {
     clearDiagnosticsScope('component')
     typeDiagnostics.clearTypeDiagnosticsState()
+    clearComponentLintDiagnosticsState()
     if (statusNode.textContent.startsWith('Rendered (Type errors:')) {
       setStatus('Rendered', 'neutral')
     }
+  })
+}
+if (diagnosticsClearStyles) {
+  diagnosticsClearStyles.addEventListener('click', () => {
+    clearDiagnosticsScope('styles')
+    clearStylesLintDiagnosticsState()
   })
 }
 if (diagnosticsClearAll) {
   diagnosticsClearAll.addEventListener('click', () => {
     clearAllDiagnostics()
     typeDiagnostics.clearTypeDiagnosticsState()
+    clearComponentLintDiagnosticsState()
+    clearStylesLintDiagnosticsState()
     if (statusNode.textContent.startsWith('Rendered (Type errors:')) {
       setStatus('Rendered', 'neutral')
     }
@@ -605,6 +826,16 @@ if (diagnosticsClearAll) {
 if (typecheckButton) {
   typecheckButton.addEventListener('click', () => {
     typeDiagnostics.triggerTypeDiagnostics()
+  })
+}
+if (lintComponentButton) {
+  lintComponentButton.addEventListener('click', () => {
+    void runComponentLint()
+  })
+}
+if (lintStylesButton) {
+  lintStylesButton.addEventListener('click', () => {
+    void runStylesLint()
   })
 }
 renderButton.addEventListener('click', renderPreview)
@@ -643,7 +874,9 @@ clearStylesButton.addEventListener('click', () => {
 })
 jsxEditor.addEventListener('input', maybeRender)
 jsxEditor.addEventListener('input', markTypeDiagnosticsStale)
+jsxEditor.addEventListener('input', markComponentLintDiagnosticsStale)
 cssEditor.addEventListener('input', maybeRender)
+cssEditor.addEventListener('input', markStylesLintDiagnosticsStale)
 
 for (const button of appGridLayoutButtons) {
   button.addEventListener('click', () => {
@@ -698,6 +931,12 @@ if (typeof compactViewportMediaQuery.addEventListener === 'function') {
 } else {
   compactViewportMediaQuery.onchange = handleCompactViewportChange
 }
+
+window.addEventListener('beforeunload', () => {
+  clearComponentLintRecheckTimer()
+  clearStylesLintRecheckTimer()
+  lintDiagnostics.dispose()
+})
 
 applyAppGridLayout(getInitialAppGridLayout(), { persist: false })
 applyTheme(getInitialTheme(), { persist: false })

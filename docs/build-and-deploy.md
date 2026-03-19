@@ -2,7 +2,7 @@
 
 This project uses two runtime modes:
 
-- Local development mode: dynamic CDN resolution from `src/cdn.js` with esm.sh as default.
+- Local development mode: dynamic CDN resolution from `src/modules/cdn.js` with esm.sh as default.
 - Production mode: CDN-first build artifacts in `dist`, with `build:esm` as the current preferred deploy build.
 
 ## Local Development
@@ -45,8 +45,8 @@ npm run build:importmap-mode
 | Mode | Resolver | Import map step | JSPM index needed | Typical use |
 | --- | --- | --- | --- | --- |
 | `importMap` | Import map in `dist/index.html` | Yes | Yes | Default production mode |
-| `esm` | `src/cdn.js` (`esm.sh` primary) | No | No | Stable fallback mode |
-| `jspmGa` | `src/cdn.js` (`ga.jspm.io` primary) | No | No | Direct ga.jspm.io testing |
+| `esm` | `src/modules/cdn.js` (`esm.sh` primary) | No | No | Stable fallback mode |
+| `jspmGa` | `src/modules/cdn.js` (`ga.jspm.io` primary) | No | No | Direct ga.jspm.io testing |
 <!-- prettier-ignore-end -->
 
 Mode notes:
@@ -72,7 +72,7 @@ This runs two steps:
   - `sass=1.93.2`
   - `less=4.4.2`
 - Traces generated `dist/prod-imports.js`
-- Import specifiers come from `importMap` entries in `src/cdn.js` (`cdnImportSpecs`)
+- Import specifiers come from `importMap` entries in `src/modules/cdn.js` (`cdnImportSpecs`)
 
 Preview the built site locally:
 
@@ -99,18 +99,20 @@ Related docs:
 
 - `docs/code-mirror.md` for CodeMirror CDN integration rules, fallback behavior, and validation checklist.
 
+- `src/modules/cdn.js` is the source of truth for CDN-managed runtime libraries (including fallback candidates). Add/update CDN specs there instead of hardcoding module URLs inside feature modules.
+
 - In production, the current preferred deploy mode is ESM resolution (`window.__KNIGHTED_PRIMARY_CDN__ = "esm"`).
 - In `importMap` mode, runtime resolution is import-map first; if a specifier is missing from the generated map, runtime falls back through the CDN
-  provider chain configured in `src/cdn.js`.
-- In `esm` and `jspmGa` modes, runtime resolution is handled entirely by the CDN provider chain configured in `src/cdn.js` without an import map.
+  provider chain configured in `src/modules/cdn.js`.
+- In `esm` and `jspmGa` modes, runtime resolution is handled entirely by the CDN provider chain configured in `src/modules/cdn.js` without an import map.
 
 ### Sass Loading Gotchas
 
 - Symptom: switching to Sass mode shows `Unable to load Sass compiler for browser usage: Dynamic require of "url" is not supported`.
 - Cause: some `esm.sh` Sass outputs currently include runtime paths that are not browser-safe for this app.
-- Current mitigation: `src/cdn.js` keeps `esm.sh` first, then falls back to `unpkg` for Sass via `sass@1.93.2/sass.default.js?module`.
+- Current mitigation: `src/modules/cdn.js` keeps `esm.sh` first, then falls back to `unpkg` for Sass via `sass@1.93.2/sass.default.js?module`.
 - Important context: this can appear even if the Sass URL has not changed in this repo, because CDN-transformed module output can change upstream.
 - If this regresses again:
-  - Verify Sass import candidates in `src/cdn.js`.
+  - Verify Sass import candidates in `src/modules/cdn.js`.
   - Reproduce directly in browser devtools with `await import('<candidate-url>')`.
   - Keep at least one known browser-safe fallback provider in the Sass candidate list.

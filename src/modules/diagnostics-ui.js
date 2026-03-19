@@ -7,6 +7,9 @@ export const createDiagnosticsUiController = ({
 }) => {
   let statusLevel = 'neutral'
   let activeTypeDiagnosticsRuns = 0
+  let activeLintDiagnosticsRuns = 0
+  let typeDiagnosticsPending = false
+  let lintDiagnosticsPending = false
   let diagnosticsDrawerOpen = false
 
   const diagnosticsByScope = {
@@ -34,28 +37,38 @@ export const createDiagnosticsUiController = ({
     return null
   }
 
-  const getDiagnosticsErrorCount = () => {
-    const componentErrors =
-      diagnosticsByScope.component.level === 'error'
-        ? diagnosticsByScope.component.lines.length
-        : 0
-    const styleErrors =
-      diagnosticsByScope.styles.level === 'error'
-        ? diagnosticsByScope.styles.lines.length
-        : 0
-    return componentErrors + styleErrors
+  const getDiagnosticsIssueCount = () => {
+    const componentIssues = Array.isArray(diagnosticsByScope.component.lines)
+      ? diagnosticsByScope.component.lines.length
+      : 0
+    const styleIssues = Array.isArray(diagnosticsByScope.styles.lines)
+      ? diagnosticsByScope.styles.lines.length
+      : 0
+
+    return componentIssues + styleIssues
   }
 
-  const getDiagnosticsIssueLevel = () => {
-    if (getDiagnosticsErrorCount() > 0) {
-      return 'error'
-    }
+  const hasDiagnosticsOkResult = () =>
+    diagnosticsByScope.component.level === 'ok' ||
+    diagnosticsByScope.styles.level === 'ok'
 
-    if (activeTypeDiagnosticsRuns > 0) {
+  const hasDiagnosticsErrorResult = () =>
+    diagnosticsByScope.component.level === 'error' ||
+    diagnosticsByScope.styles.level === 'error'
+
+  const hasActiveDiagnosticsRuns = () =>
+    activeTypeDiagnosticsRuns > 0 || activeLintDiagnosticsRuns > 0
+
+  const getDiagnosticsIssueLevel = () => {
+    if (typeDiagnosticsPending || lintDiagnosticsPending || hasActiveDiagnosticsRuns()) {
       return 'pending'
     }
 
-    if (diagnosticsByScope.component.level === 'ok') {
+    if (getDiagnosticsIssueCount() > 0 || hasDiagnosticsErrorResult()) {
+      return 'error'
+    }
+
+    if (hasDiagnosticsOkResult()) {
       return 'ok'
     }
 
@@ -64,6 +77,19 @@ export const createDiagnosticsUiController = ({
 
   const updateUiIssueIndicators = () => {
     const diagnosticsLevel = getDiagnosticsIssueLevel()
+    const hasIssues = getDiagnosticsIssueCount() > 0
+    const isDiagnosticsPending = typeDiagnosticsPending || lintDiagnosticsPending
+
+    if (
+      !hasIssues &&
+      !isDiagnosticsPending &&
+      statusLevel === 'error' &&
+      (statusNode.textContent.startsWith('Rendered (Type errors:') ||
+        statusNode.textContent.startsWith('Rendered (Lint issues:'))
+    ) {
+      statusNode.textContent = 'Rendered'
+      statusLevel = 'neutral'
+    }
 
     statusNode.classList.remove('status--neutral', 'status--pending', 'status--error')
     statusNode.classList.add(`status--${statusLevel}`)
@@ -76,6 +102,10 @@ export const createDiagnosticsUiController = ({
         'diagnostics-toggle--error',
       )
       diagnosticsToggle.classList.add(`diagnostics-toggle--${diagnosticsLevel}`)
+      diagnosticsToggle.setAttribute(
+        'aria-busy',
+        diagnosticsLevel === 'pending' ? 'true' : 'false',
+      )
     }
   }
 
@@ -150,9 +180,9 @@ export const createDiagnosticsUiController = ({
       return
     }
 
-    const totalErrors = getDiagnosticsErrorCount()
+    const totalIssues = getDiagnosticsIssueCount()
     diagnosticsToggle.textContent =
-      totalErrors > 0 ? `Diagnostics (${totalErrors})` : 'Diagnostics'
+      totalIssues > 0 ? `Diagnostics (${totalIssues})` : 'Diagnostics'
   }
 
   const setDiagnosticsDrawerOpen = isOpen => {
@@ -216,11 +246,39 @@ export const createDiagnosticsUiController = ({
     setActiveTypeDiagnosticsRuns(activeTypeDiagnosticsRuns - 1)
   }
 
+  const setActiveLintDiagnosticsRuns = nextValue => {
+    activeLintDiagnosticsRuns = Math.max(0, nextValue)
+    updateUiIssueIndicators()
+  }
+
+  const incrementLintDiagnosticsRuns = () => {
+    setActiveLintDiagnosticsRuns(activeLintDiagnosticsRuns + 1)
+  }
+
+  const decrementLintDiagnosticsRuns = () => {
+    setActiveLintDiagnosticsRuns(activeLintDiagnosticsRuns - 1)
+  }
+
+  const setTypeDiagnosticsPending = isPending => {
+    typeDiagnosticsPending = Boolean(isPending)
+    updateUiIssueIndicators()
+  }
+
+  const setLintDiagnosticsPending = isPending => {
+    lintDiagnosticsPending = Boolean(isPending)
+    updateUiIssueIndicators()
+  }
+
   return {
     clearAllDiagnostics,
     clearDiagnosticsScope,
+    decrementLintDiagnosticsRuns,
     decrementTypeDiagnosticsRuns,
+    getActiveLintDiagnosticsRuns: () => activeLintDiagnosticsRuns,
     incrementTypeDiagnosticsRuns,
+    incrementLintDiagnosticsRuns,
+    setLintDiagnosticsPending,
+    setTypeDiagnosticsPending,
     getActiveTypeDiagnosticsRuns: () => activeTypeDiagnosticsRuns,
     getDiagnosticsDrawerOpen: () => diagnosticsDrawerOpen,
     renderDiagnosticsScope,
