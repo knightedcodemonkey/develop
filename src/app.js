@@ -8,6 +8,7 @@ import { createCodeMirrorEditor } from './modules/editor-codemirror.js'
 import { defaultCss, defaultJsx, defaultReactJsx } from './modules/defaults.js'
 import { createDiagnosticsUiController } from './modules/diagnostics-ui.js'
 import { createLayoutThemeController } from './modules/layout-theme.js'
+import { createLintController } from './modules/lint/lint-controller.js'
 import { createPreviewBackgroundController } from './modules/preview-background.js'
 import { createRenderRuntimeController } from './modules/render-runtime.js'
 import { createTypeDiagnosticsController } from './modules/type-diagnostics.js'
@@ -24,6 +25,8 @@ const previewPanel = document.getElementById('preview-panel')
 const renderMode = document.getElementById('render-mode')
 const autoRenderToggle = document.getElementById('auto-render')
 const typecheckButton = document.getElementById('typecheck-button')
+const lintComponentButton = document.getElementById('lint-component-button')
+const lintStylesButton = document.getElementById('lint-styles-button')
 const renderButton = document.getElementById('render-button')
 const copyComponentButton = document.getElementById('copy-component')
 const clearComponentButton = document.getElementById('clear-component')
@@ -369,6 +372,16 @@ const setTypecheckButtonLoading = isLoading => {
   typecheckButton.disabled = isLoading
 }
 
+const setLintButtonLoading = ({ button, isLoading }) => {
+  if (!(button instanceof HTMLButtonElement)) {
+    return
+  }
+
+  button.classList.toggle('render-button--loading', isLoading)
+  button.setAttribute('aria-busy', isLoading ? 'true' : 'false')
+  button.disabled = isLoading
+}
+
 const setCdnLoading = isLoading => {
   if (!cdnLoading) return
   cdnLoading.hidden = !isLoading
@@ -408,6 +421,49 @@ const typeDiagnostics = createTypeDiagnosticsController({
   decrementTypeDiagnosticsRuns,
   getActiveTypeDiagnosticsRuns,
 })
+
+const lintController = createLintController({
+  getComponentSource: () => getJsxSource(),
+  getStylesSource: () => getCssSource(),
+  getRenderMode: () => renderMode.value,
+  getStyleMode: () => styleMode.value,
+  setComponentDiagnostics: setTypeDiagnosticsDetails,
+  setStyleDiagnostics: setStyleDiagnosticsDetails,
+  setStatus,
+})
+
+let activeComponentLintAbortController = null
+let activeStylesLintAbortController = null
+
+const runComponentLint = async () => {
+  activeComponentLintAbortController?.abort()
+  activeComponentLintAbortController = new AbortController()
+
+  setLintButtonLoading({ button: lintComponentButton, isLoading: true })
+
+  try {
+    await lintController.lintComponent({
+      signal: activeComponentLintAbortController.signal,
+    })
+  } finally {
+    setLintButtonLoading({ button: lintComponentButton, isLoading: false })
+  }
+}
+
+const runStylesLint = async () => {
+  activeStylesLintAbortController?.abort()
+  activeStylesLintAbortController = new AbortController()
+
+  setLintButtonLoading({ button: lintStylesButton, isLoading: true })
+
+  try {
+    await lintController.lintStyles({
+      signal: activeStylesLintAbortController.signal,
+    })
+  } finally {
+    setLintButtonLoading({ button: lintStylesButton, isLoading: false })
+  }
+}
 
 const markTypeDiagnosticsStale = () => {
   typeDiagnostics.markTypeDiagnosticsStale()
@@ -607,6 +663,16 @@ if (typecheckButton) {
     typeDiagnostics.triggerTypeDiagnostics()
   })
 }
+if (lintComponentButton) {
+  lintComponentButton.addEventListener('click', () => {
+    void runComponentLint()
+  })
+}
+if (lintStylesButton) {
+  lintStylesButton.addEventListener('click', () => {
+    void runStylesLint()
+  })
+}
 renderButton.addEventListener('click', renderPreview)
 if (clipboardSupported) {
   copyComponentButton.addEventListener('click', () => {
@@ -698,6 +764,10 @@ if (typeof compactViewportMediaQuery.addEventListener === 'function') {
 } else {
   compactViewportMediaQuery.onchange = handleCompactViewportChange
 }
+
+window.addEventListener('beforeunload', () => {
+  lintController.dispose()
+})
 
 applyAppGridLayout(getInitialAppGridLayout(), { persist: false })
 applyTheme(getInitialTheme(), { persist: false })
