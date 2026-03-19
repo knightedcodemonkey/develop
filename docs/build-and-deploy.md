@@ -99,6 +99,8 @@ Related docs:
 
 - `docs/code-mirror.md` for CodeMirror CDN integration rules, fallback behavior, and validation checklist.
 
+- `src/cdn.js` is the source of truth for CDN-managed runtime libraries (including fallback candidates). Add/update CDN specs there instead of hardcoding module URLs inside feature modules.
+
 - In production, the current preferred deploy mode is ESM resolution (`window.__KNIGHTED_PRIMARY_CDN__ = "esm"`).
 - In `importMap` mode, runtime resolution is import-map first; if a specifier is missing from the generated map, runtime falls back through the CDN
   provider chain configured in `src/cdn.js`.

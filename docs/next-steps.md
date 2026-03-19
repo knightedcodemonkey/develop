@@ -3,8 +3,24 @@
 Focused follow-up work for `@knighted/develop`.
 
 1. **In-browser component/style linting**
-   - Explore running lint checks for component and style sources directly in the playground.
-   - Prefer CDN-delivered tooling where possible and preserve graceful fallback behavior when unavailable.
+   - Replace the current ESLint/Stylelint worker direction with a Biome-first plan using `@biomejs/wasm-web` loaded from CDN.
+   - Remove lint-specific web worker plumbing and run lint directly on demand in the main runtime, while keeping lint execution isolated behind a small module boundary.
+   - Add a single lint service module that:
+     - lazily loads and initializes Biome WASM once,
+     - caches the initialized runtime,
+     - exposes `lintComponent(source, filename)` and `lintStyles(source, filename, styleMode)` entrypoints.
+   - Keep `src/modules/cdn.js` as the source of truth for Biome runtime candidates and provider fallbacks.
+   - Define an explicit style-mode strategy for non-CSS sources:
+     - CSS/CSS Modules: lint directly as CSS.
+     - Less/Sass: start with graceful "not yet supported" diagnostics, or optionally lint post-compiled CSS if output mapping quality is acceptable.
+   - Normalize Biome diagnostics into existing diagnostics UI shape (headline + line/column + severity + rule id), so no diagnostics drawer redesign is required.
+   - Preserve graceful degradation: if Biome fails to load/initialize, show a clear "Lint unavailable" message without breaking render/typecheck loops.
+   - Add Playwright coverage for:
+     - successful component lint run,
+     - successful CSS lint run,
+     - runtime-load failure path showing recovery-oriented messaging.
+   - Suggested implementation prompt:
+     - "Refactor `@knighted/develop` in-browser linting to use `@biomejs/wasm-web` as the primary engine for component and style lint checks. Remove lint web worker plumbing, add a lazy-initialized Biome lint service, keep CDN provider fallback definitions in `src/modules/cdn.js`, and map Biome diagnostics into existing component/styles diagnostics UI. For Less/Sass, add an explicit temporary unsupported diagnostic (or post-compile CSS lint only if mapping remains readable). Validate with `npm run lint`, `npm run build:esm`, and targeted lint-button Playwright checks."
 
 2. **In-browser component type checking**
    - Add editor-linked diagnostics navigation so each issue can jump to the exact line/column in the component source.
