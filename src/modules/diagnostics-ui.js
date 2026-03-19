@@ -52,6 +52,10 @@ export const createDiagnosticsUiController = ({
     diagnosticsByScope.component.level === 'ok' ||
     diagnosticsByScope.styles.level === 'ok'
 
+  const hasDiagnosticsErrorResult = () =>
+    diagnosticsByScope.component.level === 'error' ||
+    diagnosticsByScope.styles.level === 'error'
+
   const hasActiveDiagnosticsRuns = () =>
     activeTypeDiagnosticsRuns > 0 || activeLintDiagnosticsRuns > 0
 
@@ -60,7 +64,7 @@ export const createDiagnosticsUiController = ({
       return 'pending'
     }
 
-    if (getDiagnosticsIssueCount() > 0) {
+    if (getDiagnosticsIssueCount() > 0 || hasDiagnosticsErrorResult()) {
       return 'error'
     }
 
@@ -73,6 +77,19 @@ export const createDiagnosticsUiController = ({
 
   const updateUiIssueIndicators = () => {
     const diagnosticsLevel = getDiagnosticsIssueLevel()
+    const hasIssues = getDiagnosticsIssueCount() > 0
+    const isDiagnosticsPending = typeDiagnosticsPending || lintDiagnosticsPending
+
+    if (
+      !hasIssues &&
+      !isDiagnosticsPending &&
+      statusLevel === 'error' &&
+      (statusNode.textContent.startsWith('Rendered (Type errors:') ||
+        statusNode.textContent.startsWith('Rendered (Lint issues:'))
+    ) {
+      statusNode.textContent = 'Rendered'
+      statusLevel = 'neutral'
+    }
 
     statusNode.classList.remove('status--neutral', 'status--pending', 'status--error')
     statusNode.classList.add(`status--${statusLevel}`)

@@ -167,6 +167,13 @@
   }
 }
 
+@media (prefers-reduced-motion: reduce) {
+  .diagnostics-toggle--pending::after {
+    animation: none;
+    border-right-color: color-mix(in srgb, var(--accent) 70%, var(--panel-text));
+  }
+}
+
 @media (max-width: 900px) {
   .diagnostics-drawer {
     top: auto;

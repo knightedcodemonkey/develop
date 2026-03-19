@@ -48,8 +48,8 @@ Repository structure:
 
 ## CDN and runtime expectations
 
-- Keep dependency loading compatible with existing provider/fallback model in src/cdn.js.
-- Treat src/cdn.js as the source of truth for CDN-managed runtime libraries; add/update
+- Keep dependency loading compatible with existing provider/fallback model in src/modules/cdn.js.
+- Treat src/modules/cdn.js as the source of truth for CDN-managed runtime libraries; add/update
   CDN candidates there instead of hardcoding module URLs in feature modules.
 - Prefer extending existing CDN import key patterns instead of ad hoc dynamic imports.
 - Maintain graceful fallback behavior when CDN modules fail to load.

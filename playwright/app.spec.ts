@@ -658,6 +658,34 @@ test('clear all diagnostics removes style compile diagnostics', async ({ page })
   )
 })
 
+test('clear styles diagnostics removes style compile diagnostics', async ({ page }) => {
+  await waitForInitialRender(page)
+
+  await ensurePanelToolsVisible(page, 'styles')
+
+  await page.locator('#style-mode').selectOption('sass')
+  await setStylesEditorSource(page, '.card { color: $missing; }')
+
+  await expect(page.locator('#diagnostics-toggle')).toHaveClass(
+    /diagnostics-toggle--error/,
+  )
+
+  await page.locator('#diagnostics-toggle').click()
+  await expect(page.locator('#diagnostics-styles')).toContainText(
+    'Style compilation failed.',
+  )
+
+  await page.locator('#diagnostics-clear-styles').click()
+  await expect(page.locator('#diagnostics-component')).toContainText(
+    'No diagnostics yet.',
+  )
+  await expect(page.locator('#diagnostics-styles')).toContainText('No diagnostics yet.')
+  await expect(page.locator('#diagnostics-toggle')).toHaveText('Diagnostics')
+  await expect(page.locator('#diagnostics-toggle')).toHaveClass(
+    /diagnostics-toggle--neutral/,
+  )
+})
+
 test('typecheck success reports ok diagnostics state in button and drawer', async ({
   page,
 }) => {
@@ -720,6 +748,38 @@ test('component lint error reports diagnostics count and details', async ({ page
   await expect(page.locator('#diagnostics-component')).toContainText(
     'Biome reported issues.',
   )
+})
+
+test('clear component diagnostics resets rendered lint-issue status pill', async ({
+  page,
+}) => {
+  await waitForInitialRender(page)
+
+  await setComponentEditorSource(
+    page,
+    [
+      'const unusedValue = 1',
+      'const App = () => <button type="button">lint me</button>',
+    ].join('\n'),
+  )
+
+  await runComponentLint(page)
+
+  await expect(page.locator('#status')).toHaveText(/Rendered \(Lint issues: [1-9]\d*\)/)
+  await expect(page.locator('#status')).toHaveClass(/status--error/)
+
+  await page.locator('#diagnostics-toggle').click()
+  await page.locator('#diagnostics-clear-component').click()
+
+  await expect(page.locator('#diagnostics-component')).toContainText(
+    'No diagnostics yet.',
+  )
+  await expect(page.locator('#diagnostics-toggle')).toHaveText('Diagnostics')
+  await expect(page.locator('#diagnostics-toggle')).toHaveClass(
+    /diagnostics-toggle--neutral/,
+  )
+  await expect(page.locator('#status')).toHaveText('Rendered')
+  await expect(page.locator('#status')).toHaveClass(/status--neutral/)
 })
 
 test('component lint ignores unused App View and render bindings', async ({ page }) => {

@@ -40,6 +40,7 @@ const diagnosticsToggle = document.getElementById('diagnostics-toggle')
 const diagnosticsDrawer = document.getElementById('diagnostics-drawer')
 const diagnosticsClose = document.getElementById('diagnostics-close')
 const diagnosticsClearComponent = document.getElementById('diagnostics-clear-component')
+const diagnosticsClearStyles = document.getElementById('diagnostics-clear-styles')
 const diagnosticsClearAll = document.getElementById('diagnostics-clear-all')
 const diagnosticsComponent = document.getElementById('diagnostics-component')
 const diagnosticsStyles = document.getElementById('diagnostics-styles')
@@ -469,7 +470,8 @@ const syncLintPendingState = () => {
 
 const runComponentLint = async () => {
   activeComponentLintAbortController?.abort()
-  activeComponentLintAbortController = new AbortController()
+  const controller = new AbortController()
+  activeComponentLintAbortController = controller
   componentLintPending = false
   syncLintPendingState()
   incrementLintDiagnosticsRuns()
@@ -478,20 +480,24 @@ const runComponentLint = async () => {
 
   try {
     const result = await lintDiagnostics.lintComponent({
-      signal: activeComponentLintAbortController.signal,
+      signal: controller.signal,
     })
     if (result) {
       lastComponentLintIssueCount = result.issueCount
     }
   } finally {
     decrementLintDiagnosticsRuns()
-    setLintButtonLoading({ button: lintComponentButton, isLoading: false })
+    if (activeComponentLintAbortController === controller) {
+      activeComponentLintAbortController = null
+      setLintButtonLoading({ button: lintComponentButton, isLoading: false })
+    }
   }
 }
 
 const runStylesLint = async () => {
   activeStylesLintAbortController?.abort()
-  activeStylesLintAbortController = new AbortController()
+  const controller = new AbortController()
+  activeStylesLintAbortController = controller
   stylesLintPending = false
   syncLintPendingState()
   incrementLintDiagnosticsRuns()
@@ -500,14 +506,17 @@ const runStylesLint = async () => {
 
   try {
     const result = await lintDiagnostics.lintStyles({
-      signal: activeStylesLintAbortController.signal,
+      signal: controller.signal,
     })
     if (result) {
       lastStylesLintIssueCount = result.issueCount
     }
   } finally {
     decrementLintDiagnosticsRuns()
-    setLintButtonLoading({ button: lintStylesButton, isLoading: false })
+    if (activeStylesLintAbortController === controller) {
+      activeStylesLintAbortController = null
+      setLintButtonLoading({ button: lintStylesButton, isLoading: false })
+    }
   }
 }
 
@@ -795,6 +804,12 @@ if (diagnosticsClearComponent) {
     if (statusNode.textContent.startsWith('Rendered (Type errors:')) {
       setStatus('Rendered', 'neutral')
     }
+  })
+}
+if (diagnosticsClearStyles) {
+  diagnosticsClearStyles.addEventListener('click', () => {
+    clearDiagnosticsScope('styles')
+    clearStylesLintDiagnosticsState()
   })
 }
 if (diagnosticsClearAll) {
