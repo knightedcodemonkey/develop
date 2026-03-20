@@ -278,7 +278,37 @@ export const createTypeDiagnosticsController = ({
     return `L${position.line + 1}:${position.character + 1} TS${diagnostic.code}: ${message}`
   }
 
-  const fetchTextFromUrls = async (urls, errorPrefix) => {
+  const fetchTextFromUrls = async (
+    urls,
+    errorPrefix,
+    { orderedFallback = false } = {},
+  ) => {
+    if (orderedFallback) {
+      const tryUrlAt = async (index, firstError = null) => {
+        if (index >= urls.length) {
+          throw new Error(
+            `${errorPrefix}: Tried URLs: ${urls.join(', ')}.${firstError ? ` ${firstError}` : ''}`,
+          )
+        }
+
+        const url = urls[index]
+
+        try {
+          const response = await fetch(url)
+          if (!response.ok) {
+            throw new Error(`HTTP ${response.status} from ${url}`)
+          }
+
+          return response.text()
+        } catch (error) {
+          const message = error instanceof Error ? error.message : String(error)
+          return tryUrlAt(index + 1, firstError ?? message)
+        }
+      }
+
+      return tryUrlAt(0)
+    }
+
     const attempts = urls.map(async url => {
       const response = await fetch(url)
       if (!response.ok) {
@@ -407,6 +437,9 @@ export const createTypeDiagnosticsController = ({
         const sourceText = await fetchTextFromUrls(
           getTypePackageFileUrlsWithProvider(packageName, candidateFileName),
           `Unable to fetch type declaration ${packageName}/${candidateFileName}`,
+          {
+            orderedFallback: true,
+          },
         )
 
         return {
@@ -464,6 +497,9 @@ export const createTypeDiagnosticsController = ({
         const manifestText = await fetchTextFromUrls(
           getTypePackageManifestUrls(packageName),
           `Unable to fetch type package manifest ${packageName}`,
+          {
+            orderedFallback: true,
+          },
         )
         const manifest = JSON.parse(manifestText)
         packageManifestByName.set(packageName, manifest)

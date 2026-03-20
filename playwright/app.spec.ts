@@ -372,6 +372,8 @@ test('react mode typecheck loads types without malformed URL fetches', async ({
   expect(diagnosticsText).not.toContain(
     "Cannot find type definition file for 'react-dom'",
   )
+  expect(diagnosticsText).not.toContain("Cannot find module 'react-dom/client'")
+  expect(diagnosticsText).not.toContain('Cannot find module "react-dom/client"')
 
   expect(typeRequestUrls.some(url => url.includes('@types/react'))).toBeTruthy()
 
@@ -384,6 +386,26 @@ test('react mode typecheck loads types without malformed URL fetches', async ({
   for (const pattern of malformedTypeRequestPatterns) {
     expect(typeRequestUrls.some(url => url.includes(pattern))).toBeFalsy()
   }
+})
+
+test('dom mode typecheck does not hydrate react type graph', async ({ page }) => {
+  await waitForInitialRender(page)
+
+  await ensurePanelToolsVisible(page, 'component')
+
+  const typeRequestUrls: string[] = []
+  page.on('request', request => {
+    const url = request.url()
+    if (url.includes('@types/')) {
+      typeRequestUrls.push(url)
+    }
+  })
+
+  await runTypecheck(page)
+
+  await expect(page.locator('#status')).toHaveText('Rendered')
+  expect(typeRequestUrls.some(url => url.includes('@types/react'))).toBeFalsy()
+  expect(typeRequestUrls.some(url => url.includes('@types/react-dom'))).toBeFalsy()
 })
 
 test('react mode executes default React import without TDZ runtime failure', async ({
