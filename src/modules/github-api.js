@@ -1,4 +1,5 @@
 const githubApiBaseUrl = 'https://api.github.com'
+const githubModelsApiUrl = 'https://models.github.ai/inference/chat/completions'
 
 const parseNextPageUrlFromLinkHeader = linkHeader => {
   if (typeof linkHeader !== 'string' || !linkHeader.trim()) {
@@ -65,17 +66,223 @@ const buildRequestHeaders = token => ({
   'X-GitHub-Api-Version': '2022-11-28',
 })
 
-const parseErrorMessage = async response => {
-  try {
-    const body = await response.json()
-    if (body && typeof body.message === 'string' && body.message.trim()) {
-      return body.message
+const buildChatRequestHeaders = ({ token, stream }) => ({
+  Accept: stream ? 'text/event-stream' : 'application/json',
+  Authorization: `Bearer ${token}`,
+  'Content-Type': 'application/json',
+  'X-GitHub-Api-Version': '2022-11-28',
+})
+
+const toFiniteNumber = value => {
+  if (value === null || value === undefined) {
+    return null
+  }
+
+  if (typeof value === 'string' && value.trim().length === 0) {
+    return null
+  }
+
+  const numberValue = Number(value)
+  return Number.isFinite(numberValue) ? numberValue : null
+}
+
+const parseRateMetadataFromHeaders = headers => {
+  if (!headers || typeof headers.get !== 'function') {
+    return {
+      remaining: null,
+      resetEpochSeconds: null,
     }
+  }
+
+  const remaining =
+    toFiniteNumber(headers.get('x-ratelimit-remaining')) ??
+    toFiniteNumber(headers.get('ratelimit-remaining'))
+
+  const resetEpochSeconds =
+    toFiniteNumber(headers.get('x-ratelimit-reset')) ??
+    toFiniteNumber(headers.get('ratelimit-reset'))
+
+  return {
+    remaining,
+    resetEpochSeconds,
+  }
+}
+
+const parseRateMetadataFromBody = body => {
+  if (!body || typeof body !== 'object') {
+    return {
+      remaining: null,
+      resetEpochSeconds: null,
+    }
+  }
+
+  const rateLimit = body.rate_limit ?? body.rateLimit ?? null
+
+  const remaining =
+    toFiniteNumber(rateLimit?.remaining) ?? toFiniteNumber(body.remaining) ?? null
+
+  const resetEpochSeconds =
+    toFiniteNumber(rateLimit?.reset) ??
+    toFiniteNumber(rateLimit?.reset_epoch_seconds) ??
+    toFiniteNumber(rateLimit?.resetEpochSeconds) ??
+    toFiniteNumber(body.reset) ??
+    null
+
+  return {
+    remaining,
+    resetEpochSeconds,
+  }
+}
+
+const mergeRateMetadata = (primary, fallback) => ({
+  remaining: primary.remaining ?? fallback.remaining ?? null,
+  resetEpochSeconds: primary.resetEpochSeconds ?? fallback.resetEpochSeconds ?? null,
+})
+
+const parseRateMetadata = ({ headers, body }) => {
+  const fromHeaders = parseRateMetadataFromHeaders(headers)
+  const fromBody = parseRateMetadataFromBody(body)
+  return mergeRateMetadata(fromHeaders, fromBody)
+}
+
+const toApiError = ({ message, rateLimit }) => {
+  const error = new Error(message)
+  error.rateLimit = rateLimit
+  return error
+}
+
+const normalizeChatMessage = message => {
+  if (!message || typeof message !== 'object') {
+    return null
+  }
+
+  const role =
+    message.role === 'system' || message.role === 'assistant' ? message.role : 'user'
+  const content = typeof message.content === 'string' ? message.content.trim() : ''
+
+  if (!content) {
+    return null
+  }
+
+  return { role, content }
+}
+
+const normalizeChatMessages = messages => {
+  if (!Array.isArray(messages)) {
+    return []
+  }
+
+  return messages.map(normalizeChatMessage).filter(Boolean)
+}
+
+const buildChatBody = ({ model, messages, stream }) => {
+  const normalizedMessages = normalizeChatMessages(messages)
+
+  return {
+    model,
+    messages: normalizedMessages,
+    stream,
+  }
+}
+
+const extractContentFromMessage = message => {
+  if (!message || typeof message !== 'object') {
+    return ''
+  }
+
+  if (typeof message.content === 'string') {
+    return message.content
+  }
+
+  if (!Array.isArray(message.content)) {
+    return ''
+  }
+
+  return message.content
+    .map(part => {
+      if (typeof part === 'string') {
+        return part
+      }
+
+      if (
+        part &&
+        typeof part === 'object' &&
+        part.type === 'text' &&
+        typeof part.text === 'string'
+      ) {
+        return part.text
+      }
+
+      return ''
+    })
+    .join('')
+}
+
+const extractChatCompletionText = body => {
+  const firstChoice = Array.isArray(body?.choices) ? body.choices[0] : null
+
+  if (!firstChoice || typeof firstChoice !== 'object') {
+    return ''
+  }
+
+  const message = firstChoice.message
+  return extractContentFromMessage(message).trim()
+}
+
+const extractStreamingDeltaText = body => {
+  const firstChoice = Array.isArray(body?.choices) ? body.choices[0] : null
+
+  if (!firstChoice || typeof firstChoice !== 'object') {
+    return ''
+  }
+
+  if (typeof firstChoice.delta?.content === 'string') {
+    return firstChoice.delta.content
+  }
+
+  return ''
+}
+
+const parseSseDataLine = line => {
+  if (typeof line !== 'string') {
+    return null
+  }
+
+  const trimmedLine = line.trim()
+  if (!trimmedLine.startsWith('data:')) {
+    return null
+  }
+
+  const payload = trimmedLine.slice(5).trim()
+  if (!payload || payload === '[DONE]') {
+    return null
+  }
+
+  try {
+    return JSON.parse(payload)
+  } catch {
+    return null
+  }
+}
+
+const parseErrorResponse = async response => {
+  let body = null
+
+  try {
+    body = await response.json()
   } catch {
     /* noop */
   }
 
-  return `GitHub API request failed with status ${response.status}`
+  const message =
+    body && typeof body.message === 'string' && body.message.trim()
+      ? body.message
+      : `GitHub API request failed with status ${response.status}`
+
+  return {
+    message,
+    rateLimit: parseRateMetadata({ headers: response.headers, body }),
+  }
 }
 
 const fetchJson = async ({ token, url, signal }) => {
@@ -86,7 +293,8 @@ const fetchJson = async ({ token, url, signal }) => {
   })
 
   if (!response.ok) {
-    throw new Error(await parseErrorMessage(response))
+    const { message, rateLimit } = await parseErrorResponse(response)
+    throw toApiError({ message, rateLimit })
   }
 
   return {
@@ -137,4 +345,131 @@ export const listWritableRepositories = async ({ token, signal }) => {
   writableRepos.sort((left, right) => left.fullName.localeCompare(right.fullName))
 
   return writableRepos
+}
+
+export const streamGitHubChatCompletion = async ({
+  token,
+  messages,
+  signal,
+  onToken,
+  model = 'openai/gpt-4.1-mini',
+}) => {
+  if (typeof token !== 'string' || token.trim().length === 0) {
+    throw new Error('A GitHub token is required to start a chat request.')
+  }
+
+  const normalizedMessages = normalizeChatMessages(messages)
+  if (normalizedMessages.length === 0) {
+    throw new Error('At least one message is required to start a chat request.')
+  }
+
+  const response = await fetch(githubModelsApiUrl, {
+    method: 'POST',
+    headers: buildChatRequestHeaders({ token, stream: true }),
+    body: JSON.stringify(
+      buildChatBody({ model, messages: normalizedMessages, stream: true }),
+    ),
+    signal,
+  })
+
+  if (!response.ok) {
+    const { message, rateLimit } = await parseErrorResponse(response)
+    throw toApiError({ message, rateLimit })
+  }
+
+  if (!response.body) {
+    throw new Error('Streaming response body is not available in this browser.')
+  }
+
+  const decoder = new TextDecoder()
+  const reader = response.body.getReader()
+  let buffered = ''
+  let combined = ''
+
+  while (true) {
+    // eslint-disable-next-line no-await-in-loop
+    const { done, value } = await reader.read()
+    if (done) {
+      break
+    }
+
+    buffered += decoder.decode(value, { stream: true })
+    const lines = buffered.split('\n')
+    buffered = lines.pop() ?? ''
+
+    for (const line of lines) {
+      const body = parseSseDataLine(line)
+      if (!body) {
+        continue
+      }
+
+      const chunk = extractStreamingDeltaText(body)
+      if (!chunk) {
+        continue
+      }
+
+      combined += chunk
+      onToken?.(chunk)
+    }
+  }
+
+  if (buffered.trim()) {
+    const body = parseSseDataLine(buffered)
+    const chunk = body ? extractStreamingDeltaText(body) : ''
+    if (chunk) {
+      combined += chunk
+      onToken?.(chunk)
+    }
+  }
+
+  if (!combined.trim()) {
+    throw new Error('Streaming response did not include assistant content.')
+  }
+
+  return {
+    content: combined,
+    rateLimit: parseRateMetadata({ headers: response.headers, body: null }),
+  }
+}
+
+export const requestGitHubChatCompletion = async ({
+  token,
+  messages,
+  signal,
+  model = 'openai/gpt-4.1-mini',
+}) => {
+  if (typeof token !== 'string' || token.trim().length === 0) {
+    throw new Error('A GitHub token is required to start a chat request.')
+  }
+
+  const normalizedMessages = normalizeChatMessages(messages)
+  if (normalizedMessages.length === 0) {
+    throw new Error('At least one message is required to start a chat request.')
+  }
+
+  const response = await fetch(githubModelsApiUrl, {
+    method: 'POST',
+    headers: buildChatRequestHeaders({ token, stream: false }),
+    body: JSON.stringify(
+      buildChatBody({ model, messages: normalizedMessages, stream: false }),
+    ),
+    signal,
+  })
+
+  if (!response.ok) {
+    const { message, rateLimit } = await parseErrorResponse(response)
+    throw toApiError({ message, rateLimit })
+  }
+
+  const body = await response.json()
+  const content = extractChatCompletionText(body)
+
+  if (!content) {
+    throw new Error('GitHub chat response did not include assistant content.')
+  }
+
+  return {
+    content,
+    rateLimit: parseRateMetadata({ headers: response.headers, body }),
+  }
 }

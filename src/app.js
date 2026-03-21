@@ -8,6 +8,7 @@ import { createCodeMirrorEditor } from './modules/editor-codemirror.js'
 import { defaultCss, defaultJsx, defaultReactJsx } from './modules/defaults.js'
 import { createDiagnosticsUiController } from './modules/diagnostics-ui.js'
 import { isAiAssistantFeatureEnabled } from './modules/feature-flags.js'
+import { createGitHubChatDrawer } from './modules/github-chat-drawer.js'
 import { createGitHubByotControls } from './modules/github-byot-controls.js'
 import { createLayoutThemeController } from './modules/layout-theme.js'
 import { createLintDiagnosticsController } from './modules/lint-diagnostics.js'
@@ -24,6 +25,20 @@ const githubTokenAdd = document.getElementById('github-token-add')
 const githubTokenDelete = document.getElementById('github-token-delete')
 const githubRepoWrap = document.getElementById('github-repo-wrap')
 const githubRepoSelect = document.getElementById('github-repo-select')
+const aiChatToggle = document.getElementById('ai-chat-toggle')
+const aiChatDrawer = document.getElementById('ai-chat-drawer')
+const aiChatClose = document.getElementById('ai-chat-close')
+const aiChatClear = document.getElementById('ai-chat-clear')
+const aiChatPrompt = document.getElementById('ai-chat-prompt')
+const aiChatIncludeEditors = document.getElementById('ai-chat-include-editors')
+const aiChatSend = document.getElementById('ai-chat-send')
+const aiChatStatus = document.getElementById('ai-chat-status')
+const aiChatRate = document.getElementById('ai-chat-rate')
+const aiChatRepository = document.getElementById('ai-chat-repository')
+const aiChatMessages = document.getElementById('ai-chat-messages')
+const viewControlsToggle = document.getElementById('view-controls-toggle')
+const viewControlsDrawer = document.getElementById('view-controls-drawer')
+const aiControlsToggle = document.getElementById('ai-controls-toggle')
 const appGridLayoutButtons = document.querySelectorAll('[data-app-grid-layout]')
 const appThemeButtons = document.querySelectorAll('[data-app-theme]')
 const editorToolsButtons = document.querySelectorAll('[data-editor-tools-toggle]')
@@ -72,6 +87,7 @@ let pendingClearAction = null
 let suppressEditorChangeSideEffects = false
 let hasAppliedReactModeDefault = false
 const clipboardSupported = Boolean(navigator.clipboard?.writeText)
+const aiAssistantFeatureEnabled = isAiAssistantFeatureEnabled()
 
 const previewBackground = createPreviewBackgroundController({
   previewBgColorInput,
@@ -90,6 +106,66 @@ const { applyAppGridLayout, applyTheme, getInitialAppGridLayout, getInitialTheme
   layoutTheme
 
 const compactViewportMediaQuery = window.matchMedia('(max-width: 900px)')
+const stackedRailMediaQuery = window.matchMedia('(max-width: 1090px)')
+let stackedRailViewControlsOpen = false
+let compactAiControlsOpen = false
+
+const isStackedRailViewport = () => stackedRailMediaQuery.matches
+
+const setStackedRailViewControlsOpen = isOpen => {
+  if (!(viewControlsToggle instanceof HTMLButtonElement) || !viewControlsDrawer) {
+    return
+  }
+
+  if (!isStackedRailViewport()) {
+    stackedRailViewControlsOpen = false
+    viewControlsToggle.setAttribute('aria-expanded', 'false')
+    viewControlsDrawer.removeAttribute('hidden')
+    return
+  }
+
+  stackedRailViewControlsOpen = Boolean(isOpen)
+  viewControlsToggle.setAttribute(
+    'aria-expanded',
+    stackedRailViewControlsOpen ? 'true' : 'false',
+  )
+
+  if (stackedRailViewControlsOpen) {
+    viewControlsDrawer.removeAttribute('hidden')
+    return
+  }
+
+  viewControlsDrawer.setAttribute('hidden', '')
+}
+
+const setCompactAiControlsOpen = isOpen => {
+  if (!(aiControlsToggle instanceof HTMLButtonElement) || !githubAiControls) {
+    return
+  }
+
+  if (!aiAssistantFeatureEnabled) {
+    compactAiControlsOpen = false
+    aiControlsToggle.setAttribute('hidden', '')
+    aiControlsToggle.setAttribute('aria-expanded', 'false')
+    githubAiControls.removeAttribute('data-compact-open')
+    githubAiControls.setAttribute('hidden', '')
+    return
+  }
+
+  aiControlsToggle.removeAttribute('hidden')
+
+  if (!isCompactViewport()) {
+    compactAiControlsOpen = false
+    aiControlsToggle.setAttribute('aria-expanded', 'false')
+    githubAiControls.removeAttribute('data-compact-open')
+    githubAiControls.removeAttribute('hidden')
+    return
+  }
+
+  compactAiControlsOpen = Boolean(isOpen)
+  aiControlsToggle.setAttribute('aria-expanded', compactAiControlsOpen ? 'true' : 'false')
+  githubAiControls.dataset.compactOpen = compactAiControlsOpen ? 'true' : 'false'
+}
 
 const getCurrentLayout = () => {
   if (appGrid.classList.contains('app-grid--preview-right')) {
@@ -393,9 +469,31 @@ const {
   updateUiIssueIndicators,
 } = diagnosticsUi
 
-const aiAssistantFeatureEnabled = isAiAssistantFeatureEnabled()
+const githubAiContextState = {
+  token: null,
+  selectedRepository: null,
+}
 
-createGitHubByotControls({
+let chatDrawerController = {
+  setOpen: () => {},
+  setSelectedRepository: () => {},
+  dispose: () => {},
+}
+
+const syncAiChatTokenVisibility = token => {
+  const hasToken = typeof token === 'string' && token.trim().length > 0
+
+  if (hasToken) {
+    aiChatToggle?.removeAttribute('hidden')
+    return
+  }
+
+  aiChatToggle?.setAttribute('hidden', '')
+  aiChatToggle?.setAttribute('aria-expanded', 'false')
+  chatDrawerController.setOpen(false)
+}
+
+const byotControls = createGitHubByotControls({
   featureEnabled: aiAssistantFeatureEnabled,
   controlsRoot: githubAiControls,
   tokenInput: githubTokenInput,
@@ -404,8 +502,48 @@ createGitHubByotControls({
   tokenDeleteButton: githubTokenDelete,
   repoSelect: githubRepoSelect,
   repoWrap: githubRepoWrap,
-  onRepositoryChange: () => {},
+  onRepositoryChange: repository => {
+    githubAiContextState.selectedRepository = repository
+    chatDrawerController.setSelectedRepository(repository)
+  },
+  onTokenChange: token => {
+    githubAiContextState.token = token
+    syncAiChatTokenVisibility(token)
+  },
   setStatus,
+})
+
+githubAiContextState.selectedRepository = byotControls.getSelectedRepository()
+githubAiContextState.token = byotControls.getToken()
+
+const getCurrentGitHubToken = () => githubAiContextState.token ?? byotControls.getToken()
+
+const getCurrentSelectedRepository = () =>
+  githubAiContextState.selectedRepository ?? byotControls.getSelectedRepository()
+
+chatDrawerController = createGitHubChatDrawer({
+  featureEnabled: aiAssistantFeatureEnabled,
+  toggleButton: aiChatToggle,
+  drawer: aiChatDrawer,
+  closeButton: aiChatClose,
+  promptInput: aiChatPrompt,
+  includeEditorsContextToggle: aiChatIncludeEditors,
+  sendButton: aiChatSend,
+  clearButton: aiChatClear,
+  statusNode: aiChatStatus,
+  rateNode: aiChatRate,
+  repositoryNode: aiChatRepository,
+  messagesNode: aiChatMessages,
+  getToken: getCurrentGitHubToken,
+  getSelectedRepository: getCurrentSelectedRepository,
+  getComponentSource: () => getJsxSource(),
+  getStylesSource: () => getCssSource(),
+  getRenderMode: () => renderMode.value,
+  getStyleMode: () => styleMode.value,
+  getDrawerSide: () => {
+    const layout = getCurrentLayout()
+    return layout === 'preview-left' ? 'left' : 'right'
+  },
 })
 
 const getStyleEditorLanguage = mode => {
@@ -998,6 +1136,10 @@ for (const button of appGridLayoutButtons) {
     }
     applyAppGridLayout(nextLayout)
     applyPanelCollapseState()
+
+    if (isStackedRailViewport()) {
+      setStackedRailViewControlsOpen(false)
+    }
   })
 }
 
@@ -1008,8 +1150,71 @@ for (const button of appThemeButtons) {
       return
     }
     applyTheme(nextTheme)
+
+    if (isStackedRailViewport()) {
+      setStackedRailViewControlsOpen(false)
+    }
   })
 }
+
+if (viewControlsToggle instanceof HTMLButtonElement) {
+  viewControlsToggle.addEventListener('click', () => {
+    if (!isStackedRailViewport()) {
+      return
+    }
+
+    if (isCompactViewport()) {
+      setCompactAiControlsOpen(false)
+    }
+
+    setStackedRailViewControlsOpen(!stackedRailViewControlsOpen)
+  })
+}
+
+if (aiControlsToggle instanceof HTMLButtonElement) {
+  aiControlsToggle.addEventListener('click', () => {
+    if (!isCompactViewport()) {
+      return
+    }
+
+    setStackedRailViewControlsOpen(false)
+    setCompactAiControlsOpen(!compactAiControlsOpen)
+  })
+}
+
+document.addEventListener('click', event => {
+  const clickTarget = event.target
+  if (!(clickTarget instanceof Node)) {
+    return
+  }
+
+  if (isStackedRailViewport() && stackedRailViewControlsOpen) {
+    if (
+      !viewControlsDrawer?.contains(clickTarget) &&
+      !viewControlsToggle?.contains(clickTarget)
+    ) {
+      setStackedRailViewControlsOpen(false)
+    }
+  }
+
+  if (isCompactViewport() && compactAiControlsOpen) {
+    if (
+      !githubAiControls.contains(clickTarget) &&
+      !aiControlsToggle?.contains(clickTarget)
+    ) {
+      setCompactAiControlsOpen(false)
+    }
+  }
+})
+
+document.addEventListener('keydown', event => {
+  if (event.key !== 'Escape') {
+    return
+  }
+
+  setStackedRailViewControlsOpen(false)
+  setCompactAiControlsOpen(false)
+})
 
 for (const button of editorToolsButtons) {
   button.addEventListener('click', () => {
@@ -1036,6 +1241,11 @@ for (const button of panelCollapseButtons) {
 
 const handleCompactViewportChange = () => {
   applyPanelCollapseState()
+  setCompactAiControlsOpen(false)
+}
+
+const handleStackedRailViewportChange = () => {
+  setStackedRailViewControlsOpen(false)
 }
 
 if (typeof compactViewportMediaQuery.addEventListener === 'function') {
@@ -1044,16 +1254,26 @@ if (typeof compactViewportMediaQuery.addEventListener === 'function') {
   compactViewportMediaQuery.onchange = handleCompactViewportChange
 }
 
+if (typeof stackedRailMediaQuery.addEventListener === 'function') {
+  stackedRailMediaQuery.addEventListener('change', handleStackedRailViewportChange)
+} else {
+  stackedRailMediaQuery.onchange = handleStackedRailViewportChange
+}
+
 window.addEventListener('beforeunload', () => {
   clearComponentLintRecheckTimer()
   clearStylesLintRecheckTimer()
   lintDiagnostics.dispose()
+  chatDrawerController.dispose()
 })
 
 applyAppGridLayout(getInitialAppGridLayout(), { persist: false })
 applyTheme(getInitialTheme(), { persist: false })
 applyEditorToolsVisibility()
 applyPanelCollapseState()
+setStackedRailViewControlsOpen(false)
+setCompactAiControlsOpen(false)
+syncAiChatTokenVisibility(githubAiContextState.token)
 
 updateRenderButtonVisibility()
 renderDiagnosticsScope('component')

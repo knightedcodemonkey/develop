@@ -4,6 +4,16 @@ import type { Page } from '@playwright/test'
 const webServerMode = process.env.PLAYWRIGHT_WEB_SERVER_MODE ?? 'dev'
 const appEntryPath = webServerMode === 'preview' ? '/index.html' : '/src/index.html'
 
+type ChatRequestMessage = {
+  role?: string
+  content?: string
+}
+
+type ChatRequestBody = {
+  metadata?: unknown
+  messages?: ChatRequestMessage[]
+}
+
 const waitForAppReady = async (page: Page, path = appEntryPath) => {
   await page.goto(path)
   await expect(page.getByRole('heading', { name: '@knighted/develop' })).toBeVisible()
@@ -100,6 +110,42 @@ const ensureDiagnosticsDrawerClosed = async (page: Page) => {
   await expect(page.locator('#diagnostics-drawer')).toBeHidden()
 }
 
+const ensureAiChatDrawerOpen = async (page: Page) => {
+  const toggle = page.locator('#ai-chat-toggle')
+  const isExpanded = await toggle.getAttribute('aria-expanded')
+
+  if (isExpanded !== 'true') {
+    await toggle.click()
+  }
+
+  await expect(page.locator('#ai-chat-drawer')).toBeVisible()
+}
+
+const connectByotWithSingleRepo = async (page: Page) => {
+  await page.route('https://api.github.com/user/repos**', async route => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify([
+        {
+          id: 11,
+          owner: { login: 'knightedcodemonkey' },
+          name: 'develop',
+          full_name: 'knightedcodemonkey/develop',
+          default_branch: 'main',
+          permissions: { push: true },
+        },
+      ]),
+    })
+  })
+
+  await page.locator('#github-token-input').fill('github_pat_fake_chat_1234567890')
+  await page.locator('#github-token-add').click()
+  await expect(page.locator('#github-repo-select')).toHaveValue(
+    'knightedcodemonkey/develop',
+  )
+}
+
 const expectCollapseButtonState = async (
   page: Page,
   panelName: 'component' | 'styles' | 'preview',
@@ -136,6 +182,8 @@ test('BYOT controls stay hidden when feature flag is disabled', async ({ page })
   const byotControls = page.locator('#github-ai-controls')
   await expect(byotControls).toHaveAttribute('hidden', '')
   await expect(byotControls).toBeHidden()
+  await expect(page.locator('#ai-chat-toggle')).toBeHidden()
+  await expect(page.locator('#ai-chat-drawer')).toBeHidden()
 })
 
 test('BYOT controls render when feature flag is enabled by query param', async ({
@@ -147,6 +195,194 @@ test('BYOT controls render when feature flag is enabled by query param', async (
   await expect(byotControls).toBeVisible()
   await expect(page.locator('#github-token-input')).toBeVisible()
   await expect(page.locator('#github-token-add')).toBeVisible()
+  await expect(page.locator('#github-ai-controls #ai-chat-toggle')).toBeHidden()
+})
+
+test('AI chat drawer opens and closes when feature flag is enabled', async ({ page }) => {
+  await waitForAppReady(page, `${appEntryPath}?feature-ai=true`)
+  await connectByotWithSingleRepo(page)
+
+  const chatToggle = page.locator('#ai-chat-toggle')
+  const chatDrawer = page.locator('#ai-chat-drawer')
+
+  await expect(chatToggle).toBeVisible()
+  await expect(chatToggle).toHaveAttribute('aria-expanded', 'false')
+
+  await chatToggle.click()
+  await expect(chatDrawer).toBeVisible()
+  await expect(chatToggle).toHaveAttribute('aria-expanded', 'true')
+
+  await page.locator('#ai-chat-close').click()
+  await expect(chatDrawer).toBeHidden()
+  await expect(chatToggle).toHaveAttribute('aria-expanded', 'false')
+})
+
+test('AI chat prefers streaming responses when available', async ({ page }) => {
+  let streamRequestBody: ChatRequestBody | undefined
+
+  await page.route('https://models.github.ai/inference/chat/completions', async route => {
+    streamRequestBody = route.request().postDataJSON() as ChatRequestBody
+
+    await route.fulfill({
+      status: 200,
+      contentType: 'text/event-stream',
+      body: [
+        'data: {"choices":[{"delta":{"content":"Streaming "}}]}',
+        '',
+        'data: {"choices":[{"delta":{"content":"response ready"}}]}',
+        '',
+        'data: [DONE]',
+        '',
+      ].join('\n'),
+    })
+  })
+
+  await waitForAppReady(page, `${appEntryPath}?feature-ai=true`)
+  await connectByotWithSingleRepo(page)
+  await ensureAiChatDrawerOpen(page)
+
+  await page.locator('#ai-chat-prompt').fill('Summarize this repository.')
+  await page.locator('#ai-chat-send').click()
+
+  await expect(page.locator('#ai-chat-status')).toHaveText(
+    'Response streamed from GitHub.',
+  )
+  await expect(page.locator('#ai-chat-rate')).toHaveText('Rate limit info unavailable')
+  await expect(page.locator('#ai-chat-messages')).toContainText(
+    'Summarize this repository.',
+  )
+  await expect(page.locator('#ai-chat-messages')).toContainText(
+    'Streaming response ready',
+  )
+
+  expect(streamRequestBody?.metadata).toBeUndefined()
+  const systemMessage = streamRequestBody?.messages?.find(
+    (message: ChatRequestMessage) => message.role === 'system',
+  )
+  const systemMessages = streamRequestBody?.messages?.filter(
+    (message: ChatRequestMessage) => message.role === 'system',
+  )
+  expect(systemMessage?.content).toContain('Selected repository context')
+  expect(systemMessage?.content).toContain('Repository: knightedcodemonkey/develop')
+  expect(systemMessage?.content).toContain(
+    'Repository URL: https://github.com/knightedcodemonkey/develop',
+  )
+  expect(
+    systemMessages?.some((message: ChatRequestMessage) =>
+      message.content?.includes('Editor context:'),
+    ),
+  ).toBe(true)
+})
+
+test('AI chat can disable editor context payload via checkbox', async ({ page }) => {
+  let streamRequestBody: ChatRequestBody | undefined
+
+  await page.route('https://models.github.ai/inference/chat/completions', async route => {
+    streamRequestBody = route.request().postDataJSON() as ChatRequestBody
+
+    await route.fulfill({
+      status: 200,
+      contentType: 'text/event-stream',
+      body: [
+        'data: {"choices":[{"delta":{"content":"ok"}}]}',
+        '',
+        'data: [DONE]',
+        '',
+      ].join('\n'),
+    })
+  })
+
+  await waitForAppReady(page, `${appEntryPath}?feature-ai=true`)
+  await connectByotWithSingleRepo(page)
+  await ensureAiChatDrawerOpen(page)
+
+  const includeEditorsToggle = page.locator('#ai-chat-include-editors')
+  await expect(includeEditorsToggle).toBeChecked()
+  await includeEditorsToggle.uncheck()
+
+  await page.locator('#ai-chat-prompt').fill('No editor source this time.')
+  await page.locator('#ai-chat-send').click()
+  await expect(page.locator('#ai-chat-status')).toHaveText(
+    'Response streamed from GitHub.',
+  )
+  await expect(page.locator('#ai-chat-rate')).toHaveText('Rate limit info unavailable')
+
+  expect(streamRequestBody?.metadata).toBeUndefined()
+  const systemMessages = streamRequestBody?.messages?.filter(
+    (message: ChatRequestMessage) => message.role === 'system',
+  )
+  expect(
+    systemMessages?.some((message: ChatRequestMessage) =>
+      message.content?.includes('Selected repository context'),
+    ),
+  ).toBe(true)
+  expect(
+    systemMessages?.some((message: ChatRequestMessage) =>
+      message.content?.includes(
+        'Repository URL: https://github.com/knightedcodemonkey/develop',
+      ),
+    ),
+  ).toBe(true)
+  expect(
+    systemMessages?.some((message: ChatRequestMessage) =>
+      message.content?.includes('Editor context:'),
+    ),
+  ).toBe(false)
+})
+
+test('AI chat falls back to non-streaming response when streaming fails', async ({
+  page,
+}) => {
+  let streamAttemptCount = 0
+  let fallbackAttemptCount = 0
+
+  await page.route('https://models.github.ai/inference/chat/completions', async route => {
+    const body = route.request().postDataJSON() as { stream?: boolean } | null
+    if (body?.stream) {
+      streamAttemptCount += 1
+      await route.fulfill({
+        status: 502,
+        contentType: 'application/json',
+        body: JSON.stringify({ message: 'stream failed' }),
+      })
+      return
+    }
+
+    fallbackAttemptCount += 1
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        rate_limit: {
+          remaining: 17,
+          reset: 1704067200,
+        },
+        choices: [
+          {
+            message: {
+              role: 'assistant',
+              content: 'Fallback response from JSON path.',
+            },
+          },
+        ],
+      }),
+    })
+  })
+
+  await waitForAppReady(page, `${appEntryPath}?feature-ai=true`)
+  await connectByotWithSingleRepo(page)
+  await ensureAiChatDrawerOpen(page)
+
+  await page.locator('#ai-chat-prompt').fill('Use fallback path.')
+  await page.locator('#ai-chat-send').click()
+
+  await expect(page.locator('#ai-chat-status')).toHaveText('Fallback response loaded.')
+  await expect(page.locator('#ai-chat-rate')).toHaveText('Remaining 17, resets 00:00 UTC')
+  await expect(page.locator('#ai-chat-messages')).toContainText(
+    'Fallback response from JSON path.',
+  )
+  expect(streamAttemptCount).toBeGreaterThan(0)
+  expect(fallbackAttemptCount).toBeGreaterThan(0)
 })
 
 test('BYOT remembers selected repository across reloads', async ({ page }) => {
