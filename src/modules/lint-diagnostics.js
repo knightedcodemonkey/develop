@@ -47,9 +47,8 @@ const normalizeLintDiagnostic = diagnostic => {
 }
 
 const formatLintDiagnosticMessage = diagnostic => {
-  const normalized = normalizeLintDiagnostic(diagnostic)
-  const ruleSuffix = normalized.ruleId ? ` (${normalized.ruleId})` : ''
-  return `${normalized.message}${ruleSuffix}`
+  const ruleSuffix = diagnostic.ruleId ? ` (${diagnostic.ruleId})` : ''
+  return `${diagnostic.message}${ruleSuffix}`
 }
 
 const buildLintDiagnosticsSummary = ({ diagnostics, okHeadline, errorHeadline }) => {

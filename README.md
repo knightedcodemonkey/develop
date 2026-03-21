@@ -1,4 +1,7 @@
-# <img src="src/logo.svg" alt="@knighted/develop logo" width="36" height="36" style="vertical-align: middle;" /> <span style="vertical-align: middle;"><code>@knighted/develop</code></span>
+<h1>
+	<img src="src/logo.svg" alt="@knighted/develop logo" width="32" height="32" valign="middle" />
+	<code>@knighted/develop</code>
+</h1>
 
 CDN-first browser IDE for building UI components with [`@knighted/jsx`](https://github.com/knightedcodemonkey/jsx) and [`@knighted/css`](https://github.com/knightedcodemonkey/css).
 

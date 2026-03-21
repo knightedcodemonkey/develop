@@ -292,10 +292,18 @@ export const createTypeDiagnosticsController = ({
     { orderedFallback = false } = {},
   ) => {
     if (orderedFallback) {
-      const tryUrlAt = async (index, firstError = null) => {
+      const tryUrlAt = async (index, failures = []) => {
         if (index >= urls.length) {
+          const reasons = failures
+            .slice(0, 3)
+            .map(reason => (reason instanceof Error ? reason.message : String(reason)))
+          const reasonSummary = reasons.length ? ` Causes: ${reasons.join(' | ')}` : ''
+
           throw new Error(
-            `${errorPrefix}: Tried URLs: ${urls.join(', ')}.${firstError ? ` ${firstError}` : ''}`,
+            `${errorPrefix}: Tried URLs: ${urls.join(', ')}.${reasonSummary}`,
+            {
+              cause: failures.at(-1),
+            },
           )
         }
 
@@ -309,8 +317,7 @@ export const createTypeDiagnosticsController = ({
 
           return response.text()
         } catch (error) {
-          const message = error instanceof Error ? error.message : String(error)
-          return tryUrlAt(index + 1, firstError ?? message)
+          return tryUrlAt(index + 1, [...failures, error])
         }
       }
 
