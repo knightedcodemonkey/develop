@@ -74,6 +74,28 @@ const ensurePanelToolsVisible = async (page: Page, panelName: 'component' | 'sty
   }
 }
 
+const ensureDiagnosticsDrawerOpen = async (page: Page) => {
+  const toggle = page.locator('#diagnostics-toggle')
+  const isExpanded = await toggle.getAttribute('aria-expanded')
+
+  if (isExpanded !== 'true') {
+    await toggle.click()
+  }
+
+  await expect(page.locator('#diagnostics-drawer')).toBeVisible()
+}
+
+const ensureDiagnosticsDrawerClosed = async (page: Page) => {
+  const toggle = page.locator('#diagnostics-toggle')
+  const isExpanded = await toggle.getAttribute('aria-expanded')
+
+  if (isExpanded === 'true') {
+    await page.locator('#diagnostics-close').click()
+  }
+
+  await expect(page.locator('#diagnostics-drawer')).toBeHidden()
+}
+
 const expectCollapseButtonState = async (
   page: Page,
   panelName: 'component' | 'styles' | 'preview',
@@ -383,7 +405,7 @@ test('react mode typecheck loads types without malformed URL fetches', async ({
   await page.locator('#render-mode').selectOption('react')
   await page.getByRole('button', { name: 'Typecheck' }).click()
 
-  await page.locator('#diagnostics-toggle').click()
+  await ensureDiagnosticsDrawerOpen(page)
   await expect(page.locator('#diagnostics-component')).toContainText(
     'No TypeScript errors found.',
   )
@@ -558,7 +580,7 @@ test('style compilation errors populate styles diagnostics scope', async ({ page
     /diagnostics-toggle--error/,
   )
 
-  await page.locator('#diagnostics-toggle').click()
+  await ensureDiagnosticsDrawerOpen(page)
   await expect(page.locator('#diagnostics-styles')).toContainText(
     'Style compilation failed.',
   )
@@ -627,6 +649,7 @@ test('clearing styles keeps diagnostics error state but resets status styling', 
   )
 
   const dialog = page.locator('#clear-confirm-dialog')
+  await ensureDiagnosticsDrawerClosed(page)
   await page.getByLabel('Clear styles source').click()
   await expect(dialog).toHaveAttribute('open', '')
   await dialog.getByRole('button', { name: 'Clear' }).click()
@@ -659,7 +682,7 @@ test('clear component diagnostics removes type errors and restores rendered stat
   )
   await expect(page.locator('#status')).toHaveText(/Rendered \(Type errors: [1-9]\d*\)/)
 
-  await page.locator('#diagnostics-toggle').click()
+  await ensureDiagnosticsDrawerOpen(page)
   await page.locator('#diagnostics-clear-component').click()
 
   await expect(page.locator('#diagnostics-component')).toContainText(
@@ -685,7 +708,7 @@ test('clear all diagnostics removes style compile diagnostics', async ({ page })
     /diagnostics-toggle--error/,
   )
 
-  await page.locator('#diagnostics-toggle').click()
+  await ensureDiagnosticsDrawerOpen(page)
   await expect(page.locator('#diagnostics-styles')).toContainText(
     'Style compilation failed.',
   )
@@ -713,7 +736,7 @@ test('clear styles diagnostics removes style compile diagnostics', async ({ page
     /diagnostics-toggle--error/,
   )
 
-  await page.locator('#diagnostics-toggle').click()
+  await ensureDiagnosticsDrawerOpen(page)
   await expect(page.locator('#diagnostics-styles')).toContainText(
     'Style compilation failed.',
   )
@@ -740,7 +763,7 @@ test('typecheck success reports ok diagnostics state in button and drawer', asyn
   await expect(page.locator('#diagnostics-toggle')).toHaveClass(/diagnostics-toggle--ok/)
   await expect(page.locator('#diagnostics-toggle')).toHaveText('Diagnostics')
 
-  await page.locator('#diagnostics-toggle').click()
+  await ensureDiagnosticsDrawerOpen(page)
   await expect(page.locator('#diagnostics-component')).toContainText(
     'No TypeScript errors found.',
   )
@@ -766,7 +789,7 @@ test('typecheck error reports diagnostics count in button and details in drawer'
   )
   await expect(page.locator('#diagnostics-toggle')).toHaveText(/Diagnostics \([1-9]\d*\)/)
 
-  await page.locator('#diagnostics-toggle').click()
+  await expect(page.locator('#diagnostics-drawer')).toBeVisible()
   await expect(page.locator('#diagnostics-component')).toContainText('TypeScript found')
   await expect(page.locator('#diagnostics-component')).toContainText('TS')
 })
@@ -787,7 +810,7 @@ test('component diagnostics rows navigate editor to reported line', async ({ pag
   await expect(page.locator('#diagnostics-toggle')).toHaveClass(
     /diagnostics-toggle--error/,
   )
-  await page.locator('#diagnostics-toggle').click()
+  await ensureDiagnosticsDrawerOpen(page)
 
   const targetDiagnostic = page
     .locator('#diagnostics-component .diagnostic-line-button[data-diagnostic-line="2"]')
@@ -817,7 +840,7 @@ test('component diagnostics support arrow navigation and enter jump', async ({
     /diagnostics-toggle--error/,
   )
 
-  await page.locator('#diagnostics-toggle').click()
+  await ensureDiagnosticsDrawerOpen(page)
 
   const firstDiagnostic = page
     .locator('#diagnostics-component .diagnostic-line-button')
@@ -854,7 +877,7 @@ test('component lint error reports diagnostics count and details', async ({ page
   )
   await expect(page.locator('#diagnostics-toggle')).toHaveText(/Diagnostics \([1-9]\d*\)/)
 
-  await page.locator('#diagnostics-toggle').click()
+  await expect(page.locator('#diagnostics-drawer')).toBeVisible()
   await expect(page.locator('#diagnostics-component')).toContainText(
     'Biome reported issues.',
   )
@@ -874,7 +897,7 @@ test('styles diagnostics rows navigate editor to reported line', async ({ page }
   await expect(page.locator('#diagnostics-toggle')).toHaveClass(
     /diagnostics-toggle--error/,
   )
-  await page.locator('#diagnostics-toggle').click()
+  await ensureDiagnosticsDrawerOpen(page)
 
   const targetDiagnostic = page
     .locator('#diagnostics-styles .diagnostic-line-button[data-diagnostic-line="3"]')
@@ -904,7 +927,7 @@ test('clear component diagnostics resets rendered lint-issue status pill', async
   await expect(page.locator('#status')).toHaveText(/Rendered \(Lint issues: [1-9]\d*\)/)
   await expect(page.locator('#status')).toHaveClass(/status--error/)
 
-  await page.locator('#diagnostics-toggle').click()
+  await ensureDiagnosticsDrawerOpen(page)
   await page.locator('#diagnostics-clear-component').click()
 
   await expect(page.locator('#diagnostics-component')).toContainText(
@@ -932,7 +955,7 @@ test('component lint ignores unused App View and render bindings', async ({ page
 
   await runComponentLint(page)
 
-  await page.locator('#diagnostics-toggle').click()
+  await ensureDiagnosticsDrawerOpen(page)
   await expect(page.locator('#diagnostics-component')).toContainText(
     'No Biome issues found.',
   )
@@ -1018,7 +1041,7 @@ test('changing css dialect resets diagnostics after lint and typecheck runs', as
   )
   await expect(page.locator('#diagnostics-toggle')).toHaveText('Diagnostics')
 
-  await page.locator('#diagnostics-toggle').click()
+  await ensureDiagnosticsDrawerOpen(page)
   await expect(page.locator('#diagnostics-component')).toContainText(
     'No diagnostics yet.',
   )

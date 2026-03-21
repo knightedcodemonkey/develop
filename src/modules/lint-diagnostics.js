@@ -210,6 +210,7 @@ export const createLintDiagnosticsController = ({
   setComponentDiagnostics,
   setStyleDiagnostics,
   setStatus,
+  onIssuesDetected = () => {},
 }) => {
   let biomeWorkspacePromise = null
   let componentLintRunId = 0
@@ -296,7 +297,7 @@ export const createLintDiagnosticsController = ({
     }
   }
 
-  const lintComponent = async ({ signal } = {}) => {
+  const lintComponent = async ({ signal, userInitiated = false } = {}) => {
     componentLintRunId += 1
     const runId = componentLintRunId
 
@@ -331,6 +332,15 @@ export const createLintDiagnosticsController = ({
           : 'Rendered',
         summary.level === 'error' ? 'error' : 'neutral',
       )
+
+      if (userInitiated && summary.lines.length > 0) {
+        onIssuesDetected({
+          kind: 'lint',
+          scope: 'component',
+          issueCount: summary.lines.length,
+        })
+      }
+
       return {
         issueCount: summary.lines.length,
       }
@@ -356,7 +366,7 @@ export const createLintDiagnosticsController = ({
     }
   }
 
-  const lintStyles = async ({ signal } = {}) => {
+  const lintStyles = async ({ signal, userInitiated = false } = {}) => {
     stylesLintRunId += 1
     const runId = stylesLintRunId
 
@@ -403,6 +413,15 @@ export const createLintDiagnosticsController = ({
           : 'Rendered',
         summary.level === 'error' ? 'error' : 'neutral',
       )
+
+      if (userInitiated && summary.lines.length > 0) {
+        onIssuesDetected({
+          kind: 'lint',
+          scope: 'styles',
+          issueCount: summary.lines.length,
+        })
+      }
+
       return {
         issueCount: summary.lines.length,
       }

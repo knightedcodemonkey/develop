@@ -230,6 +230,7 @@ export const createTypeDiagnosticsController = ({
   incrementTypeDiagnosticsRuns,
   decrementTypeDiagnosticsRuns,
   getActiveTypeDiagnosticsRuns,
+  onIssuesDetected = () => {},
 }) => {
   let typeCheckRunId = 0
   let typeScriptCompiler = null
@@ -840,7 +841,7 @@ export const createTypeDiagnosticsController = ({
       .filter(diagnostic => !shouldIgnoreTypeDiagnostic(diagnostic))
   }
 
-  const runTypeDiagnostics = async runId => {
+  const runTypeDiagnostics = async (runId, { userInitiated = false } = {}) => {
     incrementTypeDiagnosticsRuns()
     setTypeDiagnosticsPending(false)
     setTypecheckButtonLoading(true)
@@ -879,6 +880,14 @@ export const createTypeDiagnosticsController = ({
           level: 'error',
         })
         setStatus(`Rendered (Type errors: ${errors.length})`, 'error')
+
+        if (userInitiated) {
+          onIssuesDetected({
+            kind: 'type',
+            scope: 'component',
+            issueCount: errors.length,
+          })
+        }
       }
 
       if (isRenderedStatus()) {
@@ -911,9 +920,9 @@ export const createTypeDiagnosticsController = ({
     }
   }
 
-  const triggerTypeDiagnostics = () => {
+  const triggerTypeDiagnostics = ({ userInitiated = false } = {}) => {
     typeCheckRunId += 1
-    void runTypeDiagnostics(typeCheckRunId)
+    void runTypeDiagnostics(typeCheckRunId, { userInitiated })
   }
 
   const scheduleTypeRecheck = () => {
