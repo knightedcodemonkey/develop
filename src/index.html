@@ -46,6 +46,7 @@
               id="github-token-info"
               type="button"
               aria-label="About GitHub token"
+              aria-describedby="github-token-privacy-note"
               data-tooltip="This token is stored only in your browser and is sent only to GitHub APIs you invoke."
             >
               i
@@ -60,7 +61,12 @@
               spellcheck="false"
               placeholder="GitHub BYOT"
               aria-label="GitHub token"
+              aria-describedby="github-token-privacy-note"
             />
+            <span class="sr-only" id="github-token-privacy-note"
+              >This token is stored only in your browser and is sent only to GitHub APIs
+              you invoke.</span
+            >
             <button
               class="layout-toggle github-token-add"
               id="github-token-add"

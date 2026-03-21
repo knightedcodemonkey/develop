@@ -161,7 +161,7 @@ export const createGitHubByotControls = ({
 
     displayingMaskedToken = true
     tokenInput.value = maskGitHubToken(savedToken)
-    tokenInput.setAttribute('aria-label', 'GitHub token saved. Focus to replace token')
+    tokenInput.setAttribute('aria-label', 'GitHub token saved. Delete token to replace')
     setTokenFieldLockState(locked)
     updateTokenAddButtonState()
   }
@@ -327,7 +327,7 @@ export const createGitHubByotControls = ({
 
     if (savedToken) {
       updateTokenActionVisibility()
-      setTokenFieldToMasked({ locked: false })
+      setTokenFieldToMasked({ locked: true })
       showRepoControl(false)
       return
     }
@@ -344,7 +344,7 @@ export const createGitHubByotControls = ({
 
   const persistAndLoadToken = async token => {
     if (displayingMaskedToken) {
-      setStatus('Focus the token field and enter a new token before adding', 'neutral')
+      setStatus('Delete the saved token before adding a new one', 'neutral')
       return
     }
 
@@ -366,26 +366,25 @@ export const createGitHubByotControls = ({
       return
     }
 
-    saveGitHubToken(trimmedToken)
+    const tokenSaved = saveGitHubToken(trimmedToken)
+    if (!tokenSaved) {
+      setStatus(
+        'Token is valid, but could not be saved in this browser context. You can still continue for this session.',
+        'error',
+      )
+      savedToken = previousToken
+      displayingMaskedToken = false
+      tokenInput.value = trimmedToken
+      tokenInput.setAttribute('aria-label', 'GitHub token')
+      setTokenFieldLockState(false)
+      updateTokenActionVisibility()
+      updateTokenAddButtonState()
+      return
+    }
+
     savedToken = trimmedToken
     setTokenFieldToMasked({ locked: true })
   }
-
-  tokenInput?.addEventListener('focus', () => {
-    if (!displayingMaskedToken) {
-      return
-    }
-
-    if (tokenInput.disabled) {
-      return
-    }
-
-    displayingMaskedToken = false
-    tokenInput.value = ''
-    tokenInput.setAttribute('aria-label', 'GitHub token')
-    setTokenFieldLockState(false)
-    updateTokenAddButtonState()
-  })
 
   tokenInput?.addEventListener('input', () => {
     updateTokenAddButtonState()
@@ -432,7 +431,7 @@ export const createGitHubByotControls = ({
   syncSavedTokenUi()
 
   if (savedToken) {
-    setTokenFieldToMasked({ locked: false })
+    setTokenFieldToMasked({ locked: true })
     void loadWritableRepos(savedToken).then(result => {
       if (!result.ok) {
         savedToken = null
