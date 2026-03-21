@@ -1,5 +1,6 @@
 @import './styles/base.css';
 @import './styles/layout-shell.css';
+@import './styles/ai-controls.css';
 @import './styles/panels-editor.css';
 @import './styles/diagnostics.css';
 @import './styles/preview-controls.css';

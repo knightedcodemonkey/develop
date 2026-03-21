@@ -7,6 +7,8 @@ import {
 import { createCodeMirrorEditor } from './modules/editor-codemirror.js'
 import { defaultCss, defaultJsx, defaultReactJsx } from './modules/defaults.js'
 import { createDiagnosticsUiController } from './modules/diagnostics-ui.js'
+import { isAiAssistantFeatureEnabled } from './modules/feature-flags.js'
+import { createGitHubByotControls } from './modules/github-byot-controls.js'
 import { createLayoutThemeController } from './modules/layout-theme.js'
 import { createLintDiagnosticsController } from './modules/lint-diagnostics.js'
 import { createPreviewBackgroundController } from './modules/preview-background.js'
@@ -15,6 +17,13 @@ import { createTypeDiagnosticsController } from './modules/type-diagnostics.js'
 
 const statusNode = document.getElementById('status')
 const appGrid = document.querySelector('.app-grid')
+const githubAiControls = document.getElementById('github-ai-controls')
+const githubTokenInput = document.getElementById('github-token-input')
+const githubTokenInfo = document.getElementById('github-token-info')
+const githubTokenAdd = document.getElementById('github-token-add')
+const githubTokenDelete = document.getElementById('github-token-delete')
+const githubRepoWrap = document.getElementById('github-repo-wrap')
+const githubRepoSelect = document.getElementById('github-repo-select')
 const appGridLayoutButtons = document.querySelectorAll('[data-app-grid-layout]')
 const appThemeButtons = document.querySelectorAll('[data-app-theme]')
 const editorToolsButtons = document.querySelectorAll('[data-editor-tools-toggle]')
@@ -383,6 +392,21 @@ const {
   updateDiagnosticsToggleLabel,
   updateUiIssueIndicators,
 } = diagnosticsUi
+
+const aiAssistantFeatureEnabled = isAiAssistantFeatureEnabled()
+
+createGitHubByotControls({
+  featureEnabled: aiAssistantFeatureEnabled,
+  controlsRoot: githubAiControls,
+  tokenInput: githubTokenInput,
+  tokenInfoButton: githubTokenInfo,
+  tokenAddButton: githubTokenAdd,
+  tokenDeleteButton: githubTokenDelete,
+  repoSelect: githubRepoSelect,
+  repoWrap: githubRepoWrap,
+  onRepositoryChange: () => {},
+  setStatus,
+})
 
 const getStyleEditorLanguage = mode => {
   if (mode === 'less') return 'less'
