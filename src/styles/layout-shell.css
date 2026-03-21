@@ -7,7 +7,7 @@
   background: var(--surface-app-header);
   position: sticky;
   top: 0;
-  z-index: 10;
+  z-index: 200;
   backdrop-filter: blur(8px);
 }
 

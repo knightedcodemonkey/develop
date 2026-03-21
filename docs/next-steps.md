@@ -19,18 +19,19 @@ Focused follow-up work for `@knighted/develop`.
    - Suggested implementation prompt:
      - "Add a deterministic E2E execution mode for `@knighted/develop` that serves pinned runtime artifacts locally (instead of live CDN fetches) and wire it into CI as a required check on every PR. Keep a separate lightweight CDN-smoke E2E check for real-network coverage. Validate with `npm run lint`, deterministic Playwright PR checks, and one CDN-smoke Playwright run."
 
-4. **Issue #18 continuation (resume from Phase 2)**
-   - Continue the GitHub AI assistant rollout after completed Phases 0-1:
+4. **Issue #18 continuation (resume from Phase 3)**
+   - Current rollout status:
      - Phase 0 complete: feature flag + scaffolding.
      - Phase 1 complete: BYOT token flow, localStorage persistence, writable repo discovery/filtering.
-   - Implement the next slice first:
-     - Phase 2: chat drawer UX with streaming responses first, plus non-streaming fallback.
-     - Add selected repository state plumbing now so Phase 4 (PR write flow) can reuse it.
-     - Add README documentation for fine-grained PAT setup (reuse existing screenshots referenced in docs/byot.md).
+     - Phase 2 complete: separate AI chat drawer UX, streaming-first responses with non-stream fallback, selected repository context plumbing, and README fine-grained PAT setup links.
+   - Implement the next slice first (Phase 3):
+     - Add mode-aware recommendation behavior so the assistant strongly adapts suggestions to current render mode and style mode.
+     - Add an editor update workflow where the assistant can propose structured edits and the user can apply to Component and Styles editors with explicit confirmation.
+     - Add filename groundwork for upcoming PR flows by allowing user-defined Component and Styles file names, persisted per selected repository.
    - Keep behavior and constraints aligned with current implementation:
      - Keep everything behind the existing browser-only AI feature flag.
      - Preserve BYOT token semantics (localStorage persistence until user deletes).
      - Keep CDN-first runtime behavior and existing fallback model.
      - Do not add dependencies without explicit approval.
-   - Suggested implementation prompt:
-     - "Continue Issue #18 in @knighted/develop from the current Phase 1 baseline. Implement Phase 2 by adding a separate AI chat drawer with streaming response rendering (primary) and a non-streaming fallback path. Wire selected repository state as shared app state for upcoming Phase 4 PR actions. Update README with a concise fine-grained PAT setup section that links to existing BYOT screenshot assets/docs. Keep all AI/BYOT UI and behavior behind the existing browser-only feature flag, preserve current token persistence and repo filtering behavior, and validate with npm run lint plus targeted Playwright coverage for chat drawer visibility, streaming/fallback behavior, and repo-context selection plumbing."
+   - Phase 3 mini-spec (agent implementation prompt):
+     - "Continue Issue #18 in @knighted/develop from the current Phase 2 baseline. Implement Phase 3 with three deliverables. (1) Add mode-aware assistant guidance: when collecting AI context, include explicit policy hints derived from render mode and style mode, and ensure recommendations avoid incompatible patterns (for example, avoid React hook/state guidance in DOM mode unless user explicitly asks for React migration). (2) Add assistant-to-editor apply flow: support structured assistant responses that can propose edits for component and/or styles editors; render these as reviewable actions in the chat drawer, require explicit user confirmation to apply, and support a one-step undo for last applied assistant edit per editor. (3) Add PR-prep filename metadata: introduce user-editable fields for Component filename and Styles filename in AI controls, validate simple safe filename format, and persist/reload values scoped to selected repository so Phase 4 PR write flow can reuse them. Keep all AI/BYOT behavior behind the existing browser-only AI feature flag and preserve current token/repo persistence semantics. Do not add dependencies. Validate with npm run lint and targeted Playwright tests covering: mode-aware recommendation constraints, apply/undo editor actions, and repository-scoped filename persistence."
