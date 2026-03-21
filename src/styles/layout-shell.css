@@ -7,7 +7,7 @@
   background: var(--surface-app-header);
   position: sticky;
   top: 0;
-  z-index: 200;
+  z-index: 10;
   backdrop-filter: blur(8px);
 }
 
@@ -432,6 +432,10 @@
 }
 
 @media (max-width: 900px) {
+  .app-header {
+    z-index: 200;
+  }
+
   .app-grid {
     grid-template-columns: minmax(0, 1fr);
     grid-template-rows: auto auto auto;
