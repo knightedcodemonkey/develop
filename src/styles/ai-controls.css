@@ -372,23 +372,78 @@
   accent-color: var(--accent);
 }
 
-@media (max-width: 900px) {
-  .app-grid-ai-controls {
-    margin-right: 8px;
-    padding-right: 8px;
-    border-right: 1px solid var(--border-subtle);
-    width: 100%;
-    justify-content: flex-start;
-    order: 3;
+@media (max-width: 1090px) {
+  .app-grid-layout-controls {
+    flex-wrap: nowrap;
   }
 
   .github-token-input {
-    width: min(56vw, 220px);
+    width: 136px;
   }
 
   .github-repo-wrap select {
-    min-width: min(84vw, 320px);
-    max-width: min(84vw, 320px);
+    min-width: 220px;
+    max-width: 260px;
+  }
+
+  .app-grid-ai-controls {
+    margin-right: 0;
+    padding-right: 0;
+    border-right: none;
+  }
+}
+
+@media (max-width: 900px) {
+  .app-grid-layout-controls {
+    flex-wrap: nowrap;
+  }
+
+  .app-grid-ai-controls {
+    position: absolute;
+    top: calc(100% + 10px);
+    left: 12px;
+    right: 12px;
+    display: none;
+    margin-right: 0;
+    padding-right: 0;
+    border-right: none;
+    width: auto;
+    max-width: none;
+    justify-content: flex-start;
+    flex-wrap: nowrap;
+    border: 1px solid var(--border-subtle);
+    border-radius: 12px;
+    padding: 10px 12px;
+    background: color-mix(in srgb, var(--surface-panel-header) 88%, transparent);
+    box-shadow: 0 14px 30px var(--shadow-elev-1);
+    backdrop-filter: blur(6px);
+    overflow-x: auto;
+    overflow-y: hidden;
+    z-index: 60;
+  }
+
+  .github-token-info.shadow-hint::after {
+    position: fixed;
+    top: auto;
+    right: 12px;
+    left: 12px;
+    bottom: 12px;
+    width: auto;
+    max-width: none;
+    z-index: 120;
+  }
+
+  .app-grid-ai-controls[data-compact-open='true'] {
+    display: inline-flex;
+  }
+
+  .github-token-input {
+    width: min(34vw, 180px);
+  }
+
+  .github-repo-wrap select {
+    min-width: min(58vw, 260px);
+    max-width: min(58vw, 260px);
   }
 
   .ai-chat-drawer {

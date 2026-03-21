@@ -126,99 +126,135 @@
           </button>
         </div>
 
-        <div class="app-grid-diagnostics-controls" role="group" aria-label="Diagnostics">
+        <div class="app-grid-layout-top-controls" role="group" aria-label="Rail controls">
+          <div
+            class="app-grid-diagnostics-controls"
+            role="group"
+            aria-label="Diagnostics"
+          >
+            <button
+              class="diagnostics-toggle"
+              id="diagnostics-toggle"
+              type="button"
+              aria-expanded="false"
+              aria-controls="diagnostics-drawer"
+            >
+              Diagnostics
+            </button>
+          </div>
+
           <button
-            class="diagnostics-toggle"
-            id="diagnostics-toggle"
+            class="diagnostics-toggle app-grid-view-toggle"
+            id="view-controls-toggle"
             type="button"
             aria-expanded="false"
-            aria-controls="diagnostics-drawer"
+            aria-controls="view-controls-drawer"
           >
-            Diagnostics
+            View
+          </button>
+
+          <button
+            class="diagnostics-toggle app-grid-ai-toggle"
+            id="ai-controls-toggle"
+            type="button"
+            aria-expanded="false"
+            aria-controls="github-ai-controls"
+            hidden
+          >
+            Agent
           </button>
         </div>
 
-        <button
-          class="layout-toggle"
-          id="layout-default"
-          type="button"
-          data-app-grid-layout="default"
-          aria-pressed="true"
-          title="Component + Styles on top, Preview below"
-          aria-label="Use stacked preview layout"
+        <div
+          class="app-grid-view-controls"
+          id="view-controls-drawer"
+          role="group"
+          aria-label="Layout and theme controls"
         >
-          <svg viewBox="0 0 24 24" aria-hidden="true">
-            <rect x="3" y="3" width="8" height="7" rx="1"></rect>
-            <rect x="13" y="3" width="8" height="7" rx="1"></rect>
-            <rect x="3" y="12" width="18" height="9" rx="1"></rect>
-          </svg>
-        </button>
-        <button
-          class="layout-toggle"
-          id="layout-preview-right"
-          type="button"
-          data-app-grid-layout="preview-right"
-          aria-pressed="false"
-          title="Component + Styles on left, Preview on right"
-          aria-label="Use side preview layout"
-        >
-          <svg viewBox="0 0 24 24" aria-hidden="true">
-            <rect x="3" y="3" width="8" height="8" rx="1"></rect>
-            <rect x="3" y="13" width="8" height="8" rx="1"></rect>
-            <rect x="13" y="3" width="8" height="18" rx="1"></rect>
-          </svg>
-        </button>
-        <button
-          class="layout-toggle"
-          id="layout-preview-left"
-          type="button"
-          data-app-grid-layout="preview-left"
-          aria-pressed="false"
-          title="Preview on left, Component + Styles on right"
-          aria-label="Use left preview layout"
-        >
-          <svg viewBox="0 0 24 24" aria-hidden="true">
-            <rect x="3" y="3" width="8" height="18" rx="1"></rect>
-            <rect x="13" y="3" width="8" height="8" rx="1"></rect>
-            <rect x="13" y="13" width="8" height="8" rx="1"></rect>
-          </svg>
-        </button>
+          <div class="app-grid-layout-toggle-controls" role="group" aria-label="Layout">
+            <button
+              class="layout-toggle"
+              id="layout-default"
+              type="button"
+              data-app-grid-layout="default"
+              aria-pressed="true"
+              title="Component + Styles on top, Preview below"
+              aria-label="Use stacked preview layout"
+            >
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <rect x="3" y="3" width="8" height="7" rx="1"></rect>
+                <rect x="13" y="3" width="8" height="7" rx="1"></rect>
+                <rect x="3" y="12" width="18" height="9" rx="1"></rect>
+              </svg>
+            </button>
+            <button
+              class="layout-toggle"
+              id="layout-preview-right"
+              type="button"
+              data-app-grid-layout="preview-right"
+              aria-pressed="false"
+              title="Component + Styles on left, Preview on right"
+              aria-label="Use side preview layout"
+            >
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <rect x="3" y="3" width="8" height="8" rx="1"></rect>
+                <rect x="3" y="13" width="8" height="8" rx="1"></rect>
+                <rect x="13" y="3" width="8" height="18" rx="1"></rect>
+              </svg>
+            </button>
+            <button
+              class="layout-toggle"
+              id="layout-preview-left"
+              type="button"
+              data-app-grid-layout="preview-left"
+              aria-pressed="false"
+              title="Preview on left, Component + Styles on right"
+              aria-label="Use left preview layout"
+            >
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <rect x="3" y="3" width="8" height="18" rx="1"></rect>
+                <rect x="13" y="3" width="8" height="8" rx="1"></rect>
+                <rect x="13" y="13" width="8" height="8" rx="1"></rect>
+              </svg>
+            </button>
+          </div>
 
-        <div class="app-grid-theme-controls" role="group" aria-label="Theme">
-          <button
-            class="layout-toggle"
-            id="theme-dark"
-            type="button"
-            data-app-theme="dark"
-            aria-pressed="true"
-            title="Use dark theme"
-            aria-label="Use dark theme"
-          >
-            <svg viewBox="0 0 24 24" aria-hidden="true">
-              <path d="M21 13.5A8.5 8.5 0 1 1 10.5 3 6.8 6.8 0 0 0 21 13.5z"></path>
-            </svg>
-          </button>
-          <button
-            class="layout-toggle"
-            id="theme-light"
-            type="button"
-            data-app-theme="light"
-            aria-pressed="false"
-            title="Use light theme"
-            aria-label="Use light theme"
-          >
-            <svg viewBox="0 0 24 24" aria-hidden="true">
-              <circle cx="12" cy="12" r="4"></circle>
-              <path d="M12 2v3"></path>
-              <path d="M12 19v3"></path>
-              <path d="M2 12h3"></path>
-              <path d="M19 12h3"></path>
-              <path d="m4.93 4.93 2.12 2.12"></path>
-              <path d="m16.95 16.95 2.12 2.12"></path>
-              <path d="m19.07 4.93-2.12 2.12"></path>
-              <path d="m7.05 16.95-2.12 2.12"></path>
-            </svg>
-          </button>
+          <div class="app-grid-theme-controls" role="group" aria-label="Theme">
+            <button
+              class="layout-toggle"
+              id="theme-dark"
+              type="button"
+              data-app-theme="dark"
+              aria-pressed="true"
+              title="Use dark theme"
+              aria-label="Use dark theme"
+            >
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M21 13.5A8.5 8.5 0 1 1 10.5 3 6.8 6.8 0 0 0 21 13.5z"></path>
+              </svg>
+            </button>
+            <button
+              class="layout-toggle"
+              id="theme-light"
+              type="button"
+              data-app-theme="light"
+              aria-pressed="false"
+              title="Use light theme"
+              aria-label="Use light theme"
+            >
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <circle cx="12" cy="12" r="4"></circle>
+                <path d="M12 2v3"></path>
+                <path d="M12 19v3"></path>
+                <path d="M2 12h3"></path>
+                <path d="M19 12h3"></path>
+                <path d="m4.93 4.93 2.12 2.12"></path>
+                <path d="m16.95 16.95 2.12 2.12"></path>
+                <path d="m19.07 4.93-2.12 2.12"></path>
+                <path d="m7.05 16.95-2.12 2.12"></path>
+              </svg>
+            </button>
+          </div>
         </div>
       </div>
 

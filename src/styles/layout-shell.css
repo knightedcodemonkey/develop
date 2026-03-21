@@ -216,6 +216,33 @@
   align-items: center;
   justify-self: end;
   gap: 10px;
+  position: relative;
+}
+
+.app-grid-view-controls {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.app-grid-layout-top-controls {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.app-grid-layout-toggle-controls {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.app-grid-view-toggle {
+  display: none;
+}
+
+.app-grid-ai-toggle {
+  display: none;
 }
 
 .app-grid-theme-controls {
@@ -232,6 +259,74 @@
   margin-right: 8px;
   padding-right: 10px;
   border-right: 1px solid var(--border-subtle);
+}
+
+@media (max-width: 1090px) {
+  .app-grid-layout-controls {
+    display: inline-flex;
+    flex-direction: row;
+    align-items: center;
+    justify-content: flex-end;
+    justify-self: end;
+    flex-wrap: nowrap;
+    gap: 10px;
+    width: auto;
+  }
+
+  .app-grid-layout-top-controls {
+    justify-content: flex-end;
+    flex-wrap: nowrap;
+  }
+
+  .app-grid-diagnostics-controls {
+    margin-right: 0;
+    padding-right: 0;
+    border-right: none;
+  }
+
+  .app-grid-view-toggle {
+    display: inline-flex;
+  }
+
+  .app-grid-view-controls {
+    position: absolute;
+    top: calc(100% + 10px);
+    right: 0;
+    display: grid;
+    grid-template-columns: max-content max-content;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 12px;
+    border: 1px solid var(--border-subtle);
+    border-radius: 12px;
+    background: color-mix(in srgb, var(--surface-panel-header) 88%, transparent);
+    box-shadow: 0 14px 30px var(--shadow-elev-1);
+    backdrop-filter: blur(6px);
+    z-index: 60;
+  }
+
+  .app-grid-view-controls[hidden] {
+    display: none !important;
+  }
+
+  .app-grid-theme-controls {
+    margin-left: 0;
+    padding-left: 10px;
+  }
+
+  .app-grid-ai-controls {
+    justify-self: auto;
+    align-self: auto;
+    margin-right: 0;
+    padding-right: 0;
+    border-right: none;
+  }
+}
+
+@media (max-width: 900px) {
+  .app-grid-ai-toggle {
+    display: inline-flex;
+  }
 }
 
 .layout-toggle {
@@ -388,18 +483,9 @@
   }
 
   .app-grid-layout-controls {
-    justify-self: start;
-  }
-
-  .app-grid-theme-controls {
-    margin-left: 0;
-    padding-left: 0;
-    border-left: none;
-  }
-
-  .app-grid-diagnostics-controls {
-    margin-right: 0;
-    padding-right: 0;
-    border-right: none;
+    display: flex;
+    justify-self: stretch;
+    justify-content: flex-end;
+    width: 100%;
   }
 }
