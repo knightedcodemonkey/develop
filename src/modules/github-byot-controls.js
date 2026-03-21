@@ -56,6 +56,7 @@ export const createGitHubByotControls = ({
   repoSelect,
   repoWrap,
   onRepositoryChange,
+  onTokenChange,
   setStatus,
 }) => {
   if (!featureEnabled) {
@@ -90,6 +91,12 @@ export const createGitHubByotControls = ({
     if (addButtonResetTimer) {
       clearTimeout(addButtonResetTimer)
       addButtonResetTimer = null
+    }
+  }
+
+  const emitTokenChange = () => {
+    if (typeof onTokenChange === 'function') {
+      onTokenChange(savedToken)
     }
   }
 
@@ -214,6 +221,7 @@ export const createGitHubByotControls = ({
       option.dataset.owner = repo.owner
       option.dataset.name = repo.name
       option.dataset.defaultBranch = repo.defaultBranch
+      option.dataset.htmlUrl = repo.htmlUrl ?? ''
       option.selected = repo.fullName === selectedRepositoryFullName
       return option
     })
@@ -254,6 +262,7 @@ export const createGitHubByotControls = ({
       owner: selectedOption.dataset.owner ?? '',
       name: selectedOption.dataset.name ?? '',
       defaultBranch: selectedOption.dataset.defaultBranch ?? 'main',
+      htmlUrl: selectedOption.dataset.htmlUrl ?? '',
     })
   }
 
@@ -383,6 +392,7 @@ export const createGitHubByotControls = ({
     }
 
     savedToken = trimmedToken
+    emitTokenChange()
     setTokenFieldToMasked({ locked: true })
   }
 
@@ -412,6 +422,7 @@ export const createGitHubByotControls = ({
     clearSelectedRepository()
     lastSelectedRepository = null
     clearGitHubToken()
+    emitTokenChange()
     onRepositoryChange?.(null)
     syncSavedTokenUi()
     setStatus('GitHub token removed', 'neutral')
@@ -429,6 +440,7 @@ export const createGitHubByotControls = ({
 
   controlsRoot?.removeAttribute('hidden')
   syncSavedTokenUi()
+  emitTokenChange()
 
   if (savedToken) {
     setTokenFieldToMasked({ locked: true })
@@ -436,6 +448,7 @@ export const createGitHubByotControls = ({
       if (!result.ok) {
         savedToken = null
         clearGitHubToken()
+        emitTokenChange()
         syncSavedTokenUi()
       }
     })

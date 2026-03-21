@@ -103,6 +103,27 @@
               <option selected>Connect a token to load repositories</option>
             </select>
           </div>
+
+          <button
+            class="diagnostics-toggle ai-chat-toggle"
+            id="ai-chat-toggle"
+            type="button"
+            aria-expanded="false"
+            aria-controls="ai-chat-drawer"
+            hidden
+          >
+            <span
+              class="ai-chat-toggle__emoji ai-chat-toggle__emoji--dark"
+              aria-hidden="true"
+              >✨</span
+            >
+            <span
+              class="ai-chat-toggle__emoji ai-chat-toggle__emoji--light"
+              aria-hidden="true"
+              >🤖</span
+            >
+            <span>Chat</span>
+          </button>
         </div>
 
         <div class="app-grid-diagnostics-controls" role="group" aria-label="Diagnostics">
@@ -466,6 +487,54 @@
           <h3>Styles</h3>
           <div class="diagnostics-scope" id="diagnostics-styles"></div>
         </section>
+      </aside>
+
+      <aside class="ai-chat-drawer" id="ai-chat-drawer" hidden>
+        <div class="ai-chat-drawer__header">
+          <h2>AI Chat</h2>
+          <button
+            class="icon-button"
+            id="ai-chat-close"
+            type="button"
+            aria-label="Close AI chat drawer"
+            title="Close AI chat drawer"
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M6 6 18 18"></path>
+              <path d="M18 6 6 18"></path>
+            </svg>
+          </button>
+        </div>
+
+        <div class="ai-chat-drawer__meta">
+          <p class="ai-chat-drawer__repo" id="ai-chat-repository">
+            No repository selected
+          </p>
+          <p class="ai-chat-drawer__status" id="ai-chat-status" data-level="neutral">
+            Idle
+          </p>
+        </div>
+        <p class="ai-chat-drawer__rate" id="ai-chat-rate">Rate limit info unavailable</p>
+
+        <div class="ai-chat-messages" id="ai-chat-messages" aria-live="polite"></div>
+
+        <label class="sr-only" for="ai-chat-prompt">Ask AI assistant</label>
+        <textarea
+          class="ai-chat-prompt"
+          id="ai-chat-prompt"
+          rows="4"
+          placeholder="Ask about your selected repository context"
+        ></textarea>
+
+        <label class="ai-chat-context-toggle" for="ai-chat-include-editors">
+          <input type="checkbox" id="ai-chat-include-editors" checked />
+          Send JSX + CSS editor context
+        </label>
+
+        <div class="ai-chat-drawer__actions">
+          <button class="render-button" id="ai-chat-send" type="button">Send</button>
+          <button class="render-button" id="ai-chat-clear" type="button">Clear</button>
+        </div>
       </aside>
     </main>
 

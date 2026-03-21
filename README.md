@@ -41,6 +41,14 @@ browser acts as the runtime host for render, lint, and typecheck flows.
 
 - GitHub PAT setup and usage: [docs/byot.md](docs/byot.md)
 
+## Fine-Grained PAT Quick Setup
+
+For AI/BYOT flows, use a fine-grained GitHub PAT and follow the existing setup guide:
+
+- Full setup and behavior: [docs/byot.md](docs/byot.md)
+- Repository permissions screenshot: [docs/media/byot-repo-perms.png](docs/media/byot-repo-perms.png)
+- Models permission screenshot: [docs/media/byot-model-perms.png](docs/media/byot-model-perms.png)
+
 ## License
 
 MIT

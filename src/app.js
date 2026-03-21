@@ -8,6 +8,7 @@ import { createCodeMirrorEditor } from './modules/editor-codemirror.js'
 import { defaultCss, defaultJsx, defaultReactJsx } from './modules/defaults.js'
 import { createDiagnosticsUiController } from './modules/diagnostics-ui.js'
 import { isAiAssistantFeatureEnabled } from './modules/feature-flags.js'
+import { createGitHubChatDrawer } from './modules/github-chat-drawer.js'
 import { createGitHubByotControls } from './modules/github-byot-controls.js'
 import { createLayoutThemeController } from './modules/layout-theme.js'
 import { createLintDiagnosticsController } from './modules/lint-diagnostics.js'
@@ -24,6 +25,17 @@ const githubTokenAdd = document.getElementById('github-token-add')
 const githubTokenDelete = document.getElementById('github-token-delete')
 const githubRepoWrap = document.getElementById('github-repo-wrap')
 const githubRepoSelect = document.getElementById('github-repo-select')
+const aiChatToggle = document.getElementById('ai-chat-toggle')
+const aiChatDrawer = document.getElementById('ai-chat-drawer')
+const aiChatClose = document.getElementById('ai-chat-close')
+const aiChatClear = document.getElementById('ai-chat-clear')
+const aiChatPrompt = document.getElementById('ai-chat-prompt')
+const aiChatIncludeEditors = document.getElementById('ai-chat-include-editors')
+const aiChatSend = document.getElementById('ai-chat-send')
+const aiChatStatus = document.getElementById('ai-chat-status')
+const aiChatRate = document.getElementById('ai-chat-rate')
+const aiChatRepository = document.getElementById('ai-chat-repository')
+const aiChatMessages = document.getElementById('ai-chat-messages')
 const appGridLayoutButtons = document.querySelectorAll('[data-app-grid-layout]')
 const appThemeButtons = document.querySelectorAll('[data-app-theme]')
 const editorToolsButtons = document.querySelectorAll('[data-editor-tools-toggle]')
@@ -395,7 +407,31 @@ const {
 
 const aiAssistantFeatureEnabled = isAiAssistantFeatureEnabled()
 
-createGitHubByotControls({
+const githubAiContextState = {
+  token: null,
+  selectedRepository: null,
+}
+
+let chatDrawerController = {
+  setOpen: () => {},
+  setSelectedRepository: () => {},
+  dispose: () => {},
+}
+
+const syncAiChatTokenVisibility = token => {
+  const hasToken = typeof token === 'string' && token.trim().length > 0
+
+  if (hasToken) {
+    aiChatToggle?.removeAttribute('hidden')
+    return
+  }
+
+  aiChatToggle?.setAttribute('hidden', '')
+  aiChatToggle?.setAttribute('aria-expanded', 'false')
+  chatDrawerController.setOpen(false)
+}
+
+const byotControls = createGitHubByotControls({
   featureEnabled: aiAssistantFeatureEnabled,
   controlsRoot: githubAiControls,
   tokenInput: githubTokenInput,
@@ -404,8 +440,48 @@ createGitHubByotControls({
   tokenDeleteButton: githubTokenDelete,
   repoSelect: githubRepoSelect,
   repoWrap: githubRepoWrap,
-  onRepositoryChange: () => {},
+  onRepositoryChange: repository => {
+    githubAiContextState.selectedRepository = repository
+    chatDrawerController.setSelectedRepository(repository)
+  },
+  onTokenChange: token => {
+    githubAiContextState.token = token
+    syncAiChatTokenVisibility(token)
+  },
   setStatus,
+})
+
+githubAiContextState.selectedRepository = byotControls.getSelectedRepository()
+githubAiContextState.token = byotControls.getToken()
+
+const getCurrentGitHubToken = () => githubAiContextState.token ?? byotControls.getToken()
+
+const getCurrentSelectedRepository = () =>
+  githubAiContextState.selectedRepository ?? byotControls.getSelectedRepository()
+
+chatDrawerController = createGitHubChatDrawer({
+  featureEnabled: aiAssistantFeatureEnabled,
+  toggleButton: aiChatToggle,
+  drawer: aiChatDrawer,
+  closeButton: aiChatClose,
+  promptInput: aiChatPrompt,
+  includeEditorsContextToggle: aiChatIncludeEditors,
+  sendButton: aiChatSend,
+  clearButton: aiChatClear,
+  statusNode: aiChatStatus,
+  rateNode: aiChatRate,
+  repositoryNode: aiChatRepository,
+  messagesNode: aiChatMessages,
+  getToken: getCurrentGitHubToken,
+  getSelectedRepository: getCurrentSelectedRepository,
+  getComponentSource: () => getJsxSource(),
+  getStylesSource: () => getCssSource(),
+  getRenderMode: () => renderMode.value,
+  getStyleMode: () => styleMode.value,
+  getDrawerSide: () => {
+    const layout = getCurrentLayout()
+    return layout === 'preview-left' ? 'left' : 'right'
+  },
 })
 
 const getStyleEditorLanguage = mode => {
@@ -1048,12 +1124,14 @@ window.addEventListener('beforeunload', () => {
   clearComponentLintRecheckTimer()
   clearStylesLintRecheckTimer()
   lintDiagnostics.dispose()
+  chatDrawerController.dispose()
 })
 
 applyAppGridLayout(getInitialAppGridLayout(), { persist: false })
 applyTheme(getInitialTheme(), { persist: false })
 applyEditorToolsVisibility()
 applyPanelCollapseState()
+syncAiChatTokenVisibility(githubAiContextState.token)
 
 updateRenderButtonVisibility()
 renderDiagnosticsScope('component')

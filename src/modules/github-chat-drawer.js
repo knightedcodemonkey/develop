@@ -1,0 +1,445 @@
+import { requestGitHubChatCompletion, streamGitHubChatCompletion } from './github-api.js'
+
+const toChatText = value => {
+  if (typeof value !== 'string') {
+    return ''
+  }
+
+  return value.trim()
+}
+
+const toRepositoryLabel = repository => {
+  if (!repository || typeof repository !== 'object') {
+    return 'No repository selected'
+  }
+
+  if (typeof repository.fullName === 'string' && repository.fullName.trim()) {
+    return repository.fullName
+  }
+
+  return 'No repository selected'
+}
+
+const toRepositoryUrl = repository => {
+  if (!repository || typeof repository !== 'object') {
+    return ''
+  }
+
+  if (typeof repository.htmlUrl === 'string' && repository.htmlUrl.trim()) {
+    return repository.htmlUrl
+  }
+
+  if (typeof repository.fullName === 'string' && repository.fullName.trim()) {
+    return `https://github.com/${repository.fullName}`
+  }
+
+  return ''
+}
+
+export const createGitHubChatDrawer = ({
+  featureEnabled,
+  toggleButton,
+  drawer,
+  closeButton,
+  promptInput,
+  sendButton,
+  clearButton,
+  statusNode,
+  rateNode,
+  repositoryNode,
+  messagesNode,
+  includeEditorsContextToggle,
+  getToken,
+  getSelectedRepository,
+  getComponentSource,
+  getStylesSource,
+  getRenderMode,
+  getStyleMode,
+  getDrawerSide,
+}) => {
+  if (!featureEnabled) {
+    toggleButton?.setAttribute('hidden', '')
+    drawer?.setAttribute('hidden', '')
+
+    return {
+      setOpen: () => {},
+      isOpen: () => false,
+      setSelectedRepository: () => {},
+      dispose: () => {},
+    }
+  }
+
+  let open = false
+  let pendingAbortController = null
+  const messages = []
+
+  const stopPendingRequest = () => {
+    pendingAbortController?.abort()
+    pendingAbortController = null
+  }
+
+  const setOpen = nextOpen => {
+    open = nextOpen === true
+
+    if (!toggleButton || !drawer) {
+      return
+    }
+
+    const preferredSide = getDrawerSide?.() === 'left' ? 'left' : 'right'
+    drawer.classList.toggle('ai-chat-drawer--left', preferredSide === 'left')
+    drawer.classList.toggle('ai-chat-drawer--right', preferredSide !== 'left')
+
+    toggleButton.setAttribute('aria-expanded', open ? 'true' : 'false')
+    drawer.toggleAttribute('hidden', !open)
+
+    if (open && promptInput instanceof HTMLTextAreaElement) {
+      promptInput.focus()
+    }
+  }
+
+  const setChatStatus = (text, level = 'neutral') => {
+    if (!statusNode) {
+      return
+    }
+
+    statusNode.textContent = text
+    statusNode.dataset.level = level
+  }
+
+  const formatResetTime = resetEpochSeconds => {
+    if (!Number.isFinite(resetEpochSeconds)) {
+      return ''
+    }
+
+    const resetDate = new Date(Number(resetEpochSeconds) * 1000)
+    if (Number.isNaN(resetDate.getTime())) {
+      return ''
+    }
+
+    return `${resetDate.toISOString().slice(11, 16)} UTC`
+  }
+
+  const setRateMetadata = rateLimit => {
+    if (!rateNode) {
+      return
+    }
+
+    const remaining = Number.isFinite(rateLimit?.remaining) ? rateLimit.remaining : null
+    const resetText = formatResetTime(rateLimit?.resetEpochSeconds)
+
+    if (remaining === null) {
+      rateNode.textContent = 'Rate limit info unavailable'
+      return
+    }
+
+    if (resetText) {
+      rateNode.textContent = `Remaining ${remaining}, resets ${resetText}`
+      return
+    }
+
+    rateNode.textContent = `Remaining ${remaining}`
+  }
+
+  const syncRepositoryLabel = () => {
+    if (!repositoryNode) {
+      return
+    }
+
+    repositoryNode.textContent = toRepositoryLabel(getSelectedRepository?.())
+  }
+
+  const renderMessages = () => {
+    if (!messagesNode) {
+      return
+    }
+
+    messagesNode.replaceChildren()
+
+    if (messages.length === 0) {
+      const emptyNode = document.createElement('p')
+      emptyNode.className = 'ai-chat-empty'
+      emptyNode.textContent = 'Ask a question about your selected repository.'
+      messagesNode.append(emptyNode)
+      return
+    }
+
+    for (const message of messages) {
+      const item = document.createElement('article')
+      item.className = `ai-chat-message ai-chat-message--${message.role}`
+
+      const label = document.createElement('h3')
+      label.className = 'ai-chat-message__label'
+      label.textContent = message.role === 'assistant' ? 'Assistant' : 'You'
+      item.append(label)
+
+      const body = document.createElement('p')
+      body.className = 'ai-chat-message__body'
+      body.textContent = message.content
+      item.append(body)
+
+      if (message.level === 'error') {
+        item.classList.add('ai-chat-message--error')
+      }
+
+      messagesNode.append(item)
+    }
+
+    messagesNode.scrollTop = messagesNode.scrollHeight
+  }
+
+  const appendMessage = message => {
+    messages.push(message)
+    renderMessages()
+  }
+
+  const updateLastAssistantMessage = content => {
+    const lastMessage = messages[messages.length - 1]
+    if (!lastMessage || lastMessage.role !== 'assistant') {
+      return
+    }
+
+    lastMessage.content = content
+    renderMessages()
+  }
+
+  const collectConversation = () => {
+    return messages
+      .filter(message => message.role === 'user' || message.role === 'assistant')
+      .map(message => ({
+        role: message.role,
+        content: message.content,
+      }))
+  }
+
+  const collectRepositoryContext = () => {
+    const repository = getSelectedRepository?.()
+
+    const repositoryLabel = toRepositoryLabel(repository)
+    const repositoryUrl = toRepositoryUrl(repository)
+    const defaultBranch =
+      repository && typeof repository.defaultBranch === 'string'
+        ? repository.defaultBranch
+        : 'unknown'
+
+    const contextLines = [
+      'Selected repository context:',
+      `- Repository: ${repositoryLabel}`,
+      ...(repositoryUrl ? [`- Repository URL: ${repositoryUrl}`] : []),
+      `- Default branch: ${defaultBranch}`,
+      'Use this repository as the default target for the user request unless they explicitly override it.',
+    ]
+
+    return contextLines.join('\n')
+  }
+
+  const collectEditorContext = () => {
+    if (!(includeEditorsContextToggle instanceof HTMLInputElement)) {
+      return null
+    }
+
+    if (!includeEditorsContextToggle.checked) {
+      return null
+    }
+
+    const componentSource =
+      typeof getComponentSource === 'function' ? toChatText(getComponentSource()) : ''
+    const stylesSource =
+      typeof getStylesSource === 'function' ? toChatText(getStylesSource()) : ''
+
+    if (!componentSource && !stylesSource) {
+      return null
+    }
+
+    const renderMode =
+      typeof getRenderMode === 'function' ? toChatText(getRenderMode()) : ''
+    const styleMode = typeof getStyleMode === 'function' ? toChatText(getStyleMode()) : ''
+
+    return [
+      'Editor context:',
+      `- Render mode: ${renderMode || 'unknown'}`,
+      `- Style mode: ${styleMode || 'unknown'}`,
+      '',
+      'Component editor source (JSX/TSX):',
+      '```jsx',
+      componentSource || '(empty)',
+      '```',
+      '',
+      'Styles editor source:',
+      '```css',
+      stylesSource || '(empty)',
+      '```',
+    ].join('\n')
+  }
+
+  const setPendingState = isPending => {
+    if (sendButton instanceof HTMLButtonElement) {
+      sendButton.disabled = isPending
+    }
+
+    if (promptInput instanceof HTMLTextAreaElement) {
+      promptInput.disabled = isPending
+    }
+  }
+
+  const runChatRequest = async () => {
+    const prompt = toChatText(promptInput?.value)
+
+    if (!prompt) {
+      setChatStatus('Enter a prompt before sending.', 'error')
+      return
+    }
+
+    const token = getToken?.()
+    if (!token) {
+      setChatStatus('Add a GitHub token before starting chat.', 'error')
+      return
+    }
+
+    const repository = getSelectedRepository?.()
+    if (!repository?.fullName) {
+      setChatStatus('Select a writable repository before starting chat.', 'error')
+      return
+    }
+
+    stopPendingRequest()
+    pendingAbortController = new AbortController()
+
+    appendMessage({ role: 'user', content: prompt })
+    appendMessage({ role: 'assistant', content: '' })
+    if (promptInput instanceof HTMLTextAreaElement) {
+      promptInput.value = ''
+    }
+
+    setPendingState(true)
+    setChatStatus('Streaming response from GitHub...', 'pending')
+
+    const repositoryContext = collectRepositoryContext()
+    const editorContext = collectEditorContext()
+    const outboundMessages = [
+      { role: 'system', content: repositoryContext },
+      ...(editorContext ? [{ role: 'system', content: editorContext }] : []),
+      ...collectConversation(),
+    ]
+
+    let streamedContent = ''
+    let streamSucceeded = false
+
+    try {
+      const streamResult = await streamGitHubChatCompletion({
+        token,
+        messages: outboundMessages,
+        signal: pendingAbortController.signal,
+        onToken: tokenChunk => {
+          streamedContent += tokenChunk
+          updateLastAssistantMessage(streamedContent)
+        },
+      })
+
+      streamSucceeded = true
+      setChatStatus('Response streamed from GitHub.', 'ok')
+      setRateMetadata(streamResult?.rateLimit)
+    } catch (streamError) {
+      setRateMetadata(streamError?.rateLimit)
+      if (pendingAbortController.signal.aborted) {
+        setChatStatus('Chat request canceled.', 'neutral')
+        pendingAbortController = null
+        setPendingState(false)
+        return
+      }
+
+      setChatStatus(
+        'Streaming unavailable. Retrying with fallback response...',
+        'pending',
+      )
+    }
+
+    if (streamSucceeded) {
+      pendingAbortController = null
+      setPendingState(false)
+      return
+    }
+
+    try {
+      const fallbackResult = await requestGitHubChatCompletion({
+        token,
+        messages: outboundMessages,
+        signal: pendingAbortController.signal,
+      })
+
+      updateLastAssistantMessage(fallbackResult.content)
+      setChatStatus('Fallback response loaded.', 'ok')
+      setRateMetadata(fallbackResult.rateLimit)
+    } catch (fallbackError) {
+      const fallbackMessage =
+        fallbackError instanceof Error ? fallbackError.message : 'Chat request failed.'
+
+      setRateMetadata(fallbackError?.rateLimit)
+
+      updateLastAssistantMessage(fallbackMessage)
+      const lastMessage = messages[messages.length - 1]
+      if (lastMessage) {
+        lastMessage.level = 'error'
+      }
+      renderMessages()
+      setChatStatus(`Chat request failed: ${fallbackMessage}`, 'error')
+    } finally {
+      pendingAbortController = null
+      setPendingState(false)
+    }
+  }
+
+  toggleButton?.setAttribute('aria-expanded', 'false')
+  drawer?.setAttribute('hidden', '')
+  syncRepositoryLabel()
+  renderMessages()
+  setChatStatus('Idle', 'neutral')
+  setRateMetadata(null)
+
+  toggleButton?.addEventListener('click', () => {
+    setOpen(!open)
+  })
+
+  closeButton?.addEventListener('click', () => {
+    setOpen(false)
+  })
+
+  clearButton?.addEventListener('click', () => {
+    messages.length = 0
+    renderMessages()
+    setChatStatus('Chat cleared.', 'neutral')
+  })
+
+  sendButton?.addEventListener('click', () => {
+    void runChatRequest()
+  })
+
+  promptInput?.addEventListener('keydown', event => {
+    if (event.key !== 'Enter' || (!event.metaKey && !event.ctrlKey)) {
+      return
+    }
+
+    event.preventDefault()
+    void runChatRequest()
+  })
+
+  const onDocumentKeydown = event => {
+    if (event.key === 'Escape' && open) {
+      setOpen(false)
+    }
+  }
+
+  document.addEventListener('keydown', onDocumentKeydown)
+
+  return {
+    setOpen,
+    isOpen: () => open,
+    setSelectedRepository: () => {
+      syncRepositoryLabel()
+    },
+    dispose: () => {
+      stopPendingRequest()
+      setPendingState(false)
+      document.removeEventListener('keydown', onDocumentKeydown)
+    },
+  }
+}
