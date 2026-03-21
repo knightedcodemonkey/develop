@@ -504,6 +504,11 @@ const typeDiagnostics = createTypeDiagnosticsController({
   incrementTypeDiagnosticsRuns,
   decrementTypeDiagnosticsRuns,
   getActiveTypeDiagnosticsRuns,
+  onIssuesDetected: ({ issueCount }) => {
+    if (issueCount > 0) {
+      setDiagnosticsDrawerOpen(true)
+    }
+  },
 })
 
 const lintDiagnostics = createLintDiagnosticsController({
@@ -515,6 +520,11 @@ const lintDiagnostics = createLintDiagnosticsController({
   setComponentDiagnostics: setTypeDiagnosticsDetails,
   setStyleDiagnostics: setStyleDiagnosticsDetails,
   setStatus,
+  onIssuesDetected: ({ issueCount }) => {
+    if (issueCount > 0) {
+      setDiagnosticsDrawerOpen(true)
+    }
+  },
 })
 
 let activeComponentLintAbortController = null
@@ -544,7 +554,7 @@ const syncLintPendingState = () => {
   setLintDiagnosticsPending(componentLintPending || stylesLintPending)
 }
 
-const runComponentLint = async () => {
+const runComponentLint = async ({ userInitiated = false } = {}) => {
   activeComponentLintAbortController?.abort()
   const controller = new AbortController()
   activeComponentLintAbortController = controller
@@ -557,6 +567,7 @@ const runComponentLint = async () => {
   try {
     const result = await lintDiagnostics.lintComponent({
       signal: controller.signal,
+      userInitiated,
     })
     if (result) {
       lastComponentLintIssueCount = result.issueCount
@@ -570,7 +581,7 @@ const runComponentLint = async () => {
   }
 }
 
-const runStylesLint = async () => {
+const runStylesLint = async ({ userInitiated = false } = {}) => {
   activeStylesLintAbortController?.abort()
   const controller = new AbortController()
   activeStylesLintAbortController = controller
@@ -583,6 +594,7 @@ const runStylesLint = async () => {
   try {
     const result = await lintDiagnostics.lintStyles({
       signal: controller.signal,
+      userInitiated,
     })
     if (result) {
       lastStylesLintIssueCount = result.issueCount
@@ -901,17 +913,17 @@ if (diagnosticsClearAll) {
 }
 if (typecheckButton) {
   typecheckButton.addEventListener('click', () => {
-    typeDiagnostics.triggerTypeDiagnostics()
+    typeDiagnostics.triggerTypeDiagnostics({ userInitiated: true })
   })
 }
 if (lintComponentButton) {
   lintComponentButton.addEventListener('click', () => {
-    void runComponentLint()
+    void runComponentLint({ userInitiated: true })
   })
 }
 if (lintStylesButton) {
   lintStylesButton.addEventListener('click', () => {
-    void runStylesLint()
+    void runStylesLint({ userInitiated: true })
   })
 }
 renderButton.addEventListener('click', renderPreview)
