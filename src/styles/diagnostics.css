@@ -158,14 +158,6 @@
   z-index: 90;
 }
 
-@media (max-width: 1090px) {
-  .app-grid-diagnostics-controls {
-    margin-right: 0;
-    padding-right: 0;
-    border-right: none;
-  }
-}
-
 .diagnostics-drawer__header {
   display: flex;
   align-items: center;

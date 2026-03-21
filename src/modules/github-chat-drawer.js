@@ -72,6 +72,51 @@ export const createGitHubChatDrawer = ({
   let open = false
   let pendingAbortController = null
   const messages = []
+  let lastAssistantBodyNode = null
+  let pendingAssistantBodyText = null
+  let pendingAssistantFrameId = null
+
+  const cancelPendingAssistantBodyUpdate = () => {
+    if (pendingAssistantFrameId === null) {
+      return
+    }
+
+    cancelAnimationFrame(pendingAssistantFrameId)
+    pendingAssistantFrameId = null
+  }
+
+  const flushPendingAssistantBodyUpdate = () => {
+    pendingAssistantFrameId = null
+
+    if (pendingAssistantBodyText === null) {
+      return
+    }
+
+    if (lastAssistantBodyNode) {
+      lastAssistantBodyNode.textContent = pendingAssistantBodyText
+      if (messagesNode) {
+        messagesNode.scrollTop = messagesNode.scrollHeight
+      }
+      pendingAssistantBodyText = null
+      return
+    }
+
+    const nextText = pendingAssistantBodyText
+    pendingAssistantBodyText = null
+    updateLastAssistantMessage(nextText)
+  }
+
+  const scheduleAssistantBodyUpdate = content => {
+    pendingAssistantBodyText = content
+
+    if (pendingAssistantFrameId !== null) {
+      return
+    }
+
+    pendingAssistantFrameId = requestAnimationFrame(() => {
+      flushPendingAssistantBodyUpdate()
+    })
+  }
 
   const stopPendingRequest = () => {
     pendingAbortController?.abort()
@@ -153,6 +198,10 @@ export const createGitHubChatDrawer = ({
       return
     }
 
+    cancelPendingAssistantBodyUpdate()
+    pendingAssistantBodyText = null
+    lastAssistantBodyNode = null
+
     messagesNode.replaceChildren()
 
     if (messages.length === 0) {
@@ -163,7 +212,7 @@ export const createGitHubChatDrawer = ({
       return
     }
 
-    for (const message of messages) {
+    for (const [index, message] of messages.entries()) {
       const item = document.createElement('article')
       item.className = `ai-chat-message ai-chat-message--${message.role}`
 
@@ -176,6 +225,10 @@ export const createGitHubChatDrawer = ({
       body.className = 'ai-chat-message__body'
       body.textContent = message.content
       item.append(body)
+
+      if (message.role === 'assistant' && index === messages.length - 1) {
+        lastAssistantBodyNode = body
+      }
 
       if (message.level === 'error') {
         item.classList.add('ai-chat-message--error')
@@ -199,6 +252,12 @@ export const createGitHubChatDrawer = ({
     }
 
     lastMessage.content = content
+
+    if (lastAssistantBodyNode) {
+      scheduleAssistantBodyUpdate(content)
+      return
+    }
+
     renderMessages()
   }
 
@@ -302,7 +361,9 @@ export const createGitHubChatDrawer = ({
     }
 
     stopPendingRequest()
-    pendingAbortController = new AbortController()
+    const requestAbortController = new AbortController()
+    const requestSignal = requestAbortController.signal
+    pendingAbortController = requestAbortController
 
     appendMessage({ role: 'user', content: prompt })
     appendMessage({ role: 'assistant', content: '' })
@@ -328,7 +389,7 @@ export const createGitHubChatDrawer = ({
       const streamResult = await streamGitHubChatCompletion({
         token,
         messages: outboundMessages,
-        signal: pendingAbortController.signal,
+        signal: requestSignal,
         onToken: tokenChunk => {
           streamedContent += tokenChunk
           updateLastAssistantMessage(streamedContent)
@@ -340,10 +401,12 @@ export const createGitHubChatDrawer = ({
       setRateMetadata(streamResult?.rateLimit)
     } catch (streamError) {
       setRateMetadata(streamError?.rateLimit)
-      if (pendingAbortController.signal.aborted) {
-        setChatStatus('Chat request canceled.', 'neutral')
-        pendingAbortController = null
-        setPendingState(false)
+      if (requestSignal.aborted) {
+        if (pendingAbortController === requestAbortController) {
+          setChatStatus('Chat request canceled.', 'neutral')
+          pendingAbortController = null
+          setPendingState(false)
+        }
         return
       }
 
@@ -354,8 +417,10 @@ export const createGitHubChatDrawer = ({
     }
 
     if (streamSucceeded) {
-      pendingAbortController = null
-      setPendingState(false)
+      if (pendingAbortController === requestAbortController) {
+        pendingAbortController = null
+        setPendingState(false)
+      }
       return
     }
 
@@ -363,13 +428,20 @@ export const createGitHubChatDrawer = ({
       const fallbackResult = await requestGitHubChatCompletion({
         token,
         messages: outboundMessages,
-        signal: pendingAbortController.signal,
+        signal: requestSignal,
       })
 
       updateLastAssistantMessage(fallbackResult.content)
       setChatStatus('Fallback response loaded.', 'ok')
       setRateMetadata(fallbackResult.rateLimit)
     } catch (fallbackError) {
+      if (requestSignal.aborted) {
+        if (pendingAbortController === requestAbortController) {
+          setChatStatus('Chat request canceled.', 'neutral')
+        }
+        return
+      }
+
       const fallbackMessage =
         fallbackError instanceof Error ? fallbackError.message : 'Chat request failed.'
 
@@ -383,8 +455,10 @@ export const createGitHubChatDrawer = ({
       renderMessages()
       setChatStatus(`Chat request failed: ${fallbackMessage}`, 'error')
     } finally {
-      pendingAbortController = null
-      setPendingState(false)
+      if (pendingAbortController === requestAbortController) {
+        pendingAbortController = null
+        setPendingState(false)
+      }
     }
   }
 
@@ -404,8 +478,13 @@ export const createGitHubChatDrawer = ({
   })
 
   clearButton?.addEventListener('click', () => {
+    stopPendingRequest()
+    setPendingState(false)
+    cancelPendingAssistantBodyUpdate()
+    pendingAssistantBodyText = null
     messages.length = 0
     renderMessages()
+    setRateMetadata(null)
     setChatStatus('Chat cleared.', 'neutral')
   })
 
@@ -439,6 +518,8 @@ export const createGitHubChatDrawer = ({
     dispose: () => {
       stopPendingRequest()
       setPendingState(false)
+      cancelPendingAssistantBodyUpdate()
+      pendingAssistantBodyText = null
       document.removeEventListener('keydown', onDocumentKeydown)
     },
   }
