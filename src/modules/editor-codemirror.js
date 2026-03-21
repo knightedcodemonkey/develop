@@ -327,6 +327,21 @@ export const createCodeMirrorEditor = async ({
     state,
     parent,
   })
+  const toDocumentOffset = (line, column = 1) => {
+    const normalizedLine = Number.isInteger(line) ? line : Number(line)
+    const normalizedColumn = Number.isInteger(column) ? column : Number(column)
+
+    const lineNumber = Number.isFinite(normalizedLine)
+      ? Math.max(1, Math.min(normalizedLine, view.state.doc.lines))
+      : 1
+
+    const lineInfo = view.state.doc.line(lineNumber)
+    const columnOffset = Number.isFinite(normalizedColumn)
+      ? Math.max(0, normalizedColumn - 1)
+      : 0
+
+    return Math.min(lineInfo.from + columnOffset, lineInfo.to)
+  }
 
   return {
     getValue: () => view.state.doc.toString(),
@@ -347,6 +362,23 @@ export const createCodeMirrorEditor = async ({
       })
     },
     focus: () => view.focus(),
+    revealPosition: ({ line, column = 1 } = {}) => {
+      const anchor = toDocumentOffset(line, column)
+
+      view.dispatch({
+        selection: {
+          anchor,
+          head: anchor,
+        },
+        effects:
+          typeof runtime.EditorView.scrollIntoView === 'function'
+            ? runtime.EditorView.scrollIntoView(anchor, {
+                y: 'center',
+              })
+            : [],
+      })
+      view.focus()
+    },
     destroy: () => view.destroy(),
   }
 }

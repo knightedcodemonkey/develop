@@ -4,6 +4,7 @@ export const createDiagnosticsUiController = ({
   diagnosticsComponent,
   diagnosticsStyles,
   statusNode,
+  onNavigateDiagnostic = () => {},
 }) => {
   let statusLevel = 'neutral'
   let activeTypeDiagnosticsRuns = 0
@@ -11,6 +12,10 @@ export const createDiagnosticsUiController = ({
   let typeDiagnosticsPending = false
   let lintDiagnosticsPending = false
   let diagnosticsDrawerOpen = false
+  const activeDiagnosticByScope = {
+    component: null,
+    styles: null,
+  }
 
   const diagnosticsByScope = {
     component: {
@@ -131,6 +136,47 @@ export const createDiagnosticsUiController = ({
 
     const hasHeadline = typeof state.headline === 'string' && state.headline.length > 0
     const hasLines = Array.isArray(state.lines) && state.lines.length > 0
+    const parseDiagnosticsLine = entry => {
+      if (typeof entry === 'string') {
+        const match = entry.match(/^L(\d+)(?::(\d+))?\s+(.*)$/)
+        if (match) {
+          return {
+            line: Number(match[1]),
+            column: match[2] ? Number(match[2]) : null,
+            message: match[3],
+          }
+        }
+
+        return {
+          line: null,
+          column: null,
+          message: entry,
+        }
+      }
+
+      if (entry && typeof entry === 'object') {
+        const line = Number.isFinite(entry.line) ? Number(entry.line) : null
+        const column = Number.isFinite(entry.column) ? Number(entry.column) : null
+        const message =
+          typeof entry.message === 'string' && entry.message.length > 0
+            ? entry.message
+            : typeof entry.text === 'string' && entry.text.length > 0
+              ? entry.text
+              : 'Unknown diagnostic'
+
+        return {
+          line,
+          column,
+          message,
+        }
+      }
+
+      return {
+        line: null,
+        column: null,
+        message: 'Unknown diagnostic',
+      }
+    }
 
     if (!hasHeadline && !hasLines) {
       const emptyNode = document.createElement('div')
@@ -154,9 +200,109 @@ export const createDiagnosticsUiController = ({
     if (hasLines) {
       const listNode = document.createElement('ol')
       listNode.className = 'type-diagnostics-list'
-      for (const line of state.lines) {
+      const normalizedLines = state.lines.map(parseDiagnosticsLine)
+
+      if (
+        activeDiagnosticByScope[scope] !== null &&
+        activeDiagnosticByScope[scope] >= normalizedLines.length
+      ) {
+        activeDiagnosticByScope[scope] = null
+      }
+
+      for (const [index, line] of normalizedLines.entries()) {
         const itemNode = document.createElement('li')
-        itemNode.textContent = line
+        const locationText = line.line
+          ? `L${line.line}${line.column ? `:${line.column}` : ''}`
+          : null
+        const isJumpTarget =
+          Number.isInteger(line.line) &&
+          line.line > 0 &&
+          typeof onNavigateDiagnostic === 'function'
+
+        if (isJumpTarget) {
+          const button = document.createElement('button')
+          button.type = 'button'
+          button.className = 'diagnostic-line-button'
+          button.dataset.diagnosticScope = scope
+          button.dataset.diagnosticIndex = String(index)
+          button.dataset.diagnosticLine = String(line.line)
+          button.dataset.diagnosticColumn = String(line.column ?? 1)
+
+          if (activeDiagnosticByScope[scope] === index) {
+            button.classList.add('diagnostic-line-button--active')
+            button.setAttribute('aria-current', 'true')
+          }
+
+          if (locationText) {
+            const locationNode = document.createElement('span')
+            locationNode.className = 'diagnostic-line-location'
+            locationNode.textContent = locationText
+            button.append(locationNode)
+          }
+
+          const messageNode = document.createElement('span')
+          messageNode.className = 'diagnostic-line-message'
+          messageNode.textContent = line.message
+          button.append(messageNode)
+
+          button.addEventListener('click', () => {
+            activeDiagnosticByScope[scope] = index
+            renderDiagnosticsScope(scope)
+            onNavigateDiagnostic({
+              scope,
+              line: line.line,
+              column: line.column ?? 1,
+            })
+          })
+
+          button.addEventListener('keydown', event => {
+            const isArrowDown = event.key === 'ArrowDown'
+            const isArrowUp = event.key === 'ArrowUp'
+            const isEnter = event.key === 'Enter'
+
+            if (isEnter) {
+              event.preventDefault()
+              button.click()
+              return
+            }
+
+            if (!isArrowDown && !isArrowUp) {
+              return
+            }
+
+            event.preventDefault()
+
+            const jumpButtons = [
+              ...root.querySelectorAll('.diagnostic-line-button[data-diagnostic-index]'),
+            ]
+            const currentIndex = jumpButtons.indexOf(button)
+            if (currentIndex === -1) {
+              return
+            }
+
+            const targetIndex = isArrowDown
+              ? Math.min(currentIndex + 1, jumpButtons.length - 1)
+              : Math.max(currentIndex - 1, 0)
+
+            jumpButtons[targetIndex]?.focus()
+          })
+
+          itemNode.append(button)
+        } else {
+          if (locationText) {
+            const locationNode = document.createElement('span')
+            locationNode.className = 'diagnostic-line-location'
+            locationNode.textContent = locationText
+            itemNode.append(locationNode)
+            itemNode.append(document.createTextNode(' '))
+          }
+
+          const messageNode = document.createElement('span')
+          messageNode.className = 'diagnostic-line-message'
+          messageNode.textContent = line.message
+          itemNode.append(messageNode)
+        }
+
         listNode.append(itemNode)
       }
       root.append(listNode)
@@ -210,6 +356,7 @@ export const createDiagnosticsUiController = ({
       lines,
       level,
     }
+    activeDiagnosticByScope[scope] = null
 
     renderDiagnosticsScope(scope)
     updateDiagnosticsToggleLabel()

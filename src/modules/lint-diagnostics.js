@@ -46,21 +46,9 @@ const normalizeLintDiagnostic = diagnostic => {
   }
 }
 
-const formatLintDiagnosticLine = diagnostic => {
-  const normalized = normalizeLintDiagnostic(diagnostic)
-  const linePrefix =
-    normalized.line && normalized.column
-      ? `L${normalized.line}:${normalized.column}`
-      : normalized.line
-        ? `L${normalized.line}`
-        : null
-
-  const ruleSuffix = normalized.ruleId ? ` (${normalized.ruleId})` : ''
-  if (!linePrefix) {
-    return `${normalized.message}${ruleSuffix}`
-  }
-
-  return `${linePrefix} ${normalized.message}${ruleSuffix}`
+const formatLintDiagnosticMessage = diagnostic => {
+  const ruleSuffix = diagnostic.ruleId ? ` (${diagnostic.ruleId})` : ''
+  return `${diagnostic.message}${ruleSuffix}`
 }
 
 const buildLintDiagnosticsSummary = ({ diagnostics, okHeadline, errorHeadline }) => {
@@ -75,7 +63,11 @@ const buildLintDiagnosticsSummary = ({ diagnostics, okHeadline, errorHeadline })
 
   return {
     headline: errorHeadline,
-    lines: normalized.map(formatLintDiagnosticLine),
+    lines: normalized.map(diagnostic => ({
+      line: diagnostic.line,
+      column: diagnostic.column,
+      message: formatLintDiagnosticMessage(diagnostic),
+    })),
     level: 'error',
   }
 }

@@ -269,16 +269,61 @@ export const createTypeDiagnosticsController = ({
 
   const formatTypeDiagnostic = (compiler, diagnostic) => {
     const message = flattenTypeDiagnosticMessage(compiler, diagnostic.messageText)
+    const code = Number.isFinite(diagnostic.code) ? `TS${diagnostic.code}` : 'TS'
+    const formattedMessage = `${code}: ${message}`
 
     if (!diagnostic.file || typeof diagnostic.start !== 'number') {
-      return `TS${diagnostic.code}: ${message}`
+      return {
+        message: formattedMessage,
+      }
     }
 
     const position = diagnostic.file.getLineAndCharacterOfPosition(diagnostic.start)
-    return `L${position.line + 1}:${position.character + 1} TS${diagnostic.code}: ${message}`
+    return {
+      line: position.line + 1,
+      column: position.character + 1,
+      message: formattedMessage,
+    }
   }
 
-  const fetchTextFromUrls = async (urls, errorPrefix) => {
+  const fetchTextFromUrls = async (
+    urls,
+    errorPrefix,
+    { orderedFallback = false } = {},
+  ) => {
+    if (orderedFallback) {
+      const tryUrlAt = async (index, failures = []) => {
+        if (index >= urls.length) {
+          const reasons = failures
+            .slice(0, 3)
+            .map(reason => (reason instanceof Error ? reason.message : String(reason)))
+          const reasonSummary = reasons.length ? ` Causes: ${reasons.join(' | ')}` : ''
+
+          throw new Error(
+            `${errorPrefix}: Tried URLs: ${urls.join(', ')}.${reasonSummary}`,
+            {
+              cause: failures.at(-1),
+            },
+          )
+        }
+
+        const url = urls[index]
+
+        try {
+          const response = await fetch(url)
+          if (!response.ok) {
+            throw new Error(`HTTP ${response.status} from ${url}`)
+          }
+
+          return response.text()
+        } catch (error) {
+          return tryUrlAt(index + 1, [...failures, error])
+        }
+      }
+
+      return tryUrlAt(0)
+    }
+
     const attempts = urls.map(async url => {
       const response = await fetch(url)
       if (!response.ok) {
@@ -407,6 +452,9 @@ export const createTypeDiagnosticsController = ({
         const sourceText = await fetchTextFromUrls(
           getTypePackageFileUrlsWithProvider(packageName, candidateFileName),
           `Unable to fetch type declaration ${packageName}/${candidateFileName}`,
+          {
+            orderedFallback: true,
+          },
         )
 
         return {
@@ -464,6 +512,9 @@ export const createTypeDiagnosticsController = ({
         const manifestText = await fetchTextFromUrls(
           getTypePackageManifestUrls(packageName),
           `Unable to fetch type package manifest ${packageName}`,
+          {
+            orderedFallback: true,
+          },
         )
         const manifest = JSON.parse(manifestText)
         packageManifestByName.set(packageName, manifest)

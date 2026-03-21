@@ -1,75 +1,78 @@
-# Forget The Build Step: Building A Compiler-as-a-Service Playground
+# Forget The Build Step: A Browser-Native IDE For JSX + CSS
 
-In modern frontend development, we have normalized a heavy local setup cost. Want JSX and modern CSS dialects? Install a large dependency graph, start a dev server, and wait for transpilation loops before you can really iterate.
+Frontend tooling has become incredibly capable.
 
-I wanted to test a different path: what if we removed the terminal from the inner loop?
+It has also become very heavy.
 
-That experiment became @knighted/develop, a browser-native playground that treats your tab as a real-time compiler host.
+For many UI experiments, the first thing you do is not write code. You install dependencies, run a dev server, wait for transforms, and only then start iterating.
 
-## The Core Idea
+I wanted to try a different baseline:
 
-Most playgrounds rely on a backend build service. @knighted/develop flips that model:
+What if the browser is the dev environment?
 
-- JSX compilation and execution happen in the browser.
-- CSS transforms (including CSS Modules, Less, and Sass) run in the browser.
-- Compilers are loaded on demand from CDN sources.
+That idea became [@knighted/develop](https://github.com/knightedcodemonkey/develop).
 
-The result is a development loop that feels direct: type, compile, render, repeat.
+It is a lightweight in-browser IDE built to showcase [@knighted/jsx](https://github.com/knightedcodemonkey/jsx) and [@knighted/css](https://github.com/knightedcodemonkey/css), with dependencies delivered over CDN ESM instead of requiring a local build step in the inner loop.
 
-## The Stack Behind It
+## The Loop, In Practice
 
-Two libraries power the runtime:
+Open a page, write JSX and styles, switch rendering/style modes, run lint/typecheck, and see results immediately.
 
-- @knighted/jsx: JSX that resolves to real DOM nodes.
-  - No virtual DOM requirement.
-  - You can use declarative JSX and imperative DOM APIs in the same flow.
-- @knighted/css: A browser-capable CSS compiler pipeline.
-  - Supports native CSS, CSS Modules, Less, and Sass.
-  - Uses WASM-backed tooling for modern transforms.
+No local bundler needed for that loop.
 
-Under the hood, the app leans on CDN resolution and lazy loading, so it fetches compiler/runtime pieces only when a mode needs them.
+## What Makes It Fun To Use
 
-## Why "Compiler-as-a-Service"?
+The app is intentionally practical, not just a demo shell:
 
-Compiler-as-a-Service here does not mean a remote build cluster.
+- Render mode switch: DOM or React
+- Style mode switch: CSS, CSS Modules, Less, Sass
+- Live preview with ShadowRoot toggle
+- In-browser lint and type diagnostics
+- Diagnostics drawer with jump-to-line navigation (mouse or keyboard)
 
-It means the service boundary is split between:
+So it is not only "can this compile?" It is closer to "can I actually iterate on a component quickly?"
 
-- global CDN infrastructure (module and WASM delivery), and
-- the user device (actual compilation and execution).
+## Why `@knighted/jsx` + `@knighted/css` Matter Here
 
-If you switch into Sass mode, the browser loads Sass support. If you stay in native CSS mode, it does not pay that cost. The compiler behaves like an on-demand service, but the work stays local to the tab.
+`@knighted/develop` is primarily a showcase app.
 
-## What This Enables
+It demonstrates how these libraries behave in a real authoring environment:
 
-- Fast feedback loops
-  - Rendering updates track edits with minimal overhead.
-- Mixed declarative and imperative workflows
-  - Useful for low-level UI experiments and DOM-heavy component prototypes.
-- Isolation testing with ShadowRoot
-  - Toggle encapsulation to verify style boundary behavior.
-- Zero install inner loop
-  - Open a page and start building.
+- `@knighted/jsx` gives you a direct path from JSX to rendered output, including DOM-first workflows.
+- `@knighted/css` handles modern style pipelines in-browser, including Modules/Less/Sass.
+
+Using both together in one interface makes the bigger point obvious: modern browsers can do much more of the compile/authoring cycle than we usually ask them to.
+
+## "Compiler-as-a-Service" Without A Backend Build Farm
+
+In this project, Compiler-as-a-Service means:
+
+- CDN handles module and WASM delivery.
+- The browser tab does the actual compile, lint, typecheck, and render work.
+
+It is service-oriented distribution, local execution.
+
+And because loading is mode-aware, you only pay for what you use. If you never touch Sass, you never load Sass.
 
 ## Why This Matters
 
-The point is not to replace every production build pipeline.
+This is not trying to replace production pipelines.
 
-The point is to prove a stronger baseline: modern browsers are now capable enough to host substantial parts of the authoring and compile cycle directly, without defaulting to local toolchain setup for every experiment.
+It is about lowering the cost of exploration.
 
-For prototyping and component iteration, that changes the cost model dramatically.
+When the setup tax drops, you try more ideas. When feedback is instant, you discover faster. And when the browser is the platform, sharing a repro can be as easy as sharing a URL.
+
+For prototyping and component iteration, that is a meaningful shift.
 
 ## Try It
 
-- Live playground: https://knightedcodemonkey.github.io/develop/
-- Source repository: https://github.com/knightedcodemonkey/develop
+- Live IDE: https://knightedcodemonkey.github.io/develop/
+- Source: https://github.com/knightedcodemonkey/develop
 
-## Notes For Publishing
+If you are curious, start by toggling:
 
-If you post this on Medium (or similar), include a short screen recording that shows:
+1. DOM -> React render mode
+2. CSS -> Modules -> Less -> Sass style mode
+3. ShadowRoot on/off
 
-- switching style modes (CSS -> Modules -> Less -> Sass),
-- toggling ShadowRoot on and off, and
-- immediate preview updates while typing.
-
-That visual sequence communicates the Compiler-as-a-Service model faster than any architecture diagram.
+That sequence tells the story better than any architecture diagram.
