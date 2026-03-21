@@ -280,12 +280,88 @@ const togglePanelCollapse = panelName => {
   applyPanelCollapseState()
 }
 
+const toTextareaOffset = (source, line, column = 1) => {
+  if (typeof source !== 'string' || source.length === 0) {
+    return 0
+  }
+
+  const targetLine = Number.isFinite(line) ? Math.max(1, Number(line)) : 1
+  const targetColumn = Number.isFinite(column) ? Math.max(1, Number(column)) : 1
+
+  let currentLine = 1
+  let lineStartOffset = 0
+
+  for (let index = 0; index < source.length; index += 1) {
+    if (currentLine === targetLine) {
+      lineStartOffset = index
+      break
+    }
+
+    if (source[index] === '\n') {
+      currentLine += 1
+      lineStartOffset = index + 1
+    }
+  }
+
+  const nextNewlineOffset = source.indexOf('\n', lineStartOffset)
+  const lineEndOffset = nextNewlineOffset === -1 ? source.length : nextNewlineOffset
+  return Math.min(lineStartOffset + targetColumn - 1, lineEndOffset)
+}
+
+const navigateToComponentDiagnostic = ({ line, column }) => {
+  if (jsxCodeEditor && typeof jsxCodeEditor.revealPosition === 'function') {
+    jsxCodeEditor.revealPosition({ line, column })
+    return
+  }
+
+  if (!(jsxEditor instanceof HTMLTextAreaElement)) {
+    return
+  }
+
+  const source = jsxEditor.value
+  const offset = toTextareaOffset(source, line, column)
+  jsxEditor.focus()
+  jsxEditor.setSelectionRange(offset, offset)
+}
+
+const navigateToStylesDiagnostic = ({ line, column }) => {
+  if (cssCodeEditor && typeof cssCodeEditor.revealPosition === 'function') {
+    cssCodeEditor.revealPosition({ line, column })
+    return
+  }
+
+  if (!(cssEditor instanceof HTMLTextAreaElement)) {
+    return
+  }
+
+  const source = cssEditor.value
+  const offset = toTextareaOffset(source, line, column)
+  cssEditor.focus()
+  cssEditor.setSelectionRange(offset, offset)
+}
+
 const diagnosticsUi = createDiagnosticsUiController({
   diagnosticsToggle,
   diagnosticsDrawer,
   diagnosticsComponent,
   diagnosticsStyles,
   statusNode,
+  onNavigateDiagnostic: diagnostic => {
+    if (diagnostic?.scope === 'component') {
+      navigateToComponentDiagnostic({
+        line: diagnostic.line,
+        column: diagnostic.column,
+      })
+      return
+    }
+
+    if (diagnostic?.scope === 'styles') {
+      navigateToStylesDiagnostic({
+        line: diagnostic.line,
+        column: diagnostic.column,
+      })
+    }
+  },
 })
 
 const {

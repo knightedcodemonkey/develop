@@ -29,6 +29,14 @@ const setStylesEditorSource = async (page: Page, source: string) => {
   await editorContent.fill(source)
 }
 
+const getActiveComponentEditorLineNumber = async (page: Page) => {
+  return page
+    .locator('#component-panel .cm-activeLineGutter')
+    .first()
+    .innerText()
+    .then(text => text.trim())
+}
+
 const runTypecheck = async (page: Page) => {
   await ensurePanelToolsVisible(page, 'component')
   await page.locator('#typecheck-button').click()
@@ -37,6 +45,19 @@ const runTypecheck = async (page: Page) => {
 const runComponentLint = async (page: Page) => {
   await ensurePanelToolsVisible(page, 'component')
   await page.locator('#lint-component-button').click()
+}
+
+const runStylesLint = async (page: Page) => {
+  await ensurePanelToolsVisible(page, 'styles')
+  await page.locator('#lint-styles-button').click()
+}
+
+const getActiveStylesEditorLineNumber = async (page: Page) => {
+  return page
+    .locator('#styles-panel .cm-activeLineGutter')
+    .first()
+    .innerText()
+    .then(text => text.trim())
 }
 
 const getCollapseButton = (page: Page, panelName: 'component' | 'styles' | 'preview') =>
@@ -750,6 +771,73 @@ test('typecheck error reports diagnostics count in button and details in drawer'
   await expect(page.locator('#diagnostics-component')).toContainText('TS')
 })
 
+test('component diagnostics rows navigate editor to reported line', async ({ page }) => {
+  await waitForInitialRender(page)
+
+  await setComponentEditorSource(
+    page,
+    [
+      "const brokenCount: number = 'oops'",
+      'const App = () => <button>{brokenCount.toUpperCase()}</button>',
+    ].join('\n'),
+  )
+
+  await runTypecheck(page)
+
+  await expect(page.locator('#diagnostics-toggle')).toHaveClass(
+    /diagnostics-toggle--error/,
+  )
+  await page.locator('#diagnostics-toggle').click()
+
+  const targetDiagnostic = page
+    .locator('#diagnostics-component .diagnostic-line-button[data-diagnostic-line="2"]')
+    .first()
+  await expect(targetDiagnostic).toBeVisible()
+
+  await targetDiagnostic.click()
+  await expect(targetDiagnostic).toHaveClass(/diagnostic-line-button--active/)
+  await expect.poll(() => getActiveComponentEditorLineNumber(page)).toBe('2')
+})
+
+test('component diagnostics support arrow navigation and enter jump', async ({
+  page,
+}) => {
+  await waitForInitialRender(page)
+
+  await setComponentEditorSource(
+    page,
+    [
+      "const broken: number = 'oops'",
+      'const App = () => <button>{missingName}</button>',
+    ].join('\n'),
+  )
+
+  await runTypecheck(page)
+  await expect(page.locator('#diagnostics-toggle')).toHaveClass(
+    /diagnostics-toggle--error/,
+  )
+
+  await page.locator('#diagnostics-toggle').click()
+
+  const firstDiagnostic = page
+    .locator('#diagnostics-component .diagnostic-line-button')
+    .first()
+  const secondDiagnostic = page
+    .locator('#diagnostics-component .diagnostic-line-button')
+    .nth(1)
+
+  await expect(firstDiagnostic).toBeVisible()
+  await expect(secondDiagnostic).toBeVisible()
+
+  await firstDiagnostic.focus()
+  await firstDiagnostic.press('ArrowDown')
+  await expect(secondDiagnostic).toBeFocused()
+
+  await secondDiagnostic.press('Enter')
+  await expect(secondDiagnostic).toHaveClass(/diagnostic-line-button--active/)
+  await expect.poll(() => getActiveComponentEditorLineNumber(page)).toBe('2')
+})
+
 test('component lint error reports diagnostics count and details', async ({ page }) => {
   await waitForInitialRender(page)
 
@@ -770,6 +858,32 @@ test('component lint error reports diagnostics count and details', async ({ page
   await expect(page.locator('#diagnostics-component')).toContainText(
     'Biome reported issues.',
   )
+})
+
+test('styles diagnostics rows navigate editor to reported line', async ({ page }) => {
+  await waitForInitialRender(page)
+
+  await ensurePanelToolsVisible(page, 'styles')
+  await setStylesEditorSource(
+    page,
+    ['.card {', '  color: red', '  color: blue;', '}'].join('\n'),
+  )
+
+  await runStylesLint(page)
+
+  await expect(page.locator('#diagnostics-toggle')).toHaveClass(
+    /diagnostics-toggle--error/,
+  )
+  await page.locator('#diagnostics-toggle').click()
+
+  const targetDiagnostic = page
+    .locator('#diagnostics-styles .diagnostic-line-button[data-diagnostic-line="3"]')
+    .first()
+  await expect(targetDiagnostic).toBeVisible()
+
+  await targetDiagnostic.click()
+  await expect(targetDiagnostic).toHaveClass(/diagnostic-line-button--active/)
+  await expect.poll(() => getActiveStylesEditorLineNumber(page)).toBe('3')
 })
 
 test('clear component diagnostics resets rendered lint-issue status pill', async ({

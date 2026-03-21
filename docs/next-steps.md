@@ -16,8 +16,6 @@ Focused follow-up work for `@knighted/develop`.
      - "Audit the current Biome lint rules used by `@knighted/develop`, propose and apply a refined rule profile for component/styles linting, and add/update Playwright coverage to keep diagnostics UX stable under the new rules. Preserve intentional suppressions only when justified and document the reasoning. Validate with `npm run lint`, `npm run build:esm`, and targeted lint diagnostics Playwright tests."
 
 2. **In-browser component type checking**
-   - Add editor-linked diagnostics navigation so each issue can jump to the exact line/column in the component source.
-   - Surface line/column context directly in the diagnostics UI (not just message text) to speed up triage.
    - Prioritize first-run performance improvements in CDN/type graph hydration (request ordering, cache reuse, and avoiding redundant fetches) before deeper host refactors.
    - Continue improving warm-run typecheck performance for large sources while keeping the preview loop non-blocking.
 

@@ -29,8 +29,8 @@
 
 .type-diagnostics-list {
   margin: 8px 0 0;
-  padding-left: 0;
-  list-style-position: inside;
+  padding-left: 35px;
+  list-style-position: outside;
 }
 
 .type-diagnostics-list li {
@@ -39,6 +39,45 @@
   font-family: 'JetBrains Mono', 'Fira Code', monospace;
   font-size: 0.8rem;
   line-height: 1.4;
+}
+
+.diagnostic-line-button {
+  width: auto;
+  max-width: 100%;
+  display: inline-flex;
+  align-items: baseline;
+  gap: 8px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  padding: 2px 4px;
+  border-radius: 6px;
+  cursor: pointer;
+  font: inherit;
+}
+
+.diagnostic-line-button:hover {
+  background: color-mix(in srgb, var(--accent) 14%, transparent);
+}
+
+.diagnostic-line-button:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+.diagnostic-line-button--active {
+  background: color-mix(in srgb, var(--accent) 20%, transparent);
+}
+
+.diagnostic-line-location {
+  display: inline-block;
+  color: var(--text-muted);
+  font-weight: 700;
+}
+
+.diagnostic-line-message {
+  flex: 1;
 }
 
 .diagnostics-toggle {
@@ -107,7 +146,7 @@
   position: fixed;
   top: 82px;
   right: 18px;
-  width: min(480px, calc(100vw - 24px));
+  width: min(580px, calc(100vw - 24px));
   max-height: min(72vh, 760px);
   padding: 14px 14px 12px;
   border: 1px solid var(--border-subtle);

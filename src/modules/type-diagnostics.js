@@ -269,13 +269,21 @@ export const createTypeDiagnosticsController = ({
 
   const formatTypeDiagnostic = (compiler, diagnostic) => {
     const message = flattenTypeDiagnosticMessage(compiler, diagnostic.messageText)
+    const code = Number.isFinite(diagnostic.code) ? `TS${diagnostic.code}` : 'TS'
+    const formattedMessage = `${code}: ${message}`
 
     if (!diagnostic.file || typeof diagnostic.start !== 'number') {
-      return `TS${diagnostic.code}: ${message}`
+      return {
+        message: formattedMessage,
+      }
     }
 
     const position = diagnostic.file.getLineAndCharacterOfPosition(diagnostic.start)
-    return `L${position.line + 1}:${position.character + 1} TS${diagnostic.code}: ${message}`
+    return {
+      line: position.line + 1,
+      column: position.character + 1,
+      message: formattedMessage,
+    }
   }
 
   const fetchTextFromUrls = async (
