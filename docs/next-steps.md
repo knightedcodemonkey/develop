@@ -18,3 +18,19 @@ Focused follow-up work for `@knighted/develop`.
    - Ensure the deterministic lane still exercises the same user-facing flows (render, typecheck, lint, diagnostics drawer/button states), only swapping the source of runtime artifacts.
    - Suggested implementation prompt:
      - "Add a deterministic E2E execution mode for `@knighted/develop` that serves pinned runtime artifacts locally (instead of live CDN fetches) and wire it into CI as a required check on every PR. Keep a separate lightweight CDN-smoke E2E check for real-network coverage. Validate with `npm run lint`, deterministic Playwright PR checks, and one CDN-smoke Playwright run."
+
+4. **Issue #18 continuation (resume from Phase 2)**
+   - Continue the GitHub AI assistant rollout after completed Phases 0-1:
+     - Phase 0 complete: feature flag + scaffolding.
+     - Phase 1 complete: BYOT token flow, localStorage persistence, writable repo discovery/filtering.
+   - Implement the next slice first:
+     - Phase 2: chat drawer UX with streaming responses first, plus non-streaming fallback.
+     - Add selected repository state plumbing now so Phase 4 (PR write flow) can reuse it.
+     - Add README documentation for fine-grained PAT setup (reuse existing screenshots referenced in docs/byot.md).
+   - Keep behavior and constraints aligned with current implementation:
+     - Keep everything behind the existing browser-only AI feature flag.
+     - Preserve BYOT token semantics (localStorage persistence until user deletes).
+     - Keep CDN-first runtime behavior and existing fallback model.
+     - Do not add dependencies without explicit approval.
+   - Suggested implementation prompt:
+     - "Continue Issue #18 in @knighted/develop from the current Phase 1 baseline. Implement Phase 2 by adding a separate AI chat drawer with streaming response rendering (primary) and a non-streaming fallback path. Wire selected repository state as shared app state for upcoming Phase 4 PR actions. Update README with a concise fine-grained PAT setup section that links to existing BYOT screenshot assets/docs. Keep all AI/BYOT UI and behavior behind the existing browser-only feature flag, preserve current token persistence and repo filtering behavior, and validate with npm run lint plus targeted Playwright coverage for chat drawer visibility, streaming/fallback behavior, and repo-context selection plumbing."

@@ -4,11 +4,15 @@ import type { Page } from '@playwright/test'
 const webServerMode = process.env.PLAYWRIGHT_WEB_SERVER_MODE ?? 'dev'
 const appEntryPath = webServerMode === 'preview' ? '/index.html' : '/src/index.html'
 
-const waitForInitialRender = async (page: Page) => {
-  await page.goto(appEntryPath)
+const waitForAppReady = async (page: Page, path = appEntryPath) => {
+  await page.goto(path)
   await expect(page.getByRole('heading', { name: '@knighted/develop' })).toBeVisible()
-  await expect(page.locator('#status')).toHaveText('Rendered')
   await expect(page.locator('#cdn-loading')).toHaveAttribute('hidden', '')
+}
+
+const waitForInitialRender = async (page: Page) => {
+  await waitForAppReady(page)
+  await expect(page.locator('#status')).toHaveText('Rendered')
 }
 
 const expectPreviewHasRenderedContent = async (page: Page) => {
@@ -125,6 +129,70 @@ const expectCollapseButtonState = async (
     }
   }
 }
+
+test('BYOT controls stay hidden when feature flag is disabled', async ({ page }) => {
+  await waitForAppReady(page)
+
+  const byotControls = page.locator('#github-ai-controls')
+  await expect(byotControls).toHaveAttribute('hidden', '')
+  await expect(byotControls).toBeHidden()
+})
+
+test('BYOT controls render when feature flag is enabled by query param', async ({
+  page,
+}) => {
+  await waitForAppReady(page, `${appEntryPath}?feature-ai=true`)
+
+  const byotControls = page.locator('#github-ai-controls')
+  await expect(byotControls).toBeVisible()
+  await expect(page.locator('#github-token-input')).toBeVisible()
+  await expect(page.locator('#github-token-add')).toBeVisible()
+})
+
+test('BYOT remembers selected repository across reloads', async ({ page }) => {
+  await page.route('https://api.github.com/user/repos**', async route => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify([
+        {
+          id: 2,
+          owner: { login: 'knightedcodemonkey' },
+          name: 'develop',
+          full_name: 'knightedcodemonkey/develop',
+          default_branch: 'main',
+          permissions: { push: true },
+        },
+        {
+          id: 1,
+          owner: { login: 'knightedcodemonkey' },
+          name: 'css',
+          full_name: 'knightedcodemonkey/css',
+          default_branch: 'main',
+          permissions: { push: true },
+        },
+      ]),
+    })
+  })
+
+  await waitForAppReady(page, `${appEntryPath}?feature-ai=true`)
+
+  await page.locator('#github-token-input').fill('github_pat_fake_1234567890')
+  await page.locator('#github-token-add').click()
+
+  const repoSelect = page.locator('#github-repo-select')
+  await expect(repoSelect).toBeEnabled()
+  await expect(page.locator('#status')).toHaveText('Loaded 2 writable repositories')
+
+  await repoSelect.selectOption('knightedcodemonkey/develop')
+  await expect(repoSelect).toHaveValue('knightedcodemonkey/develop')
+
+  await page.reload()
+  await expect(page.getByRole('heading', { name: '@knighted/develop' })).toBeVisible()
+  await expect(page.locator('#github-token-add')).toBeHidden()
+  await expect(page.locator('#github-token-delete')).toBeVisible()
+  await expect(repoSelect).toHaveValue('knightedcodemonkey/develop')
+})
 
 test('renders default playground preview', async ({ page }) => {
   await waitForInitialRender(page)

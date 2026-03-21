@@ -37,6 +37,10 @@ browser acts as the runtime host for render, lint, and typecheck flows.
 - Live IDE: https://knightedcodemonkey.github.io/develop/
 - Source repository: https://github.com/knightedcodemonkey/develop
 
+## BYOT Guide
+
+- GitHub PAT setup and usage: [docs/byot.md](docs/byot.md)
+
 ## License
 
 MIT

@@ -33,6 +33,78 @@
 
     <main class="app-grid">
       <div class="app-grid-layout-controls" role="group" aria-label="App grid layout">
+        <div
+          class="app-grid-ai-controls"
+          id="github-ai-controls"
+          role="group"
+          aria-label="GitHub AI controls"
+          hidden
+        >
+          <div class="github-token-control-wrap">
+            <button
+              class="hint-icon shadow-hint github-token-info"
+              id="github-token-info"
+              type="button"
+              aria-label="About GitHub token"
+              aria-describedby="github-token-privacy-note"
+              data-tooltip="This token is stored only in your browser and is sent only to GitHub APIs you invoke."
+            >
+              i
+            </button>
+            <label class="sr-only" for="github-token-input">GitHub token</label>
+            <input
+              class="github-token-input"
+              id="github-token-input"
+              type="text"
+              autocomplete="off"
+              autocapitalize="off"
+              spellcheck="false"
+              placeholder="GitHub BYOT"
+              aria-label="GitHub token"
+              aria-describedby="github-token-privacy-note"
+            />
+            <span class="sr-only" id="github-token-privacy-note"
+              >This token is stored only in your browser and is sent only to GitHub APIs
+              you invoke.</span
+            >
+            <button
+              class="layout-toggle github-token-add"
+              id="github-token-add"
+              type="button"
+              aria-label="Add GitHub token"
+              title="Add GitHub token"
+            >
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M12 5v14"></path>
+                <path d="M5 12h14"></path>
+              </svg>
+            </button>
+            <button
+              class="layout-toggle github-token-delete"
+              id="github-token-delete"
+              type="button"
+              aria-label="Delete GitHub token"
+              title="Delete GitHub token"
+              hidden
+            >
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M4 7h16"></path>
+                <path d="M10 11v6"></path>
+                <path d="M14 11v6"></path>
+                <path d="M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12"></path>
+                <path d="M9 7V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v3"></path>
+              </svg>
+            </button>
+          </div>
+
+          <div class="github-repo-wrap" id="github-repo-wrap" hidden>
+            <label class="sr-only" for="github-repo-select">Repository</label>
+            <select id="github-repo-select" aria-label="Repository" disabled>
+              <option selected>Connect a token to load repositories</option>
+            </select>
+          </div>
+        </div>
+
         <div class="app-grid-diagnostics-controls" role="group" aria-label="Diagnostics">
           <button
             class="diagnostics-toggle"
