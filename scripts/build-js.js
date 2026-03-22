@@ -30,7 +30,19 @@ const collectJavaScriptFiles = async directory => {
 
   return nested.flat()
 }
-const distStats = await stat(distDir)
+let distStats
+
+try {
+  distStats = await stat(distDir)
+} catch (error) {
+  if (error && typeof error === 'object' && 'code' in error && error.code === 'ENOENT') {
+    throw new Error('dist directory is missing. Run build:prepare first.', {
+      cause: error,
+    })
+  }
+
+  throw error
+}
 
 if (!distStats.isDirectory()) {
   throw new Error('dist directory is missing. Run build:prepare first.')

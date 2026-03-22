@@ -11,6 +11,12 @@ const run = script => {
     env,
   })
 
+  if (result.error) {
+    throw new Error(`Failed to run npm script "${script}".`, {
+      cause: result.error,
+    })
+  }
+
   if (result.status !== 0) {
     process.exit(result.status ?? 1)
   }
