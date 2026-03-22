@@ -538,7 +538,6 @@ const byotControls = createGitHubByotControls({
       title: 'Remove saved GitHub token?',
       copy: 'This action removes the token from browser storage. You can add another token at any time.',
       confirmButtonText: 'Remove',
-      confirmButtonAriaLabel: 'Confirm remove saved GitHub token',
       fallbackConfirmText:
         'Remove saved GitHub token? This action removes the token from browser storage.',
       onConfirm,
@@ -983,7 +982,6 @@ const confirmAction = ({
   title,
   copy,
   confirmButtonText = 'Clear',
-  confirmButtonAriaLabel,
   fallbackConfirmText,
   onConfirm,
 }) => {
@@ -1012,11 +1010,7 @@ const confirmAction = ({
 
   if (clearConfirmButton instanceof HTMLButtonElement) {
     clearConfirmButton.textContent = confirmButtonText
-    if (typeof confirmButtonAriaLabel === 'string' && confirmButtonAriaLabel) {
-      clearConfirmButton.setAttribute('aria-label', confirmButtonAriaLabel)
-    } else {
-      clearConfirmButton.removeAttribute('aria-label')
-    }
+    clearConfirmButton.removeAttribute('aria-label')
   }
 
   pendingClearAction = onConfirm
