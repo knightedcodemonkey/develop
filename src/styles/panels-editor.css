@@ -391,7 +391,6 @@ textarea:focus {
 
   .component-panel,
   .styles-panel {
-    max-height: none;
-    min-height: 360px;
+    min-height: min(360px, var(--mobile-editor-max-height));
   }
 }
