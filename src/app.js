@@ -82,6 +82,7 @@ const diagnosticsClearAll = document.getElementById('diagnostics-clear-all')
 const diagnosticsComponent = document.getElementById('diagnostics-component')
 const diagnosticsStyles = document.getElementById('diagnostics-styles')
 const cdnLoading = document.getElementById('cdn-loading')
+const appToast = document.getElementById('app-toast')
 const previewBgColorInput = document.getElementById('preview-bg-color')
 const clearConfirmDialog = document.getElementById('clear-confirm-dialog')
 const clearConfirmTitle = document.getElementById('clear-confirm-title')
@@ -100,8 +101,31 @@ let renderRuntime = null
 let pendingClearAction = null
 let suppressEditorChangeSideEffects = false
 let hasAppliedReactModeDefault = false
+let appToastDismissTimer = null
 const clipboardSupported = Boolean(navigator.clipboard?.writeText)
 const aiAssistantFeatureEnabled = isAiAssistantFeatureEnabled()
+
+const showAppToast = message => {
+  if (!(appToast instanceof HTMLElement)) {
+    return
+  }
+
+  if (appToastDismissTimer) {
+    clearTimeout(appToastDismissTimer)
+    appToastDismissTimer = null
+  }
+
+  appToast.textContent = message
+  appToast.hidden = false
+  appToast.dataset.open = 'true'
+
+  appToastDismissTimer = setTimeout(() => {
+    appToast.dataset.open = 'false'
+    appToastDismissTimer = setTimeout(() => {
+      appToast.hidden = true
+    }, 190)
+  }, 4500)
+}
 
 const previewBackground = createPreviewBackgroundController({
   previewBgColorInput,
@@ -650,6 +674,12 @@ prDrawerController = createGitHubPrDrawer({
   },
   confirmBeforeSubmit: options => {
     confirmAction(options)
+  },
+  onPullRequestOpened: ({ url }) => {
+    const message = url
+      ? `Pull request opened: ${url}`
+      : 'Pull request opened successfully.'
+    showAppToast(message)
   },
 })
 
@@ -1423,6 +1453,10 @@ if (typeof stackedRailMediaQuery.addEventListener === 'function') {
 }
 
 window.addEventListener('beforeunload', () => {
+  if (appToastDismissTimer) {
+    clearTimeout(appToastDismissTimer)
+    appToastDismissTimer = null
+  }
   clearComponentLintRecheckTimer()
   clearStylesLintRecheckTimer()
   lintDiagnostics.dispose()

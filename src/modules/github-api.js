@@ -645,6 +645,18 @@ const toUtf8Base64 = value => {
   return btoa(binary)
 }
 
+const isMissingShaForExistingFileError = error => {
+  if (!(error instanceof Error)) {
+    return false
+  }
+
+  const message = error.message.toLowerCase()
+  return (
+    message.includes('sha') &&
+    (message.includes('already exists') || message.includes('must be supplied'))
+  )
+}
+
 export const upsertRepositoryFile = async ({
   token,
   owner,
@@ -655,34 +667,62 @@ export const upsertRepositoryFile = async ({
   message,
   signal,
 }) => {
-  const existingFile = await getRepositoryFileMetadata({
-    token,
-    owner,
-    repo,
-    path,
-    ref: branch,
-    signal,
-  })
-
   const encodedPath = encodePathForApi(path)
 
-  const response = await requestGitHubJson({
-    token,
-    url: `${githubApiBaseUrl}/repos/${owner}/${repo}/contents/${encodedPath}`,
-    method: 'PUT',
-    body: {
-      message,
-      content: toUtf8Base64(content),
-      branch,
-      ...(existingFile?.sha ? { sha: existingFile.sha } : {}),
-    },
-    signal,
-  })
+  const baseBody = {
+    message,
+    content: toUtf8Base64(content),
+    branch,
+  }
 
-  return {
-    path,
-    commitSha: typeof response?.commit?.sha === 'string' ? response.commit.sha : null,
-    created: !existingFile?.sha,
+  try {
+    const response = await requestGitHubJson({
+      token,
+      url: `${githubApiBaseUrl}/repos/${owner}/${repo}/contents/${encodedPath}`,
+      method: 'PUT',
+      body: baseBody,
+      signal,
+    })
+
+    return {
+      path,
+      commitSha: typeof response?.commit?.sha === 'string' ? response.commit.sha : null,
+      created: true,
+    }
+  } catch (error) {
+    if (!isMissingShaForExistingFileError(error)) {
+      throw error
+    }
+
+    const existingFile = await getRepositoryFileMetadata({
+      token,
+      owner,
+      repo,
+      path,
+      ref: branch,
+      signal,
+    })
+
+    if (!existingFile?.sha) {
+      throw error
+    }
+
+    const response = await requestGitHubJson({
+      token,
+      url: `${githubApiBaseUrl}/repos/${owner}/${repo}/contents/${encodedPath}`,
+      method: 'PUT',
+      body: {
+        ...baseBody,
+        sha: existingFile.sha,
+      },
+      signal,
+    })
+
+    return {
+      path,
+      commitSha: typeof response?.commit?.sha === 'string' ? response.commit.sha : null,
+      created: false,
+    }
   }
 }
 
