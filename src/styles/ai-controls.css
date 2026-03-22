@@ -329,6 +329,9 @@
 
 .ai-chat-prompt {
   resize: vertical;
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
   min-height: 72px;
   max-height: 220px;
   border: 1px solid var(--border-control);
@@ -347,6 +350,8 @@
 
 .ai-chat-model-picker {
   display: grid;
+  width: 100%;
+  min-width: 0;
   gap: 6px;
   font-size: 0.76rem;
   color: var(--text-muted);
@@ -355,6 +360,9 @@
 .ai-chat-model-picker select {
   appearance: none;
   -webkit-appearance: none;
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
   border: 1px solid var(--border-control);
   border-radius: 9px;
   background: var(--surface-select);
