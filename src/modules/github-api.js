@@ -1,6 +1,8 @@
 const githubApiBaseUrl = 'https://api.github.com'
 const githubModelsApiUrl = 'https://models.github.ai/inference/chat/completions'
 
+export const defaultGitHubChatModel = 'openai/gpt-4.1-mini'
+
 const parseNextPageUrlFromLinkHeader = linkHeader => {
   if (typeof linkHeader !== 'string' || !linkHeader.trim()) {
     return null
@@ -352,7 +354,7 @@ export const streamGitHubChatCompletion = async ({
   messages,
   signal,
   onToken,
-  model = 'openai/gpt-4.1-mini',
+  model = defaultGitHubChatModel,
 }) => {
   if (typeof token !== 'string' || token.trim().length === 0) {
     throw new Error('A GitHub token is required to start a chat request.')
@@ -385,6 +387,7 @@ export const streamGitHubChatCompletion = async ({
   const reader = response.body.getReader()
   let buffered = ''
   let combined = ''
+  let responseModel = ''
 
   while (true) {
     // eslint-disable-next-line no-await-in-loop
@@ -403,6 +406,10 @@ export const streamGitHubChatCompletion = async ({
         continue
       }
 
+      if (!responseModel && typeof body.model === 'string') {
+        responseModel = body.model
+      }
+
       const chunk = extractStreamingDeltaText(body)
       if (!chunk) {
         continue
@@ -415,6 +422,9 @@ export const streamGitHubChatCompletion = async ({
 
   if (buffered.trim()) {
     const body = parseSseDataLine(buffered)
+    if (body && !responseModel && typeof body.model === 'string') {
+      responseModel = body.model
+    }
     const chunk = body ? extractStreamingDeltaText(body) : ''
     if (chunk) {
       combined += chunk
@@ -428,6 +438,7 @@ export const streamGitHubChatCompletion = async ({
 
   return {
     content: combined,
+    model: responseModel || model,
     rateLimit: parseRateMetadata({ headers: response.headers, body: null }),
   }
 }
@@ -436,7 +447,7 @@ export const requestGitHubChatCompletion = async ({
   token,
   messages,
   signal,
-  model = 'openai/gpt-4.1-mini',
+  model = defaultGitHubChatModel,
 }) => {
   if (typeof token !== 'string' || token.trim().length === 0) {
     throw new Error('A GitHub token is required to start a chat request.')
@@ -470,6 +481,7 @@ export const requestGitHubChatCompletion = async ({
 
   return {
     content,
+    model: typeof body?.model === 'string' && body.model ? body.model : model,
     rateLimit: parseRateMetadata({ headers: response.headers, body }),
   }
 }

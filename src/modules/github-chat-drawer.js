@@ -1,4 +1,8 @@
-import { requestGitHubChatCompletion, streamGitHubChatCompletion } from './github-api.js'
+import {
+  defaultGitHubChatModel,
+  requestGitHubChatCompletion,
+  streamGitHubChatCompletion,
+} from './github-api.js'
 
 const toChatText = value => {
   if (typeof value !== 'string') {
@@ -6,6 +10,19 @@ const toChatText = value => {
   }
 
   return value.trim()
+}
+
+const toModelLabelText = value => {
+  if (typeof value !== 'string') {
+    return ''
+  }
+
+  const model = value.trim()
+  if (!model) {
+    return ''
+  }
+
+  return `(${model})`
 }
 
 const toRepositoryLabel = repository => {
@@ -207,7 +224,8 @@ export const createGitHubChatDrawer = ({
     if (messages.length === 0) {
       const emptyNode = document.createElement('p')
       emptyNode.className = 'ai-chat-empty'
-      emptyNode.textContent = 'Ask a question about your selected repository.'
+      emptyNode.textContent =
+        'Ask for help developing your component, styles, or repository workflow.'
       messagesNode.append(emptyNode)
       return
     }
@@ -219,6 +237,17 @@ export const createGitHubChatDrawer = ({
       const label = document.createElement('h3')
       label.className = 'ai-chat-message__label'
       label.textContent = message.role === 'assistant' ? 'Assistant' : 'You'
+
+      if (message.role === 'assistant') {
+        const modelLabelText = toModelLabelText(message.model)
+        if (modelLabelText) {
+          const modelLabel = document.createElement('span')
+          modelLabel.className = 'ai-chat-message__label-model'
+          modelLabel.textContent = modelLabelText
+          label.append(modelLabel)
+        }
+      }
+
       item.append(label)
 
       const body = document.createElement('p')
@@ -366,7 +395,7 @@ export const createGitHubChatDrawer = ({
     pendingAbortController = requestAbortController
 
     appendMessage({ role: 'user', content: prompt })
-    appendMessage({ role: 'assistant', content: '' })
+    appendMessage({ role: 'assistant', content: '', model: defaultGitHubChatModel })
     if (promptInput instanceof HTMLTextAreaElement) {
       promptInput.value = ''
     }
@@ -397,6 +426,14 @@ export const createGitHubChatDrawer = ({
       })
 
       streamSucceeded = true
+      const streamedModel = toChatText(streamResult?.model)
+      if (streamedModel) {
+        const lastMessage = messages[messages.length - 1]
+        if (lastMessage?.role === 'assistant' && lastMessage.model !== streamedModel) {
+          lastMessage.model = streamedModel
+          renderMessages()
+        }
+      }
       setChatStatus('Response streamed from GitHub.', 'ok')
       setRateMetadata(streamResult?.rateLimit)
     } catch (streamError) {
@@ -432,6 +469,14 @@ export const createGitHubChatDrawer = ({
       })
 
       updateLastAssistantMessage(fallbackResult.content)
+      const fallbackModel = toChatText(fallbackResult.model)
+      if (fallbackModel) {
+        const lastMessage = messages[messages.length - 1]
+        if (lastMessage?.role === 'assistant' && lastMessage.model !== fallbackModel) {
+          lastMessage.model = fallbackModel
+          renderMessages()
+        }
+      }
       setChatStatus('Fallback response loaded.', 'ok')
       setRateMetadata(fallbackResult.rateLimit)
     } catch (fallbackError) {

@@ -192,7 +192,7 @@
   position: fixed;
   top: 82px;
   left: auto;
-  right: 18px;
+  right: 24px;
   width: min(560px, calc(100vw - 24px));
   max-height: min(78vh, 820px);
   padding: 14px;
@@ -209,12 +209,12 @@
 }
 
 .ai-chat-drawer.ai-chat-drawer--right {
-  right: 18px;
+  right: 24px;
   left: auto;
 }
 
 .ai-chat-drawer.ai-chat-drawer--left {
-  left: 18px;
+  left: 24px;
   right: auto;
 }
 
@@ -237,30 +237,21 @@
 .ai-chat-drawer__meta {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-start;
   gap: 10px;
   border-top: 1px solid var(--border-subtle);
   border-bottom: 1px solid var(--border-subtle);
   padding: 8px 0;
 }
 
-.ai-chat-drawer__repo,
 .ai-chat-drawer__status {
   margin: 0;
   font-size: 0.78rem;
 }
 
-.ai-chat-drawer__repo {
-  color: var(--text-muted);
-  max-width: 66%;
-  text-overflow: ellipsis;
-  overflow: hidden;
-  white-space: nowrap;
-}
-
 .ai-chat-drawer__status {
   color: var(--text-subtle);
-  text-align: right;
+  text-align: left;
 }
 
 .ai-chat-drawer__status[data-level='pending'] {
@@ -278,6 +269,7 @@
 .ai-chat-drawer__rate {
   margin: -2px 0 0;
   font-size: 0.74rem;
+  font-style: italic;
   color: var(--text-muted);
   align-self: start;
 }
@@ -326,6 +318,14 @@
   letter-spacing: 0.02em;
   text-transform: uppercase;
   color: var(--text-muted);
+}
+
+.ai-chat-message__label-model {
+  margin-left: 6px;
+  font-size: 0.64rem;
+  letter-spacing: 0;
+  text-transform: none;
+  color: color-mix(in srgb, var(--text-muted) 72%, var(--panel-text));
 }
 
 .ai-chat-message__body {
@@ -446,21 +446,19 @@
     max-width: min(58vw, 260px);
   }
 
-  .ai-chat-drawer {
+  .ai-chat-drawer,
+  .ai-chat-drawer.ai-chat-drawer--right,
+  .ai-chat-drawer.ai-chat-drawer--left {
     top: auto;
-    right: 12px;
-    left: 12px;
-    bottom: 12px;
-    width: auto;
-    max-height: 68vh;
+    right: 24px;
+    left: 24px;
+    bottom: auto;
+    width: calc(100vw - 48px);
+    max-width: none;
+    max-height: min(68vh, calc(100dvh - 100px));
   }
 
   .ai-chat-drawer__meta {
-    flex-direction: column;
     align-items: flex-start;
-  }
-
-  .ai-chat-drawer__repo {
-    max-width: 100%;
   }
 }

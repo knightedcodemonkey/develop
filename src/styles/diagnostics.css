@@ -216,10 +216,10 @@
 @media (max-width: 900px) {
   .diagnostics-drawer {
     top: auto;
-    right: 12px;
-    left: 12px;
-    bottom: 12px;
-    width: auto;
-    max-height: 58vh;
+    right: 24px;
+    left: 24px;
+    bottom: auto;
+    width: calc(100vw - 48px);
+    max-height: min(58vh, calc(100dvh - 100px));
   }
 }
