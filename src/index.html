@@ -42,15 +42,33 @@
         >
           <div class="github-token-control-wrap">
             <button
-              class="hint-icon shadow-hint github-token-info"
+              class="github-token-info"
               id="github-token-info"
               type="button"
-              aria-label="About GitHub token"
-              aria-describedby="github-token-privacy-note"
-              data-tooltip="This token is stored only in your browser and is sent only to GitHub APIs you invoke."
+              aria-label="About GitHub token features and privacy"
+              aria-expanded="false"
+              aria-controls="github-token-info-panel"
             >
               i
             </button>
+            <div class="github-token-info-panel" id="github-token-info-panel" hidden>
+              <p
+                class="github-token-info-message github-token-info-message--missing-token"
+              >
+                Provide a GitHub PAT to open pull requests against your repos or chat with
+                GitHub models. Read more about it in the
+                <a
+                  href="https://github.com/knightedcodemonkey/develop/blob/main/docs/byot.md"
+                  target="_blank"
+                  rel="noreferrer noopener"
+                  >docs</a
+                >.
+              </p>
+              <p class="github-token-info-message github-token-info-message--has-token">
+                This token is stored only in your browser and is sent only to GitHub APIs
+                you invoke. Use the trash icon to remove it from storage.
+              </p>
+            </div>
             <label class="sr-only" for="github-token-input">GitHub token</label>
             <input
               class="github-token-input"

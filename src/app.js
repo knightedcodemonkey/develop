@@ -21,6 +21,7 @@ const appGrid = document.querySelector('.app-grid')
 const githubAiControls = document.getElementById('github-ai-controls')
 const githubTokenInput = document.getElementById('github-token-input')
 const githubTokenInfo = document.getElementById('github-token-info')
+const githubTokenInfoPanel = document.getElementById('github-token-info-panel')
 const githubTokenAdd = document.getElementById('github-token-add')
 const githubTokenDelete = document.getElementById('github-token-delete')
 const githubRepoWrap = document.getElementById('github-repo-wrap')
@@ -110,6 +111,7 @@ const compactViewportMediaQuery = window.matchMedia('(max-width: 900px)')
 const stackedRailMediaQuery = window.matchMedia('(max-width: 1090px)')
 let stackedRailViewControlsOpen = false
 let compactAiControlsOpen = false
+let githubTokenInfoOpen = false
 
 const isStackedRailViewport = () => stackedRailMediaQuery.matches
 
@@ -139,6 +141,22 @@ const setStackedRailViewControlsOpen = isOpen => {
   viewControlsDrawer.setAttribute('hidden', '')
 }
 
+const setGitHubTokenInfoOpen = isOpen => {
+  if (!(githubTokenInfo instanceof HTMLButtonElement) || !githubTokenInfoPanel) {
+    return
+  }
+
+  githubTokenInfoOpen = Boolean(isOpen)
+  githubTokenInfo.setAttribute('aria-expanded', githubTokenInfoOpen ? 'true' : 'false')
+
+  if (githubTokenInfoOpen) {
+    githubTokenInfoPanel.removeAttribute('hidden')
+    return
+  }
+
+  githubTokenInfoPanel.setAttribute('hidden', '')
+}
+
 const setCompactAiControlsOpen = isOpen => {
   if (!(aiControlsToggle instanceof HTMLButtonElement) || !githubAiControls) {
     return
@@ -146,6 +164,7 @@ const setCompactAiControlsOpen = isOpen => {
 
   if (!aiAssistantFeatureEnabled) {
     compactAiControlsOpen = false
+    setGitHubTokenInfoOpen(false)
     aiControlsToggle.setAttribute('hidden', '')
     aiControlsToggle.setAttribute('aria-expanded', 'false')
     githubAiControls.removeAttribute('data-compact-open')
@@ -157,6 +176,7 @@ const setCompactAiControlsOpen = isOpen => {
 
   if (!isCompactViewport()) {
     compactAiControlsOpen = false
+    setGitHubTokenInfoOpen(false)
     aiControlsToggle.setAttribute('aria-expanded', 'false')
     githubAiControls.removeAttribute('data-compact-open')
     githubAiControls.removeAttribute('hidden')
@@ -166,6 +186,10 @@ const setCompactAiControlsOpen = isOpen => {
   compactAiControlsOpen = Boolean(isOpen)
   aiControlsToggle.setAttribute('aria-expanded', compactAiControlsOpen ? 'true' : 'false')
   githubAiControls.dataset.compactOpen = compactAiControlsOpen ? 'true' : 'false'
+
+  if (!compactAiControlsOpen) {
+    setGitHubTokenInfoOpen(false)
+  }
 }
 
 const getCurrentLayout = () => {
@@ -507,6 +531,15 @@ const byotControls = createGitHubByotControls({
   onRepositoryChange: repository => {
     githubAiContextState.selectedRepository = repository
     chatDrawerController.setSelectedRepository(repository)
+  },
+  onTokenDeleteRequest: onConfirm => {
+    confirmAction({
+      title: 'Remove saved GitHub token?',
+      copy: 'This action removes the token from browser storage. You can add another token at any time.',
+      fallbackConfirmText:
+        'Remove saved GitHub token? This action removes the token from browser storage.',
+      onConfirm,
+    })
   },
   onTokenChange: token => {
     githubAiContextState.token = token
@@ -943,17 +976,13 @@ const clearStylesSource = () => {
   maybeRender()
 }
 
-const confirmClearSource = ({ label, onConfirm }) => {
+const confirmAction = ({ title, copy, fallbackConfirmText, onConfirm }) => {
   const supportsModalDialog =
     clearConfirmDialog instanceof HTMLDialogElement &&
     typeof clearConfirmDialog.showModal === 'function'
 
   if (!supportsModalDialog) {
-    if (
-      window.confirm(
-        `Clear ${label.toLowerCase()} source? This action will remove all text from the editor.`,
-      )
-    ) {
+    if (window.confirm(fallbackConfirmText)) {
       onConfirm()
     }
     return
@@ -964,16 +993,24 @@ const confirmClearSource = ({ label, onConfirm }) => {
   }
 
   if (clearConfirmTitle) {
-    clearConfirmTitle.textContent = `Clear ${label} source?`
+    clearConfirmTitle.textContent = title
   }
 
   if (clearConfirmCopy) {
-    clearConfirmCopy.textContent =
-      'This action will remove all text from the editor. This cannot be undone.'
+    clearConfirmCopy.textContent = copy
   }
 
   pendingClearAction = onConfirm
   clearConfirmDialog.showModal()
+}
+
+const confirmClearSource = ({ label, onConfirm }) => {
+  confirmAction({
+    title: `Clear ${label} source?`,
+    copy: 'This action will remove all text from the editor. This cannot be undone.',
+    fallbackConfirmText: `Clear ${label.toLowerCase()} source? This action will remove all text from the editor.`,
+    onConfirm,
+  })
 }
 
 const copyTextToClipboard = async text => {
@@ -1186,6 +1223,13 @@ if (aiControlsToggle instanceof HTMLButtonElement) {
   })
 }
 
+if (githubTokenInfo instanceof HTMLButtonElement && githubTokenInfoPanel) {
+  githubTokenInfo.addEventListener('click', event => {
+    event.preventDefault()
+    setGitHubTokenInfoOpen(!githubTokenInfoOpen)
+  })
+}
+
 document.addEventListener('click', event => {
   const clickTarget = event.target
   if (!(clickTarget instanceof Node)) {
@@ -1209,6 +1253,15 @@ document.addEventListener('click', event => {
       setCompactAiControlsOpen(false)
     }
   }
+
+  if (githubTokenInfoOpen) {
+    if (
+      !githubTokenInfo?.contains(clickTarget) &&
+      !githubTokenInfoPanel?.contains(clickTarget)
+    ) {
+      setGitHubTokenInfoOpen(false)
+    }
+  }
 })
 
 document.addEventListener('keydown', event => {
@@ -1218,6 +1271,7 @@ document.addEventListener('keydown', event => {
 
   setStackedRailViewControlsOpen(false)
   setCompactAiControlsOpen(false)
+  setGitHubTokenInfoOpen(false)
 })
 
 for (const button of editorToolsButtons) {
@@ -1277,6 +1331,7 @@ applyEditorToolsVisibility()
 applyPanelCollapseState()
 setStackedRailViewControlsOpen(false)
 setCompactAiControlsOpen(false)
+setGitHubTokenInfoOpen(false)
 syncAiChatTokenVisibility(githubAiContextState.token)
 
 updateRenderButtonVisibility()
