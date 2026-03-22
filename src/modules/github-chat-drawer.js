@@ -43,6 +43,16 @@ const formatModelAccessErrorMessage = selectedModel => {
   return `Selected model "${model}" is not available for this token. Choose a different model.`
 }
 
+const isModelAccessStatusMessage = value => {
+  if (typeof value !== 'string') {
+    return false
+  }
+
+  return (
+    value.startsWith('Selected model "') && value.includes('not available for this token')
+  )
+}
+
 const toRepositoryLabel = repository => {
   if (!repository || typeof repository !== 'object') {
     return 'No repository selected'
@@ -204,7 +214,20 @@ export const createGitHubChatDrawer = ({
       modelIds: githubChatModelOptions,
       selectedModel: defaultGitHubChatModel,
     })
-    setModelSelectDisabled(false)
+  }
+
+  const syncModelSelectionForToken = token => {
+    const hasToken = typeof token === 'string' && token.trim().length > 0
+
+    setModelSelectDisabled(!hasToken)
+
+    if (!hasToken && modelSelect instanceof HTMLSelectElement) {
+      modelSelect.value = defaultGitHubChatModel
+    }
+
+    if (hasToken && isModelAccessStatusMessage(statusNode?.textContent)) {
+      setChatStatus('Idle', 'neutral')
+    }
   }
 
   const setOpen = nextOpen => {
@@ -426,7 +449,13 @@ export const createGitHubChatDrawer = ({
     }
 
     if (modelSelect instanceof HTMLSelectElement) {
-      modelSelect.disabled = isPending
+      if (isPending) {
+        modelSelect.disabled = true
+      } else {
+        const token = getToken?.()
+        const hasToken = typeof token === 'string' && token.trim().length > 0
+        modelSelect.disabled = !hasToken
+      }
     }
   }
 
@@ -596,6 +625,7 @@ export const createGitHubChatDrawer = ({
   toggleButton?.setAttribute('aria-expanded', 'false')
   drawer?.setAttribute('hidden', '')
   initializeModelOptions()
+  syncModelSelectionForToken(getToken?.())
   syncRepositoryLabel()
   renderMessages()
   setChatStatus('Idle', 'neutral')
@@ -647,7 +677,9 @@ export const createGitHubChatDrawer = ({
     setSelectedRepository: () => {
       syncRepositoryLabel()
     },
-    setToken: () => {},
+    setToken: token => {
+      syncModelSelectionForToken(token)
+    },
     dispose: () => {
       stopPendingRequest()
       setPendingState(false)

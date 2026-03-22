@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test'
 import type { Page } from '@playwright/test'
+import { defaultGitHubChatModel } from '../src/modules/github-api.js'
 
 const webServerMode = process.env.PLAYWRIGHT_WEB_SERVER_MODE ?? 'dev'
 const appEntryPath = webServerMode === 'preview' ? '/index.html' : '/src/index.html'
@@ -12,6 +13,8 @@ type ChatRequestMessage = {
 type ChatRequestBody = {
   metadata?: unknown
   messages?: ChatRequestMessage[]
+  model?: string
+  stream?: boolean
 }
 
 const waitForAppReady = async (page: Page, path = appEntryPath) => {
@@ -256,6 +259,7 @@ test('AI chat prefers streaming responses when available', async ({ page }) => {
   )
 
   expect(streamRequestBody?.metadata).toBeUndefined()
+  expect(streamRequestBody?.model).toBe(defaultGitHubChatModel)
   const systemMessage = streamRequestBody?.messages?.find(
     (message: ChatRequestMessage) => message.role === 'system',
   )
@@ -335,9 +339,14 @@ test('AI chat falls back to non-streaming response when streaming fails', async 
 }) => {
   let streamAttemptCount = 0
   let fallbackAttemptCount = 0
+  const attemptedModels: string[] = []
 
   await page.route('https://models.github.ai/inference/chat/completions', async route => {
-    const body = route.request().postDataJSON() as { stream?: boolean } | null
+    const body = route.request().postDataJSON() as ChatRequestBody | null
+    if (typeof body?.model === 'string') {
+      attemptedModels.push(body.model)
+    }
+
     if (body?.stream) {
       streamAttemptCount += 1
       await route.fulfill({
@@ -373,6 +382,10 @@ test('AI chat falls back to non-streaming response when streaming fails', async 
   await connectByotWithSingleRepo(page)
   await ensureAiChatDrawerOpen(page)
 
+  const selectedModel = 'openai/gpt-5-mini'
+  await page.locator('#ai-chat-model').selectOption(selectedModel)
+  await expect(page.locator('#ai-chat-model')).toHaveValue(selectedModel)
+
   await page.locator('#ai-chat-prompt').fill('Use fallback path.')
   await page.locator('#ai-chat-send').click()
 
@@ -383,6 +396,8 @@ test('AI chat falls back to non-streaming response when streaming fails', async 
   )
   expect(streamAttemptCount).toBeGreaterThan(0)
   expect(fallbackAttemptCount).toBeGreaterThan(0)
+  expect(attemptedModels.length).toBeGreaterThan(0)
+  expect(attemptedModels.every(model => model === selectedModel)).toBe(true)
 })
 
 test('BYOT remembers selected repository across reloads', async ({ page }) => {
