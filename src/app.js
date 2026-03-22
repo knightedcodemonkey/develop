@@ -75,6 +75,7 @@ const previewBgColorInput = document.getElementById('preview-bg-color')
 const clearConfirmDialog = document.getElementById('clear-confirm-dialog')
 const clearConfirmTitle = document.getElementById('clear-confirm-title')
 const clearConfirmCopy = document.getElementById('clear-confirm-copy')
+const clearConfirmButton = clearConfirmDialog?.querySelector('button[value="confirm"]')
 
 jsxEditor.value = defaultJsx
 cssEditor.value = defaultCss
@@ -536,6 +537,8 @@ const byotControls = createGitHubByotControls({
     confirmAction({
       title: 'Remove saved GitHub token?',
       copy: 'This action removes the token from browser storage. You can add another token at any time.',
+      confirmButtonText: 'Remove',
+      confirmButtonAriaLabel: 'Confirm remove saved GitHub token',
       fallbackConfirmText:
         'Remove saved GitHub token? This action removes the token from browser storage.',
       onConfirm,
@@ -976,7 +979,14 @@ const clearStylesSource = () => {
   maybeRender()
 }
 
-const confirmAction = ({ title, copy, fallbackConfirmText, onConfirm }) => {
+const confirmAction = ({
+  title,
+  copy,
+  confirmButtonText = 'Clear',
+  confirmButtonAriaLabel,
+  fallbackConfirmText,
+  onConfirm,
+}) => {
   const supportsModalDialog =
     clearConfirmDialog instanceof HTMLDialogElement &&
     typeof clearConfirmDialog.showModal === 'function'
@@ -998,6 +1008,15 @@ const confirmAction = ({ title, copy, fallbackConfirmText, onConfirm }) => {
 
   if (clearConfirmCopy) {
     clearConfirmCopy.textContent = copy
+  }
+
+  if (clearConfirmButton instanceof HTMLButtonElement) {
+    clearConfirmButton.textContent = confirmButtonText
+    if (typeof confirmButtonAriaLabel === 'string' && confirmButtonAriaLabel) {
+      clearConfirmButton.setAttribute('aria-label', confirmButtonAriaLabel)
+    } else {
+      clearConfirmButton.removeAttribute('aria-label')
+    }
   }
 
   pendingClearAction = onConfirm

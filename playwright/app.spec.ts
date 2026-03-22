@@ -256,6 +256,7 @@ test('deleting saved GitHub token requires confirmation modal', async ({ page })
   await expect(page.locator('#clear-confirm-copy')).toHaveText(
     'This action removes the token from browser storage. You can add another token at any time.',
   )
+  await expect(dialog.getByRole('button', { name: 'Remove' })).toBeVisible()
 
   await dialog.getByRole('button', { name: 'Cancel' }).click()
   await expect(dialog).not.toHaveAttribute('open', '')
@@ -264,7 +265,7 @@ test('deleting saved GitHub token requires confirmation modal', async ({ page })
 
   await tokenDelete.click()
   await expect(dialog).toHaveAttribute('open', '')
-  await dialog.getByRole('button', { name: 'Clear' }).click()
+  await dialog.getByRole('button', { name: 'Remove' }).click()
   await expect(dialog).not.toHaveAttribute('open', '')
 
   await expect(page.locator('#status')).toHaveText('GitHub token removed')

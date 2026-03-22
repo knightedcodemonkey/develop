@@ -8,6 +8,7 @@
     "realtime",
     "browser",
     "development",
+    "ide",
     "jsx",
     "css",
     "importmap",
@@ -34,7 +35,7 @@
     "build:importmap-mode": "KNIGHTED_PRIMARY_CDN=importMap npm run build",
     "preview": "npm run build && http-server dist -a localhost -p 8081 -c-1 -o index.html",
     "check-types": "tsc -p tsconfig.json",
-    "lint:playwright": "eslint playwright playwright.config.ts",
+    "lint:playwright": "eslint playwright playwright.config.ts src/index.html",
     "test:e2e": "npm run build && PLAYWRIGHT_WEB_SERVER_MODE=preview PLAYWRIGHT_PORT=8081 playwright test",
     "test:e2e:dev": "playwright test",
     "test:e2e:headed": "npm run build && PLAYWRIGHT_WEB_SERVER_MODE=preview PLAYWRIGHT_PORT=8081 playwright test --headed",
@@ -43,6 +44,8 @@
     "lint": "oxlint src scripts && npm run lint:playwright"
   },
   "devDependencies": {
+    "@html-eslint/eslint-plugin": "^0.58.1",
+    "@html-eslint/parser": "^0.58.1",
     "@playwright/test": "^1.58.2",
     "@types/node": "^25.5.0",
     "@typescript-eslint/parser": "^8.57.1",
