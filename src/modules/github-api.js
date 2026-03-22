@@ -530,3 +530,332 @@ export const requestGitHubChatCompletion = async ({
     rateLimit: parseRateMetadata({ headers: response.headers, body }),
   }
 }
+
+const encodePathForApi = path =>
+  path
+    .split('/')
+    .map(segment => encodeURIComponent(segment))
+    .join('/')
+
+const requestGitHubJson = async ({
+  token,
+  url,
+  method = 'GET',
+  body,
+  signal,
+  allowNotFound = false,
+}) => {
+  const response = await fetch(url, {
+    method,
+    headers: buildRequestHeaders(token),
+    body: body ? JSON.stringify(body) : undefined,
+    signal,
+  })
+
+  if (allowNotFound && response.status === 404) {
+    return null
+  }
+
+  if (!response.ok) {
+    const { message, rateLimit } = await parseErrorResponse(response)
+    throw toApiError({ message, rateLimit })
+  }
+
+  return response.json()
+}
+
+export const getBranchReferenceSha = async ({ token, owner, repo, branch, signal }) => {
+  const ref = encodeURIComponent(`heads/${branch}`)
+  const response = await requestGitHubJson({
+    token,
+    url: `${githubApiBaseUrl}/repos/${owner}/${repo}/git/ref/${ref}`,
+    signal,
+  })
+
+  const sha = response?.object?.sha
+  if (typeof sha !== 'string' || !sha) {
+    throw new Error(`Could not resolve SHA for ${owner}/${repo}@${branch}`)
+  }
+
+  return sha
+}
+
+export const createBranchReference = async ({
+  token,
+  owner,
+  repo,
+  branch,
+  sha,
+  signal,
+}) => {
+  const response = await requestGitHubJson({
+    token,
+    url: `${githubApiBaseUrl}/repos/${owner}/${repo}/git/refs`,
+    method: 'POST',
+    body: {
+      ref: `refs/heads/${branch}`,
+      sha,
+    },
+    signal,
+  })
+
+  const createdRef = response?.ref
+  if (typeof createdRef !== 'string' || !createdRef) {
+    throw new Error(`Could not create branch ${branch} in ${owner}/${repo}`)
+  }
+
+  return createdRef
+}
+
+export const getRepositoryFileMetadata = async ({
+  token,
+  owner,
+  repo,
+  path,
+  ref,
+  signal,
+}) => {
+  const encodedPath = encodePathForApi(path)
+  const query = ref ? `?ref=${encodeURIComponent(ref)}` : ''
+  const response = await requestGitHubJson({
+    token,
+    url: `${githubApiBaseUrl}/repos/${owner}/${repo}/contents/${encodedPath}${query}`,
+    signal,
+    allowNotFound: true,
+  })
+
+  if (!response) {
+    return null
+  }
+
+  return {
+    sha: typeof response.sha === 'string' ? response.sha : null,
+  }
+}
+
+const toUtf8Base64 = value => {
+  const encoder = new TextEncoder()
+  const bytes = encoder.encode(value)
+  let binary = ''
+
+  for (const byte of bytes) {
+    binary += String.fromCharCode(byte)
+  }
+
+  return btoa(binary)
+}
+
+export const upsertRepositoryFile = async ({
+  token,
+  owner,
+  repo,
+  branch,
+  path,
+  content,
+  message,
+  signal,
+}) => {
+  const existingFile = await getRepositoryFileMetadata({
+    token,
+    owner,
+    repo,
+    path,
+    ref: branch,
+    signal,
+  })
+
+  const encodedPath = encodePathForApi(path)
+
+  const response = await requestGitHubJson({
+    token,
+    url: `${githubApiBaseUrl}/repos/${owner}/${repo}/contents/${encodedPath}`,
+    method: 'PUT',
+    body: {
+      message,
+      content: toUtf8Base64(content),
+      branch,
+      ...(existingFile?.sha ? { sha: existingFile.sha } : {}),
+    },
+    signal,
+  })
+
+  return {
+    path,
+    commitSha: typeof response?.commit?.sha === 'string' ? response.commit.sha : null,
+    created: !existingFile?.sha,
+  }
+}
+
+export const createRepositoryPullRequest = async ({
+  token,
+  owner,
+  repo,
+  title,
+  body,
+  head,
+  base,
+  signal,
+}) => {
+  const response = await requestGitHubJson({
+    token,
+    url: `${githubApiBaseUrl}/repos/${owner}/${repo}/pulls`,
+    method: 'POST',
+    body: {
+      title,
+      body,
+      head,
+      base,
+    },
+    signal,
+  })
+
+  return {
+    number: response?.number,
+    htmlUrl: typeof response?.html_url === 'string' ? response.html_url : '',
+    apiUrl: typeof response?.url === 'string' ? response.url : '',
+  }
+}
+
+const isReferenceAlreadyExistsError = error => {
+  if (!(error instanceof Error)) {
+    return false
+  }
+
+  const message = error.message.toLowerCase()
+  return (
+    message.includes('reference already exists') || message.includes('already exists')
+  )
+}
+
+const createUniqueBranchReference = async ({
+  token,
+  owner,
+  repo,
+  headBranch,
+  baseSha,
+  signal,
+  attempt = 0,
+}) => {
+  const candidateBranch = attempt === 0 ? headBranch : `${headBranch}-${attempt + 1}`
+
+  try {
+    await createBranchReference({
+      token,
+      owner,
+      repo,
+      branch: candidateBranch,
+      sha: baseSha,
+      signal,
+    })
+    return candidateBranch
+  } catch (error) {
+    if (!isReferenceAlreadyExistsError(error)) {
+      throw error
+    }
+
+    if (attempt >= 4) {
+      throw new Error(
+        `Branch ${headBranch} already exists. Choose another branch name and retry.`,
+        {
+          cause: error,
+        },
+      )
+    }
+
+    return createUniqueBranchReference({
+      token,
+      owner,
+      repo,
+      headBranch,
+      baseSha,
+      signal,
+      attempt: attempt + 1,
+    })
+  }
+}
+
+export const createEditorContentPullRequest = async ({
+  token,
+  repository,
+  baseBranch,
+  headBranch,
+  prTitle,
+  prBody,
+  componentFilePath,
+  componentSource,
+  stylesFilePath,
+  stylesSource,
+  commitMessage,
+  signal,
+}) => {
+  const owner = repository?.owner
+  const repo = repository?.name
+
+  if (typeof owner !== 'string' || !owner || typeof repo !== 'string' || !repo) {
+    throw new Error('A valid repository selection is required.')
+  }
+
+  const baseSha = await getBranchReferenceSha({
+    token,
+    owner,
+    repo,
+    branch: baseBranch,
+    signal,
+  })
+
+  const nextBranch = await createUniqueBranchReference({
+    token,
+    owner,
+    repo,
+    headBranch,
+    baseSha,
+    signal,
+  })
+
+  const fileUpdates = []
+
+  fileUpdates.push(
+    await upsertRepositoryFile({
+      token,
+      owner,
+      repo,
+      branch: nextBranch,
+      path: componentFilePath,
+      content: componentSource,
+      message: commitMessage,
+      signal,
+    }),
+  )
+
+  if (stylesFilePath !== componentFilePath) {
+    fileUpdates.push(
+      await upsertRepositoryFile({
+        token,
+        owner,
+        repo,
+        branch: nextBranch,
+        path: stylesFilePath,
+        content: stylesSource,
+        message: commitMessage,
+        signal,
+      }),
+    )
+  }
+
+  const pullRequest = await createRepositoryPullRequest({
+    token,
+    owner,
+    repo,
+    title: prTitle,
+    body: prBody,
+    head: nextBranch,
+    base: baseBranch,
+    signal,
+  })
+
+  return {
+    pullRequest,
+    branch: nextBranch,
+    fileUpdates,
+  }
+}

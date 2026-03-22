@@ -1,0 +1,552 @@
+import { createEditorContentPullRequest } from './github-api.js'
+
+const prConfigStoragePrefix = 'knighted:develop:github-pr-config:'
+
+const defaultPrConfig = {
+  componentFilePath: 'src/components/App.jsx',
+  stylesFilePath: 'src/styles/app.css',
+}
+
+const readRepositoryPrConfig = repositoryFullName => {
+  if (typeof repositoryFullName !== 'string' || !repositoryFullName.trim()) {
+    return {}
+  }
+
+  try {
+    const value = localStorage.getItem(`${prConfigStoragePrefix}${repositoryFullName}`)
+    if (!value) {
+      return {}
+    }
+
+    const parsed = JSON.parse(value)
+    return parsed && typeof parsed === 'object' ? parsed : {}
+  } catch {
+    return {}
+  }
+}
+
+const saveRepositoryPrConfig = ({ repositoryFullName, config }) => {
+  if (typeof repositoryFullName !== 'string' || !repositoryFullName.trim()) {
+    return
+  }
+
+  try {
+    localStorage.setItem(
+      `${prConfigStoragePrefix}${repositoryFullName}`,
+      JSON.stringify(config),
+    )
+  } catch {
+    /* noop */
+  }
+}
+
+const toSafeText = value => (typeof value === 'string' ? value.trim() : '')
+
+const normalizeFilePath = value =>
+  toSafeText(value).replace(/\\/g, '/').replace(/\/+/g, '/')
+
+const validateFilePath = value => {
+  const path = normalizeFilePath(value)
+
+  if (!path) {
+    return { ok: false, reason: 'File path is required.' }
+  }
+
+  if (path.startsWith('/')) {
+    return {
+      ok: false,
+      reason: 'File path must be repository-relative (no leading slash).',
+    }
+  }
+
+  if (path.includes('..')) {
+    return { ok: false, reason: 'File path cannot include parent directory traversal.' }
+  }
+
+  if (!/^[A-Za-z0-9._\-/]+$/.test(path)) {
+    return {
+      ok: false,
+      reason:
+        'File path contains unsupported characters. Use letters, numbers, ., _, -, and / only.',
+    }
+  }
+
+  const segments = path.split('/').filter(Boolean)
+  if (segments.length === 0 || segments.some(segment => segment === '.' || !segment)) {
+    return { ok: false, reason: 'File path is invalid.' }
+  }
+
+  return { ok: true, value: path }
+}
+
+const sanitizeBranchPart = value => {
+  const trimmed = toSafeText(value).toLowerCase()
+  if (!trimmed) {
+    return ''
+  }
+
+  return trimmed
+    .replace(/[^a-z0-9._/-]/g, '-')
+    .replace(/\/+/, '/')
+    .replace(/-{2,}/g, '-')
+    .replace(/^[-/.]+|[-/.]+$/g, '')
+}
+
+const createDefaultBranchName = repository => {
+  const repoName = sanitizeBranchPart(repository?.name ?? '') || 'repo'
+  const stamp = new Date().toISOString().slice(0, 10).replace(/-/g, '')
+  return `develop/${repoName}/editor-sync-${stamp}`
+}
+
+const toDefaultPrTitle = repository => {
+  const label = toSafeText(repository?.fullName) || 'selected repository'
+  return `Apply component and styles edits to ${label}`
+}
+
+const toDefaultPrBody = ({ componentFilePath, stylesFilePath }) => {
+  return [
+    'This PR was created from @knighted/develop editor content.',
+    '',
+    `- Component source -> ${componentFilePath}`,
+    `- Styles source -> ${stylesFilePath}`,
+  ].join('\n')
+}
+
+const buildSummary = ({
+  repository,
+  baseBranch,
+  headBranch,
+  componentFilePath,
+  stylesFilePath,
+  prTitle,
+}) => {
+  const repositoryLabel = toSafeText(repository?.fullName) || 'No repository selected'
+
+  return [
+    `Repository: ${repositoryLabel}`,
+    `Base branch: ${baseBranch}`,
+    `Head branch: ${headBranch}`,
+    `Component file path: ${componentFilePath}`,
+    `Styles file path: ${stylesFilePath}`,
+    `PR title: ${prTitle}`,
+    '',
+    'Proceed with creating commits and opening this pull request?',
+  ].join('\n')
+}
+
+export const createGitHubPrDrawer = ({
+  featureEnabled,
+  toggleButton,
+  drawer,
+  closeButton,
+  repositorySelect,
+  baseBranchInput,
+  headBranchInput,
+  componentPathInput,
+  stylesPathInput,
+  prTitleInput,
+  prBodyInput,
+  submitButton,
+  statusNode,
+  getToken,
+  getSelectedRepository,
+  getWritableRepositories,
+  setSelectedRepository,
+  getComponentSource,
+  getStylesSource,
+  getDrawerSide,
+  confirmBeforeSubmit,
+}) => {
+  if (!featureEnabled) {
+    toggleButton?.setAttribute('hidden', '')
+    drawer?.setAttribute('hidden', '')
+
+    return {
+      setOpen: () => {},
+      isOpen: () => false,
+      setToken: () => {},
+      setSelectedRepository: () => {},
+      syncRepositories: () => {},
+      dispose: () => {},
+    }
+  }
+
+  let open = false
+  let submitting = false
+  let pendingAbortController = null
+
+  const setStatus = (text, level = 'neutral') => {
+    if (!statusNode) {
+      return
+    }
+
+    statusNode.textContent = text
+    statusNode.dataset.level = level
+  }
+
+  const setPendingState = isPending => {
+    submitting = isPending
+
+    if (submitButton instanceof HTMLButtonElement) {
+      submitButton.disabled = isPending
+      submitButton.setAttribute('aria-busy', isPending ? 'true' : 'false')
+    }
+
+    for (const input of [
+      repositorySelect,
+      baseBranchInput,
+      headBranchInput,
+      componentPathInput,
+      stylesPathInput,
+      prTitleInput,
+      prBodyInput,
+    ]) {
+      if (
+        input instanceof HTMLInputElement ||
+        input instanceof HTMLSelectElement ||
+        input instanceof HTMLTextAreaElement
+      ) {
+        input.disabled = isPending
+      }
+    }
+  }
+
+  const getSelectedRepositoryObject = () => getSelectedRepository?.() ?? null
+
+  const getRepositoryFullName = repository =>
+    typeof repository?.fullName === 'string' ? repository.fullName : ''
+
+  const getFormValues = () => {
+    return {
+      baseBranch: toSafeText(baseBranchInput?.value),
+      headBranch: toSafeText(headBranchInput?.value),
+      componentFilePath: normalizeFilePath(componentPathInput?.value),
+      stylesFilePath: normalizeFilePath(stylesPathInput?.value),
+      prTitle: toSafeText(prTitleInput?.value),
+      prBody: typeof prBodyInput?.value === 'string' ? prBodyInput.value.trim() : '',
+    }
+  }
+
+  const syncRepositorySelect = ({ repositories, selectedRepository }) => {
+    if (!(repositorySelect instanceof HTMLSelectElement)) {
+      return
+    }
+
+    repositorySelect.replaceChildren()
+
+    if (!Array.isArray(repositories) || repositories.length === 0) {
+      const option = document.createElement('option')
+      option.value = ''
+      option.textContent = 'Connect a token to load repositories'
+      option.selected = true
+      repositorySelect.append(option)
+      repositorySelect.disabled = true
+      return
+    }
+
+    const selectedFullName = getRepositoryFullName(selectedRepository)
+
+    const options = repositories.map(repo => {
+      const option = document.createElement('option')
+      option.value = repo.fullName
+      option.textContent = repo.fullName
+      option.selected = repo.fullName === selectedFullName
+      return option
+    })
+
+    repositorySelect.replaceChildren(...options)
+    repositorySelect.disabled = false
+
+    if (!selectedFullName && repositories[0]) {
+      repositorySelect.value = repositories[0].fullName
+      setSelectedRepository?.(repositories[0].fullName)
+      return
+    }
+
+    repositorySelect.value = selectedFullName
+  }
+
+  const syncFormForRepository = ({ resetBranch = false } = {}) => {
+    const repository = getSelectedRepositoryObject()
+    const repositoryFullName = getRepositoryFullName(repository)
+    const savedConfig = readRepositoryPrConfig(repositoryFullName)
+
+    const componentFilePath =
+      typeof savedConfig.componentFilePath === 'string' && savedConfig.componentFilePath
+        ? savedConfig.componentFilePath
+        : defaultPrConfig.componentFilePath
+    const stylesFilePath =
+      typeof savedConfig.stylesFilePath === 'string' && savedConfig.stylesFilePath
+        ? savedConfig.stylesFilePath
+        : defaultPrConfig.stylesFilePath
+
+    if (componentPathInput instanceof HTMLInputElement) {
+      componentPathInput.value = componentFilePath
+    }
+
+    if (stylesPathInput instanceof HTMLInputElement) {
+      stylesPathInput.value = stylesFilePath
+    }
+
+    const baseBranch =
+      toSafeText(savedConfig.baseBranch) ||
+      toSafeText(repository?.defaultBranch) ||
+      'main'
+
+    if (baseBranchInput instanceof HTMLInputElement) {
+      baseBranchInput.value = baseBranch
+    }
+
+    if (headBranchInput instanceof HTMLInputElement) {
+      if (resetBranch || !toSafeText(headBranchInput.value)) {
+        headBranchInput.value =
+          toSafeText(savedConfig.headBranch) || createDefaultBranchName(repository)
+      }
+    }
+
+    if (prTitleInput instanceof HTMLInputElement) {
+      if (!toSafeText(prTitleInput.value)) {
+        prTitleInput.value =
+          toSafeText(savedConfig.prTitle) || toDefaultPrTitle(repository)
+      }
+    }
+
+    if (prBodyInput instanceof HTMLTextAreaElement) {
+      if (!toSafeText(prBodyInput.value)) {
+        prBodyInput.value =
+          typeof savedConfig.prBody === 'string' && savedConfig.prBody
+            ? savedConfig.prBody
+            : toDefaultPrBody({ componentFilePath, stylesFilePath })
+      }
+    }
+  }
+
+  const persistCurrentPaths = () => {
+    const repository = getSelectedRepositoryObject()
+    const repositoryFullName = getRepositoryFullName(repository)
+    if (!repositoryFullName) {
+      return
+    }
+
+    const values = getFormValues()
+    saveRepositoryPrConfig({
+      repositoryFullName,
+      config: {
+        componentFilePath: values.componentFilePath,
+        stylesFilePath: values.stylesFilePath,
+        baseBranch: values.baseBranch,
+        headBranch: values.headBranch,
+        prTitle: values.prTitle,
+        prBody: values.prBody,
+      },
+    })
+  }
+
+  const syncRepositories = () => {
+    const repositories = getWritableRepositories?.() ?? []
+    const selectedRepository = getSelectedRepositoryObject()
+    syncRepositorySelect({ repositories, selectedRepository })
+    syncFormForRepository()
+  }
+
+  const setOpen = nextOpen => {
+    open = nextOpen === true
+
+    if (!(toggleButton instanceof HTMLButtonElement) || !drawer) {
+      return
+    }
+
+    const preferredSide = getDrawerSide?.() === 'left' ? 'left' : 'right'
+    drawer.classList.toggle('github-pr-drawer--left', preferredSide === 'left')
+    drawer.classList.toggle('github-pr-drawer--right', preferredSide !== 'left')
+
+    toggleButton.setAttribute('aria-expanded', open ? 'true' : 'false')
+    drawer.toggleAttribute('hidden', !open)
+
+    if (open) {
+      syncRepositories()
+      repositorySelect?.focus()
+    }
+  }
+
+  const runSubmit = async () => {
+    const repository = getSelectedRepositoryObject()
+    const repositoryLabel = getRepositoryFullName(repository)
+    const token = getToken?.()
+
+    if (!toSafeText(token)) {
+      setStatus('Add a GitHub token before opening a pull request.', 'error')
+      return
+    }
+
+    if (!repositoryLabel) {
+      setStatus('Select a writable repository before opening a pull request.', 'error')
+      return
+    }
+
+    const values = getFormValues()
+    const componentPathValidation = validateFilePath(values.componentFilePath)
+    if (!componentPathValidation.ok) {
+      setStatus(`Component path: ${componentPathValidation.reason}`, 'error')
+      return
+    }
+
+    const stylesPathValidation = validateFilePath(values.stylesFilePath)
+    if (!stylesPathValidation.ok) {
+      setStatus(`Styles path: ${stylesPathValidation.reason}`, 'error')
+      return
+    }
+
+    if (!values.baseBranch) {
+      setStatus('Base branch is required.', 'error')
+      return
+    }
+
+    const normalizedHeadBranch = sanitizeBranchPart(values.headBranch)
+    if (!normalizedHeadBranch) {
+      setStatus('Head branch name is required.', 'error')
+      return
+    }
+
+    if (!values.prTitle) {
+      setStatus('Pull request title is required.', 'error')
+      return
+    }
+
+    const summary = buildSummary({
+      repository,
+      baseBranch: values.baseBranch,
+      headBranch: normalizedHeadBranch,
+      componentFilePath: componentPathValidation.value,
+      stylesFilePath: stylesPathValidation.value,
+      prTitle: values.prTitle,
+    })
+
+    const submitRequest = () => {
+      pendingAbortController?.abort()
+      const abortController = new AbortController()
+      pendingAbortController = abortController
+
+      setPendingState(true)
+      setStatus(
+        'Creating branch, committing editor files, and opening pull request...',
+        'pending',
+      )
+
+      void createEditorContentPullRequest({
+        token,
+        repository,
+        baseBranch: values.baseBranch,
+        headBranch: normalizedHeadBranch,
+        prTitle: values.prTitle,
+        prBody: values.prBody,
+        componentFilePath: componentPathValidation.value,
+        componentSource:
+          typeof getComponentSource === 'function' ? getComponentSource() : '',
+        stylesFilePath: stylesPathValidation.value,
+        stylesSource: typeof getStylesSource === 'function' ? getStylesSource() : '',
+        commitMessage: `chore: sync editor component and styles from @knighted/develop`,
+        signal: abortController.signal,
+      })
+        .then(result => {
+          persistCurrentPaths()
+          const url = result.pullRequest.htmlUrl
+          setStatus(
+            url ? `Pull request opened: ${url}` : 'Pull request opened successfully.',
+            'ok',
+          )
+          setOpen(false)
+        })
+        .catch(error => {
+          if (abortController.signal.aborted) {
+            return
+          }
+
+          const message =
+            error instanceof Error ? error.message : 'Failed to open pull request.'
+          setStatus(`Open PR failed: ${message}`, 'error')
+        })
+        .finally(() => {
+          if (pendingAbortController === abortController) {
+            pendingAbortController = null
+          }
+          setPendingState(false)
+        })
+    }
+
+    if (typeof confirmBeforeSubmit === 'function') {
+      confirmBeforeSubmit({
+        title: 'Open pull request with editor content?',
+        copy: summary,
+        confirmButtonText: 'Open PR',
+        fallbackConfirmText: summary,
+        onConfirm: submitRequest,
+      })
+      return
+    }
+
+    submitRequest()
+  }
+
+  toggleButton?.addEventListener('click', () => {
+    setOpen(!open)
+  })
+
+  closeButton?.addEventListener('click', () => {
+    setOpen(false)
+  })
+
+  repositorySelect?.addEventListener('change', () => {
+    if (!(repositorySelect instanceof HTMLSelectElement)) {
+      return
+    }
+
+    const repositoryFullName = toSafeText(repositorySelect.value)
+    if (!repositoryFullName) {
+      return
+    }
+
+    setSelectedRepository?.(repositoryFullName)
+    syncFormForRepository({ resetBranch: true })
+  })
+
+  componentPathInput?.addEventListener('blur', persistCurrentPaths)
+  stylesPathInput?.addEventListener('blur', persistCurrentPaths)
+  baseBranchInput?.addEventListener('blur', persistCurrentPaths)
+  headBranchInput?.addEventListener('blur', persistCurrentPaths)
+  prTitleInput?.addEventListener('blur', persistCurrentPaths)
+  prBodyInput?.addEventListener('blur', persistCurrentPaths)
+
+  submitButton?.addEventListener('click', () => {
+    if (submitting) {
+      return
+    }
+
+    void runSubmit()
+  })
+
+  syncRepositories()
+
+  return {
+    setOpen,
+    isOpen: () => open,
+    setToken: token => {
+      const hasToken = typeof token === 'string' && token.trim().length > 0
+      if (toggleButton instanceof HTMLButtonElement) {
+        toggleButton.disabled = !hasToken
+      }
+
+      if (!hasToken) {
+        setOpen(false)
+      }
+    },
+    setSelectedRepository: () => {
+      syncRepositories()
+    },
+    syncRepositories,
+    dispose: () => {
+      pendingAbortController?.abort()
+      pendingAbortController = null
+    },
+  }
+}

@@ -10,6 +10,7 @@ import { createDiagnosticsUiController } from './modules/diagnostics-ui.js'
 import { isAiAssistantFeatureEnabled } from './modules/feature-flags.js'
 import { createGitHubChatDrawer } from './modules/github-chat-drawer.js'
 import { createGitHubByotControls } from './modules/github-byot-controls.js'
+import { createGitHubPrDrawer } from './modules/github-pr-drawer.js'
 import { createLayoutThemeController } from './modules/layout-theme.js'
 import { createLintDiagnosticsController } from './modules/lint-diagnostics.js'
 import { createPreviewBackgroundController } from './modules/preview-background.js'
@@ -24,8 +25,6 @@ const githubTokenInfo = document.getElementById('github-token-info')
 const githubTokenInfoPanel = document.getElementById('github-token-info-panel')
 const githubTokenAdd = document.getElementById('github-token-add')
 const githubTokenDelete = document.getElementById('github-token-delete')
-const githubRepoWrap = document.getElementById('github-repo-wrap')
-const githubRepoSelect = document.getElementById('github-repo-select')
 const aiChatToggle = document.getElementById('ai-chat-toggle')
 const aiChatDrawer = document.getElementById('ai-chat-drawer')
 const aiChatClose = document.getElementById('ai-chat-close')
@@ -38,6 +37,18 @@ const aiChatStatus = document.getElementById('ai-chat-status')
 const aiChatRate = document.getElementById('ai-chat-rate')
 const aiChatRepository = document.getElementById('ai-chat-repository')
 const aiChatMessages = document.getElementById('ai-chat-messages')
+const githubPrToggle = document.getElementById('github-pr-toggle')
+const githubPrDrawer = document.getElementById('github-pr-drawer')
+const githubPrClose = document.getElementById('github-pr-close')
+const githubPrStatus = document.getElementById('github-pr-status')
+const githubPrRepoSelect = document.getElementById('github-pr-repo-select')
+const githubPrBaseBranch = document.getElementById('github-pr-base-branch')
+const githubPrHeadBranch = document.getElementById('github-pr-head-branch')
+const githubPrComponentPath = document.getElementById('github-pr-component-path')
+const githubPrStylesPath = document.getElementById('github-pr-styles-path')
+const githubPrTitle = document.getElementById('github-pr-title')
+const githubPrBody = document.getElementById('github-pr-body')
+const githubPrSubmit = document.getElementById('github-pr-submit')
 const viewControlsToggle = document.getElementById('view-controls-toggle')
 const viewControlsDrawer = document.getElementById('view-controls-drawer')
 const aiControlsToggle = document.getElementById('ai-controls-toggle')
@@ -498,6 +509,7 @@ const {
 const githubAiContextState = {
   token: null,
   selectedRepository: null,
+  writableRepositories: [],
 }
 
 let chatDrawerController = {
@@ -507,17 +519,29 @@ let chatDrawerController = {
   dispose: () => {},
 }
 
+let prDrawerController = {
+  setOpen: () => {},
+  setSelectedRepository: () => {},
+  setToken: () => {},
+  syncRepositories: () => {},
+  dispose: () => {},
+}
+
 const syncAiChatTokenVisibility = token => {
   const hasToken = typeof token === 'string' && token.trim().length > 0
 
   if (hasToken) {
     aiChatToggle?.removeAttribute('hidden')
+    githubPrToggle?.removeAttribute('hidden')
     return
   }
 
   aiChatToggle?.setAttribute('hidden', '')
   aiChatToggle?.setAttribute('aria-expanded', 'false')
+  githubPrToggle?.setAttribute('hidden', '')
+  githubPrToggle?.setAttribute('aria-expanded', 'false')
   chatDrawerController.setOpen(false)
+  prDrawerController.setOpen(false)
 }
 
 const byotControls = createGitHubByotControls({
@@ -527,11 +551,16 @@ const byotControls = createGitHubByotControls({
   tokenInfoButton: githubTokenInfo,
   tokenAddButton: githubTokenAdd,
   tokenDeleteButton: githubTokenDelete,
-  repoSelect: githubRepoSelect,
-  repoWrap: githubRepoWrap,
   onRepositoryChange: repository => {
     githubAiContextState.selectedRepository = repository
     chatDrawerController.setSelectedRepository(repository)
+    prDrawerController.setSelectedRepository(repository)
+  },
+  onWritableRepositoriesChange: ({ repositories }) => {
+    githubAiContextState.writableRepositories = Array.isArray(repositories)
+      ? [...repositories]
+      : []
+    prDrawerController.syncRepositories()
   },
   onTokenDeleteRequest: onConfirm => {
     confirmAction({
@@ -547,17 +576,27 @@ const byotControls = createGitHubByotControls({
     githubAiContextState.token = token
     syncAiChatTokenVisibility(token)
     chatDrawerController.setToken(token)
+    prDrawerController.setToken(token)
   },
   setStatus,
 })
 
 githubAiContextState.selectedRepository = byotControls.getSelectedRepository()
 githubAiContextState.token = byotControls.getToken()
+githubAiContextState.writableRepositories = byotControls.getWritableRepositories()
 
 const getCurrentGitHubToken = () => githubAiContextState.token ?? byotControls.getToken()
 
 const getCurrentSelectedRepository = () =>
   githubAiContextState.selectedRepository ?? byotControls.getSelectedRepository()
+
+const getCurrentWritableRepositories = () =>
+  githubAiContextState.writableRepositories.length > 0
+    ? [...githubAiContextState.writableRepositories]
+    : byotControls.getWritableRepositories()
+
+const setCurrentSelectedRepository = fullName =>
+  byotControls.setSelectedRepository(fullName)
 
 chatDrawerController = createGitHubChatDrawer({
   featureEnabled: aiAssistantFeatureEnabled,
@@ -584,6 +623,39 @@ chatDrawerController = createGitHubChatDrawer({
     return layout === 'preview-left' ? 'left' : 'right'
   },
 })
+
+prDrawerController = createGitHubPrDrawer({
+  featureEnabled: aiAssistantFeatureEnabled,
+  toggleButton: githubPrToggle,
+  drawer: githubPrDrawer,
+  closeButton: githubPrClose,
+  repositorySelect: githubPrRepoSelect,
+  baseBranchInput: githubPrBaseBranch,
+  headBranchInput: githubPrHeadBranch,
+  componentPathInput: githubPrComponentPath,
+  stylesPathInput: githubPrStylesPath,
+  prTitleInput: githubPrTitle,
+  prBodyInput: githubPrBody,
+  submitButton: githubPrSubmit,
+  statusNode: githubPrStatus,
+  getToken: getCurrentGitHubToken,
+  getSelectedRepository: getCurrentSelectedRepository,
+  getWritableRepositories: getCurrentWritableRepositories,
+  setSelectedRepository: setCurrentSelectedRepository,
+  getComponentSource: () => getJsxSource(),
+  getStylesSource: () => getCssSource(),
+  getDrawerSide: () => {
+    const layout = getCurrentLayout()
+    return layout === 'preview-left' ? 'left' : 'right'
+  },
+  confirmBeforeSubmit: options => {
+    confirmAction(options)
+  },
+})
+
+prDrawerController.setToken(githubAiContextState.token)
+prDrawerController.setSelectedRepository(githubAiContextState.selectedRepository)
+prDrawerController.syncRepositories()
 
 const getStyleEditorLanguage = mode => {
   if (mode === 'less') return 'less'
@@ -985,6 +1057,7 @@ const confirmAction = ({
   fallbackConfirmText,
   onConfirm,
 }) => {
+  const toConfirmText = value => (typeof value === 'string' ? value.trim() : '')
   const supportsModalDialog =
     clearConfirmDialog instanceof HTMLDialogElement &&
     typeof clearConfirmDialog.showModal === 'function'
@@ -1004,7 +1077,25 @@ const confirmAction = ({
     clearConfirmTitle.textContent = title
   }
 
-  if (clearConfirmCopy) {
+  if (clearConfirmCopy instanceof HTMLUListElement) {
+    const lines = toConfirmText(copy)
+      .split('\n')
+      .map(line => line.replace(/^\s*[-*]\s*/, '').trim())
+      .filter(Boolean)
+
+    clearConfirmCopy.replaceChildren()
+    const items = lines.length > 0 ? lines : [toConfirmText(copy)]
+
+    for (const line of items) {
+      if (!line) {
+        continue
+      }
+
+      const listItem = document.createElement('li')
+      listItem.textContent = line
+      clearConfirmCopy.append(listItem)
+    }
+  } else if (clearConfirmCopy) {
     clearConfirmCopy.textContent = copy
   }
 
@@ -1336,6 +1427,7 @@ window.addEventListener('beforeunload', () => {
   clearStylesLintRecheckTimer()
   lintDiagnostics.dispose()
   chatDrawerController.dispose()
+  prDrawerController.dispose()
 })
 
 applyAppGridLayout(getInitialAppGridLayout(), { persist: false })

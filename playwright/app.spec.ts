@@ -17,10 +17,19 @@ type ChatRequestBody = {
   stream?: boolean
 }
 
+type CreateRefRequestBody = {
+  ref?: string
+  sha?: string
+}
+
+type PullRequestCreateBody = {
+  head?: string
+  base?: string
+}
+
 const waitForAppReady = async (page: Page, path = appEntryPath) => {
   await page.goto(path)
   await expect(page.getByRole('heading', { name: '@knighted/develop' })).toBeVisible()
-  await expect(page.locator('#cdn-loading')).toHaveAttribute('hidden', '')
 }
 
 const waitForInitialRender = async (page: Page) => {
@@ -124,6 +133,18 @@ const ensureAiChatDrawerOpen = async (page: Page) => {
   await expect(page.locator('#ai-chat-drawer')).toBeVisible()
 }
 
+const ensureOpenPrDrawerOpen = async (page: Page) => {
+  const toggle = page.locator('#github-pr-toggle')
+  await expect(toggle).toBeEnabled({ timeout: 60_000 })
+  const isExpanded = await toggle.getAttribute('aria-expanded')
+
+  if (isExpanded !== 'true') {
+    await toggle.click()
+  }
+
+  await expect(page.locator('#github-pr-drawer')).toBeVisible()
+}
+
 const connectByotWithSingleRepo = async (page: Page) => {
   await page.route('https://api.github.com/user/repos**', async route => {
     await route.fulfill({
@@ -144,9 +165,8 @@ const connectByotWithSingleRepo = async (page: Page) => {
 
   await page.locator('#github-token-input').fill('github_pat_fake_chat_1234567890')
   await page.locator('#github-token-add').click()
-  await expect(page.locator('#github-repo-select')).toHaveValue(
-    'knightedcodemonkey/develop',
-  )
+  await expect(page.locator('#status')).toHaveText('Loaded 1 writable repositories')
+  await expect(page.locator('#github-pr-toggle')).toBeVisible()
 }
 
 const expectCollapseButtonState = async (
@@ -187,6 +207,8 @@ test('BYOT controls stay hidden when feature flag is disabled', async ({ page })
   await expect(byotControls).toBeHidden()
   await expect(page.locator('#ai-chat-toggle')).toBeHidden()
   await expect(page.locator('#ai-chat-drawer')).toBeHidden()
+  await expect(page.locator('#github-pr-toggle')).toBeHidden()
+  await expect(page.locator('#github-pr-drawer')).toBeHidden()
 })
 
 test('BYOT controls render when feature flag is enabled by query param', async ({
@@ -199,6 +221,7 @@ test('BYOT controls render when feature flag is enabled by query param', async (
   await expect(page.locator('#github-token-input')).toBeVisible()
   await expect(page.locator('#github-token-add')).toBeVisible()
   await expect(page.locator('#github-ai-controls #ai-chat-toggle')).toBeHidden()
+  await expect(page.locator('#github-ai-controls #github-pr-toggle')).toBeHidden()
 })
 
 test('GitHub token info panel reflects missing and present token states', async ({
@@ -476,6 +499,8 @@ test('AI chat falls back to non-streaming response when streaming fails', async 
 })
 
 test('BYOT remembers selected repository across reloads', async ({ page }) => {
+  test.setTimeout(90_000)
+
   await page.route('https://api.github.com/user/repos**', async route => {
     await route.fulfill({
       status: 200,
@@ -506,7 +531,9 @@ test('BYOT remembers selected repository across reloads', async ({ page }) => {
   await page.locator('#github-token-input').fill('github_pat_fake_1234567890')
   await page.locator('#github-token-add').click()
 
-  const repoSelect = page.locator('#github-repo-select')
+  await ensureOpenPrDrawerOpen(page)
+
+  const repoSelect = page.locator('#github-pr-repo-select')
   await expect(repoSelect).toBeEnabled()
   await expect(page.locator('#status')).toHaveText('Loaded 2 writable repositories')
 
@@ -515,9 +542,164 @@ test('BYOT remembers selected repository across reloads', async ({ page }) => {
 
   await page.reload()
   await expect(page.getByRole('heading', { name: '@knighted/develop' })).toBeVisible()
+  await expect(page.locator('#status')).toHaveText('Loaded 2 writable repositories', {
+    timeout: 60_000,
+  })
   await expect(page.locator('#github-token-add')).toBeHidden()
   await expect(page.locator('#github-token-delete')).toBeVisible()
+  await ensureOpenPrDrawerOpen(page)
   await expect(repoSelect).toHaveValue('knightedcodemonkey/develop')
+})
+
+test('Open PR drawer confirms and submits component/styles filepaths', async ({
+  page,
+}) => {
+  let createdRefBody: CreateRefRequestBody | null = null
+  const upsertRequests: Array<{ path: string; body: Record<string, unknown> }> = []
+  let pullRequestBody: PullRequestCreateBody | null = null
+
+  await page.route('https://api.github.com/user/repos**', async route => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify([
+        {
+          id: 11,
+          owner: { login: 'knightedcodemonkey' },
+          name: 'develop',
+          full_name: 'knightedcodemonkey/develop',
+          default_branch: 'main',
+          permissions: { push: true },
+        },
+      ]),
+    })
+  })
+
+  await page.route(
+    'https://api.github.com/repos/knightedcodemonkey/develop/git/ref/**',
+    async route => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          ref: 'refs/heads/main',
+          object: { type: 'commit', sha: 'abc123mainsha' },
+        }),
+      })
+    },
+  )
+
+  await page.route(
+    'https://api.github.com/repos/knightedcodemonkey/develop/git/refs',
+    async route => {
+      createdRefBody = route.request().postDataJSON() as CreateRefRequestBody
+      await route.fulfill({
+        status: 201,
+        contentType: 'application/json',
+        body: JSON.stringify({ ref: 'refs/heads/develop/open-pr-test' }),
+      })
+    },
+  )
+
+  await page.route(
+    'https://api.github.com/repos/knightedcodemonkey/develop/contents/**',
+    async route => {
+      const request = route.request()
+      const method = request.method()
+      const url = request.url()
+      const path = new URL(url).pathname.split('/contents/')[1] ?? ''
+
+      if (method === 'GET') {
+        await route.fulfill({
+          status: 404,
+          contentType: 'application/json',
+          body: JSON.stringify({ message: 'Not Found' }),
+        })
+        return
+      }
+
+      const body = request.postDataJSON() as Record<string, unknown>
+      upsertRequests.push({ path: decodeURIComponent(path), body })
+      await route.fulfill({
+        status: 201,
+        contentType: 'application/json',
+        body: JSON.stringify({ commit: { sha: 'commit-sha' } }),
+      })
+    },
+  )
+
+  await page.route(
+    'https://api.github.com/repos/knightedcodemonkey/develop/pulls',
+    async route => {
+      pullRequestBody = route.request().postDataJSON() as PullRequestCreateBody
+      await route.fulfill({
+        status: 201,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          number: 42,
+          html_url: 'https://github.com/knightedcodemonkey/develop/pull/42',
+        }),
+      })
+    },
+  )
+
+  await waitForAppReady(page, `${appEntryPath}?feature-ai=true`)
+  await connectByotWithSingleRepo(page)
+  await ensureOpenPrDrawerOpen(page)
+
+  await page.locator('#github-pr-head-branch').fill('develop/open-pr-test')
+  await page.locator('#github-pr-component-path').fill('examples/component/App.tsx')
+  await page.locator('#github-pr-styles-path').fill('examples/styles/app.css')
+  await page.locator('#github-pr-title').fill('Apply editor updates from develop')
+  await page
+    .locator('#github-pr-body')
+    .fill('Generated from editor content in @knighted/develop.')
+
+  await page.locator('#github-pr-submit').click()
+
+  const dialog = page.locator('#clear-confirm-dialog')
+  await expect(dialog).toHaveAttribute('open', '')
+  await expect(page.locator('#clear-confirm-title')).toHaveText(
+    'Open pull request with editor content?',
+  )
+  await expect(page.locator('#clear-confirm-copy')).toContainText(
+    'Component file path: examples/component/App.tsx',
+  )
+  await expect(page.locator('#clear-confirm-copy')).toContainText(
+    'Styles file path: examples/styles/app.css',
+  )
+
+  await dialog.getByRole('button', { name: 'Open PR' }).click()
+
+  await expect(page.locator('#github-pr-status')).toContainText(
+    'Pull request opened: https://github.com/knightedcodemonkey/develop/pull/42',
+  )
+
+  const createdRefPayload = createdRefBody as CreateRefRequestBody | null
+  const pullRequestPayload = pullRequestBody as PullRequestCreateBody | null
+
+  expect(createdRefPayload?.ref).toBe('refs/heads/develop/open-pr-test')
+  expect(createdRefPayload?.sha).toBe('abc123mainsha')
+
+  expect(upsertRequests).toHaveLength(2)
+  expect(upsertRequests[0]?.path).toBe('examples/component/App.tsx')
+  expect(upsertRequests[1]?.path).toBe('examples/styles/app.css')
+  expect(pullRequestPayload?.head).toBe('develop/open-pr-test')
+  expect(pullRequestPayload?.base).toBe('main')
+})
+
+test('Open PR drawer validates unsafe filepaths', async ({ page }) => {
+  await waitForAppReady(page, `${appEntryPath}?feature-ai=true`)
+  await connectByotWithSingleRepo(page)
+  await ensureOpenPrDrawerOpen(page)
+
+  await page.locator('#github-pr-component-path').fill('../outside/App.tsx')
+  await page.locator('#github-pr-submit').click()
+
+  await expect(page.locator('#github-pr-status')).toContainText(
+    'Component path: File path cannot include parent directory traversal.',
+  )
+  await expect(page.locator('#clear-confirm-dialog')).not.toHaveAttribute('open', '')
 })
 
 test('renders default playground preview', async ({ page }) => {

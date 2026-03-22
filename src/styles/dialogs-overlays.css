@@ -29,10 +29,19 @@
   font-size: 1.04rem;
 }
 
-.confirm-dialog__form p {
+.confirm-dialog__form p,
+.confirm-dialog__form ul {
   margin: 10px 0 0;
   color: var(--dialog-muted);
   font-size: 0.9rem;
+}
+
+.confirm-dialog__form ul {
+  padding-left: 1.1rem;
+}
+
+.confirm-dialog__form li + li {
+  margin-top: 4px;
 }
 
 .confirm-dialog__actions {
