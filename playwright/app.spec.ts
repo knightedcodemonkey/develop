@@ -30,6 +30,8 @@ type PullRequestCreateBody = {
 const waitForAppReady = async (page: Page, path = appEntryPath) => {
   await page.goto(path)
   await expect(page.getByRole('heading', { name: '@knighted/develop' })).toBeVisible()
+  await expect(page.locator('#cdn-loading')).toHaveAttribute('hidden', '')
+  await expect.poll(() => page.locator('#status').textContent()).not.toBe('Idle')
 }
 
 const waitForInitialRender = async (page: Page) => {
@@ -698,6 +700,37 @@ test('Open PR drawer validates unsafe filepaths', async ({ page }) => {
 
   await expect(page.locator('#github-pr-status')).toContainText(
     'Component path: File path cannot include parent directory traversal.',
+  )
+  await expect(page.locator('#clear-confirm-dialog')).not.toHaveAttribute('open', '')
+})
+
+test('Open PR drawer allows dotted file segments that are not traversal', async ({
+  page,
+}) => {
+  await waitForAppReady(page, `${appEntryPath}?feature-ai=true`)
+  await connectByotWithSingleRepo(page)
+  await ensureOpenPrDrawerOpen(page)
+
+  await page.locator('#github-pr-component-path').fill('docs/v1.0..v1.1/App.tsx')
+  await page.locator('#github-pr-styles-path').fill('styles/foo..bar.css')
+  await page.locator('#github-pr-submit').click()
+
+  await expect(page.locator('#clear-confirm-dialog')).toHaveAttribute('open', '')
+  await expect(page.locator('#github-pr-status')).not.toContainText(
+    'File path cannot include parent directory traversal.',
+  )
+})
+
+test('Open PR drawer rejects trailing slash file paths', async ({ page }) => {
+  await waitForAppReady(page, `${appEntryPath}?feature-ai=true`)
+  await connectByotWithSingleRepo(page)
+  await ensureOpenPrDrawerOpen(page)
+
+  await page.locator('#github-pr-component-path').fill('src/components/')
+  await page.locator('#github-pr-submit').click()
+
+  await expect(page.locator('#github-pr-status')).toContainText(
+    'Component path: File path must include a filename (no trailing slash).',
   )
   await expect(page.locator('#clear-confirm-dialog')).not.toHaveAttribute('open', '')
 })

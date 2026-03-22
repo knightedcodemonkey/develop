@@ -545,9 +545,14 @@ const requestGitHubJson = async ({
   signal,
   allowNotFound = false,
 }) => {
+  const headers = {
+    ...buildRequestHeaders(token),
+    ...(body ? { 'Content-Type': 'application/json' } : {}),
+  }
+
   const response = await fetch(url, {
     method,
-    headers: buildRequestHeaders(token),
+    headers,
     body: body ? JSON.stringify(body) : undefined,
     signal,
   })
@@ -636,13 +641,15 @@ export const getRepositoryFileMetadata = async ({
 const toUtf8Base64 = value => {
   const encoder = new TextEncoder()
   const bytes = encoder.encode(value)
-  let binary = ''
+  const chunkSize = 0x8000
+  const chunks = []
 
-  for (const byte of bytes) {
-    binary += String.fromCharCode(byte)
+  for (let offset = 0; offset < bytes.length; offset += chunkSize) {
+    const chunk = bytes.subarray(offset, offset + chunkSize)
+    chunks.push(String.fromCharCode(...chunk))
   }
 
-  return btoa(binary)
+  return btoa(chunks.join(''))
 }
 
 const isMissingShaForExistingFileError = error => {

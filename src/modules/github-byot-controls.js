@@ -193,6 +193,16 @@ export const createGitHubByotControls = ({
   }
 
   const clearRepoOptions = placeholderLabel => {
+    if (repoSelect instanceof HTMLSelectElement) {
+      repoSelect.replaceChildren(
+        createDefaultRepoOption({
+          label: placeholderLabel,
+          disabled: true,
+        }),
+      )
+      repoSelect.disabled = true
+    }
+
     if (typeof onWritableRepositoriesChange === 'function') {
       onWritableRepositoriesChange({
         repositories: [],

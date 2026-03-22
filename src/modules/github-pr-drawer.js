@@ -71,7 +71,13 @@ const validateFilePath = value => {
     }
   }
 
-  if (path.includes('..')) {
+  if (path.endsWith('/')) {
+    return { ok: false, reason: 'File path must include a filename (no trailing slash).' }
+  }
+
+  const segments = path.split('/').filter(Boolean)
+
+  if (segments.some(segment => segment === '..')) {
     return { ok: false, reason: 'File path cannot include parent directory traversal.' }
   }
 
@@ -83,7 +89,6 @@ const validateFilePath = value => {
     }
   }
 
-  const segments = path.split('/').filter(Boolean)
   if (segments.length === 0 || segments.some(segment => segment === '.' || !segment)) {
     return { ok: false, reason: 'File path is invalid.' }
   }
@@ -99,7 +104,7 @@ const sanitizeBranchPart = value => {
 
   return trimmed
     .replace(/[^a-z0-9._/-]/g, '-')
-    .replace(/\/+/, '/')
+    .replace(/\/+/g, '/')
     .replace(/-{2,}/g, '-')
     .replace(/^[-/.]+|[-/.]+$/g, '')
 }
