@@ -45,26 +45,48 @@
 }
 
 .status {
+  --status-accent: var(--text-subtle);
+  --status-bg: var(--surface-chip);
+  --status-fg: var(--text-subtle);
   font-size: 0.9rem;
+  font-weight: 600;
+  line-height: 1.2;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
   padding: 8px 12px;
-  border-radius: 999px;
-  background: var(--surface-chip);
-  color: var(--text-subtle);
+  border-radius: 10px;
+  border: 1px solid color-mix(in srgb, var(--status-accent) 40%, var(--border-subtle));
+  background: var(--status-bg);
+  color: var(--status-fg);
+}
+
+.status::before {
+  content: '';
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+  background: var(--status-accent);
+  flex: none;
 }
 
 .status--neutral {
-  background: var(--surface-chip);
-  color: var(--text-subtle);
+  --status-accent: var(--text-subtle);
+  --status-bg: var(--surface-chip);
+  --status-fg: var(--text-subtle);
+  border-color: color-mix(in srgb, var(--border-subtle) 72%, transparent);
 }
 
 .status--pending {
-  background: color-mix(in srgb, var(--accent) 18%, transparent);
-  color: color-mix(in srgb, var(--panel-text) 72%, var(--accent));
+  --status-accent: color-mix(in srgb, var(--accent) 88%, var(--panel-text));
+  --status-bg: color-mix(in srgb, var(--accent) 18%, transparent);
+  --status-fg: color-mix(in srgb, var(--panel-text) 72%, var(--accent));
 }
 
 .status--error {
-  background: color-mix(in srgb, rgb(var(--danger-rgb)) 20%, transparent);
-  color: color-mix(in srgb, rgb(var(--danger-rgb)) 85%, var(--panel-text));
+  --status-accent: color-mix(in srgb, rgb(var(--danger-rgb)) 88%, var(--panel-text));
+  --status-bg: color-mix(in srgb, rgb(var(--danger-rgb)) 20%, transparent);
+  --status-fg: color-mix(in srgb, rgb(var(--danger-rgb)) 85%, var(--panel-text));
 }
 
 .app-grid {
@@ -330,6 +352,23 @@
 @media (max-width: 900px) {
   .app-grid-ai-toggle:not([hidden]) {
     display: inline-flex;
+  }
+}
+
+@media (max-width: 640px) {
+  .app-header {
+    flex-direction: column;
+    align-items: flex-start;
+    justify-content: flex-start;
+    gap: 10px;
+  }
+
+  .app-header p {
+    max-width: 32ch;
+  }
+
+  .app-header .status {
+    align-self: flex-start;
   }
 }
 

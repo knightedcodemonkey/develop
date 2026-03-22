@@ -83,14 +83,7 @@
 }
 
 .editor-tools-toggle {
-  opacity: 0.72;
-}
-
-.editor-tools-toggle svg {
-  width: 15px;
-  height: 15px;
-  fill: currentColor;
-  stroke: none;
+  opacity: 0.74;
 }
 
 .editor-tools-toggle[aria-pressed='true'] {
@@ -98,6 +91,10 @@
   border-color: color-mix(in srgb, var(--accent) 65%, transparent);
   background: var(--accent-soft);
   color: var(--select-text);
+}
+
+.editor-tools-toggle .editor-tools-toggle__inner-ring {
+  stroke-width: 0.75;
 }
 
 .panel-collapse-toggle {
