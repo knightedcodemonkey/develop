@@ -433,7 +433,7 @@ test('BYOT remembers selected repository across reloads', async ({ page }) => {
 test('renders default playground preview', async ({ page }) => {
   await waitForInitialRender(page)
 
-  await page.getByLabel('ShadowRoot (open)').uncheck()
+  await page.getByLabel('ShadowRoot').uncheck()
   await expect(page.locator('#status')).toHaveText('Rendered')
   await expectPreviewHasRenderedContent(page)
 })
@@ -668,7 +668,7 @@ test('renders in react mode with css modules', async ({ page }) => {
   await ensurePanelToolsVisible(page, 'component')
   await ensurePanelToolsVisible(page, 'styles')
 
-  await page.getByLabel('ShadowRoot (open)').uncheck()
+  await page.getByLabel('ShadowRoot').uncheck()
   await page.locator('#render-mode').selectOption('react')
   await page.locator('#style-mode').selectOption('module')
   await expect(page.locator('#status')).toHaveText('Rendered')
@@ -678,7 +678,7 @@ test('renders in react mode with css modules', async ({ page }) => {
 test('transpiles TypeScript annotations in component source', async ({ page }) => {
   await waitForInitialRender(page)
 
-  await page.getByLabel('ShadowRoot (open)').uncheck()
+  await page.getByLabel('ShadowRoot').uncheck()
   await setComponentEditorSource(
     page,
     [
@@ -762,7 +762,7 @@ test('react mode executes default React import without TDZ runtime failure', asy
 
   await ensurePanelToolsVisible(page, 'component')
 
-  await page.getByLabel('ShadowRoot (open)').uncheck()
+  await page.getByLabel('ShadowRoot').uncheck()
   await page.locator('#render-mode').selectOption('react')
   await setComponentEditorSource(
     page,
@@ -854,7 +854,7 @@ test('renders with less style mode', async ({ page }) => {
 
   await ensurePanelToolsVisible(page, 'styles')
 
-  await page.getByLabel('ShadowRoot (open)').uncheck()
+  await page.getByLabel('ShadowRoot').uncheck()
   await page.locator('#style-mode').selectOption('less')
   await expect(page.locator('#status')).toHaveText('Rendered')
   await expectPreviewHasRenderedContent(page)
@@ -865,7 +865,7 @@ test('renders with sass style mode', async ({ page }) => {
 
   await ensurePanelToolsVisible(page, 'styles')
 
-  await page.getByLabel('ShadowRoot (open)').uncheck()
+  await page.getByLabel('ShadowRoot').uncheck()
   await page.locator('#style-mode').selectOption('sass')
   await expect(page.locator('#status')).toHaveText('Rendered')
   await expectPreviewHasRenderedContent(page)

@@ -30,6 +30,7 @@ const aiChatDrawer = document.getElementById('ai-chat-drawer')
 const aiChatClose = document.getElementById('ai-chat-close')
 const aiChatClear = document.getElementById('ai-chat-clear')
 const aiChatPrompt = document.getElementById('ai-chat-prompt')
+const aiChatModel = document.getElementById('ai-chat-model')
 const aiChatIncludeEditors = document.getElementById('ai-chat-include-editors')
 const aiChatSend = document.getElementById('ai-chat-send')
 const aiChatStatus = document.getElementById('ai-chat-status')
@@ -477,6 +478,7 @@ const githubAiContextState = {
 let chatDrawerController = {
   setOpen: () => {},
   setSelectedRepository: () => {},
+  setToken: () => {},
   dispose: () => {},
 }
 
@@ -509,6 +511,7 @@ const byotControls = createGitHubByotControls({
   onTokenChange: token => {
     githubAiContextState.token = token
     syncAiChatTokenVisibility(token)
+    chatDrawerController.setToken(token)
   },
   setStatus,
 })
@@ -527,6 +530,7 @@ chatDrawerController = createGitHubChatDrawer({
   drawer: aiChatDrawer,
   closeButton: aiChatClose,
   promptInput: aiChatPrompt,
+  modelSelect: aiChatModel,
   includeEditorsContextToggle: aiChatIncludeEditors,
   sendButton: aiChatSend,
   clearButton: aiChatClear,

@@ -455,7 +455,7 @@
             </label>
             <label class="toggle">
               <input id="shadow-toggle" type="checkbox" checked />
-              ShadowRoot (open)
+              ShadowRoot
             </label>
             <button
               class="hint-icon shadow-hint"
@@ -559,6 +559,13 @@
           rows="4"
           placeholder="Ask for help developing your component and styles"
         ></textarea>
+
+        <label class="ai-chat-model-picker" for="ai-chat-model">
+          <span class="sr-only">Model</span>
+          <select id="ai-chat-model" aria-label="Chat model" disabled>
+            <option value="openai/gpt-4.1-mini" selected>openai/gpt-4.1-mini</option>
+          </select>
+        </label>
 
         <label class="ai-chat-context-toggle" for="ai-chat-include-editors">
           <input type="checkbox" id="ai-chat-include-editors" checked />

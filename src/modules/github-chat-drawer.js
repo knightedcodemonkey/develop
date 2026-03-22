@@ -1,5 +1,6 @@
 import {
   defaultGitHubChatModel,
+  githubChatModelOptions,
   requestGitHubChatCompletion,
   streamGitHubChatCompletion,
 } from './github-api.js'
@@ -12,17 +13,34 @@ const toChatText = value => {
   return value.trim()
 }
 
-const toModelLabelText = value => {
+const toModelId = value => {
   if (typeof value !== 'string') {
-    return ''
+    return defaultGitHubChatModel
   }
 
   const model = value.trim()
-  if (!model) {
-    return ''
+  return model || defaultGitHubChatModel
+}
+
+const isModelAccessError = error => {
+  const message = error instanceof Error ? error.message.toLowerCase() : ''
+  if (!message) {
+    return false
   }
 
-  return `(${model})`
+  return (
+    (message.includes('model') && message.includes('access')) ||
+    (message.includes('model') && message.includes('permission')) ||
+    (message.includes('model') && message.includes('not available')) ||
+    (message.includes('model') && message.includes('not found')) ||
+    (message.includes('model') && message.includes('not enabled')) ||
+    (message.includes('forbidden') && message.includes('model'))
+  )
+}
+
+const formatModelAccessErrorMessage = selectedModel => {
+  const model = toModelId(selectedModel)
+  return `Selected model "${model}" is not available for this token. Choose a different model.`
 }
 
 const toRepositoryLabel = repository => {
@@ -59,6 +77,7 @@ export const createGitHubChatDrawer = ({
   drawer,
   closeButton,
   promptInput,
+  modelSelect,
   sendButton,
   clearButton,
   statusNode,
@@ -82,6 +101,7 @@ export const createGitHubChatDrawer = ({
       setOpen: () => {},
       isOpen: () => false,
       setSelectedRepository: () => {},
+      setToken: () => {},
       dispose: () => {},
     }
   }
@@ -138,6 +158,53 @@ export const createGitHubChatDrawer = ({
   const stopPendingRequest = () => {
     pendingAbortController?.abort()
     pendingAbortController = null
+  }
+
+  const setModelSelectDisabled = isDisabled => {
+    if (!(modelSelect instanceof HTMLSelectElement)) {
+      return
+    }
+
+    modelSelect.disabled = isDisabled
+  }
+
+  const replaceModelOptions = ({ modelIds, selectedModel }) => {
+    if (!(modelSelect instanceof HTMLSelectElement)) {
+      return
+    }
+
+    const nextSelectedModel = toModelId(selectedModel)
+    const nextModelIds = [...new Set([defaultGitHubChatModel, ...modelIds])]
+
+    modelSelect.replaceChildren()
+
+    for (const modelId of nextModelIds) {
+      const option = document.createElement('option')
+      option.value = modelId
+      option.textContent = modelId
+      option.selected = modelId === nextSelectedModel
+      modelSelect.append(option)
+    }
+
+    if (!nextModelIds.includes(nextSelectedModel)) {
+      modelSelect.value = defaultGitHubChatModel
+    }
+  }
+
+  const getSelectedModel = () => {
+    if (!(modelSelect instanceof HTMLSelectElement)) {
+      return defaultGitHubChatModel
+    }
+
+    return toModelId(modelSelect.value)
+  }
+
+  const initializeModelOptions = () => {
+    replaceModelOptions({
+      modelIds: githubChatModelOptions,
+      selectedModel: defaultGitHubChatModel,
+    })
+    setModelSelectDisabled(false)
   }
 
   const setOpen = nextOpen => {
@@ -237,16 +304,6 @@ export const createGitHubChatDrawer = ({
       const label = document.createElement('h3')
       label.className = 'ai-chat-message__label'
       label.textContent = message.role === 'assistant' ? 'Assistant' : 'You'
-
-      if (message.role === 'assistant') {
-        const modelLabelText = toModelLabelText(message.model)
-        if (modelLabelText) {
-          const modelLabel = document.createElement('span')
-          modelLabel.className = 'ai-chat-message__label-model'
-          modelLabel.textContent = modelLabelText
-          label.append(modelLabel)
-        }
-      }
 
       item.append(label)
 
@@ -367,6 +424,10 @@ export const createGitHubChatDrawer = ({
     if (promptInput instanceof HTMLTextAreaElement) {
       promptInput.disabled = isPending
     }
+
+    if (modelSelect instanceof HTMLSelectElement) {
+      modelSelect.disabled = isPending
+    }
   }
 
   const runChatRequest = async () => {
@@ -389,13 +450,15 @@ export const createGitHubChatDrawer = ({
       return
     }
 
+    const selectedModel = getSelectedModel()
+
     stopPendingRequest()
     const requestAbortController = new AbortController()
     const requestSignal = requestAbortController.signal
     pendingAbortController = requestAbortController
 
     appendMessage({ role: 'user', content: prompt })
-    appendMessage({ role: 'assistant', content: '', model: defaultGitHubChatModel })
+    appendMessage({ role: 'assistant', content: '', model: selectedModel })
     if (promptInput instanceof HTMLTextAreaElement) {
       promptInput.value = ''
     }
@@ -418,6 +481,7 @@ export const createGitHubChatDrawer = ({
       const streamResult = await streamGitHubChatCompletion({
         token,
         messages: outboundMessages,
+        model: selectedModel,
         signal: requestSignal,
         onToken: tokenChunk => {
           streamedContent += tokenChunk
@@ -447,6 +511,24 @@ export const createGitHubChatDrawer = ({
         return
       }
 
+      if (isModelAccessError(streamError)) {
+        const modelAccessMessage = formatModelAccessErrorMessage(selectedModel)
+
+        updateLastAssistantMessage(modelAccessMessage)
+        const lastMessage = messages[messages.length - 1]
+        if (lastMessage) {
+          lastMessage.level = 'error'
+        }
+        renderMessages()
+        setChatStatus(modelAccessMessage, 'error')
+
+        if (pendingAbortController === requestAbortController) {
+          pendingAbortController = null
+          setPendingState(false)
+        }
+        return
+      }
+
       setChatStatus(
         'Streaming unavailable. Retrying with fallback response...',
         'pending',
@@ -465,6 +547,7 @@ export const createGitHubChatDrawer = ({
       const fallbackResult = await requestGitHubChatCompletion({
         token,
         messages: outboundMessages,
+        model: selectedModel,
         signal: requestSignal,
       })
 
@@ -487,8 +570,11 @@ export const createGitHubChatDrawer = ({
         return
       }
 
-      const fallbackMessage =
-        fallbackError instanceof Error ? fallbackError.message : 'Chat request failed.'
+      const fallbackMessage = isModelAccessError(fallbackError)
+        ? formatModelAccessErrorMessage(selectedModel)
+        : fallbackError instanceof Error
+          ? fallbackError.message
+          : 'Chat request failed.'
 
       setRateMetadata(fallbackError?.rateLimit)
 
@@ -509,6 +595,7 @@ export const createGitHubChatDrawer = ({
 
   toggleButton?.setAttribute('aria-expanded', 'false')
   drawer?.setAttribute('hidden', '')
+  initializeModelOptions()
   syncRepositoryLabel()
   renderMessages()
   setChatStatus('Idle', 'neutral')
@@ -560,6 +647,7 @@ export const createGitHubChatDrawer = ({
     setSelectedRepository: () => {
       syncRepositoryLabel()
     },
+    setToken: () => {},
     dispose: () => {
       stopPendingRequest()
       setPendingState(false)
