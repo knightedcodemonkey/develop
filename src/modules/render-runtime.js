@@ -815,11 +815,21 @@ export const createRenderRuntimeController = ({
       setStatus('Rendered', 'neutral')
       setRenderedStatus()
     } catch (error) {
-      setStatus('Error', 'error')
+      const errorMessage = error instanceof Error ? error.message : String(error)
+      const isCdnDependencyLoadFailure = errorMessage.startsWith(
+        'Unable to load core runtime from CDN:',
+      )
+
+      setStatus(
+        isCdnDependencyLoadFailure
+          ? 'Error loading CDN dependency. Reload to retry.'
+          : 'Error',
+        'error',
+      )
       const target = getRenderTarget()
       clearTarget(target)
       const message = document.createElement('pre')
-      message.textContent = error instanceof Error ? error.message : String(error)
+      message.textContent = errorMessage
       message.style.color = '#ff9aa2'
       target.append(message)
     } finally {

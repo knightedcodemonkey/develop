@@ -189,6 +189,28 @@ test('BYOT controls stay hidden when feature flag is disabled', async ({ page })
   await expect(page.locator('#ai-chat-drawer')).toBeHidden()
 })
 
+test('shows actionable status when core CDN dependency loading fails', async ({
+  page,
+}) => {
+  await page.route('**/*', async route => {
+    const url = route.request().url()
+
+    if (url.includes('@knighted') || url.includes('%40knighted')) {
+      await route.abort()
+      return
+    }
+
+    await route.continue()
+  })
+  await waitForAppReady(page)
+  await expect(page.locator('#status')).toHaveText(
+    'Error loading CDN dependency. Reload to retry.',
+  )
+  await expect(page.locator('#preview-host')).toContainText(
+    'Unable to load core runtime from CDN:',
+  )
+})
+
 test('BYOT controls render when feature flag is enabled by query param', async ({
   page,
 }) => {
