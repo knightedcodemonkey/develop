@@ -3,7 +3,7 @@
 This project uses two runtime modes:
 
 - Local development mode: dynamic CDN resolution from `src/modules/cdn.js` with esm.sh as default.
-- Production mode: CDN-first build artifacts in `dist`, with `build:esm` as the current preferred deploy build.
+- Production mode: CDN-first build artifacts in `dist`, with `npm run build` defaulting to ESM unless `KNIGHTED_PRIMARY_CDN` is set.
 
 ## Local Development
 
@@ -29,6 +29,7 @@ Select a different production primary CDN at build time:
 ```sh
 KNIGHTED_PRIMARY_CDN=esm npm run build
 KNIGHTED_PRIMARY_CDN=jspmGa npm run build
+KNIGHTED_PRIMARY_CDN=importMap npm run build
 ```
 
 Convenience scripts are also available:
@@ -44,25 +45,29 @@ npm run build:importmap-mode
 <!-- prettier-ignore-start -->
 | Mode | Resolver | Import map step | JSPM index needed | Typical use |
 | --- | --- | --- | --- | --- |
-| `importMap` | Import map in `dist/index.html` | Yes | Yes | Default production mode |
-| `esm` | `src/modules/cdn.js` (`esm.sh` primary) | No | No | Stable fallback mode |
+| `importMap` | Import map in `dist/index.html` | Yes | Yes | JSPM-indexed release builds |
+| `esm` | `src/modules/cdn.js` (`esm.sh` primary) | No | No | Current default and deploy mode |
 | `jspmGa` | `src/modules/cdn.js` (`ga.jspm.io` primary) | No | No | Direct ga.jspm.io testing |
 <!-- prettier-ignore-end -->
 
 Mode notes:
 
 - `importMap`: Import-map mode when JSPM has indexed the required graph.
-- `esm`: Current preferred deploy build mode.
+- `esm`: Current default `build` mode and preferred deploy build mode.
 - `jspmGa`: Direct ga.jspm.io URL mode without import-map generation.
 
-This runs two steps:
+`npm run build` runs five steps:
 
 1. `npm run build:prepare`
 
 - Copies `src` to `dist`
 - Injects `window.__KNIGHTED_PRIMARY_CDN__` into `dist/index.html`
 
-2. `npm run build:importmap`
+2. `npm run build:css`
+
+- Bundles and minifies `dist/styles.css` with Lightning CSS
+
+3. `npm run build:importmap`
 
 - Runs only when `KNIGHTED_PRIMARY_CDN=importMap`
 - Runs `jspm link` with `--provider jspm.io`
@@ -73,6 +78,15 @@ This runs two steps:
   - `less=4.4.2`
 - Traces generated `dist/prod-imports.js`
 - Import specifiers come from `importMap` entries in `src/modules/cdn.js` (`cdnImportSpecs`)
+
+4. `npm run build:js`
+
+- Minifies `dist/**/*.js` and `dist/**/*.mjs` with esbuild
+- Uses syntax + whitespace minification only (no identifier mangling)
+
+5. `npm run build:html`
+
+- Minifies `dist/index.html` with `html-minifier-terser`
 
 Preview the built site locally:
 
@@ -86,11 +100,13 @@ End-to-end tests run against a preview build by default:
 npm run test:e2e
 ```
 
-This command builds with `build:esm` first, then runs Playwright against the preview server.
+This command forces `KNIGHTED_PRIMARY_CDN=esm` and runs `npm run build` first, then runs Playwright against the preview server.
+
+`preview` also forces an ESM build (`KNIGHTED_PRIMARY_CDN=esm npm run build`) before serving `dist`.
 
 ## CI And Deployment
 
-- CI workflow (`.github/workflows/ci.yml`) installs dependencies, runs lint, and runs `npm run build`.
+- CI workflow (`.github/workflows/ci.yml`) installs dependencies, runs lint, and runs `npm run build:esm`.
 - Deploy workflow (`.github/workflows/deploy.yml`) builds the production site and publishes `dist` to GitHub Pages.
 
 ## Notes
