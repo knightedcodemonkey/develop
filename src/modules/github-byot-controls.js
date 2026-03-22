@@ -214,7 +214,7 @@ export const createGitHubByotControls = ({
 
   const getSelectedRepositoryObject = () => {
     if (!lastSelectedRepository) {
-      return
+      return null
     }
 
     return writableRepos.find(repo => repo.fullName === lastSelectedRepository) ?? null

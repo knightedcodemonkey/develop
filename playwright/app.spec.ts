@@ -649,7 +649,7 @@ test('Open PR drawer confirms and submits component/styles filepaths', async ({
   await connectByotWithSingleRepo(page)
   await ensureOpenPrDrawerOpen(page)
 
-  await page.locator('#github-pr-head-branch').fill('develop/open-pr-test')
+  await page.locator('#github-pr-head-branch').fill('Develop/Open-Pr-Test')
   await page.locator('#github-pr-component-path').fill('examples/component/App.tsx')
   await page.locator('#github-pr-styles-path').fill('examples/styles/app.css')
   await page.locator('#github-pr-title').fill('Apply editor updates from develop')
@@ -680,14 +680,41 @@ test('Open PR drawer confirms and submits component/styles filepaths', async ({
   const createdRefPayload = createdRefBody as CreateRefRequestBody | null
   const pullRequestPayload = pullRequestBody as PullRequestCreateBody | null
 
-  expect(createdRefPayload?.ref).toBe('refs/heads/develop/open-pr-test')
+  expect(createdRefPayload?.ref).toBe('refs/heads/Develop/Open-Pr-Test')
   expect(createdRefPayload?.sha).toBe('abc123mainsha')
 
   expect(upsertRequests).toHaveLength(2)
   expect(upsertRequests[0]?.path).toBe('examples/component/App.tsx')
   expect(upsertRequests[1]?.path).toBe('examples/styles/app.css')
-  expect(pullRequestPayload?.head).toBe('develop/open-pr-test')
+  expect(pullRequestPayload?.head).toBe('Develop/Open-Pr-Test')
   expect(pullRequestPayload?.base).toBe('main')
+
+  await ensureOpenPrDrawerOpen(page)
+  await expect(page.locator('#github-pr-component-path')).toHaveValue(
+    'examples/component/App.tsx',
+  )
+  await expect(page.locator('#github-pr-styles-path')).toHaveValue(
+    'examples/styles/app.css',
+  )
+  await expect(page.locator('#github-pr-base-branch')).toHaveValue('main')
+
+  await expect(page.locator('#github-pr-head-branch')).toHaveValue(
+    /^develop\/develop\/editor-sync-/,
+  )
+  await expect(page.locator('#github-pr-head-branch')).not.toHaveValue(
+    'Develop/Open-Pr-Test',
+  )
+  await expect(page.locator('#github-pr-title')).toHaveValue(
+    'Apply component and styles edits to knightedcodemonkey/develop',
+  )
+  await expect(page.locator('#github-pr-body')).toHaveValue(
+    [
+      'This PR was created from @knighted/develop editor content.',
+      '',
+      '- Component source -> examples/component/App.tsx',
+      '- Styles source -> examples/styles/app.css',
+    ].join('\n'),
+  )
 })
 
 test('Open PR drawer validates unsafe filepaths', async ({ page }) => {
