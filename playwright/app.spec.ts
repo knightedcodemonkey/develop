@@ -201,6 +201,78 @@ test('BYOT controls render when feature flag is enabled by query param', async (
   await expect(page.locator('#github-ai-controls #ai-chat-toggle')).toBeHidden()
 })
 
+test('GitHub token info panel reflects missing and present token states', async ({
+  page,
+}) => {
+  await waitForAppReady(page, `${appEntryPath}?feature-ai=true`)
+
+  const infoButton = page.locator('#github-token-info')
+  const infoPanel = page.locator('#github-token-info-panel')
+  const missingMessage = page.locator('.github-token-info-message--missing-token')
+  const presentMessage = page.locator('.github-token-info-message--has-token')
+
+  await expect(infoButton).toHaveText('?')
+  await expect(infoButton).toHaveAttribute('data-token-state', 'missing')
+
+  await infoButton.click()
+  await expect(infoPanel).toBeVisible()
+  await expect(missingMessage).toBeVisible()
+  await expect(missingMessage).toContainText('Provide a GitHub PAT')
+  await expect(missingMessage.getByRole('link', { name: 'docs' })).toHaveAttribute(
+    'href',
+    'https://github.com/knightedcodemonkey/develop/blob/main/docs/byot.md',
+  )
+  await expect(presentMessage).toBeHidden()
+
+  await connectByotWithSingleRepo(page)
+  await expect(infoButton).toHaveText('i')
+  await expect(infoButton).toHaveAttribute('data-token-state', 'present')
+
+  await infoButton.click()
+  await expect(infoPanel).toBeVisible()
+  await expect(presentMessage).toBeVisible()
+  await expect(presentMessage).toContainText(
+    'Use the trash icon to remove it from storage.',
+  )
+  await expect(missingMessage).toBeHidden()
+})
+
+test('deleting saved GitHub token requires confirmation modal', async ({ page }) => {
+  await waitForAppReady(page, `${appEntryPath}?feature-ai=true`)
+  await connectByotWithSingleRepo(page)
+
+  const dialog = page.locator('#clear-confirm-dialog')
+  const tokenDelete = page.locator('#github-token-delete')
+  const tokenAdd = page.locator('#github-token-add')
+  const tokenInput = page.locator('#github-token-input')
+
+  await expect(tokenDelete).toBeVisible()
+
+  await tokenDelete.click()
+  await expect(dialog).toHaveAttribute('open', '')
+  await expect(page.locator('#clear-confirm-title')).toHaveText(
+    'Remove saved GitHub token?',
+  )
+  await expect(page.locator('#clear-confirm-copy')).toHaveText(
+    'This action removes the token from browser storage. You can add another token at any time.',
+  )
+
+  await dialog.getByRole('button', { name: 'Cancel' }).click()
+  await expect(dialog).not.toHaveAttribute('open', '')
+  await expect(tokenDelete).toBeVisible()
+  await expect(tokenAdd).toBeHidden()
+
+  await tokenDelete.click()
+  await expect(dialog).toHaveAttribute('open', '')
+  await dialog.getByRole('button', { name: 'Clear' }).click()
+  await expect(dialog).not.toHaveAttribute('open', '')
+
+  await expect(page.locator('#status')).toHaveText('GitHub token removed')
+  await expect(tokenAdd).toBeVisible()
+  await expect(tokenDelete).toBeHidden()
+  await expect(tokenInput).toHaveValue('')
+})
+
 test('AI chat drawer opens and closes when feature flag is enabled', async ({ page }) => {
   await waitForAppReady(page, `${appEntryPath}?feature-ai=true`)
   await connectByotWithSingleRepo(page)
