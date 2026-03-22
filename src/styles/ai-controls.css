@@ -28,6 +28,16 @@
   gap: 8px;
 }
 
+.github-token-control-wrap[data-token-state='missing']
+  .github-token-info-message--has-token {
+  display: none;
+}
+
+.github-token-control-wrap[data-token-state='present']
+  .github-token-info-message--missing-token {
+  display: none;
+}
+
 .github-token-input {
   width: 170px;
   min-width: 0;
@@ -79,7 +89,85 @@
 }
 
 .github-token-info {
-  align-self: flex-start;
+  display: inline-grid;
+  place-content: center;
+  cursor: pointer;
+  border-radius: 999px;
+  border: 1px solid var(--border-strong);
+  color: var(--hint-icon);
+  font-weight: 700;
+  line-height: 1;
+  opacity: 0.9;
+  background: transparent;
+  padding: 0;
+  width: 24px;
+  height: 24px;
+  font-size: 0.74rem;
+  transition:
+    border-color 140ms ease,
+    color 140ms ease,
+    background 140ms ease,
+    box-shadow 140ms ease;
+}
+
+.github-token-info[data-token-state='missing'] {
+  border-color: color-mix(in srgb, #f59e0b 70%, var(--border-strong));
+  color: color-mix(in srgb, #fbbf24 86%, var(--panel-text));
+  background: color-mix(in srgb, #f59e0b 14%, transparent);
+}
+
+.github-token-info[data-token-state='present'] {
+  border-color: color-mix(in srgb, #22c55e 56%, var(--border-strong));
+  color: color-mix(in srgb, #4ade80 82%, var(--panel-text));
+  background: color-mix(in srgb, #22c55e 12%, transparent);
+}
+
+.github-token-info[aria-expanded='true'] {
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--focus-ring) 70%, transparent);
+}
+
+.github-token-info:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+.github-token-info-panel {
+  position: absolute;
+  top: calc(100% + 10px);
+  left: 0;
+  width: min(360px, calc(100vw - 36px));
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--border-tooltip);
+  background: var(--surface-tooltip);
+  color: var(--tooltip-text);
+  font-size: 0.78rem;
+  line-height: 1.35;
+  text-align: left;
+  box-shadow: 0 12px 24px var(--shadow-elev-1);
+  z-index: 80;
+}
+
+.github-token-info-panel[hidden] {
+  display: none !important;
+}
+
+.github-token-info-message {
+  margin: 0;
+}
+
+.github-token-info-message a {
+  color: color-mix(in srgb, var(--focus-ring) 82%, white 18%);
+  text-underline-offset: 2px;
+}
+
+.github-token-info-message a:hover {
+  color: color-mix(in srgb, var(--focus-ring) 92%, white 8%);
+}
+
+.github-token-info-message a:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 1px;
 }
 
 .github-token-delete svg {
@@ -90,12 +178,6 @@
 .github-token-add svg {
   width: 14px;
   height: 14px;
-}
-
-.github-token-info.shadow-hint::after {
-  right: auto;
-  left: 0;
-  z-index: 80;
 }
 
 .github-token-add[data-state='loading'] svg {
@@ -443,19 +525,19 @@
     width: auto;
     max-width: none;
     justify-content: flex-start;
-    flex-wrap: nowrap;
+    flex-wrap: wrap;
+    row-gap: 10px;
     border: 1px solid var(--border-subtle);
     border-radius: 12px;
     padding: 10px 12px;
     background: color-mix(in srgb, var(--surface-panel-header) 88%, transparent);
     box-shadow: 0 14px 30px var(--shadow-elev-1);
     backdrop-filter: blur(6px);
-    overflow-x: auto;
-    overflow-y: hidden;
+    overflow: visible;
     z-index: 60;
   }
 
-  .github-token-info.shadow-hint::after {
+  .github-token-info-panel {
     position: fixed;
     top: auto;
     right: 12px;

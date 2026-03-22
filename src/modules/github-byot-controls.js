@@ -56,6 +56,7 @@ export const createGitHubByotControls = ({
   repoSelect,
   repoWrap,
   onRepositoryChange,
+  onTokenDeleteRequest,
   onTokenChange,
   setStatus,
 }) => {
@@ -113,6 +114,22 @@ export const createGitHubByotControls = ({
   const updateTokenActionVisibility = () => {
     const hasProvidedToken =
       typeof savedToken === 'string' && savedToken.trim().length > 0
+
+    if (tokenInfoButton instanceof HTMLButtonElement) {
+      tokenInfoButton.dataset.tokenState = hasProvidedToken ? 'present' : 'missing'
+      tokenInfoButton.textContent = hasProvidedToken ? 'i' : '?'
+      tokenInfoButton.setAttribute(
+        'aria-label',
+        hasProvidedToken
+          ? 'About GitHub token privacy'
+          : 'About GitHub token features and privacy',
+      )
+
+      const tokenControlWrap = tokenInfoButton.closest('.github-token-control-wrap')
+      if (tokenControlWrap instanceof HTMLElement) {
+        tokenControlWrap.dataset.tokenState = hasProvidedToken ? 'present' : 'missing'
+      }
+    }
 
     if (tokenAddButton instanceof HTMLButtonElement) {
       tokenAddButton.hidden = hasProvidedToken
@@ -413,7 +430,7 @@ export const createGitHubByotControls = ({
     void persistAndLoadToken(tokenInput.value)
   })
 
-  tokenDeleteButton?.addEventListener('click', () => {
+  const removeSavedToken = () => {
     abortInFlightRepoRequest()
     clearAddButtonResetTimer()
     setTokenAddButtonState('idle')
@@ -426,6 +443,15 @@ export const createGitHubByotControls = ({
     onRepositoryChange?.(null)
     syncSavedTokenUi()
     setStatus('GitHub token removed', 'neutral')
+  }
+
+  tokenDeleteButton?.addEventListener('click', () => {
+    if (typeof onTokenDeleteRequest === 'function') {
+      onTokenDeleteRequest(removeSavedToken)
+      return
+    }
+
+    removeSavedToken()
   })
 
   tokenInfoButton?.setAttribute('aria-expanded', 'false')

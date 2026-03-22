@@ -55,6 +55,13 @@ Repository structure:
 - Maintain graceful fallback behavior when CDN modules fail to load.
 - Keep the app usable in local dev without requiring a local bundle step.
 
+## Browser support policy
+
+- Target evergreen browsers only (current stable Chrome, Edge, Safari, and Firefox).
+- Prefer platform features available in evergreen browsers without adding legacy polyfills.
+- Do not add legacy-browser workarounds unless a task explicitly requires expanded support.
+- In code review, treat requests for old-browser compatibility as out-of-scope unless documented.
+
 ## Testing and validation expectations
 
 - Run npm run lint after JavaScript edits.
