@@ -17,10 +17,11 @@ const run = script => {
 }
 
 /*
- * Order matters: prepare/create dist first, then mutate assets,
- * and run HTML minification last after any index.html injection.
+ * Order matters: prepare/create dist first, then mutate assets.
+ * Keep HTML minification last after any index.html injection.
  */
 run('build:prepare')
 run('build:css')
 run('build:importmap')
+run('build:js')
 run('build:html')

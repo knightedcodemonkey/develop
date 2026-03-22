@@ -56,7 +56,7 @@ Mode notes:
 - `esm`: Current default `build` mode and preferred deploy build mode.
 - `jspmGa`: Direct ga.jspm.io URL mode without import-map generation.
 
-`npm run build` runs four steps:
+`npm run build` runs five steps:
 
 1. `npm run build:prepare`
 
@@ -79,7 +79,12 @@ Mode notes:
 - Traces generated `dist/prod-imports.js`
 - Import specifiers come from `importMap` entries in `src/modules/cdn.js` (`cdnImportSpecs`)
 
-4. `npm run build:html`
+4. `npm run build:js`
+
+- Minifies `dist/**/*.js` and `dist/**/*.mjs` with esbuild
+- Uses syntax + whitespace minification only (no identifier mangling)
+
+5. `npm run build:html`
 
 - Minifies `dist/index.html` with `html-minifier-terser`
 
