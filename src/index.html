@@ -115,12 +115,22 @@
             </button>
           </div>
 
-          <div class="github-repo-wrap" id="github-repo-wrap" hidden>
-            <label class="sr-only" for="github-repo-select">Repository</label>
-            <select id="github-repo-select" aria-label="Repository" disabled>
-              <option selected>Connect a token to load repositories</option>
-            </select>
-          </div>
+          <button
+            class="diagnostics-toggle github-pr-toggle"
+            id="github-pr-toggle"
+            type="button"
+            aria-expanded="false"
+            aria-controls="github-pr-drawer"
+            title="Open pull request"
+            disabled
+          >
+            <svg viewBox="0 0 16 16" aria-hidden="true">
+              <path
+                d="M1.5 3.25a2.25 2.25 0 1 1 3 2.122v5.256a2.251 2.251 0 1 1-1.5 0V5.372A2.25 2.25 0 0 1 1.5 3.25Zm5.677-.177L9.573.677A.25.25 0 0 1 10 .854V2.5h1A2.5 2.5 0 0 1 13.5 5v5.628a2.251 2.251 0 1 1-1.5 0V5a1 1 0 0 0-1-1h-1v1.646a.25.25 0 0 1-.427.177L7.177 3.427a.25.25 0 0 1 0-.354ZM3.75 2.5a.75.75 0 1 0 0 1.5.75.75 0 0 0 0-1.5Zm0 9.5a.75.75 0 1 0 0 1.5.75.75 0 0 0 0-1.5Zm8.25.75a.75.75 0 1 0 1.5 0 .75.75 0 0 0-1.5 0Z"
+              ></path>
+            </svg>
+            <span>Open PR</span>
+          </button>
 
           <button
             class="diagnostics-toggle ai-chat-toggle"
@@ -607,6 +617,126 @@
           <button class="render-button" id="ai-chat-clear" type="button">Clear</button>
         </div>
       </aside>
+
+      <aside class="github-pr-drawer" id="github-pr-drawer" hidden>
+        <div class="github-pr-drawer__header">
+          <h2>Open Pull Request</h2>
+          <button
+            class="icon-button"
+            id="github-pr-close"
+            type="button"
+            aria-label="Close open pull request drawer"
+            title="Close open pull request drawer"
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M6 6 18 18"></path>
+              <path d="M18 6 6 18"></path>
+            </svg>
+          </button>
+        </div>
+
+        <p class="github-pr-drawer__status" id="github-pr-status" data-level="neutral">
+          Configure repository, file paths, and branch details.
+        </p>
+
+        <div class="github-pr-drawer__form-grid" role="group" aria-label="Open PR form">
+          <label
+            class="github-pr-field github-pr-field--repo"
+            for="github-pr-repo-select"
+          >
+            <span>Repository</span>
+            <select
+              id="github-pr-repo-select"
+              aria-label="Pull request repository"
+              disabled
+            >
+              <option selected>Connect a token to load repositories</option>
+            </select>
+          </label>
+
+          <label
+            class="github-pr-field github-pr-field--base"
+            for="github-pr-base-branch"
+          >
+            <span>Base</span>
+            <input
+              id="github-pr-base-branch"
+              type="text"
+              autocomplete="off"
+              spellcheck="false"
+              placeholder="main"
+            />
+          </label>
+
+          <label
+            class="github-pr-field github-pr-field--head"
+            for="github-pr-head-branch"
+          >
+            <span>Head</span>
+            <input
+              id="github-pr-head-branch"
+              type="text"
+              autocomplete="off"
+              spellcheck="false"
+              placeholder="develop/repo/editor-sync-yyyymmdd"
+            />
+          </label>
+
+          <label
+            class="github-pr-field github-pr-field--component-filename"
+            for="github-pr-component-path"
+          >
+            <span>Component filename</span>
+            <input
+              id="github-pr-component-path"
+              type="text"
+              autocomplete="off"
+              spellcheck="false"
+              placeholder="src/components/App.jsx"
+            />
+          </label>
+
+          <label
+            class="github-pr-field github-pr-field--styles-filename"
+            for="github-pr-styles-path"
+          >
+            <span>Styles filename</span>
+            <input
+              id="github-pr-styles-path"
+              type="text"
+              autocomplete="off"
+              spellcheck="false"
+              placeholder="src/styles/app.css"
+            />
+          </label>
+
+          <label class="github-pr-field github-pr-field--full" for="github-pr-title">
+            <span>PR title</span>
+            <input
+              id="github-pr-title"
+              type="text"
+              autocomplete="off"
+              spellcheck="false"
+              placeholder="Apply editor updates"
+            />
+          </label>
+
+          <label class="github-pr-field github-pr-field--full" for="github-pr-body">
+            <span>PR description</span>
+            <textarea
+              id="github-pr-body"
+              rows="5"
+              placeholder="Describe the generated editor updates."
+            ></textarea>
+          </label>
+        </div>
+
+        <div class="github-pr-drawer__actions">
+          <button class="render-button" id="github-pr-submit" type="button">
+            Open PR
+          </button>
+        </div>
+      </aside>
     </main>
 
     <footer class="app-footer">
@@ -617,6 +747,8 @@
         CDN-delivered runtimes and compilers.
       </div>
     </footer>
+
+    <div class="app-toast" id="app-toast" role="status" aria-live="polite" hidden></div>
 
     <div class="cdn-loading" id="cdn-loading" role="status" aria-live="polite">
       <div class="cdn-loading-card">
@@ -636,7 +768,9 @@
     >
       <form method="dialog" class="confirm-dialog__form">
         <h3 id="clear-confirm-title">Clear source?</h3>
-        <p id="clear-confirm-copy">This action will remove all text from the editor.</p>
+        <ul id="clear-confirm-copy">
+          <li>This action will remove all text from the editor.</li>
+        </ul>
         <menu class="confirm-dialog__actions">
           <button
             class="confirm-dialog__button confirm-dialog__button--secondary"

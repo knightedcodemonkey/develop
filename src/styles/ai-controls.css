@@ -249,6 +249,73 @@
   gap: 6px;
 }
 
+.diagnostics-toggle.github-pr-toggle {
+  --github-pr-icon-color: color-mix(in srgb, #2da44e 82%, var(--panel-text));
+  --github-pr-icon-color-hover: color-mix(in srgb, #2da44e 92%, var(--panel-text));
+  --github-pr-icon-color-active: color-mix(in srgb, #1f883d 94%, var(--panel-text));
+  --github-pr-icon-color-disabled: color-mix(
+    in srgb,
+    var(--shell-text) 58%,
+    var(--text-muted)
+  );
+
+  margin-left: 2px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  transition:
+    box-shadow 140ms ease,
+    transform 140ms ease;
+}
+
+:root[data-theme='light'] .diagnostics-toggle.github-pr-toggle {
+  --github-pr-icon-color: color-mix(in srgb, #1f883d 88%, var(--panel-text));
+  --github-pr-icon-color-hover: color-mix(in srgb, #1a7f37 92%, var(--panel-text));
+  --github-pr-icon-color-active: color-mix(in srgb, #116329 95%, var(--panel-text));
+  --github-pr-icon-color-disabled: color-mix(
+    in srgb,
+    var(--shell-text) 52%,
+    var(--text-muted)
+  );
+}
+
+.diagnostics-toggle.github-pr-toggle svg {
+  width: 16px;
+  height: 16px;
+  fill: var(--github-pr-icon-color);
+  transition: fill 140ms ease;
+}
+
+.diagnostics-toggle.github-pr-toggle svg path {
+  fill: var(--github-pr-icon-color);
+}
+
+.diagnostics-toggle.github-pr-toggle:hover:not(:disabled) {
+  --github-pr-icon-color: var(--github-pr-icon-color-hover);
+}
+
+.diagnostics-toggle.github-pr-toggle[aria-expanded='true']:not(:disabled) {
+  --github-pr-icon-color: var(--github-pr-icon-color-active);
+}
+
+.diagnostics-toggle.github-pr-toggle:focus-visible:not(:disabled) {
+  outline: 2px solid transparent;
+  outline-offset: 2px;
+  box-shadow:
+    0 0 0 2px color-mix(in srgb, var(--focus-ring) 70%, transparent),
+    0 0 0 1px color-mix(in srgb, var(--accent) 58%, var(--border-control));
+}
+
+.diagnostics-toggle.github-pr-toggle:disabled {
+  opacity: 0.64;
+  cursor: not-allowed;
+  --github-pr-icon-color: var(--github-pr-icon-color-disabled);
+}
+
+.github-pr-toggle[hidden] {
+  display: none !important;
+}
+
 .ai-chat-toggle[hidden] {
   display: none !important;
 }
@@ -302,6 +369,155 @@
 
 .ai-chat-drawer[hidden] {
   display: none !important;
+}
+
+.github-pr-drawer {
+  position: fixed;
+  top: 82px;
+  left: auto;
+  right: 24px;
+  width: min(620px, calc(100vw - 24px));
+  max-height: min(80vh, 840px);
+  padding: 14px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--surface-panel) 92%, transparent);
+  box-shadow: 0 20px 40px var(--shadow-elev-1);
+  backdrop-filter: blur(8px);
+  overflow: hidden;
+  display: grid;
+  grid-template-rows: auto auto minmax(220px, 1fr) auto;
+  gap: 10px;
+  z-index: 96;
+}
+
+.github-pr-drawer.github-pr-drawer--right {
+  right: 24px;
+  left: auto;
+}
+
+.github-pr-drawer.github-pr-drawer--left {
+  left: 24px;
+  right: auto;
+}
+
+.github-pr-drawer[hidden] {
+  display: none !important;
+}
+
+.github-pr-drawer__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.github-pr-drawer__header h2 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.github-pr-drawer__status {
+  margin: 0;
+  font-size: 0.82rem;
+  line-height: 1.4;
+  color: color-mix(in srgb, var(--panel-text) 90%, var(--text-subtle));
+  border: 1px solid color-mix(in srgb, var(--border-subtle) 70%, var(--accent));
+  border-left: 3px solid color-mix(in srgb, var(--accent) 72%, var(--panel-text));
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--surface-panel-header) 86%, transparent);
+  padding: 9px 10px;
+}
+
+.github-pr-drawer__status[data-level='pending'] {
+  color: color-mix(in srgb, var(--panel-text) 72%, var(--accent));
+}
+
+.github-pr-drawer__status[data-level='ok'] {
+  color: color-mix(in srgb, #22c55e 80%, var(--panel-text));
+}
+
+.github-pr-drawer__status[data-level='error'] {
+  color: color-mix(in srgb, rgb(var(--danger-rgb)) 85%, var(--panel-text));
+}
+
+.github-pr-drawer__form-grid {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 10px;
+  overflow: auto;
+  align-content: start;
+  padding: 2px;
+}
+
+.github-pr-field--repo {
+  grid-column: span 3;
+}
+
+.github-pr-field--base {
+  grid-column: span 1;
+}
+
+.github-pr-field--head {
+  grid-column: span 2;
+}
+
+.github-pr-field--component-filename,
+.github-pr-field--styles-filename {
+  grid-column: span 3;
+}
+
+.github-pr-field {
+  display: grid;
+  gap: 6px;
+  font-size: 0.76rem;
+  color: var(--text-muted);
+}
+
+.github-pr-field--full {
+  grid-column: 1 / -1;
+}
+
+.github-pr-field input,
+.github-pr-field select,
+.github-pr-field textarea {
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  border: 1px solid var(--border-control);
+  border-radius: 9px;
+  background: var(--surface-select);
+  color: var(--select-text);
+  padding: 7px 10px;
+  font-size: 0.83rem;
+  font-family: inherit;
+}
+
+.github-pr-field select {
+  appearance: none;
+  -webkit-appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath fill='currentColor' d='M1.2 0 5 3.8 8.8 0 10 1.2 5 6 0 1.2z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+  padding-right: 30px;
+}
+
+.github-pr-field textarea {
+  resize: vertical;
+  min-height: 116px;
+}
+
+.github-pr-field input:focus-visible,
+.github-pr-field select:focus-visible,
+.github-pr-field textarea:focus-visible {
+  outline: none;
+  border-color: var(--focus-ring);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--focus-ring) 80%, transparent);
+}
+
+.github-pr-drawer__actions {
+  display: flex;
+  justify-content: flex-end;
 }
 
 .ai-chat-drawer__header {
@@ -571,6 +787,22 @@
     width: calc(100vw - 48px);
     max-width: none;
     max-height: min(68vh, calc(100dvh - 100px));
+  }
+
+  .github-pr-drawer,
+  .github-pr-drawer.github-pr-drawer--right,
+  .github-pr-drawer.github-pr-drawer--left {
+    top: auto;
+    right: 24px;
+    left: 24px;
+    bottom: auto;
+    width: calc(100vw - 48px);
+    max-width: none;
+    max-height: min(72vh, calc(100dvh - 92px));
+  }
+
+  .github-pr-drawer__form-grid {
+    grid-template-columns: 1fr;
   }
 
   .ai-chat-drawer__meta {

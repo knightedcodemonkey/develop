@@ -54,8 +54,8 @@ export const createGitHubByotControls = ({
   tokenAddButton,
   tokenDeleteButton,
   repoSelect,
-  repoWrap,
   onRepositoryChange,
+  onWritableRepositoriesChange,
   onTokenDeleteRequest,
   onTokenChange,
   setStatus,
@@ -64,6 +64,8 @@ export const createGitHubByotControls = ({
     controlsRoot?.setAttribute('hidden', '')
     return {
       getSelectedRepository: () => null,
+      getWritableRepositories: () => [],
+      setSelectedRepository: () => false,
       getToken: () => null,
     }
   }
@@ -191,24 +193,72 @@ export const createGitHubByotControls = ({
   }
 
   const clearRepoOptions = placeholderLabel => {
-    if (!(repoSelect instanceof HTMLSelectElement)) {
-      return
+    if (repoSelect instanceof HTMLSelectElement) {
+      repoSelect.replaceChildren(
+        createDefaultRepoOption({
+          label: placeholderLabel,
+          disabled: true,
+        }),
+      )
+      repoSelect.disabled = true
     }
 
-    repoSelect.replaceChildren(createDefaultRepoOption({ label: placeholderLabel }))
-    repoSelect.disabled = true
+    if (typeof onWritableRepositoriesChange === 'function') {
+      onWritableRepositoriesChange({
+        repositories: [],
+        selectedRepository: null,
+        placeholderLabel,
+      })
+    }
   }
 
-  const showRepoControl = shouldShow => {
-    if (!repoWrap) {
+  const getSelectedRepositoryObject = () => {
+    if (!lastSelectedRepository) {
+      return null
+    }
+
+    return writableRepos.find(repo => repo.fullName === lastSelectedRepository) ?? null
+  }
+
+  const emitWritableRepositories = ({ placeholderLabel = '' } = {}) => {
+    if (typeof onWritableRepositoriesChange !== 'function') {
       return
     }
 
-    repoWrap.hidden = !shouldShow
+    onWritableRepositoriesChange({
+      repositories: [...writableRepos],
+      selectedRepository: getSelectedRepositoryObject(),
+      placeholderLabel,
+    })
+  }
+
+  const selectPreferredRepository = repos => {
+    if (!Array.isArray(repos) || repos.length === 0) {
+      clearSelectedRepository()
+      lastSelectedRepository = null
+      return null
+    }
+
+    const hasStoredSelection =
+      typeof lastSelectedRepository === 'string' &&
+      repos.some(repo => repo.fullName === lastSelectedRepository)
+
+    const selectedRepositoryFullName = hasStoredSelection
+      ? lastSelectedRepository
+      : repos[0].fullName
+
+    saveSelectedRepository(selectedRepositoryFullName)
+    lastSelectedRepository = selectedRepositoryFullName
+    return selectedRepositoryFullName
   }
 
   const renderRepoOptions = repos => {
+    const selectedRepositoryFullName = selectPreferredRepository(repos)
+
     if (!(repoSelect instanceof HTMLSelectElement)) {
+      emitWritableRepositories({
+        placeholderLabel: repos.length === 0 ? 'No writable repositories available' : '',
+      })
       return
     }
 
@@ -220,16 +270,9 @@ export const createGitHubByotControls = ({
         }),
       )
       repoSelect.disabled = true
+      emitWritableRepositories({ placeholderLabel: 'No writable repositories available' })
       return
     }
-
-    const hasStoredSelection =
-      typeof lastSelectedRepository === 'string' &&
-      repos.some(repo => repo.fullName === lastSelectedRepository)
-
-    const selectedRepositoryFullName = hasStoredSelection
-      ? lastSelectedRepository
-      : repos[0].fullName
 
     const options = repos.map(repo => {
       const option = document.createElement('option')
@@ -246,8 +289,7 @@ export const createGitHubByotControls = ({
     repoSelect.replaceChildren(...options)
     repoSelect.disabled = false
     repoSelect.value = selectedRepositoryFullName
-    lastSelectedRepository = selectedRepositoryFullName
-    saveSelectedRepository(selectedRepositoryFullName)
+    emitWritableRepositories()
   }
 
   const abortInFlightRepoRequest = () => {
@@ -256,10 +298,14 @@ export const createGitHubByotControls = ({
   }
 
   const emitSelectedRepository = () => {
-    if (
-      typeof onRepositoryChange !== 'function' ||
-      !(repoSelect instanceof HTMLSelectElement)
-    ) {
+    if (typeof onRepositoryChange !== 'function') {
+      return
+    }
+
+    if (!(repoSelect instanceof HTMLSelectElement)) {
+      const selectedRepository = getSelectedRepositoryObject()
+      onRepositoryChange(selectedRepository)
+      emitWritableRepositories()
       return
     }
 
@@ -268,6 +314,7 @@ export const createGitHubByotControls = ({
       onRepositoryChange(null)
       clearSelectedRepository()
       lastSelectedRepository = null
+      emitWritableRepositories()
       return
     }
 
@@ -281,6 +328,7 @@ export const createGitHubByotControls = ({
       defaultBranch: selectedOption.dataset.defaultBranch ?? 'main',
       htmlUrl: selectedOption.dataset.htmlUrl ?? '',
     })
+    emitWritableRepositories()
   }
 
   const loadWritableRepos = async token => {
@@ -291,7 +339,6 @@ export const createGitHubByotControls = ({
     setTokenAddButtonState('loading')
 
     clearRepoOptions('Loading writable repositories...')
-    showRepoControl(true)
     setStatus('Loading writable repositories from GitHub...', 'pending')
 
     try {
@@ -330,7 +377,6 @@ export const createGitHubByotControls = ({
 
       writableRepos = []
       renderRepoOptions([])
-      showRepoControl(false)
       setStatus(
         error instanceof Error
           ? `GitHub token validation failed: ${error.message}`
@@ -354,7 +400,7 @@ export const createGitHubByotControls = ({
     if (savedToken) {
       updateTokenActionVisibility()
       setTokenFieldToMasked({ locked: true })
-      showRepoControl(false)
+      emitWritableRepositories({ placeholderLabel: 'Loading writable repositories...' })
       return
     }
 
@@ -363,7 +409,6 @@ export const createGitHubByotControls = ({
     tokenInput.setAttribute('aria-label', 'GitHub token')
     setTokenFieldLockState(false)
     updateTokenActionVisibility()
-    showRepoControl(false)
     clearRepoOptions('Connect a token to load repositories')
     updateTokenAddButtonState()
   }
@@ -482,11 +527,29 @@ export const createGitHubByotControls = ({
 
   return {
     getSelectedRepository: () => {
-      const fullName = repoSelect?.value
-      if (!fullName) {
-        return null
+      return getSelectedRepositoryObject()
+    },
+    getWritableRepositories: () => [...writableRepos],
+    setSelectedRepository: fullName => {
+      if (typeof fullName !== 'string' || !fullName.trim()) {
+        return false
       }
-      return writableRepos.find(repo => repo.fullName === fullName) ?? null
+
+      const normalizedFullName = fullName.trim()
+      const repository = writableRepos.find(repo => repo.fullName === normalizedFullName)
+      if (!repository) {
+        return false
+      }
+
+      lastSelectedRepository = repository.fullName
+      saveSelectedRepository(repository.fullName)
+
+      if (repoSelect instanceof HTMLSelectElement) {
+        repoSelect.value = repository.fullName
+      }
+
+      emitSelectedRepository()
+      return true
     },
     getToken: () => savedToken,
   }
