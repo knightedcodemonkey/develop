@@ -1,6 +1,53 @@
 const githubApiBaseUrl = 'https://api.github.com'
 const githubModelsApiUrl = 'https://models.github.ai/inference/chat/completions'
 
+export const defaultGitHubChatModel = 'openai/gpt-4.1-mini'
+
+/* Local model options avoid browser CORS failures when calling catalog endpoints directly. */
+export const githubChatModelOptions = [
+  'openai/gpt-4.1-mini',
+  'openai/gpt-4.1',
+  'openai/gpt-4.1-nano',
+  'openai/gpt-4o',
+  'openai/gpt-4o-mini',
+  'openai/gpt-5',
+  'openai/gpt-5-chat',
+  'openai/gpt-5-mini',
+  'openai/gpt-5-nano',
+  'openai/o1',
+  'openai/o1-mini',
+  'openai/o1-preview',
+  'openai/o3',
+  'openai/o3-mini',
+  'openai/o4-mini',
+  'ai21-labs/ai21-jamba-1.5-large',
+  'cohere/cohere-command-a',
+  'cohere/cohere-command-r-08-2024',
+  'cohere/cohere-command-r-plus-08-2024',
+  'xai/grok-3',
+  'xai/grok-3-mini',
+  'deepseek/deepseek-r1',
+  'deepseek/deepseek-r1-0528',
+  'deepseek/deepseek-v3-0324',
+  'meta/llama-3.2-11b-vision-instruct',
+  'meta/llama-3.2-90b-vision-instruct',
+  'meta/llama-3.3-70b-instruct',
+  'meta/llama-4-maverick-17b-128e-instruct-fp8',
+  'meta/llama-4-scout-17b-16e-instruct',
+  'meta/meta-llama-3.1-405b-instruct',
+  'meta/meta-llama-3.1-8b-instruct',
+  'mistral-ai/codestral-2501',
+  'mistral-ai/ministral-3b',
+  'mistral-ai/mistral-medium-2505',
+  'mistral-ai/mistral-small-2503',
+  'microsoft/mai-ds-r1',
+  'microsoft/phi-4',
+  'microsoft/phi-4-mini-instruct',
+  'microsoft/phi-4-mini-reasoning',
+  'microsoft/phi-4-multimodal-instruct',
+  'microsoft/phi-4-reasoning',
+]
+
 const parseNextPageUrlFromLinkHeader = linkHeader => {
   if (typeof linkHeader !== 'string' || !linkHeader.trim()) {
     return null
@@ -352,7 +399,7 @@ export const streamGitHubChatCompletion = async ({
   messages,
   signal,
   onToken,
-  model = 'openai/gpt-4.1-mini',
+  model = defaultGitHubChatModel,
 }) => {
   if (typeof token !== 'string' || token.trim().length === 0) {
     throw new Error('A GitHub token is required to start a chat request.')
@@ -385,6 +432,7 @@ export const streamGitHubChatCompletion = async ({
   const reader = response.body.getReader()
   let buffered = ''
   let combined = ''
+  let responseModel = ''
 
   while (true) {
     // eslint-disable-next-line no-await-in-loop
@@ -403,6 +451,10 @@ export const streamGitHubChatCompletion = async ({
         continue
       }
 
+      if (!responseModel && typeof body.model === 'string') {
+        responseModel = body.model
+      }
+
       const chunk = extractStreamingDeltaText(body)
       if (!chunk) {
         continue
@@ -415,6 +467,9 @@ export const streamGitHubChatCompletion = async ({
 
   if (buffered.trim()) {
     const body = parseSseDataLine(buffered)
+    if (body && !responseModel && typeof body.model === 'string') {
+      responseModel = body.model
+    }
     const chunk = body ? extractStreamingDeltaText(body) : ''
     if (chunk) {
       combined += chunk
@@ -428,6 +483,7 @@ export const streamGitHubChatCompletion = async ({
 
   return {
     content: combined,
+    model: responseModel || model,
     rateLimit: parseRateMetadata({ headers: response.headers, body: null }),
   }
 }
@@ -436,7 +492,7 @@ export const requestGitHubChatCompletion = async ({
   token,
   messages,
   signal,
-  model = 'openai/gpt-4.1-mini',
+  model = defaultGitHubChatModel,
 }) => {
   if (typeof token !== 'string' || token.trim().length === 0) {
     throw new Error('A GitHub token is required to start a chat request.')
@@ -470,6 +526,7 @@ export const requestGitHubChatCompletion = async ({
 
   return {
     content,
+    model: typeof body?.model === 'string' && body.model ? body.model : model,
     rateLimit: parseRateMetadata({ headers: response.headers, body }),
   }
 }
