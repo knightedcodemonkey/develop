@@ -7,10 +7,41 @@ const defaultPrConfig = {
   stylesFilePath: 'src/styles/app.css',
 }
 
+const pruneRepositoryPrConfigs = repositoryFullName => {
+  if (typeof repositoryFullName !== 'string' || !repositoryFullName.trim()) {
+    return
+  }
+
+  const activeStorageKey = `${prConfigStoragePrefix}${repositoryFullName}`
+
+  try {
+    const keysToRemove = []
+
+    for (let index = 0; index < localStorage.length; index += 1) {
+      const key = localStorage.key(index)
+      if (!key || !key.startsWith(prConfigStoragePrefix)) {
+        continue
+      }
+
+      if (key !== activeStorageKey) {
+        keysToRemove.push(key)
+      }
+    }
+
+    for (const key of keysToRemove) {
+      localStorage.removeItem(key)
+    }
+  } catch {
+    /* noop */
+  }
+}
+
 const readRepositoryPrConfig = repositoryFullName => {
   if (typeof repositoryFullName !== 'string' || !repositoryFullName.trim()) {
     return {}
   }
+
+  pruneRepositoryPrConfigs(repositoryFullName)
 
   try {
     const value = localStorage.getItem(`${prConfigStoragePrefix}${repositoryFullName}`)
@@ -31,10 +62,11 @@ const saveRepositoryPrConfig = ({ repositoryFullName, config }) => {
   }
 
   try {
-    localStorage.setItem(
-      `${prConfigStoragePrefix}${repositoryFullName}`,
-      JSON.stringify(config),
-    )
+    const activeStorageKey = `${prConfigStoragePrefix}${repositoryFullName}`
+
+    localStorage.setItem(activeStorageKey, JSON.stringify(config))
+
+    pruneRepositoryPrConfigs(repositoryFullName)
   } catch {
     /* noop */
   }
