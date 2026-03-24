@@ -41,8 +41,6 @@ const readRepositoryPrConfig = repositoryFullName => {
     return {}
   }
 
-  pruneRepositoryPrConfigs(repositoryFullName)
-
   try {
     const value = localStorage.getItem(`${prConfigStoragePrefix}${repositoryFullName}`)
     if (!value) {
