@@ -100,8 +100,8 @@
   opacity: 0.9;
   background: transparent;
   padding: 0;
-  width: 24px;
-  height: 24px;
+  width: 20px;
+  height: 20px;
   font-size: 0.74rem;
   transition:
     border-color 140ms ease,

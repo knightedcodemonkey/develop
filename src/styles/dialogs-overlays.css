@@ -102,7 +102,8 @@
 
 .app-toast {
   position: fixed;
-  top: 76px;
+  top: auto;
+  bottom: 12px;
   right: 24px;
   max-width: min(560px, calc(100vw - 48px));
   border-radius: 12px;
@@ -115,7 +116,7 @@
   line-height: 1.35;
   z-index: 140;
   opacity: 0;
-  transform: translateY(-6px);
+  transform: translateY(6px);
   transition:
     opacity 170ms ease,
     transform 170ms ease;
@@ -129,8 +130,6 @@
 
 @media (max-width: 900px) {
   .app-toast {
-    top: auto;
-    bottom: 12px;
     left: 12px;
     right: 12px;
     max-width: none;

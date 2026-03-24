@@ -830,6 +830,154 @@ test('Open PR drawer base dropdown updates from mocked repo branches', async ({
   ).toBe(true)
 })
 
+test('Open PR drawer keeps a single active PR context in localStorage', async ({
+  page,
+}) => {
+  await page.route('https://api.github.com/user/repos**', async route => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify([
+        {
+          id: 2,
+          owner: { login: 'knightedcodemonkey' },
+          name: 'develop',
+          full_name: 'knightedcodemonkey/develop',
+          default_branch: 'main',
+          permissions: { push: true },
+        },
+        {
+          id: 1,
+          owner: { login: 'knightedcodemonkey' },
+          name: 'css',
+          full_name: 'knightedcodemonkey/css',
+          default_branch: 'stable',
+          permissions: { push: true },
+        },
+      ]),
+    })
+  })
+
+  await mockRepositoryBranches(page, {
+    'knightedcodemonkey/develop': ['main', 'develop-next'],
+    'knightedcodemonkey/css': ['stable', 'release/1.x'],
+  })
+
+  await waitForAppReady(page, `${appEntryPath}?feature-ai=true`)
+
+  await page.locator('#github-token-input').fill('github_pat_fake_1234567890')
+  await page.locator('#github-token-add').click()
+  await ensureOpenPrDrawerOpen(page)
+
+  const repoSelect = page.locator('#github-pr-repo-select')
+  const componentPath = page.locator('#github-pr-component-path')
+
+  await repoSelect.selectOption('knightedcodemonkey/develop')
+  await componentPath.fill('examples/develop/App.tsx')
+  await componentPath.blur()
+
+  await repoSelect.selectOption('knightedcodemonkey/css')
+  await componentPath.fill('examples/css/App.tsx')
+  await componentPath.blur()
+
+  const activeContext = await page.evaluate(() => {
+    const storagePrefix = 'knighted:develop:github-pr-config:'
+    const keys = Object.keys(localStorage).filter(key => key.startsWith(storagePrefix))
+    const key = keys[0] ?? null
+    const raw = key ? localStorage.getItem(key) : null
+
+    let parsed = null
+    try {
+      parsed = raw ? JSON.parse(raw) : null
+    } catch {
+      parsed = null
+    }
+
+    return { keys, key, parsed }
+  })
+
+  expect(activeContext.keys).toHaveLength(1)
+  expect(activeContext.key).toBe(
+    'knighted:develop:github-pr-config:knightedcodemonkey/css',
+  )
+  expect(activeContext.parsed?.componentFilePath).toBe('examples/css/App.tsx')
+})
+
+test('Open PR drawer does not prune saved PR context on repo switch before save', async ({
+  page,
+}) => {
+  await page.route('https://api.github.com/user/repos**', async route => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify([
+        {
+          id: 2,
+          owner: { login: 'knightedcodemonkey' },
+          name: 'develop',
+          full_name: 'knightedcodemonkey/develop',
+          default_branch: 'main',
+          permissions: { push: true },
+        },
+        {
+          id: 1,
+          owner: { login: 'knightedcodemonkey' },
+          name: 'css',
+          full_name: 'knightedcodemonkey/css',
+          default_branch: 'stable',
+          permissions: { push: true },
+        },
+      ]),
+    })
+  })
+
+  await mockRepositoryBranches(page, {
+    'knightedcodemonkey/develop': ['main', 'develop-next'],
+    'knightedcodemonkey/css': ['stable', 'release/1.x'],
+  })
+
+  await waitForAppReady(page, `${appEntryPath}?feature-ai=true`)
+
+  await page.locator('#github-token-input').fill('github_pat_fake_1234567890')
+  await page.locator('#github-token-add').click()
+  await ensureOpenPrDrawerOpen(page)
+
+  const repoSelect = page.locator('#github-pr-repo-select')
+  const componentPath = page.locator('#github-pr-component-path')
+
+  await repoSelect.selectOption('knightedcodemonkey/develop')
+  await componentPath.fill('examples/develop/App.tsx')
+  await componentPath.blur()
+
+  await repoSelect.selectOption('knightedcodemonkey/css')
+
+  const contexts = await page.evaluate(() => {
+    const storagePrefix = 'knighted:develop:github-pr-config:'
+    const keys = Object.keys(localStorage)
+      .filter(key => key.startsWith(storagePrefix))
+      .sort((left, right) => left.localeCompare(right))
+
+    return keys.map(key => {
+      const raw = localStorage.getItem(key)
+      let parsed = null
+
+      try {
+        parsed = raw ? JSON.parse(raw) : null
+      } catch {
+        parsed = null
+      }
+
+      return { key, parsed }
+    })
+  })
+
+  expect(contexts).toHaveLength(1)
+  expect(contexts[0]?.key).toBe(
+    'knighted:develop:github-pr-config:knightedcodemonkey/develop',
+  )
+  expect(contexts[0]?.parsed?.componentFilePath).toBe('examples/develop/App.tsx')
+})
+
 test('Open PR drawer validates unsafe filepaths', async ({ page }) => {
   await waitForAppReady(page, `${appEntryPath}?feature-ai=true`)
   await connectByotWithSingleRepo(page)

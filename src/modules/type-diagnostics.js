@@ -483,7 +483,7 @@ export const createTypeDiagnosticsController = ({
       return reactTypeLoadPromise
     }
 
-    reactTypeLoadPromise = (async () => {
+    const loadReactTypeFiles = async () => {
       const files = new Map()
       const packageEntryByName = new Map()
       const packageManifestByName = new Map()
@@ -631,7 +631,9 @@ export const createTypeDiagnosticsController = ({
         files,
         packageEntries: packageEntryByName,
       }
-    })()
+    }
+
+    reactTypeLoadPromise = loadReactTypeFiles()
 
     try {
       return await reactTypeLoadPromise
