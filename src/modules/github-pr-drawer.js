@@ -1,4 +1,4 @@
-import { createEditorContentPullRequest } from './github-api.js'
+import { createEditorContentPullRequest, listRepositoryBranches } from './github-api.js'
 
 const prConfigStoragePrefix = 'knighted:develop:github-pr-config:'
 
@@ -192,6 +192,50 @@ const buildSummary = ({
   ].join('\n')
 }
 
+const toBranchCacheKey = repository => {
+  const owner = toSafeText(repository?.owner)
+  const name = toSafeText(repository?.name)
+  if (!owner || !name) {
+    return ''
+  }
+
+  return `${owner}/${name}`
+}
+
+const createSelectOption = ({ value, label, selected = false, disabled = false }) => {
+  const option = document.createElement('option')
+  option.value = value
+  option.textContent = label
+  option.selected = selected
+  option.disabled = disabled
+  return option
+}
+
+const mergeBranchOptions = ({ preferredBranch, branchNames }) => {
+  const dedupe = new Set()
+  const result = []
+
+  const pushBranch = branch => {
+    const safeBranch = toSafeText(branch)
+    if (!safeBranch || dedupe.has(safeBranch)) {
+      return
+    }
+
+    dedupe.add(safeBranch)
+    result.push(safeBranch)
+  }
+
+  pushBranch(preferredBranch)
+
+  if (Array.isArray(branchNames)) {
+    for (const branchName of branchNames) {
+      pushBranch(branchName)
+    }
+  }
+
+  return result
+}
+
 export const createGitHubPrDrawer = ({
   featureEnabled,
   toggleButton,
@@ -233,7 +277,9 @@ export const createGitHubPrDrawer = ({
   let open = false
   let submitting = false
   let pendingAbortController = null
+  let pendingBranchesAbortController = null
   let resetOnNextOpen = false
+  const baseBranchesByRepository = new Map()
   const submitButtonDefaultLabel =
     submitButton instanceof HTMLButtonElement && toSafeText(submitButton.textContent)
       ? toSafeText(submitButton.textContent)
@@ -290,6 +336,122 @@ export const createGitHubPrDrawer = ({
       stylesFilePath: normalizeFilePath(stylesPathInput?.value),
       prTitle: toSafeText(prTitleInput?.value),
       prBody: typeof prBodyInput?.value === 'string' ? prBodyInput.value.trim() : '',
+    }
+  }
+
+  const abortPendingBranchesRequest = () => {
+    pendingBranchesAbortController?.abort()
+    pendingBranchesAbortController = null
+  }
+
+  const renderBaseBranchOptions = ({ preferredBranch, branchNames, loading = false }) => {
+    const baseBranch = toSafeText(preferredBranch) || 'main'
+
+    if (baseBranchInput instanceof HTMLInputElement) {
+      baseBranchInput.value = baseBranch
+      return
+    }
+
+    if (!(baseBranchInput instanceof HTMLSelectElement)) {
+      return
+    }
+
+    if (loading) {
+      baseBranchInput.replaceChildren(
+        createSelectOption({
+          value: baseBranch,
+          label: 'Loading branches...',
+        }),
+      )
+      baseBranchInput.value = baseBranch
+      baseBranchInput.disabled = true
+      return
+    }
+
+    const mergedOptions = mergeBranchOptions({ preferredBranch: baseBranch, branchNames })
+
+    const options = mergedOptions.map(branchName =>
+      createSelectOption({
+        value: branchName,
+        label: branchName,
+        selected: branchName === baseBranch,
+      }),
+    )
+
+    baseBranchInput.replaceChildren(...options)
+    baseBranchInput.disabled = submitting
+    baseBranchInput.value = baseBranch
+  }
+
+  const getPreferredBaseBranchForRepository = repository => {
+    const repositoryFullName = getRepositoryFullName(repository)
+    const savedConfig = readRepositoryPrConfig(repositoryFullName)
+    return (
+      toSafeText(savedConfig.baseBranch) ||
+      toSafeText(repository?.defaultBranch) ||
+      'main'
+    )
+  }
+
+  const loadBaseBranchesForSelectedRepository = async ({ preferredBranch }) => {
+    const repository = getSelectedRepositoryObject()
+    const cacheKey = toBranchCacheKey(repository)
+    const nextPreferredBranch =
+      toSafeText(preferredBranch) || getPreferredBaseBranchForRepository(repository)
+
+    if (!cacheKey) {
+      renderBaseBranchOptions({ preferredBranch: nextPreferredBranch, branchNames: [] })
+      return
+    }
+
+    const token = toSafeText(getToken?.())
+    if (!token) {
+      renderBaseBranchOptions({ preferredBranch: nextPreferredBranch, branchNames: [] })
+      return
+    }
+
+    const cachedBranches = baseBranchesByRepository.get(cacheKey)
+    if (Array.isArray(cachedBranches) && cachedBranches.length > 0) {
+      renderBaseBranchOptions({
+        preferredBranch: nextPreferredBranch,
+        branchNames: cachedBranches,
+      })
+      return
+    }
+
+    abortPendingBranchesRequest()
+    renderBaseBranchOptions({ preferredBranch: nextPreferredBranch, loading: true })
+
+    const abortController = new AbortController()
+    pendingBranchesAbortController = abortController
+
+    try {
+      const branches = await listRepositoryBranches({
+        token,
+        owner: repository.owner,
+        repo: repository.name,
+        signal: abortController.signal,
+      })
+
+      if (pendingBranchesAbortController !== abortController) {
+        return
+      }
+
+      baseBranchesByRepository.set(cacheKey, branches)
+      renderBaseBranchOptions({
+        preferredBranch: nextPreferredBranch,
+        branchNames: branches,
+      })
+    } catch {
+      if (abortController.signal.aborted) {
+        return
+      }
+
+      renderBaseBranchOptions({ preferredBranch: nextPreferredBranch, branchNames: [] })
+    } finally {
+      if (pendingBranchesAbortController === abortController) {
+        pendingBranchesAbortController = null
+      }
     }
   }
 
@@ -360,9 +522,7 @@ export const createGitHubPrDrawer = ({
       toSafeText(repository?.defaultBranch) ||
       'main'
 
-    if (baseBranchInput instanceof HTMLInputElement) {
-      baseBranchInput.value = baseBranch
-    }
+    renderBaseBranchOptions({ preferredBranch: baseBranch, branchNames: [] })
 
     if (headBranchInput instanceof HTMLInputElement) {
       if (resetAll || resetBranch || !toSafeText(headBranchInput.value)) {
@@ -417,6 +577,9 @@ export const createGitHubPrDrawer = ({
     const selectedRepository = getSelectedRepositoryObject()
     syncRepositorySelect({ repositories, selectedRepository })
     syncFormForRepository()
+    void loadBaseBranchesForSelectedRepository({
+      preferredBranch: getFormValues().baseBranch,
+    })
   }
 
   const setOpen = nextOpen => {
@@ -441,9 +604,15 @@ export const createGitHubPrDrawer = ({
         resetAll: resetOnNextOpen,
         resetBranch: resetOnNextOpen,
       })
+      void loadBaseBranchesForSelectedRepository({
+        preferredBranch: getFormValues().baseBranch,
+      })
       resetOnNextOpen = false
       repositorySelect?.focus()
+      return
     }
+
+    abortPendingBranchesRequest()
   }
 
   const runSubmit = async () => {
@@ -602,6 +771,9 @@ export const createGitHubPrDrawer = ({
 
     setSelectedRepository?.(repositoryFullName)
     syncFormForRepository({ resetBranch: true })
+    void loadBaseBranchesForSelectedRepository({
+      preferredBranch: getFormValues().baseBranch,
+    })
   })
 
   componentPathInput?.addEventListener('blur', persistCurrentPaths)
@@ -631,8 +803,16 @@ export const createGitHubPrDrawer = ({
       }
 
       if (!hasToken) {
+        abortPendingBranchesRequest()
+        baseBranchesByRepository.clear()
         setOpen(false)
+        renderBaseBranchOptions({ preferredBranch: 'main', branchNames: [] })
+        return
       }
+
+      void loadBaseBranchesForSelectedRepository({
+        preferredBranch: getFormValues().baseBranch,
+      })
     },
     setSelectedRepository: () => {
       syncRepositories()
@@ -641,6 +821,7 @@ export const createGitHubPrDrawer = ({
     dispose: () => {
       pendingAbortController?.abort()
       pendingAbortController = null
+      abortPendingBranchesRequest()
     },
   }
 }

@@ -107,6 +107,14 @@ const normalizeRepo = repo => {
 
 const hasWritePermission = permissions => Boolean(permissions && permissions.push)
 
+const normalizeBranchName = branch => {
+  if (!branch || typeof branch !== 'object') {
+    return null
+  }
+
+  return typeof branch.name === 'string' && branch.name.trim() ? branch.name : null
+}
+
 const buildRequestHeaders = token => ({
   Accept: 'application/vnd.github+json',
   Authorization: `Bearer ${token}`,
@@ -363,6 +371,19 @@ const listReposPage = async ({ token, url, signal }) => {
   }
 }
 
+const listBranchesPage = async ({ token, url, signal }) => {
+  const { data, nextPageUrl } = await fetchJson({ token, url, signal })
+
+  if (!Array.isArray(data)) {
+    throw new Error('Unexpected response while loading repository branches from GitHub.')
+  }
+
+  return {
+    branches: data.map(normalizeBranchName).filter(Boolean),
+    nextPageUrl,
+  }
+}
+
 export const listWritableRepositories = async ({ token, signal }) => {
   if (typeof token !== 'string' || token.trim().length === 0) {
     throw new Error('A GitHub token is required to load repositories.')
@@ -392,6 +413,41 @@ export const listWritableRepositories = async ({ token, signal }) => {
   writableRepos.sort((left, right) => left.fullName.localeCompare(right.fullName))
 
   return writableRepos
+}
+
+export const listRepositoryBranches = async ({ token, owner, repo, signal }) => {
+  if (typeof token !== 'string' || token.trim().length === 0) {
+    throw new Error('A GitHub token is required to load branches.')
+  }
+
+  if (typeof owner !== 'string' || !owner || typeof repo !== 'string' || !repo) {
+    throw new Error('A valid repository owner/name is required to load branches.')
+  }
+
+  const branches = []
+  const dedupe = new Set()
+  let nextPageUrl = `${githubApiBaseUrl}/repos/${owner}/${repo}/branches?per_page=100`
+  let remainingPageBudget = 5
+
+  while (nextPageUrl && remainingPageBudget > 0) {
+    /* Branch pagination depends on the prior Link header response. */
+    // eslint-disable-next-line no-await-in-loop
+    const page = await listBranchesPage({ token, url: nextPageUrl, signal })
+    for (const name of page.branches) {
+      if (dedupe.has(name)) {
+        continue
+      }
+
+      dedupe.add(name)
+      branches.push(name)
+    }
+
+    nextPageUrl = page.nextPageUrl
+    remainingPageBudget -= 1
+  }
+
+  branches.sort((left, right) => left.localeCompare(right))
+  return branches
 }
 
 export const streamGitHubChatCompletion = async ({

@@ -165,6 +165,17 @@ const connectByotWithSingleRepo = async (page: Page) => {
     })
   })
 
+  await page.route(
+    'https://api.github.com/repos/knightedcodemonkey/develop/branches**',
+    async route => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify([{ name: 'main' }, { name: 'release' }]),
+      })
+    },
+  )
+
   await page.locator('#github-token-input').fill('github_pat_fake_chat_1234567890')
   await page.locator('#github-token-add').click()
   await expect(page.locator('#status')).toHaveText('Loaded 1 writable repositories')
@@ -715,6 +726,82 @@ test('Open PR drawer confirms and submits component/styles filepaths', async ({
       '- Styles source -> examples/styles/app.css',
     ].join('\n'),
   )
+})
+
+test('Open PR drawer base dropdown updates from mocked repo branches', async ({
+  page,
+}) => {
+  const branchRequestUrls: string[] = []
+
+  await page.route('https://api.github.com/user/repos**', async route => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify([
+        {
+          id: 2,
+          owner: { login: 'knightedcodemonkey' },
+          name: 'develop',
+          full_name: 'knightedcodemonkey/develop',
+          default_branch: 'main',
+          permissions: { push: true },
+        },
+        {
+          id: 1,
+          owner: { login: 'knightedcodemonkey' },
+          name: 'css',
+          full_name: 'knightedcodemonkey/css',
+          default_branch: 'stable',
+          permissions: { push: true },
+        },
+      ]),
+    })
+  })
+
+  await page.route('https://api.github.com/repos/**/branches**', async route => {
+    const url = route.request().url()
+    branchRequestUrls.push(url)
+
+    const branchNames = url.includes('/repos/knightedcodemonkey/css/branches')
+      ? ['stable', 'release/1.x']
+      : ['main', 'develop-next']
+
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(branchNames.map(name => ({ name }))),
+    })
+  })
+
+  await waitForAppReady(page, `${appEntryPath}?feature-ai=true`)
+
+  await page.locator('#github-token-input').fill('github_pat_fake_1234567890')
+  await page.locator('#github-token-add').click()
+  await expect(page.locator('#status')).toHaveText('Loaded 2 writable repositories')
+
+  await ensureOpenPrDrawerOpen(page)
+
+  const repoSelect = page.locator('#github-pr-repo-select')
+  const baseSelect = page.locator('#github-pr-base-branch')
+
+  await repoSelect.selectOption('knightedcodemonkey/develop')
+  await expect(baseSelect).toHaveValue('main')
+  await expect(baseSelect.locator('option')).toHaveText(['main', 'develop-next'])
+
+  await repoSelect.selectOption('knightedcodemonkey/css')
+  await expect(baseSelect).toHaveValue('stable')
+  await expect(baseSelect.locator('option')).toHaveText(['stable', 'release/1.x'])
+
+  expect(
+    branchRequestUrls.some(url =>
+      url.includes('https://api.github.com/repos/knightedcodemonkey/develop/branches'),
+    ),
+  ).toBe(true)
+  expect(
+    branchRequestUrls.some(url =>
+      url.includes('https://api.github.com/repos/knightedcodemonkey/css/branches'),
+    ),
+  ).toBe(true)
 })
 
 test('Open PR drawer validates unsafe filepaths', async ({ page }) => {
