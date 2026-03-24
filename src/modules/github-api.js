@@ -107,6 +107,14 @@ const normalizeRepo = repo => {
 
 const hasWritePermission = permissions => Boolean(permissions && permissions.push)
 
+const normalizeBranchName = branch => {
+  if (!branch || typeof branch !== 'object') {
+    return null
+  }
+
+  return typeof branch.name === 'string' && branch.name.trim() ? branch.name : null
+}
+
 const buildRequestHeaders = token => ({
   Accept: 'application/vnd.github+json',
   Authorization: `Bearer ${token}`,
@@ -363,6 +371,19 @@ const listReposPage = async ({ token, url, signal }) => {
   }
 }
 
+const listBranchesPage = async ({ token, url, signal }) => {
+  const { data, nextPageUrl } = await fetchJson({ token, url, signal })
+
+  if (!Array.isArray(data)) {
+    throw new Error('Unexpected response while loading repository branches from GitHub.')
+  }
+
+  return {
+    branches: data.map(normalizeBranchName).filter(Boolean),
+    nextPageUrl,
+  }
+}
+
 export const listWritableRepositories = async ({ token, signal }) => {
   if (typeof token !== 'string' || token.trim().length === 0) {
     throw new Error('A GitHub token is required to load repositories.')
@@ -392,6 +413,51 @@ export const listWritableRepositories = async ({ token, signal }) => {
   writableRepos.sort((left, right) => left.fullName.localeCompare(right.fullName))
 
   return writableRepos
+}
+
+export const listRepositoryBranches = async ({ token, owner, repo, signal }) => {
+  if (typeof token !== 'string' || token.trim().length === 0) {
+    throw new Error('A GitHub token is required to load branches.')
+  }
+
+  const normalizedOwner = typeof owner === 'string' ? owner.trim() : ''
+  const normalizedRepo = typeof repo === 'string' ? repo.trim() : ''
+
+  if (!normalizedOwner || !normalizedRepo) {
+    throw new Error('A valid repository owner/name is required to load branches.')
+  }
+
+  const branches = []
+  const dedupe = new Set()
+  const collectBranchesByPage = async ({ url, remainingPageBudget }) => {
+    if (!url || remainingPageBudget <= 0) {
+      return
+    }
+
+    const page = await listBranchesPage({ token, url, signal })
+
+    for (const name of page.branches) {
+      if (dedupe.has(name)) {
+        continue
+      }
+
+      dedupe.add(name)
+      branches.push(name)
+    }
+
+    await collectBranchesByPage({
+      url: page.nextPageUrl,
+      remainingPageBudget: remainingPageBudget - 1,
+    })
+  }
+
+  await collectBranchesByPage({
+    url: `${githubApiBaseUrl}/repos/${normalizedOwner}/${normalizedRepo}/branches?per_page=100`,
+    remainingPageBudget: 5,
+  })
+
+  branches.sort((left, right) => left.localeCompare(right))
+  return branches
 }
 
 export const streamGitHubChatCompletion = async ({

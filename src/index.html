@@ -659,13 +659,13 @@
             for="github-pr-base-branch"
           >
             <span>Base</span>
-            <input
+            <select
               id="github-pr-base-branch"
-              type="text"
-              autocomplete="off"
-              spellcheck="false"
-              placeholder="main"
-            />
+              aria-label="Pull request base branch"
+              disabled
+            >
+              <option value="main" selected>main</option>
+            </select>
           </label>
 
           <label
