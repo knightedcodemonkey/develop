@@ -278,6 +278,8 @@ export const createGitHubPrDrawer = ({
   let submitting = false
   let pendingAbortController = null
   let pendingBranchesAbortController = null
+  let pendingBranchesRequestKey = ''
+  let pendingBranchesPromise = null
   let resetOnNextOpen = false
   const baseBranchesByRepository = new Map()
   const submitButtonDefaultLabel =
@@ -398,6 +400,7 @@ export const createGitHubPrDrawer = ({
     const cacheKey = toBranchCacheKey(repository)
     const nextPreferredBranch =
       toSafeText(preferredBranch) || getPreferredBaseBranchForRepository(repository)
+    const requestKey = `${cacheKey}:${nextPreferredBranch}`
 
     if (!cacheKey) {
       renderBaseBranchOptions({ preferredBranch: nextPreferredBranch, branchNames: [] })
@@ -419,13 +422,18 @@ export const createGitHubPrDrawer = ({
       return
     }
 
+    if (pendingBranchesPromise && pendingBranchesRequestKey === requestKey) {
+      await pendingBranchesPromise
+      return
+    }
+
     abortPendingBranchesRequest()
     renderBaseBranchOptions({ preferredBranch: nextPreferredBranch, loading: true })
 
     const abortController = new AbortController()
     pendingBranchesAbortController = abortController
 
-    try {
+    const runBranchRequest = async () => {
       const branches = await listRepositoryBranches({
         token,
         owner: repository.owner,
@@ -442,6 +450,15 @@ export const createGitHubPrDrawer = ({
         preferredBranch: nextPreferredBranch,
         branchNames: branches,
       })
+    }
+
+    const requestPromise = runBranchRequest()
+
+    pendingBranchesRequestKey = requestKey
+    pendingBranchesPromise = requestPromise
+
+    try {
+      await requestPromise
     } catch {
       if (abortController.signal.aborted) {
         return
@@ -451,6 +468,11 @@ export const createGitHubPrDrawer = ({
     } finally {
       if (pendingBranchesAbortController === abortController) {
         pendingBranchesAbortController = null
+      }
+
+      if (pendingBranchesPromise === requestPromise) {
+        pendingBranchesPromise = null
+        pendingBranchesRequestKey = ''
       }
     }
   }
@@ -577,6 +599,10 @@ export const createGitHubPrDrawer = ({
     const selectedRepository = getSelectedRepositoryObject()
     syncRepositorySelect({ repositories, selectedRepository })
     syncFormForRepository()
+    if (!open) {
+      return
+    }
+
     void loadBaseBranchesForSelectedRepository({
       preferredBranch: getFormValues().baseBranch,
     })
@@ -778,6 +804,7 @@ export const createGitHubPrDrawer = ({
 
   componentPathInput?.addEventListener('blur', persistCurrentPaths)
   stylesPathInput?.addEventListener('blur', persistCurrentPaths)
+  baseBranchInput?.addEventListener('change', persistCurrentPaths)
   baseBranchInput?.addEventListener('blur', persistCurrentPaths)
   headBranchInput?.addEventListener('blur', persistCurrentPaths)
   prTitleInput?.addEventListener('blur', persistCurrentPaths)
@@ -807,6 +834,10 @@ export const createGitHubPrDrawer = ({
         baseBranchesByRepository.clear()
         setOpen(false)
         renderBaseBranchOptions({ preferredBranch: 'main', branchNames: [] })
+        return
+      }
+
+      if (!open) {
         return
       }
 

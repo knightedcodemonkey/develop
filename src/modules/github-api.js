@@ -420,19 +420,22 @@ export const listRepositoryBranches = async ({ token, owner, repo, signal }) => 
     throw new Error('A GitHub token is required to load branches.')
   }
 
-  if (typeof owner !== 'string' || !owner || typeof repo !== 'string' || !repo) {
+  const normalizedOwner = typeof owner === 'string' ? owner.trim() : ''
+  const normalizedRepo = typeof repo === 'string' ? repo.trim() : ''
+
+  if (!normalizedOwner || !normalizedRepo) {
     throw new Error('A valid repository owner/name is required to load branches.')
   }
 
   const branches = []
   const dedupe = new Set()
-  let nextPageUrl = `${githubApiBaseUrl}/repos/${owner}/${repo}/branches?per_page=100`
-  let remainingPageBudget = 5
+  const collectBranchesByPage = async ({ url, remainingPageBudget }) => {
+    if (!url || remainingPageBudget <= 0) {
+      return
+    }
 
-  while (nextPageUrl && remainingPageBudget > 0) {
-    /* Branch pagination depends on the prior Link header response. */
-    // eslint-disable-next-line no-await-in-loop
-    const page = await listBranchesPage({ token, url: nextPageUrl, signal })
+    const page = await listBranchesPage({ token, url, signal })
+
     for (const name of page.branches) {
       if (dedupe.has(name)) {
         continue
@@ -442,9 +445,16 @@ export const listRepositoryBranches = async ({ token, owner, repo, signal }) => 
       branches.push(name)
     }
 
-    nextPageUrl = page.nextPageUrl
-    remainingPageBudget -= 1
+    await collectBranchesByPage({
+      url: page.nextPageUrl,
+      remainingPageBudget: remainingPageBudget - 1,
+    })
   }
+
+  await collectBranchesByPage({
+    url: `${githubApiBaseUrl}/repos/${normalizedOwner}/${normalizedRepo}/branches?per_page=100`,
+    remainingPageBudget: 5,
+  })
 
   branches.sort((left, right) => left.localeCompare(right))
   return branches

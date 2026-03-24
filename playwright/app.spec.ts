@@ -27,6 +27,8 @@ type PullRequestCreateBody = {
   base?: string
 }
 
+type BranchesByRepo = Record<string, string[]>
+
 const waitForAppReady = async (page: Page, path = appEntryPath) => {
   await page.goto(path)
   await expect(page.getByRole('heading', { name: '@knighted/develop' })).toBeVisible()
@@ -147,6 +149,28 @@ const ensureOpenPrDrawerOpen = async (page: Page) => {
   await expect(page.locator('#github-pr-drawer')).toBeVisible()
 }
 
+const mockRepositoryBranches = async (
+  page: Page,
+  branchesByRepo: BranchesByRepo = {},
+) => {
+  await page.route('https://api.github.com/repos/**/branches**', async route => {
+    const url = new URL(route.request().url())
+    const match = url.pathname.match(/^\/repos\/([^/]+)\/([^/]+)\/branches$/)
+    const repositoryKey = match ? `${match[1]}/${match[2]}` : ''
+
+    const branchNames =
+      branchesByRepo[repositoryKey] && branchesByRepo[repositoryKey].length > 0
+        ? branchesByRepo[repositoryKey]
+        : ['main']
+
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(branchNames.map(name => ({ name }))),
+    })
+  })
+}
+
 const connectByotWithSingleRepo = async (page: Page) => {
   await page.route('https://api.github.com/user/repos**', async route => {
     await route.fulfill({
@@ -165,16 +189,9 @@ const connectByotWithSingleRepo = async (page: Page) => {
     })
   })
 
-  await page.route(
-    'https://api.github.com/repos/knightedcodemonkey/develop/branches**',
-    async route => {
-      await route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify([{ name: 'main' }, { name: 'release' }]),
-      })
-    },
-  )
+  await mockRepositoryBranches(page, {
+    'knightedcodemonkey/develop': ['main', 'release'],
+  })
 
   await page.locator('#github-token-input').fill('github_pat_fake_chat_1234567890')
   await page.locator('#github-token-add').click()
@@ -539,6 +556,11 @@ test('BYOT remembers selected repository across reloads', async ({ page }) => {
     })
   })
 
+  await mockRepositoryBranches(page, {
+    'knightedcodemonkey/develop': ['main', 'release'],
+    'knightedcodemonkey/css': ['main', 'release/1.x'],
+  })
+
   await waitForAppReady(page, `${appEntryPath}?feature-ai=true`)
 
   await page.locator('#github-token-input').fill('github_pat_fake_1234567890')
@@ -586,6 +608,10 @@ test('Open PR drawer confirms and submits component/styles filepaths', async ({
         },
       ]),
     })
+  })
+
+  await mockRepositoryBranches(page, {
+    'knightedcodemonkey/develop': ['main', 'release'],
   })
 
   await page.route(
