@@ -115,6 +115,26 @@
   fill: currentColor;
 }
 
+.github-token-info__icon--present {
+  display: none;
+}
+
+.github-token-info[data-token-state='present'] .github-token-info__icon--missing {
+  display: none;
+}
+
+.github-token-info[data-token-state='present'] .github-token-info__icon--present {
+  display: block;
+}
+
+.github-token-info[data-token-state='missing'] .github-token-info__icon--missing {
+  display: block;
+}
+
+.github-token-info[data-token-state='missing'] .github-token-info__icon--present {
+  display: none;
+}
+
 .github-token-info[data-token-state='missing'] {
   color: color-mix(in srgb, #fbbf24 86%, var(--panel-text));
 }

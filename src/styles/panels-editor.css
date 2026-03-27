@@ -93,13 +93,9 @@
   color: var(--select-text);
 }
 
-.editor-tools-toggle svg {
-  fill: currentColor;
-  stroke: none;
-}
-
 .editor-tools-toggle svg path {
   fill: currentColor;
+  stroke: none;
 }
 
 .panel-collapse-toggle {
