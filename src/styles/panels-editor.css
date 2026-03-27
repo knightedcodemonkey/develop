@@ -93,8 +93,13 @@
   color: var(--select-text);
 }
 
-.editor-tools-toggle .editor-tools-toggle__inner-ring {
-  stroke-width: 0.75;
+.editor-tools-toggle svg {
+  fill: currentColor;
+  stroke: none;
+}
+
+.editor-tools-toggle svg path {
+  fill: currentColor;
 }
 
 .panel-collapse-toggle {

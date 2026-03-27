@@ -92,37 +92,38 @@
   display: inline-grid;
   place-content: center;
   cursor: pointer;
-  border-radius: 999px;
-  border: 1px solid var(--border-strong);
+  border: none;
   color: var(--hint-icon);
-  font-weight: 700;
-  line-height: 1;
   opacity: 0.9;
   background: transparent;
   padding: 0;
-  width: 20px;
-  height: 20px;
-  font-size: 0.74rem;
+  width: 24px;
+  height: 24px;
   transition:
-    border-color 140ms ease,
     color 140ms ease,
-    background 140ms ease,
     box-shadow 140ms ease;
 }
 
+.github-token-info svg {
+  width: 100%;
+  height: 100%;
+  fill: currentColor;
+  stroke: none;
+}
+
+.github-token-info svg path {
+  fill: currentColor;
+}
+
 .github-token-info[data-token-state='missing'] {
-  border-color: color-mix(in srgb, #f59e0b 70%, var(--border-strong));
   color: color-mix(in srgb, #fbbf24 86%, var(--panel-text));
-  background: color-mix(in srgb, #f59e0b 14%, transparent);
 }
 
 .github-token-info[data-token-state='present'] {
-  border-color: color-mix(in srgb, #22c55e 56%, var(--border-strong));
   color: color-mix(in srgb, #4ade80 82%, var(--panel-text));
-  background: color-mix(in srgb, #22c55e 12%, transparent);
 }
 
-.github-token-info[aria-expanded='true'] {
+.github-token-info[aria-expanded='true']:focus-visible {
   box-shadow: 0 0 0 2px color-mix(in srgb, var(--focus-ring) 70%, transparent);
 }
 
@@ -178,6 +179,12 @@
 .github-token-add svg {
   width: 14px;
   height: 14px;
+  fill: currentColor;
+  stroke: none;
+}
+
+.github-token-add svg path {
+  fill: currentColor;
 }
 
 .github-token-add[data-state='loading'] svg {
