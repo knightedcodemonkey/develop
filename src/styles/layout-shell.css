@@ -267,6 +267,14 @@
   display: none;
 }
 
+.app-grid-ai-toggle svg {
+  width: 14px;
+  height: 14px;
+  fill: currentColor;
+  stroke: none;
+  flex-shrink: 0;
+}
+
 .app-grid-ai-toggle[hidden] {
   display: none;
 }
@@ -352,6 +360,8 @@
 @media (max-width: 900px) {
   .app-grid-ai-toggle:not([hidden]) {
     display: inline-flex;
+    align-items: center;
+    gap: 7px;
   }
 }
 

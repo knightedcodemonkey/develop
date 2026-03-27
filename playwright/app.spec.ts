@@ -259,30 +259,41 @@ test('GitHub token info panel reflects missing and present token states', async 
 }) => {
   await waitForAppReady(page, `${appEntryPath}?feature-ai=true`)
 
-  const infoButton = page.locator('#github-token-info')
-  const infoPanel = page.locator('#github-token-info-panel')
-  const missingMessage = page.locator('.github-token-info-message--missing-token')
-  const presentMessage = page.locator('.github-token-info-message--has-token')
+  const infoButtonMissing = page.getByRole('button', {
+    name: 'About GitHub token features and privacy',
+  })
+  const infoButtonPresent = page.getByRole('button', {
+    name: 'About GitHub token privacy',
+  })
+  const missingMessage = page.getByText('Provide a GitHub PAT', { exact: false })
+  const presentMessage = page.getByText(
+    'This token is stored only in your browser and is sent only to GitHub APIs you invoke. Use the trash icon to remove it from storage.',
+  )
 
-  await expect(infoButton).toHaveText('?')
-  await expect(infoButton).toHaveAttribute('data-token-state', 'missing')
+  await expect(infoButtonMissing).toHaveAttribute('data-token-state', 'missing')
+  await expect(infoButtonMissing).toHaveAttribute(
+    'aria-label',
+    'About GitHub token features and privacy',
+  )
+  await expect(presentMessage).toBeHidden()
 
-  await infoButton.click()
-  await expect(infoPanel).toBeVisible()
+  await infoButtonMissing.click()
   await expect(missingMessage).toBeVisible()
   await expect(missingMessage).toContainText('Provide a GitHub PAT')
-  await expect(missingMessage.getByRole('link', { name: 'docs' })).toHaveAttribute(
+  await expect(page.getByRole('link', { name: 'docs' })).toHaveAttribute(
     'href',
     'https://github.com/knightedcodemonkey/develop/blob/main/docs/byot.md',
   )
   await expect(presentMessage).toBeHidden()
 
   await connectByotWithSingleRepo(page)
-  await expect(infoButton).toHaveText('i')
-  await expect(infoButton).toHaveAttribute('data-token-state', 'present')
+  await expect(infoButtonPresent).toHaveAttribute('data-token-state', 'present')
+  await expect(infoButtonPresent).toHaveAttribute(
+    'aria-label',
+    'About GitHub token privacy',
+  )
 
-  await infoButton.click()
-  await expect(infoPanel).toBeVisible()
+  await infoButtonPresent.click()
   await expect(presentMessage).toBeVisible()
   await expect(presentMessage).toContainText(
     'Use the trash icon to remove it from storage.',

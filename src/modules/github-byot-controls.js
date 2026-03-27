@@ -78,15 +78,14 @@ export const createGitHubByotControls = ({
   let lastSelectedRepository = loadSelectedRepository()
 
   const tokenAddPlusIcon = `
-    <svg viewBox="0 0 24 24" aria-hidden="true">
-      <path d="M12 5v14"></path>
-      <path d="M5 12h14"></path>
+    <svg viewBox="0 0 16 16" aria-hidden="true">
+      <path d="M7.75 2a.75.75 0 0 1 .75.75V7h4.25a.75.75 0 0 1 0 1.5H8.5v4.25a.75.75 0 0 1-1.5 0V8.5H2.75a.75.75 0 0 1 0-1.5H7V2.75A.75.75 0 0 1 7.75 2Z"></path>
     </svg>
   `
 
   const tokenAddCheckIcon = `
-    <svg viewBox="0 0 24 24" aria-hidden="true">
-      <path d="m5 13 4 4L19 7"></path>
+    <svg viewBox="0 0 16 16" aria-hidden="true">
+      <path d="M0 8a8 8 0 1 1 16 0A8 8 0 0 1 0 8Zm1.5 0a6.5 6.5 0 1 0 13 0 6.5 6.5 0 0 0-13 0Zm10.28-1.72-4.5 4.5a.75.75 0 0 1-1.06 0l-2-2a.751.751 0 0 1 .018-1.042.751.751 0 0 1 1.042-.018l1.47 1.47 3.97-3.97a.751.751 0 0 1 1.042.018.751.751 0 0 1 .018 1.042Z"></path>
     </svg>
   `
 
@@ -119,7 +118,6 @@ export const createGitHubByotControls = ({
 
     if (tokenInfoButton instanceof HTMLButtonElement) {
       tokenInfoButton.dataset.tokenState = hasProvidedToken ? 'present' : 'missing'
-      tokenInfoButton.textContent = hasProvidedToken ? 'i' : '?'
       tokenInfoButton.setAttribute(
         'aria-label',
         hasProvidedToken
