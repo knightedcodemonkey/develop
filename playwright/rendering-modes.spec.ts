@@ -190,6 +190,104 @@ test('requires render button when auto render is disabled', async ({ page }) => 
   await expect(page.locator('#preview-host pre')).toHaveCount(0)
 })
 
+test('clears preview when auto render is toggled', async ({ page }) => {
+  await waitForInitialRender(page)
+
+  await ensurePanelToolsVisible(page, 'component')
+
+  const autoRenderToggle = page.getByLabel('Auto render')
+
+  await expect(
+    page.getByRole('region', { name: 'Preview output' }).getByRole('button'),
+  ).toHaveCount(1)
+
+  await autoRenderToggle.uncheck()
+
+  await expect(
+    page.getByRole('region', { name: 'Preview output' }).getByRole('button'),
+  ).toHaveCount(0)
+  await expect(page.locator('#preview-host pre')).toHaveCount(0)
+})
+
+test('shows App-only error when auto render is disabled and App is missing', async ({
+  page,
+}) => {
+  await waitForInitialRender(page)
+
+  await ensurePanelToolsVisible(page, 'component')
+
+  const autoRenderToggle = page.getByLabel('Auto render')
+  const renderButton = page.getByRole('button', { name: 'Render' })
+
+  await autoRenderToggle.uncheck()
+  await setComponentEditorSource(
+    page,
+    'const Button = () => <button type="button">no app wrapper</button>',
+  )
+
+  await renderButton.click()
+
+  await expect(page.getByRole('status', { name: 'App status' })).toHaveText('Error')
+  await expect(page.locator('#preview-host pre')).toContainText(
+    'Expected a function or const named App.',
+  )
+})
+
+test('auto render implicitly wraps source with App in dom and react modes', async ({
+  page,
+}) => {
+  await waitForInitialRender(page)
+
+  await ensurePanelToolsVisible(page, 'component')
+  await page.getByLabel('ShadowRoot').uncheck()
+
+  await setComponentEditorSource(
+    page,
+    'const Button = () => <button type="button">implicit app dom</button>',
+  )
+
+  await expect(page.getByRole('status', { name: 'App status' })).toHaveText('Rendered')
+  await expect(
+    page.getByRole('region', { name: 'Preview output' }).getByRole('button'),
+  ).toContainText('implicit app dom')
+
+  await page.getByRole('combobox', { name: 'Render mode' }).selectOption('react')
+  await setComponentEditorSource(
+    page,
+    'const Button = () => <button type="button">implicit app react</button>',
+  )
+
+  await expect(page.getByRole('status', { name: 'App status' })).toHaveText('Rendered')
+  await expect(
+    page.getByRole('region', { name: 'Preview output' }).getByRole('button'),
+  ).toContainText('implicit app react')
+})
+
+test('auto render implicit App includes multiple component declarations', async ({
+  page,
+}) => {
+  await waitForInitialRender(page)
+
+  await ensurePanelToolsVisible(page, 'component')
+  await page.getByLabel('ShadowRoot').uncheck()
+
+  await setComponentEditorSource(
+    page,
+    [
+      'const OtherButton = () => <button type="button">bar</button>',
+      'const Button = () => <button type="button">foo</button>',
+    ].join('\n'),
+  )
+
+  await expect(page.getByRole('status', { name: 'App status' })).toHaveText('Rendered')
+  await expect(
+    page.getByRole('region', { name: 'Preview output' }).getByRole('button'),
+  ).toHaveCount(2)
+  await expect(
+    page.getByRole('region', { name: 'Preview output' }).getByRole('button'),
+  ).toContainText(['bar', 'foo'])
+})
+
 test('persists layout and theme across reload', async ({ page }) => {
   await waitForInitialRender(page)
 

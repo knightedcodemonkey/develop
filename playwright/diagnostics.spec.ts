@@ -346,7 +346,7 @@ test('clear component diagnostics resets rendered lint-issue status pill', async
   await expect(page.getByText('Rendered', { exact: true })).toHaveClass(/status--neutral/)
 })
 
-test('component lint ignores unused App View and render bindings', async ({ page }) => {
+test('component lint ignores only unused App binding', async ({ page }) => {
   await waitForInitialRender(page)
 
   await setComponentEditorSource(
@@ -361,20 +361,20 @@ test('component lint ignores unused App View and render bindings', async ({ page
   await runComponentLint(page)
 
   await ensureDiagnosticsDrawerOpen(page)
-  await expect(page.getByText('No Biome issues found.')).toBeVisible()
 
   const diagnosticsToggle = page.getByRole('button', { name: /^Diagnostics/ })
-  await expect(page.getByText('Rendered', { exact: true })).toHaveClass(/status--neutral/)
-  await expect(diagnosticsToggle).toHaveText('Diagnostics')
-  await expect(diagnosticsToggle).toHaveClass(/diagnostics-toggle--ok/)
+  await expect(page.getByText(/Rendered \(Lint issues: [1-9]\d*\)/)).toHaveClass(
+    /status--error/,
+  )
+  await expect(diagnosticsToggle).toHaveText(/Diagnostics \([1-9]\d*\)/)
+  await expect(diagnosticsToggle).toHaveClass(/diagnostics-toggle--error/)
 
   const diagnosticsText = await page.getByRole('complementary').innerText()
+  expect(diagnosticsText).toContain('Biome reported issues.')
   expect(diagnosticsText).not.toContain('This variable App is unused')
-  expect(diagnosticsText).not.toContain('This variable View is unused')
-  expect(diagnosticsText).not.toContain('This variable render is unused')
   expect(diagnosticsText).not.toContain('This function App is unused')
-  expect(diagnosticsText).not.toContain('This function View is unused')
-  expect(diagnosticsText).not.toContain('This function render is unused')
+  expect(diagnosticsText).toContain('This function View is unused')
+  expect(diagnosticsText).toContain('This function render is unused')
 })
 
 test('component lint with unresolved issues enters pending diagnostics state while typing', async ({

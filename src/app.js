@@ -16,6 +16,8 @@ import { createLintDiagnosticsController } from './modules/lint-diagnostics.js'
 import { createPreviewBackgroundController } from './modules/preview-background.js'
 import { createRenderRuntimeController } from './modules/render-runtime.js'
 import { createTypeDiagnosticsController } from './modules/type-diagnostics.js'
+import { collectTopLevelDeclarations } from './modules/jsx-top-level-declarations.js'
+import { ensureJsxTransformSource } from './modules/jsx-transform-runtime.js'
 
 const statusNode = document.getElementById('status')
 const appGrid = document.querySelector('.app-grid')
@@ -48,6 +50,7 @@ const githubPrComponentPath = document.getElementById('github-pr-component-path'
 const githubPrStylesPath = document.getElementById('github-pr-styles-path')
 const githubPrTitle = document.getElementById('github-pr-title')
 const githubPrBody = document.getElementById('github-pr-body')
+const githubPrIncludeAppWrapper = document.getElementById('github-pr-include-app-wrapper')
 const githubPrSubmit = document.getElementById('github-pr-submit')
 const viewControlsToggle = document.getElementById('view-controls-toggle')
 const viewControlsDrawer = document.getElementById('view-controls-drawer')
@@ -622,6 +625,18 @@ const getCurrentWritableRepositories = () =>
 const setCurrentSelectedRepository = fullName =>
   byotControls.setSelectedRepository(fullName)
 
+const getTopLevelDeclarations = async source => {
+  if (typeof source !== 'string' || !source.trim()) {
+    return []
+  }
+
+  const transformJsxSource = await ensureJsxTransformSource({
+    cdnImports,
+    importFromCdnWithFallback,
+  })
+  return collectTopLevelDeclarations({ source, transformJsxSource })
+}
+
 chatDrawerController = createGitHubChatDrawer({
   featureEnabled: aiAssistantFeatureEnabled,
   toggleButton: aiChatToggle,
@@ -660,6 +675,7 @@ prDrawerController = createGitHubPrDrawer({
   stylesPathInput: githubPrStylesPath,
   prTitleInput: githubPrTitle,
   prBodyInput: githubPrBody,
+  includeAppWrapperToggle: githubPrIncludeAppWrapper,
   submitButton: githubPrSubmit,
   statusNode: githubPrStatus,
   getToken: getCurrentGitHubToken,
@@ -668,6 +684,7 @@ prDrawerController = createGitHubPrDrawer({
   setSelectedRepository: setCurrentSelectedRepository,
   getComponentSource: () => getJsxSource(),
   getStylesSource: () => getCssSource(),
+  getTopLevelDeclarations,
   getDrawerSide: () => {
     const layout = getCurrentLayout()
     return layout === 'preview-left' ? 'left' : 'right'
@@ -1030,6 +1047,7 @@ renderRuntime = createRenderRuntimeController({
   renderMode,
   styleMode,
   shadowToggle,
+  isAutoRenderEnabled: () => autoRenderToggle.checked,
   getCssSource: () => getCssSource(),
   getJsxSource: () => getJsxSource(),
   getPreviewHost: () => previewHost,
@@ -1214,6 +1232,7 @@ styleMode.addEventListener('change', () => {
 })
 shadowToggle.addEventListener('change', maybeRender)
 autoRenderToggle.addEventListener('change', () => {
+  renderRuntime.clearPreview()
   updateRenderButtonVisibility()
   if (autoRenderToggle.checked) {
     renderPreview()
