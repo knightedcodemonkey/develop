@@ -77,12 +77,12 @@ export const runTypecheck = async (page: Page) => {
 
 export const runComponentLint = async (page: Page) => {
   await ensurePanelToolsVisible(page, 'component')
-  await page.getByRole('button', { name: 'Lint' }).first().click()
+  await page.getByRole('button', { name: 'Component lint' }).click()
 }
 
 export const runStylesLint = async (page: Page) => {
   await ensurePanelToolsVisible(page, 'styles')
-  await page.locator('#styles-panel').getByRole('button', { name: 'Lint' }).click()
+  await page.getByRole('button', { name: 'Styles lint' }).click()
 }
 
 export const getActiveStylesEditorLineNumber = async (page: Page) => {
@@ -122,7 +122,7 @@ export const ensureDiagnosticsDrawerOpen = async (page: Page) => {
     await toggle.click()
   }
 
-  await expect(page.locator('#diagnostics-drawer')).toBeVisible()
+  await expect(page.getByRole('complementary', { name: 'Diagnostics' })).toBeVisible()
 }
 
 export const ensureDiagnosticsDrawerClosed = async (page: Page) => {
@@ -135,7 +135,7 @@ export const ensureDiagnosticsDrawerClosed = async (page: Page) => {
     await page.getByRole('button', { name: 'Close diagnostics drawer' }).click()
   }
 
-  await expect(page.locator('#diagnostics-drawer')).toBeHidden()
+  await expect(page.getByRole('complementary', { name: 'Diagnostics' })).toBeHidden()
 }
 
 export const ensureAiChatDrawerOpen = async (page: Page) => {
@@ -146,7 +146,7 @@ export const ensureAiChatDrawerOpen = async (page: Page) => {
     await toggle.click()
   }
 
-  await expect(page.locator('#ai-chat-drawer')).toBeVisible()
+  await expect(page.getByRole('complementary', { name: 'AI Chat' })).toBeVisible()
 }
 
 export const ensureOpenPrDrawerOpen = async (page: Page) => {
@@ -158,7 +158,9 @@ export const ensureOpenPrDrawerOpen = async (page: Page) => {
     await toggle.click()
   }
 
-  await expect(page.locator('#github-pr-drawer')).toBeVisible()
+  await expect(
+    page.getByRole('complementary', { name: 'Open Pull Request' }),
+  ).toBeVisible()
 }
 
 export const mockRepositoryBranches = async (

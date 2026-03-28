@@ -399,7 +399,12 @@
                 <button class="render-button" id="typecheck-button" type="button">
                   Typecheck
                 </button>
-                <button class="render-button" id="lint-component-button" type="button">
+                <button
+                  class="render-button"
+                  id="lint-component-button"
+                  type="button"
+                  aria-label="Component lint"
+                >
                   Lint
                 </button>
                 <label>
@@ -494,7 +499,12 @@
             </div>
             <div class="panel-header-main-actions">
               <div class="controls controls--actions">
-                <button class="render-button" id="lint-styles-button" type="button">
+                <button
+                  class="render-button"
+                  id="lint-styles-button"
+                  type="button"
+                  aria-label="Styles lint"
+                >
                   Lint
                 </button>
                 <label>
@@ -573,9 +583,14 @@
         </div>
       </section>
 
-      <aside class="diagnostics-drawer" id="diagnostics-drawer" hidden>
+      <aside
+        class="diagnostics-drawer"
+        id="diagnostics-drawer"
+        aria-labelledby="diagnostics-title"
+        hidden
+      >
         <div class="diagnostics-drawer__header">
-          <h2>Diagnostics</h2>
+          <h2 id="diagnostics-title">Diagnostics</h2>
           <button
             class="icon-button"
             id="diagnostics-close"
@@ -610,9 +625,14 @@
         </section>
       </aside>
 
-      <aside class="ai-chat-drawer" id="ai-chat-drawer" hidden>
+      <aside
+        class="ai-chat-drawer"
+        id="ai-chat-drawer"
+        aria-labelledby="ai-chat-title"
+        hidden
+      >
         <div class="ai-chat-drawer__header">
-          <h2>AI Chat</h2>
+          <h2 id="ai-chat-title">AI Chat</h2>
           <button
             class="icon-button"
             id="ai-chat-close"
@@ -662,9 +682,14 @@
         </div>
       </aside>
 
-      <aside class="github-pr-drawer" id="github-pr-drawer" hidden>
+      <aside
+        class="github-pr-drawer"
+        id="github-pr-drawer"
+        aria-labelledby="open-pr-title"
+        hidden
+      >
         <div class="github-pr-drawer__header">
-          <h2>Open Pull Request</h2>
+          <h2 id="open-pr-title">Open Pull Request</h2>
           <button
             class="icon-button"
             id="github-pr-close"
