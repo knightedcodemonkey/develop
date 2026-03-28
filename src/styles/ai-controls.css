@@ -501,6 +501,22 @@
   color: var(--text-muted);
 }
 
+.github-pr-field--checkbox {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.8rem;
+}
+
+.github-pr-field--checkbox input[type='checkbox'] {
+  width: auto;
+  margin: 0;
+}
+
+.github-pr-field--checkbox span {
+  color: var(--text-subtle);
+}
+
 .github-pr-field--full {
   grid-column: 1 / -1;
 }

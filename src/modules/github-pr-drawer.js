@@ -1,4 +1,8 @@
 import { createEditorContentPullRequest, listRepositoryBranches } from './github-api.js'
+import {
+  isFunctionLikeDeclaration,
+  isFunctionLikeVariableInitializer,
+} from './jsx-top-level-declarations.js'
 
 const prConfigStoragePrefix = 'knighted:develop:github-pr-config:'
 
@@ -266,6 +270,76 @@ const mergeBranchOptions = ({ preferredBranch, branchNames }) => {
   return result
 }
 
+const mergeWhitespaceAroundRemoval = value => value.replace(/\n{3,}/g, '\n\n')
+
+const isSourceRange = value =>
+  Array.isArray(value) &&
+  value.length === 2 &&
+  Number.isInteger(value[0]) &&
+  Number.isInteger(value[1])
+
+const isRemovableAppDeclaration = declaration => {
+  if (!declaration || declaration.name !== 'App') {
+    return false
+  }
+
+  if (!isFunctionLikeDeclaration(declaration)) {
+    return false
+  }
+
+  if (declaration.kind !== 'variable') {
+    return true
+  }
+
+  return isFunctionLikeVariableInitializer(declaration)
+}
+
+const removeRanges = ({ source, ranges }) => {
+  const sortedRanges = ranges.slice().sort((first, second) => second[0] - first[0])
+  let output = source
+
+  for (const [start, end] of sortedRanges) {
+    if (start < 0 || end < start || end > output.length) {
+      continue
+    }
+
+    output = `${output.slice(0, start)}${output.slice(end)}`
+  }
+
+  return output
+}
+
+const stripTopLevelAppWrapper = async ({ source, getTopLevelDeclarations }) => {
+  if (typeof source !== 'string' || !source.trim()) {
+    return ''
+  }
+
+  if (typeof getTopLevelDeclarations !== 'function') {
+    return source
+  }
+
+  try {
+    const declarations = await getTopLevelDeclarations(source)
+
+    if (!Array.isArray(declarations)) {
+      return source
+    }
+
+    const ranges = declarations
+      .filter(isRemovableAppDeclaration)
+      .map(declaration => declaration.statementRange)
+      .filter(isSourceRange)
+
+    if (ranges.length === 0) {
+      return source
+    }
+
+    return mergeWhitespaceAroundRemoval(removeRanges({ source, ranges }))
+  } catch {
+    return source
+  }
+}
+
 export const createGitHubPrDrawer = ({
   featureEnabled,
   toggleButton,
@@ -278,6 +352,7 @@ export const createGitHubPrDrawer = ({
   stylesPathInput,
   prTitleInput,
   prBodyInput,
+  includeAppWrapperToggle,
   submitButton,
   statusNode,
   getToken,
@@ -286,6 +361,7 @@ export const createGitHubPrDrawer = ({
   setSelectedRepository,
   getComponentSource,
   getStylesSource,
+  getTopLevelDeclarations,
   getDrawerSide,
   confirmBeforeSubmit,
   onPullRequestOpened,
@@ -344,6 +420,7 @@ export const createGitHubPrDrawer = ({
       stylesPathInput,
       prTitleInput,
       prBodyInput,
+      includeAppWrapperToggle,
     ]) {
       if (
         input instanceof HTMLInputElement ||
@@ -601,6 +678,10 @@ export const createGitHubPrDrawer = ({
             : toDefaultPrBody({ componentFilePath, stylesFilePath })
       }
     }
+
+    if (includeAppWrapperToggle instanceof HTMLInputElement) {
+      includeAppWrapperToggle.checked = false
+    }
   }
 
   const persistCurrentPaths = () => {
@@ -687,6 +768,10 @@ export const createGitHubPrDrawer = ({
     }
 
     const values = getFormValues()
+    const includeAppWrapper =
+      includeAppWrapperToggle instanceof HTMLInputElement
+        ? includeAppWrapperToggle.checked
+        : false
     const componentPathValidation = validateFilePath(values.componentFilePath)
     if (!componentPathValidation.ok) {
       setStatus(`Component path: ${componentPathValidation.reason}`, 'error')
@@ -724,6 +809,15 @@ export const createGitHubPrDrawer = ({
       prTitle: values.prTitle,
     })
 
+    const originalComponentSource =
+      typeof getComponentSource === 'function' ? getComponentSource() : ''
+    const componentSource = includeAppWrapper
+      ? originalComponentSource
+      : await stripTopLevelAppWrapper({
+          source: originalComponentSource,
+          getTopLevelDeclarations,
+        })
+
     const submitRequest = () => {
       pendingAbortController?.abort()
       const abortController = new AbortController()
@@ -743,8 +837,7 @@ export const createGitHubPrDrawer = ({
         prTitle: values.prTitle,
         prBody: values.prBody,
         componentFilePath: componentPathValidation.value,
-        componentSource:
-          typeof getComponentSource === 'function' ? getComponentSource() : '',
+        componentSource,
         stylesFilePath: stylesPathValidation.value,
         stylesSource: typeof getStylesSource === 'function' ? getStylesSource() : '',
         commitMessage: `chore: sync editor component and styles from @knighted/develop`,

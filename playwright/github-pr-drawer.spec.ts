@@ -8,8 +8,14 @@ import {
   connectByotWithSingleRepo,
   ensureOpenPrDrawerOpen,
   mockRepositoryBranches,
+  setComponentEditorSource,
   waitForAppReady,
 } from './helpers/app-test-helpers.js'
+
+const decodeGitHubFileBodyContent = (body: Record<string, unknown>) => {
+  const encoded = typeof body.content === 'string' ? body.content : ''
+  return Buffer.from(encoded, 'base64').toString('utf8')
+}
 
 test('Open PR drawer confirms and submits component/styles filepaths', async ({
   page,
@@ -450,4 +456,280 @@ test('Open PR drawer rejects trailing slash file paths', async ({ page }) => {
     'Component path: File path must include a filename (no trailing slash).',
   )
   await expect(page.getByRole('dialog')).toBeHidden()
+})
+
+test('Open PR drawer include App wrapper checkbox defaults off and resets on reopen', async ({
+  page,
+}) => {
+  await waitForAppReady(page, `${appEntryPath}?feature-ai=true`)
+  await connectByotWithSingleRepo(page)
+  await ensureOpenPrDrawerOpen(page)
+
+  const includeWrapperToggle = page.getByLabel(
+    'Include App wrapper in committed component source',
+  )
+  await expect(includeWrapperToggle).not.toBeChecked()
+
+  await includeWrapperToggle.check()
+  await expect(includeWrapperToggle).toBeChecked()
+
+  await page.getByRole('button', { name: 'Close open pull request drawer' }).click()
+  await ensureOpenPrDrawerOpen(page)
+
+  await expect(includeWrapperToggle).not.toBeChecked()
+})
+
+test('Open PR drawer strips App wrapper from committed component source by default', async ({
+  page,
+}) => {
+  const upsertRequests: Array<{ path: string; body: Record<string, unknown> }> = []
+
+  await page.route('https://api.github.com/user/repos**', async route => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify([
+        {
+          id: 11,
+          owner: { login: 'knightedcodemonkey' },
+          name: 'develop',
+          full_name: 'knightedcodemonkey/develop',
+          default_branch: 'main',
+          permissions: { push: true },
+        },
+      ]),
+    })
+  })
+
+  await mockRepositoryBranches(page, {
+    'knightedcodemonkey/develop': ['main', 'release'],
+  })
+
+  await page.route(
+    'https://api.github.com/repos/knightedcodemonkey/develop/git/ref/**',
+    async route => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          ref: 'refs/heads/main',
+          object: { type: 'commit', sha: 'abc123mainsha' },
+        }),
+      })
+    },
+  )
+
+  await page.route(
+    'https://api.github.com/repos/knightedcodemonkey/develop/git/refs',
+    async route => {
+      await route.fulfill({
+        status: 201,
+        contentType: 'application/json',
+        body: JSON.stringify({ ref: 'refs/heads/develop/open-pr-app-wrapper' }),
+      })
+    },
+  )
+
+  await page.route(
+    'https://api.github.com/repos/knightedcodemonkey/develop/contents/**',
+    async route => {
+      const request = route.request()
+      const method = request.method()
+      const path =
+        new URL(request.url()).pathname.split('/contents/')[1] ?? 'unknown-file-path'
+
+      if (method === 'GET') {
+        await route.fulfill({
+          status: 404,
+          contentType: 'application/json',
+          body: JSON.stringify({ message: 'Not Found' }),
+        })
+        return
+      }
+
+      const body = request.postDataJSON() as Record<string, unknown>
+      upsertRequests.push({ path: decodeURIComponent(path), body })
+      await route.fulfill({
+        status: 201,
+        contentType: 'application/json',
+        body: JSON.stringify({ commit: { sha: 'commit-sha' } }),
+      })
+    },
+  )
+
+  await page.route(
+    'https://api.github.com/repos/knightedcodemonkey/develop/pulls',
+    async route => {
+      await route.fulfill({
+        status: 201,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          number: 101,
+          html_url: 'https://github.com/knightedcodemonkey/develop/pull/101',
+        }),
+      })
+    },
+  )
+
+  await waitForAppReady(page, `${appEntryPath}?feature-ai=true`)
+  await connectByotWithSingleRepo(page)
+
+  const componentSource = [
+    'const CounterButton = () => <button type="button">Counter</button>',
+    'const App = () => <CounterButton />',
+  ].join('\n')
+
+  await setComponentEditorSource(page, componentSource)
+  await ensureOpenPrDrawerOpen(page)
+
+  await page.getByLabel('Head').fill('develop/repo/editor-sync-without-app')
+  await page.getByRole('button', { name: 'Open PR' }).last().click()
+  await page.getByRole('dialog').getByRole('button', { name: 'Open PR' }).click()
+
+  await expect(
+    page.getByRole('status', { name: 'Open pull request status', includeHidden: true }),
+  ).toContainText(
+    'Pull request opened: https://github.com/knightedcodemonkey/develop/pull/101',
+  )
+
+  const componentUpserts = upsertRequests.filter(request =>
+    request.path.endsWith('/App.jsx'),
+  )
+
+  expect(componentUpserts).toHaveLength(1)
+
+  const strippedComponentSource = decodeGitHubFileBodyContent(componentUpserts[0].body)
+
+  expect(strippedComponentSource).toContain('const CounterButton = () =>')
+  expect(strippedComponentSource).not.toContain('const App = () =>')
+})
+
+test('Open PR drawer includes App wrapper in committed source when toggled on', async ({
+  page,
+}) => {
+  const upsertRequests: Array<{ path: string; body: Record<string, unknown> }> = []
+
+  await page.route('https://api.github.com/user/repos**', async route => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify([
+        {
+          id: 11,
+          owner: { login: 'knightedcodemonkey' },
+          name: 'develop',
+          full_name: 'knightedcodemonkey/develop',
+          default_branch: 'main',
+          permissions: { push: true },
+        },
+      ]),
+    })
+  })
+
+  await mockRepositoryBranches(page, {
+    'knightedcodemonkey/develop': ['main', 'release'],
+  })
+
+  await page.route(
+    'https://api.github.com/repos/knightedcodemonkey/develop/git/ref/**',
+    async route => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          ref: 'refs/heads/main',
+          object: { type: 'commit', sha: 'abc123mainsha' },
+        }),
+      })
+    },
+  )
+
+  await page.route(
+    'https://api.github.com/repos/knightedcodemonkey/develop/git/refs',
+    async route => {
+      await route.fulfill({
+        status: 201,
+        contentType: 'application/json',
+        body: JSON.stringify({ ref: 'refs/heads/develop/open-pr-app-wrapper' }),
+      })
+    },
+  )
+
+  await page.route(
+    'https://api.github.com/repos/knightedcodemonkey/develop/contents/**',
+    async route => {
+      const request = route.request()
+      const method = request.method()
+      const path =
+        new URL(request.url()).pathname.split('/contents/')[1] ?? 'unknown-file-path'
+
+      if (method === 'GET') {
+        await route.fulfill({
+          status: 404,
+          contentType: 'application/json',
+          body: JSON.stringify({ message: 'Not Found' }),
+        })
+        return
+      }
+
+      const body = request.postDataJSON() as Record<string, unknown>
+      upsertRequests.push({ path: decodeURIComponent(path), body })
+      await route.fulfill({
+        status: 201,
+        contentType: 'application/json',
+        body: JSON.stringify({ commit: { sha: 'commit-sha' } }),
+      })
+    },
+  )
+
+  await page.route(
+    'https://api.github.com/repos/knightedcodemonkey/develop/pulls',
+    async route => {
+      await route.fulfill({
+        status: 201,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          number: 101,
+          html_url: 'https://github.com/knightedcodemonkey/develop/pull/101',
+        }),
+      })
+    },
+  )
+
+  await waitForAppReady(page, `${appEntryPath}?feature-ai=true`)
+  await connectByotWithSingleRepo(page)
+
+  await setComponentEditorSource(
+    page,
+    [
+      'const CounterButton = () => <button type="button">Counter</button>',
+      'const App = () => <CounterButton />',
+    ].join('\n'),
+  )
+  await ensureOpenPrDrawerOpen(page)
+
+  const includeWrapperToggle = page.getByLabel(
+    'Include App wrapper in committed component source',
+  )
+  await includeWrapperToggle.check()
+
+  await page.getByLabel('Head').fill('develop/repo/editor-sync-with-app')
+  await page.getByRole('button', { name: 'Open PR' }).last().click()
+  await page.getByRole('dialog').getByRole('button', { name: 'Open PR' }).click()
+
+  await expect(
+    page.getByRole('status', { name: 'Open pull request status', includeHidden: true }),
+  ).toContainText(
+    'Pull request opened: https://github.com/knightedcodemonkey/develop/pull/101',
+  )
+
+  const componentUpserts = upsertRequests.filter(request =>
+    request.path.endsWith('/App.jsx'),
+  )
+
+  expect(componentUpserts).toHaveLength(1)
+
+  const fullComponentSource = decodeGitHubFileBodyContent(componentUpserts[0].body)
+  expect(fullComponentSource).toContain('const CounterButton = () =>')
+  expect(fullComponentSource).toContain('const App = () =>')
 })

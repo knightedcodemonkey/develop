@@ -1,9 +1,17 @@
+import {
+  collectTopLevelTransformMetadata,
+  getFunctionLikeDeclarationNames,
+  hasFunctionLikeDeclarationNamed,
+} from './jsx-top-level-declarations.js'
+import { ensureJsxTransformSource } from './jsx-transform-runtime.js'
+
 export const createRenderRuntimeController = ({
   cdnImports,
   importFromCdnWithFallback,
   renderMode,
   styleMode,
   shadowToggle,
+  isAutoRenderEnabled = () => false,
   getCssSource,
   getJsxSource,
   getPreviewHost,
@@ -28,6 +36,11 @@ export const createRenderRuntimeController = ({
     key: null,
     value: null,
   }
+  let topLevelTransformMetadataCache = {
+    source: null,
+    transformJsxSource: null,
+    value: null,
+  }
   let hasCompletedInitialRender = false
 
   const setStyleCompiling = isCompiling => {
@@ -43,10 +56,13 @@ export const createRenderRuntimeController = ({
     if (coreRuntime) return coreRuntime
 
     try {
-      const [cssBrowser, jsxDom, jsxTransform] = await Promise.all([
+      const [cssBrowser, jsxDom, transformJsxSource] = await Promise.all([
         importFromCdnWithFallback(cdnImports.cssBrowser),
         importFromCdnWithFallback(cdnImports.jsxDom),
-        importFromCdnWithFallback(cdnImports.jsxTransform),
+        ensureJsxTransformSource({
+          cdnImports,
+          importFromCdnWithFallback,
+        }),
       ])
 
       if (typeof cssBrowser.module.cssFromSource !== 'function') {
@@ -57,16 +73,10 @@ export const createRenderRuntimeController = ({
         throw new Error(`jsx export was not found from ${jsxDom.url}`)
       }
 
-      if (typeof jsxTransform.module.transformJsxSource !== 'function') {
-        throw new Error(
-          `transformJsxSource export was not found from ${jsxTransform.url}`,
-        )
-      }
-
       coreRuntime = {
         cssFromSource: cssBrowser.module.cssFromSource,
         jsx: jsxDom.module.jsx,
-        transformJsxSource: jsxTransform.module.transformJsxSource,
+        transformJsxSource,
       }
 
       return coreRuntime
@@ -391,12 +401,106 @@ export const createRenderRuntimeController = ({
     return lines.join('\n')
   }
 
+  const hasAppDeclaration = declarations =>
+    hasFunctionLikeDeclarationNamed({ declarations, name: 'App' })
+
+  const isComponentLikeName = name => typeof name === 'string' && /^[A-Z]/.test(name)
+
+  const getComponentNames = declarations =>
+    getFunctionLikeDeclarationNames({ declarations, excludeNames: ['App'] }).filter(
+      isComponentLikeName,
+    )
+
+  const isSourceRange = range =>
+    Array.isArray(range) &&
+    range.length === 2 &&
+    Number.isInteger(range[0]) &&
+    Number.isInteger(range[1])
+
+  const sourceFromRange = ({ source, range }) => {
+    if (!isSourceRange(range)) {
+      return null
+    }
+
+    const [start, end] = range
+    if (start < 0 || end < start || end > source.length) {
+      return null
+    }
+
+    const expression = source.slice(start, end).trim()
+    return expression || null
+  }
+
+  const getTopLevelTransformMetadata = ({ source, transformJsxSource }) => {
+    if (
+      topLevelTransformMetadataCache.source === source &&
+      topLevelTransformMetadataCache.transformJsxSource === transformJsxSource &&
+      topLevelTransformMetadataCache.value
+    ) {
+      return topLevelTransformMetadataCache.value
+    }
+
+    const value = collectTopLevelTransformMetadata({ source, transformJsxSource })
+    topLevelTransformMetadataCache = {
+      source,
+      transformJsxSource,
+      value,
+    }
+
+    return value
+  }
+
+  const withImplicitAppWrapper = (source, transformJsxSource) => {
+    if (!source.trim()) {
+      return source
+    }
+
+    const {
+      declarations,
+      importCount,
+      hasTopLevelJsxExpression,
+      topLevelJsxExpressionRange,
+    } = getTopLevelTransformMetadata({ source, transformJsxSource })
+    if (hasAppDeclaration(declarations)) {
+      return source
+    }
+
+    if (hasTopLevelJsxExpression) {
+      const expressionSource = sourceFromRange({
+        source,
+        range: topLevelJsxExpressionRange,
+      })
+
+      if (!expressionSource) {
+        throw new Error(
+          'Unable to infer top-level JSX entry for implicit App. Define App explicitly.',
+        )
+      }
+
+      if (declarations.length > 0 || importCount > 0) {
+        throw new Error(
+          'Top-level JSX with declarations or imports requires an explicit App component.',
+        )
+      }
+
+      return `const App = () => (${expressionSource})`
+    }
+
+    const componentNames = getComponentNames(declarations)
+    if (componentNames.length > 0) {
+      const children = componentNames.map(name => `    <${name} />`).join('\n')
+      return `${source}\n\nconst App = () => (\n  <>\n${children}\n  </>\n)`
+    }
+
+    return source
+  }
+
   const createUserModuleFactory = source =>
     new Function(
       'jsx',
       'reactJsx',
       'React',
-      `"use strict";\nlet __defaultExport;\n${source}\nconst __renderComponent = (Component, jsxTag) => {\n  if (typeof Component !== 'function') return null;\n  return jsxTag\`<\${Component} />\`;\n};\nconst __renderEntry = jsxTag => {\n  if (typeof render === 'function') return render(jsxTag);\n  if (typeof __defaultExport !== 'undefined') {\n    return typeof __defaultExport === 'function'\n      ? __renderComponent(__defaultExport, jsxTag)\n      : __defaultExport;\n  }\n  const component = typeof App === 'function' ? App : typeof View === 'function' ? View : null;\n  if (component) return __renderComponent(component, jsxTag);\n  if (typeof View !== 'undefined') return View;\n  if (typeof view !== 'undefined') return view;\n  if (typeof output !== 'undefined') return output;\n  return null;\n};\nreturn __renderEntry;`,
+      `"use strict";\n${source}\nconst __renderComponent = (Component, jsxTag) => {\n  if (typeof Component !== 'function') return null;\n  return jsxTag\`<\${Component} />\`;\n};\nconst __renderEntry = jsxTag => {\n  if (typeof App !== 'function') return null;\n  return __renderComponent(App, jsxTag);\n};\nreturn __renderEntry;`,
     )
 
   const isDomNode = value => typeof Node !== 'undefined' && value instanceof Node
@@ -594,10 +698,22 @@ export const createRenderRuntimeController = ({
   const evaluateUserModule = async (helpers = {}) => {
     const { jsx, transformJsxSource } = await ensureCoreRuntime()
     let runtimeHelpers = helpers
-    const userCode = getJsxSource()
-      .replace(/^\s*export\s+default\s+function\b/gm, '__defaultExport = function')
-      .replace(/^\s*export\s+default\s+class\b/gm, '__defaultExport = class')
-      .replace(/^\s*export\s+default\s+/gm, '__defaultExport = ')
+    const source = getJsxSource()
+    const executableSource = isAutoRenderEnabled()
+      ? withImplicitAppWrapper(source, transformJsxSource)
+      : source
+    const userCode = executableSource
+      .replace(
+        /^\s*export\s+default\s+([A-Za-z_$][\w$]*)\s*;?\s*$/gm,
+        (match, identifier) => {
+          if (identifier === 'App') {
+            return ''
+          }
+
+          return `const App = ${identifier}`
+        },
+      )
+      .replace(/^\s*export\s+default\s+/gm, 'const App = ')
       .replace(/^\s*export\s+(?=function|const|let|var|class)/gm, '')
       .replace(/^\s*export\s*\{[^}]*\}\s*;?\s*$/gm, '')
     try {
@@ -770,7 +886,7 @@ export const createRenderRuntimeController = ({
       reactRoot = createRoot(host)
       reactRoot.render(remapReactClassNames(output, compiledStyles.moduleExports, React))
     } else {
-      throw new Error('Expected a render() function or a component named App/View.')
+      throw new Error('Expected a function or const named App.')
     }
   }
 
@@ -787,7 +903,7 @@ export const createRenderRuntimeController = ({
     const { reactJsx, createRoot, React } = await ensureReactRuntime()
     const renderFn = await evaluateUserModule({ jsx: reactJsx, reactJsx, React })
     if (!renderFn) {
-      throw new Error('Expected a render() function or a component named App/View.')
+      throw new Error('Expected a function or const named App.')
     }
 
     const host = document.createElement('div')
@@ -799,7 +915,7 @@ export const createRenderRuntimeController = ({
       React,
     )
     if (!output) {
-      throw new Error('Expected a render() function or a component named App/View.')
+      throw new Error('Expected a function or const named App.')
     }
     reactRoot.render(output)
   }

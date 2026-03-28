@@ -20,7 +20,7 @@ const lintPathByScope = {
   stylesSass: '/styles.scss',
 }
 
-const allowedUnusedComponentBindings = new Set(['App', 'View', 'render'])
+const allowedUnusedComponentBindings = new Set(['App'])
 
 const normalizeSeverity = value => {
   if (value === 'error' || value === 2) return 'error'
