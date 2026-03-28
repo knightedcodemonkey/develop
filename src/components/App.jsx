@@ -1,0 +1,1 @@
+const Button = () => <button type="button">button</button>
