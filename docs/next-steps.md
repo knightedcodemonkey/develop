@@ -45,3 +45,19 @@ Focused follow-up work for `@knighted/develop`.
    - Ensure assistant/editor integration remains compatible with this model (edits should target one of the fixed tabs) without expanding to dynamic tab metadata yet.
    - Suggested implementation prompt:
      - "Implement Phase 2 UX/UI tab support in @knighted/develop with a fixed first-pass tab model: Component, Styles, and App only (no arbitrary tab names yet). Add a clear tab UI for switching editor panes, preserve existing editor behavior/content wiring, and keep render/lint/typecheck/diagnostics flows working with the selected tab context where relevant. Keep AI/BYOT feature-flag behavior unchanged, maintain CDN-first runtime constraints, and do not add dependencies. Add targeted Playwright coverage for tab switching, default/active tab behavior, and interactions with existing render/style-mode flows. Validate with npm run lint and targeted Playwright tests."
+
+6. **Document implicit App strict-flow behavior (auto render)**
+   - Add a short behavior matrix in docs that explains when implicit App wrapping is allowed versus when users must define `App` explicitly.
+   - Include concrete Component editor examples for each case so reviewer/user expectations are clear.
+   - Suggested example cases to document:
+     - Allowed implicit wrap (standalone top-level JSX, no imports/declarations), for example:
+       - `(<button type="button">Standalone</button>) as any`
+     - Requires explicit `App` (top-level JSX with declarations/imports), for example:
+       - `const label = 'Hello'`
+       - `const Button = () => <button>{label}</button>`
+       - `(<Button />) as any`
+     - Recommended explicit pattern, for example:
+       - `const Button = () => <button>Hello</button>`
+       - `const App = () => <Button />`
+   - Suggested implementation prompt:
+     - "Document the current implicit App behavior in @knighted/develop for auto-render mode using a compact behavior matrix and concrete component-editor snippets. Clearly distinguish supported implicit wrapping from cases that intentionally require an explicit App (such as top-level JSX mixed with imports/declarations). Keep docs concise, aligned with current runtime behavior, and include at least one positive and one explicit-error example."

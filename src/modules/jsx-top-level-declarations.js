@@ -1,5 +1,6 @@
 const createEmptyMetadata = () => ({
   declarations: [],
+  importCount: 0,
   hasTopLevelJsxExpression: false,
   topLevelJsxExpressionRange: null,
 })
@@ -28,6 +29,7 @@ export const collectTopLevelTransformMetadata = ({ source, transformJsxSource })
 
   return {
     declarations: Array.isArray(result?.declarations) ? result.declarations : [],
+    importCount: Array.isArray(result?.imports) ? result.imports.length : 0,
     hasTopLevelJsxExpression: result?.hasTopLevelJsxExpression === true,
     topLevelJsxExpressionRange: isSourceRange(result?.topLevelJsxExpressionRange)
       ? result.topLevelJsxExpressionRange

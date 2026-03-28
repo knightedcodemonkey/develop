@@ -404,8 +404,12 @@ export const createRenderRuntimeController = ({
   const hasAppDeclaration = declarations =>
     hasFunctionLikeDeclarationNamed({ declarations, name: 'App' })
 
+  const isComponentLikeName = name => typeof name === 'string' && /^[A-Z]/.test(name)
+
   const getComponentNames = declarations =>
-    getFunctionLikeDeclarationNames({ declarations, excludeNames: ['App'] })
+    getFunctionLikeDeclarationNames({ declarations, excludeNames: ['App'] }).filter(
+      isComponentLikeName,
+    )
 
   const isSourceRange = range =>
     Array.isArray(range) &&
@@ -451,16 +455,14 @@ export const createRenderRuntimeController = ({
       return source
     }
 
-    const { declarations, hasTopLevelJsxExpression, topLevelJsxExpressionRange } =
-      getTopLevelTransformMetadata({ source, transformJsxSource })
+    const {
+      declarations,
+      importCount,
+      hasTopLevelJsxExpression,
+      topLevelJsxExpressionRange,
+    } = getTopLevelTransformMetadata({ source, transformJsxSource })
     if (hasAppDeclaration(declarations)) {
       return source
-    }
-
-    const componentNames = getComponentNames(declarations)
-    if (componentNames.length > 0) {
-      const children = componentNames.map(name => `    <${name} />`).join('\n')
-      return `${source}\n\nconst App = () => (\n  <>\n${children}\n  </>\n)`
     }
 
     if (hasTopLevelJsxExpression) {
@@ -469,9 +471,25 @@ export const createRenderRuntimeController = ({
         range: topLevelJsxExpressionRange,
       })
 
-      if (expressionSource) {
-        return `const App = () => (${expressionSource})`
+      if (!expressionSource) {
+        throw new Error(
+          'Unable to infer top-level JSX entry for implicit App. Define App explicitly.',
+        )
       }
+
+      if (declarations.length > 0 || importCount > 0) {
+        throw new Error(
+          'Top-level JSX with declarations or imports requires an explicit App component.',
+        )
+      }
+
+      return `const App = () => (${expressionSource})`
+    }
+
+    const componentNames = getComponentNames(declarations)
+    if (componentNames.length > 0) {
+      const children = componentNames.map(name => `    <${name} />`).join('\n')
+      return `${source}\n\nconst App = () => (\n  <>\n${children}\n  </>\n)`
     }
 
     return source
@@ -685,6 +703,16 @@ export const createRenderRuntimeController = ({
       ? withImplicitAppWrapper(source, transformJsxSource)
       : source
     const userCode = executableSource
+      .replace(
+        /^\s*export\s+default\s+([A-Za-z_$][\w$]*)\s*;?\s*$/gm,
+        (match, identifier) => {
+          if (identifier === 'App') {
+            return ''
+          }
+
+          return `const App = ${identifier}`
+        },
+      )
       .replace(/^\s*export\s+default\s+/gm, 'const App = ')
       .replace(/^\s*export\s+(?=function|const|let|var|class)/gm, '')
       .replace(/^\s*export\s*\{[^}]*\}\s*;?\s*$/gm, '')

@@ -288,6 +288,28 @@ test('auto render implicit App includes multiple component declarations', async 
   ).toContainText(['bar', 'foo'])
 })
 
+test('auto render does not treat lowercase helpers as implicit components', async ({
+  page,
+}) => {
+  await waitForInitialRender(page)
+
+  await ensurePanelToolsVisible(page, 'component')
+  await page.getByLabel('ShadowRoot').uncheck()
+
+  await setComponentEditorSource(
+    page,
+    [
+      'const helper = () => <button type="button">helper</button>',
+      'function render() { return <div /> }',
+    ].join('\n'),
+  )
+
+  await expect(page.getByRole('status', { name: 'App status' })).toHaveText('Error')
+  await expect(page.locator('#preview-host pre')).toContainText(
+    'Expected a function or const named App.',
+  )
+})
+
 test('auto render wraps standalone JSX with trailing semicolon and comment', async ({
   page,
 }) => {
@@ -305,6 +327,29 @@ test('auto render wraps standalone JSX with trailing semicolon and comment', asy
   await expect(
     page.getByRole('region', { name: 'Preview output' }).getByRole('button'),
   ).toContainText('implicit app from jsx expression')
+})
+
+test('auto render requires explicit App for declarations plus top-level JSX expression', async ({
+  page,
+}) => {
+  await waitForInitialRender(page)
+
+  await ensurePanelToolsVisible(page, 'component')
+  await page.getByLabel('ShadowRoot').uncheck()
+
+  await setComponentEditorSource(
+    page,
+    [
+      "const label = 'kept declarations'",
+      'const Button = () => <button type="button">{label}</button>',
+      '(<Button />) as any',
+    ].join('\n'),
+  )
+
+  await expect(page.getByRole('status', { name: 'App status' })).toHaveText('Error')
+  await expect(page.locator('#preview-host pre')).toContainText(
+    'Top-level JSX with declarations or imports requires an explicit App component.',
+  )
 })
 
 test('renders export default arrow component when auto render is disabled', async ({
@@ -352,9 +397,35 @@ test('renders export default class component in react mode', async ({ page }) =>
   await page.getByRole('button', { name: 'Render' }).click()
 
   await expect(page.getByRole('status', { name: 'App status' })).toHaveText('Rendered')
+  const previewButtons = page
+    .getByRole('region', { name: 'Preview output' })
+    .getByRole('button')
+  await expect(previewButtons.first()).toContainText('default export class')
+})
+
+test('supports export default App without redeclaration', async ({ page }) => {
+  await waitForInitialRender(page)
+
+  await ensurePanelToolsVisible(page, 'component')
+  await page.getByLabel('ShadowRoot').uncheck()
+  await page.getByLabel('Auto render').uncheck()
+
+  await setComponentEditorSource(
+    page,
+    [
+      'function App() {',
+      '  return <button type="button">export default App</button>',
+      '}',
+      'export default App',
+    ].join('\n'),
+  )
+
+  await page.getByRole('button', { name: 'Render' }).click()
+
+  await expect(page.getByRole('status', { name: 'App status' })).toHaveText('Rendered')
   await expect(
-    page.getByRole('region', { name: 'Preview output' }).getByRole('button'),
-  ).toContainText('default export class')
+    page.getByRole('region', { name: 'Preview output' }).getByRole('button').first(),
+  ).toContainText('export default App')
 })
 
 test('persists layout and theme across reload', async ({ page }) => {

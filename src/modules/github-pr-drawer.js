@@ -334,7 +334,7 @@ const stripTopLevelAppWrapper = async ({ source, getTopLevelDeclarations }) => {
       return source
     }
 
-    return mergeWhitespaceAroundRemoval(removeRanges({ source, ranges })).trim()
+    return mergeWhitespaceAroundRemoval(removeRanges({ source, ranges }))
   } catch {
     return source
   }
