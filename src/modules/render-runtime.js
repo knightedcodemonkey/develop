@@ -36,6 +36,11 @@ export const createRenderRuntimeController = ({
     key: null,
     value: null,
   }
+  let topLevelTransformMetadataCache = {
+    source: null,
+    transformJsxSource: null,
+    value: null,
+  }
   let hasCompletedInitialRender = false
 
   const setStyleCompiling = isCompiling => {
@@ -422,13 +427,32 @@ export const createRenderRuntimeController = ({
     return expression || null
   }
 
+  const getTopLevelTransformMetadata = ({ source, transformJsxSource }) => {
+    if (
+      topLevelTransformMetadataCache.source === source &&
+      topLevelTransformMetadataCache.transformJsxSource === transformJsxSource &&
+      topLevelTransformMetadataCache.value
+    ) {
+      return topLevelTransformMetadataCache.value
+    }
+
+    const value = collectTopLevelTransformMetadata({ source, transformJsxSource })
+    topLevelTransformMetadataCache = {
+      source,
+      transformJsxSource,
+      value,
+    }
+
+    return value
+  }
+
   const withImplicitAppWrapper = (source, transformJsxSource) => {
     if (!source.trim()) {
       return source
     }
 
     const { declarations, hasTopLevelJsxExpression, topLevelJsxExpressionRange } =
-      collectTopLevelTransformMetadata({ source, transformJsxSource })
+      getTopLevelTransformMetadata({ source, transformJsxSource })
     if (hasAppDeclaration(declarations)) {
       return source
     }
