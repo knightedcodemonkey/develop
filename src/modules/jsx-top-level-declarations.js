@@ -1,28 +1,42 @@
-const collectTransformResultDeclarations = result => {
-  if (!result || !Array.isArray(result.declarations)) {
-    return []
-  }
+const createEmptyMetadata = () => ({
+  declarations: [],
+  hasTopLevelJsxExpression: false,
+  topLevelJsxExpressionRange: null,
+})
 
-  return result.declarations
-}
+const isSourceRange = value =>
+  Array.isArray(value) &&
+  value.length === 2 &&
+  Number.isInteger(value[0]) &&
+  Number.isInteger(value[1])
 
-export const collectTopLevelDeclarations = ({ source, transformJsxSource }) => {
+export const collectTopLevelTransformMetadata = ({ source, transformJsxSource }) => {
   if (typeof source !== 'string' || !source.trim()) {
-    return []
+    return createEmptyMetadata()
   }
 
   if (typeof transformJsxSource !== 'function') {
-    return []
+    return createEmptyMetadata()
   }
 
   const result = transformJsxSource(source, {
     sourceType: 'module',
     typescript: 'preserve',
     collectTopLevelDeclarations: true,
+    collectTopLevelJsxExpression: true,
   })
 
-  return collectTransformResultDeclarations(result)
+  return {
+    declarations: Array.isArray(result?.declarations) ? result.declarations : [],
+    hasTopLevelJsxExpression: result?.hasTopLevelJsxExpression === true,
+    topLevelJsxExpressionRange: isSourceRange(result?.topLevelJsxExpressionRange)
+      ? result.topLevelJsxExpressionRange
+      : null,
+  }
 }
+
+export const collectTopLevelDeclarations = input =>
+  collectTopLevelTransformMetadata(input).declarations
 
 export const isFunctionLikeVariableInitializer = declaration =>
   declaration?.initializerKind === 'arrow-function' ||

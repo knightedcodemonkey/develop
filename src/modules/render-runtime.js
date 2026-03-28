@@ -1,5 +1,5 @@
 import {
-  collectTopLevelDeclarations,
+  collectTopLevelTransformMetadata,
   getFunctionLikeDeclarationNames,
   hasFunctionLikeDeclarationNamed,
 } from './jsx-top-level-declarations.js'
@@ -402,9 +402,24 @@ export const createRenderRuntimeController = ({
   const getComponentNames = declarations =>
     getFunctionLikeDeclarationNames({ declarations, excludeNames: ['App'] })
 
-  const looksLikeStandaloneJsx = source => {
-    const trimmed = source.trim()
-    return trimmed.startsWith('<') && trimmed.endsWith('>')
+  const isSourceRange = range =>
+    Array.isArray(range) &&
+    range.length === 2 &&
+    Number.isInteger(range[0]) &&
+    Number.isInteger(range[1])
+
+  const sourceFromRange = ({ source, range }) => {
+    if (!isSourceRange(range)) {
+      return null
+    }
+
+    const [start, end] = range
+    if (start < 0 || end < start || end > source.length) {
+      return null
+    }
+
+    const expression = source.slice(start, end).trim()
+    return expression || null
   }
 
   const withImplicitAppWrapper = (source, transformJsxSource) => {
@@ -412,10 +427,8 @@ export const createRenderRuntimeController = ({
       return source
     }
 
-    const declarations = collectTopLevelDeclarations({
-      source,
-      transformJsxSource,
-    })
+    const { declarations, hasTopLevelJsxExpression, topLevelJsxExpressionRange } =
+      collectTopLevelTransformMetadata({ source, transformJsxSource })
     if (hasAppDeclaration(declarations)) {
       return source
     }
@@ -426,8 +439,15 @@ export const createRenderRuntimeController = ({
       return `${source}\n\nconst App = () => (\n  <>\n${children}\n  </>\n)`
     }
 
-    if (looksLikeStandaloneJsx(source)) {
-      return `const App = () => (${source.trim()})`
+    if (hasTopLevelJsxExpression) {
+      const expressionSource = sourceFromRange({
+        source,
+        range: topLevelJsxExpressionRange,
+      })
+
+      if (expressionSource) {
+        return `const App = () => (${expressionSource})`
+      }
     }
 
     return source
@@ -641,9 +661,7 @@ export const createRenderRuntimeController = ({
       ? withImplicitAppWrapper(source, transformJsxSource)
       : source
     const userCode = executableSource
-      .replace(/^\s*export\s+default\s+function\b/gm, 'function')
-      .replace(/^\s*export\s+default\s+class\b/gm, 'class')
-      .replace(/^\s*export\s+default\s+/gm, '')
+      .replace(/^\s*export\s+default\s+/gm, 'const App = ')
       .replace(/^\s*export\s+(?=function|const|let|var|class)/gm, '')
       .replace(/^\s*export\s*\{[^}]*\}\s*;?\s*$/gm, '')
     try {

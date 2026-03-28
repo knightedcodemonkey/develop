@@ -288,6 +288,75 @@ test('auto render implicit App includes multiple component declarations', async 
   ).toContainText(['bar', 'foo'])
 })
 
+test('auto render wraps standalone JSX with trailing semicolon and comment', async ({
+  page,
+}) => {
+  await waitForInitialRender(page)
+
+  await ensurePanelToolsVisible(page, 'component')
+  await page.getByLabel('ShadowRoot').uncheck()
+
+  await setComponentEditorSource(
+    page,
+    '(<button type="button">implicit app from jsx expression</button>) as any; // trailing',
+  )
+
+  await expect(page.getByRole('status', { name: 'App status' })).toHaveText('Rendered')
+  await expect(
+    page.getByRole('region', { name: 'Preview output' }).getByRole('button'),
+  ).toContainText('implicit app from jsx expression')
+})
+
+test('renders export default arrow component when auto render is disabled', async ({
+  page,
+}) => {
+  await waitForInitialRender(page)
+
+  await ensurePanelToolsVisible(page, 'component')
+  await page.getByLabel('ShadowRoot').uncheck()
+  await page.getByLabel('Auto render').uncheck()
+
+  await setComponentEditorSource(
+    page,
+    'export default () => <button type="button">default export arrow</button>',
+  )
+
+  await page.getByRole('button', { name: 'Render' }).click()
+
+  await expect(page.getByRole('status', { name: 'App status' })).toHaveText('Rendered')
+  await expect(
+    page.getByRole('region', { name: 'Preview output' }).getByRole('button'),
+  ).toContainText('default export arrow')
+})
+
+test('renders export default class component in react mode', async ({ page }) => {
+  await waitForInitialRender(page)
+
+  await ensurePanelToolsVisible(page, 'component')
+  await page.getByLabel('ShadowRoot').uncheck()
+  await page.getByRole('combobox', { name: 'Render mode' }).selectOption('react')
+  await page.getByLabel('Auto render').uncheck()
+
+  await setComponentEditorSource(
+    page,
+    [
+      "import React from 'react'",
+      'export default class extends React.Component {',
+      '  render() {',
+      '    return <button type="button">default export class</button>',
+      '  }',
+      '}',
+    ].join('\n'),
+  )
+
+  await page.getByRole('button', { name: 'Render' }).click()
+
+  await expect(page.getByRole('status', { name: 'App status' })).toHaveText('Rendered')
+  await expect(
+    page.getByRole('region', { name: 'Preview output' }).getByRole('button'),
+  ).toContainText('default export class')
+})
+
 test('persists layout and theme across reload', async ({ page }) => {
   await waitForInitialRender(page)
 
