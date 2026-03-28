@@ -22,13 +22,29 @@ const isAbsoluteUrlReference = reference => {
 }
 
 const domJsxTypes =
+  "declare module '@knighted/jsx' {\n" +
+  '  export type JsxRenderable =\n' +
+  '    | Node\n' +
+  '    | DocumentFragment\n' +
+  '    | string\n' +
+  '    | number\n' +
+  '    | bigint\n' +
+  '    | boolean\n' +
+  '    | null\n' +
+  '    | undefined\n' +
+  '    | Iterable<JsxRenderable>\n' +
+  '  export type JsxChildren = JsxRenderable | JsxRenderable[]\n' +
+  '  export type JsxComponent<Props = Record<string, unknown>> = (\n' +
+  '    props: Props & { children?: JsxChildren }\n' +
+  '  ) => JsxRenderable\n' +
+  '}\n' +
   'declare namespace React {\n' +
   '  type Key = string | number\n' +
   '  interface Attributes { key?: Key | null }\n' +
   '}\n' +
   'declare namespace JSX {\n' +
-  '  type Element = unknown\n' +
-  '  interface ElementChildrenAttribute { children: unknown }\n' +
+  "  type Element = import('@knighted/jsx').JsxRenderable\n" +
+  "  interface ElementChildrenAttribute { children: import('@knighted/jsx').JsxChildren }\n" +
   '  interface IntrinsicAttributes extends React.Attributes {}\n' +
   '  interface IntrinsicElements { [elemName: string]: Record<string, unknown> }\n' +
   '}\n'

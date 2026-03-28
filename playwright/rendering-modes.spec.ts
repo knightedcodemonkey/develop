@@ -40,6 +40,41 @@ test('transpiles TypeScript annotations in component source', async ({ page }) =
   ).toContainText('typed')
 })
 
+test('dom mode supports type-only imports without runtime export syntax errors', async ({
+  page,
+}) => {
+  await waitForInitialRender(page)
+
+  await ensurePanelToolsVisible(page, 'component')
+  await page.getByLabel('ShadowRoot').uncheck()
+  await page.getByRole('combobox', { name: 'Render mode' }).selectOption('dom')
+
+  await setComponentEditorSource(
+    page,
+    [
+      "import type { JsxChildren } from '@knighted/jsx'",
+      '',
+      'type DrawerProps = {',
+      '  children?: JsxChildren',
+      '}',
+      '',
+      'const Drawer = ({ children }: DrawerProps) => {',
+      '  return <div className="drawer">{children}</div>',
+      '}',
+      '',
+      'const App = () => {',
+      '  return <Drawer><button type="button">typed children import</button></Drawer>',
+      '}',
+    ].join('\n'),
+  )
+
+  await expect(page.getByRole('status', { name: 'App status' })).toHaveText('Rendered')
+  await expect(page.locator('#preview-host pre')).toHaveCount(0)
+  await expect(
+    page.getByRole('region', { name: 'Preview output' }).getByRole('button'),
+  ).toContainText('typed children import')
+})
+
 test('react mode typecheck loads types without malformed URL fetches', async ({
   page,
 }) => {
