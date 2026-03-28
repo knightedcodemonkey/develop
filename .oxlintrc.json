@@ -9,6 +9,7 @@
     "nursery": "off"
   },
   "rules": {
+    "eqeqeq": "error",
     "no-console": "error",
     "no-unused-vars": "error",
     "no-shadow": "error",

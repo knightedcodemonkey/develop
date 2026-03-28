@@ -114,10 +114,13 @@ export const createCodeMirrorEditor = async ({
   parent,
   value,
   language,
+  contentAttributes,
   onChange,
   onFocus,
 }) => {
   const runtime = await ensureCodeMirrorRuntime()
+  const supportsContentAttributesFacet =
+    typeof runtime.EditorView.contentAttributes?.of === 'function'
   const editorColors = {
     keyword: 'var(--cm-keyword)',
     name: 'var(--cm-name)',
@@ -318,6 +321,9 @@ export const createCodeMirrorEditor = async ({
         ...runtime.defaultKeymap,
         ...runtime.historyKeymap,
       ]),
+      ...(contentAttributes && supportsContentAttributesFacet
+        ? [runtime.EditorView.contentAttributes.of(contentAttributes)]
+        : []),
       languageCompartment.of(resolveLanguageExtension(runtime, language)),
       editorTheme,
       updateListener,
@@ -327,6 +333,17 @@ export const createCodeMirrorEditor = async ({
     state,
     parent,
   })
+
+  if (contentAttributes && !supportsContentAttributesFacet) {
+    for (const [attributeName, attributeValue] of Object.entries(contentAttributes)) {
+      if (attributeValue === null || attributeValue === undefined) {
+        view.contentDOM.removeAttribute(attributeName)
+      } else {
+        view.contentDOM.setAttribute(attributeName, String(attributeValue))
+      }
+    }
+  }
+
   const toDocumentOffset = (line, column = 1) => {
     const normalizedLine = Number.isInteger(line) ? line : Number(line)
     const normalizedColumn = Number.isInteger(column) ? column : Number(column)
