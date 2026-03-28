@@ -313,6 +313,9 @@ export const createRenderRuntimeController = ({
     return output
   }
 
+  const stripEmptyExportStatements = code =>
+    code.replace(/(?:^|\n)\s*export\s*\{\s*\}\s*;?\s*(?=\n|$)/g, '\n')
+
   const buildRuntimeImportPlan = imports => {
     const preamble = []
     const unsupportedSources = new Set()
@@ -790,9 +793,10 @@ export const createRenderRuntimeController = ({
         transformedResult.code,
         importAnalysisResult.imports,
       )
+      const sanitizedRuntimeCode = stripEmptyExportStatements(runtimeCode)
       const executableUserCode = runtimeImportPlan.preamble.length
-        ? `${runtimeImportPlan.preamble.join('\n')}\n${runtimeCode}`
-        : runtimeCode
+        ? `${runtimeImportPlan.preamble.join('\n')}\n${sanitizedRuntimeCode}`
+        : sanitizedRuntimeCode
 
       const moduleFactory = createUserModuleFactory(executableUserCode)
 

@@ -208,6 +208,45 @@ test('typecheck error reports diagnostics count in button and details in drawer'
   await expect(page.getByText(/TS\d+/)).toBeVisible()
 })
 
+test('dom mode typecheck resolves @knighted/jsx type-only imports', async ({ page }) => {
+  await waitForInitialRender(page)
+
+  await ensurePanelToolsVisible(page, 'component')
+
+  await page.getByRole('combobox', { name: 'Render mode' }).selectOption('dom')
+  await setComponentEditorSource(
+    page,
+    [
+      "import type { JsxChildren } from '@knighted/jsx'",
+      '',
+      'type DrawerProps = {',
+      '  children?: JsxChildren',
+      '}',
+      '',
+      'const Drawer = ({ children }: DrawerProps) => {',
+      '  return <div className="drawer">{children}</div>',
+      '}',
+      '',
+      'const App = () => {',
+      '  return (',
+      '    <Drawer>',
+      '      <p>drawer</p>',
+      '    </Drawer>',
+      '  )',
+      '}',
+    ].join('\n'),
+  )
+
+  await runTypecheck(page)
+  await ensureDiagnosticsDrawerOpen(page)
+  await expect(page.locator('#diagnostics-component')).toContainText(
+    'No TypeScript errors found.',
+  )
+
+  const diagnosticsText = await page.locator('#diagnostics-component').innerText()
+  expect(diagnosticsText).not.toContain("Cannot find module '@knighted/jsx'")
+})
+
 test('component diagnostics rows navigate editor to reported line', async ({ page }) => {
   await waitForInitialRender(page)
 
