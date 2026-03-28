@@ -1,0 +1,29 @@
+.counter-button {
+  margin: 0;
+  padding: 0.75rem 1rem;
+  border: 1px solid #3558b8;
+  border-radius: 0.5rem;
+  background: #e9efff;
+  color: #1a2a52;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 120ms ease;
+}
+
+.counter-button:hover {
+  background: #dce6ff;
+}
+
+.counter-button[data-active='true'] {
+  background: #3558b8;
+  color: #fff;
+}
+
+.counter-button.is-even {
+  border-style: dashed;
+}
+
+.counter-button:focus-visible {
+  outline: 2px solid #6a84d8;
+  outline-offset: 2px;
+}
