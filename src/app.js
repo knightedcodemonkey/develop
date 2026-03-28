@@ -710,6 +710,10 @@ const initializeCodeEditors = async () => {
         parent: jsxHost,
         value: defaultJsx,
         language: 'javascript-jsx',
+        contentAttributes: {
+          'aria-label': 'Component source editor',
+          'aria-multiline': 'true',
+        },
         onChange: () => {
           if (suppressEditorChangeSideEffects) {
             return
@@ -723,6 +727,10 @@ const initializeCodeEditors = async () => {
         parent: cssHost,
         value: defaultCss,
         language: getStyleEditorLanguage(styleMode.value),
+        contentAttributes: {
+          'aria-label': 'Styles source editor',
+          'aria-multiline': 'true',
+        },
         onChange: () => {
           if (suppressEditorChangeSideEffects) {
             return

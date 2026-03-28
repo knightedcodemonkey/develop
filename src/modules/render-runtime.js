@@ -84,6 +84,8 @@ export const createRenderRuntimeController = ({
     const nextHost = document.createElement('div')
     nextHost.id = 'preview-host'
     nextHost.className = previewHost.className
+    nextHost.setAttribute('role', 'region')
+    nextHost.setAttribute('aria-label', 'Preview output')
     previewHost.replaceWith(nextHost)
     setPreviewHost(nextHost)
 

@@ -28,7 +28,7 @@
         </h1>
         <p>Browser IDE with compiler-as-a-service.</p>
       </div>
-      <div class="status" id="status">Idle</div>
+      <div class="status" id="status" role="status" aria-label="App status">Idle</div>
     </header>
 
     <main class="app-grid">
@@ -317,9 +317,13 @@
       </div>
 
       <div class="panels-stack panels-stack--editors">
-        <section class="panel component-panel panel--tools-hidden" id="component-panel">
+        <section
+          class="panel component-panel panel--tools-hidden"
+          id="component-panel"
+          aria-labelledby="component-header"
+        >
           <div class="panel-header panel-header--grid">
-            <h2>Component</h2>
+            <h2 id="component-header">Component</h2>
             <div class="controls controls--quick-actions panel-header-quick-actions">
               <button
                 class="panel-collapse-toggle"
@@ -409,13 +413,22 @@
             </div>
           </div>
           <div class="panel-content" id="component-panel-content">
-            <textarea id="jsx-editor" spellcheck="false"></textarea>
+            <textarea
+              id="jsx-editor"
+              spellcheck="false"
+              aria-label="Component source editor fallback"
+              aria-multiline="true"
+            ></textarea>
           </div>
         </section>
 
-        <section class="panel styles-panel panel--tools-hidden" id="styles-panel">
+        <section
+          class="panel styles-panel panel--tools-hidden"
+          id="styles-panel"
+          aria-labelledby="styles-header"
+        >
           <div class="panel-header panel-header--grid">
-            <h2>Styles</h2>
+            <h2 id="styles-header">Styles</h2>
             <div class="controls controls--quick-actions panel-header-quick-actions">
               <button
                 class="panel-collapse-toggle"
@@ -497,14 +510,23 @@
             </div>
           </div>
           <div class="panel-content" id="styles-panel-content">
-            <textarea id="css-editor" spellcheck="false"></textarea>
+            <textarea
+              id="css-editor"
+              spellcheck="false"
+              aria-label="Styles source editor fallback"
+              aria-multiline="true"
+            ></textarea>
           </div>
         </section>
       </div>
 
-      <section class="panel preview preview-panel" id="preview-panel">
+      <section
+        class="panel preview preview-panel"
+        id="preview-panel"
+        aria-labelledby="preview-header"
+      >
         <div class="panel-header">
-          <h2>Preview</h2>
+          <h2 id="preview-header">Preview</h2>
           <div class="controls">
             <label class="color-control" for="preview-bg-color">
               <span class="preview-bg-label">Background</span>
@@ -542,7 +564,12 @@
           </div>
         </div>
         <div class="panel-content" id="preview-panel-content">
-          <div class="preview-host" id="preview-host"></div>
+          <div
+            class="preview-host"
+            id="preview-host"
+            role="region"
+            aria-label="Preview output"
+          ></div>
         </div>
       </section>
 
@@ -652,7 +679,13 @@
           </button>
         </div>
 
-        <p class="github-pr-drawer__status" id="github-pr-status" data-level="neutral">
+        <p
+          class="github-pr-drawer__status"
+          id="github-pr-status"
+          role="status"
+          aria-label="Open pull request status"
+          data-level="neutral"
+        >
           Configure repository, file paths, and branch details.
         </p>
 

@@ -114,6 +114,7 @@ export const createCodeMirrorEditor = async ({
   parent,
   value,
   language,
+  contentAttributes,
   onChange,
   onFocus,
 }) => {
@@ -318,6 +319,9 @@ export const createCodeMirrorEditor = async ({
         ...runtime.defaultKeymap,
         ...runtime.historyKeymap,
       ]),
+      ...(contentAttributes
+        ? [runtime.EditorView.contentAttributes.of(contentAttributes)]
+        : []),
       languageCompartment.of(resolveLanguageExtension(runtime, language)),
       editorTheme,
       updateListener,

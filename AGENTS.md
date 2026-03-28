@@ -45,6 +45,10 @@ Repository structure:
 - Do not introduce bundler-only assumptions into src/ runtime code.
 - Prefer async/await over promise chains.
 - Do not use IIFE, find another pattern instead.
+- In Playwright tests, prefer accessible selectors first: `getByRole`, `getByLabel`, `getByText`, and explicit accessible names.
+- Avoid `locator()` for interactive controls when a semantic selector is available.
+- Use `locator()` only as a fallback for cases without reliable semantics (for example: document root `html`, structural class assertions, or implementation-only hooks).
+- When testability needs improvement, prefer adding accessibility semantics (`role`, `aria-label`, `aria-labelledby`) over introducing new id-only selectors.
 
 ## CDN and runtime expectations
 
