@@ -60,7 +60,7 @@ jobs:
         uses: actions/upload-artifact@v6.0.0
         if: ${{ failure() }}
         with:
-          name: playwright-report
+          name: playwright-report-${{ matrix.browser }}
           path: playwright-report
           if-no-files-found: ignore
 
@@ -68,6 +68,6 @@ jobs:
         uses: actions/upload-artifact@v6.0.0
         if: ${{ failure() }}
         with:
-          name: test-results
+          name: test-results-${{ matrix.browser }}
           path: test-results
           if-no-files-found: ignore
