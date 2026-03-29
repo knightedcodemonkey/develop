@@ -10,6 +10,11 @@ import { createDiagnosticsUiController } from './modules/diagnostics-ui.js'
 import { isAiAssistantFeatureEnabled } from './modules/feature-flags.js'
 import { createGitHubChatDrawer } from './modules/github-chat-drawer.js'
 import { createGitHubByotControls } from './modules/github-byot-controls.js'
+import {
+  formatActivePrReference,
+  getActivePrContextSyncKey,
+} from './modules/github-pr-context.js'
+import { createGitHubPrEditorSyncController } from './modules/github-pr-editor-sync.js'
 import { createGitHubPrDrawer } from './modules/github-pr-drawer.js'
 import { createLayoutThemeController } from './modules/layout-theme.js'
 import { createLintDiagnosticsController } from './modules/lint-diagnostics.js'
@@ -40,7 +45,12 @@ const aiChatRate = document.getElementById('ai-chat-rate')
 const aiChatRepository = document.getElementById('ai-chat-repository')
 const aiChatMessages = document.getElementById('ai-chat-messages')
 const githubPrToggle = document.getElementById('github-pr-toggle')
+const githubPrToggleLabel = document.getElementById('github-pr-toggle-label')
+const githubPrToggleIcon = document.getElementById('github-pr-toggle-icon')
+const githubPrToggleIconPath = document.getElementById('github-pr-toggle-icon-path')
+const githubPrContextClose = document.getElementById('github-pr-context-close')
 const githubPrDrawer = document.getElementById('github-pr-drawer')
+const openPrTitle = document.getElementById('open-pr-title')
 const githubPrClose = document.getElementById('github-pr-close')
 const githubPrStatus = document.getElementById('github-pr-status')
 const githubPrRepoSelect = document.getElementById('github-pr-repo-select')
@@ -52,6 +62,10 @@ const githubPrTitle = document.getElementById('github-pr-title')
 const githubPrBody = document.getElementById('github-pr-body')
 const githubPrIncludeAppWrapper = document.getElementById('github-pr-include-app-wrapper')
 const githubPrSubmit = document.getElementById('github-pr-submit')
+const componentPrSyncIcon = document.getElementById('component-pr-sync-icon')
+const componentPrSyncIconPath = document.getElementById('component-pr-sync-icon-path')
+const stylesPrSyncIcon = document.getElementById('styles-pr-sync-icon')
+const stylesPrSyncIconPath = document.getElementById('styles-pr-sync-icon-path')
 const viewControlsToggle = document.getElementById('view-controls-toggle')
 const viewControlsDrawer = document.getElementById('view-controls-drawer')
 const aiControlsToggle = document.getElementById('ai-controls-toggle')
@@ -107,6 +121,14 @@ let hasAppliedReactModeDefault = false
 let appToastDismissTimer = null
 const clipboardSupported = Boolean(navigator.clipboard?.writeText)
 const aiAssistantFeatureEnabled = isAiAssistantFeatureEnabled()
+const githubPrOpenIcon = {
+  viewBox: '0 0 16 16',
+  path: 'M1.5 3.25a2.25 2.25 0 1 1 3 2.122v5.256a2.251 2.251 0 1 1-1.5 0V5.372A2.25 2.25 0 0 1 1.5 3.25Zm5.677-.177L9.573.677A.25.25 0 0 1 10 .854V2.5h1A2.5 2.5 0 0 1 13.5 5v5.628a2.251 2.251 0 1 1-1.5 0V5a1 1 0 0 0-1-1h-1v1.646a.25.25 0 0 1-.427.177L7.177 3.427a.25.25 0 0 1 0-.354ZM3.75 2.5a.75.75 0 1 0 0 1.5.75.75 0 0 0 0-1.5Zm0 9.5a.75.75 0 1 0 0 1.5.75.75 0 0 0 0-1.5Zm8.25.75a.75.75 0 1 0 1.5 0 .75.75 0 0 0-1.5 0Z',
+}
+const githubPrPushCommitIcon = {
+  viewBox: '0 0 24 24',
+  path: 'M16.944 11h4.306a.75.75 0 0 1 0 1.5h-4.306a5.001 5.001 0 0 1-9.888 0H2.75a.75.75 0 0 1 0-1.5h4.306a5.001 5.001 0 0 1 9.888 0Zm-1.444.75a3.5 3.5 0 1 0-7 0 3.5 3.5 0 0 0 7 0Z',
+}
 
 const showAppToast = message => {
   if (!(appToast instanceof HTMLElement)) {
@@ -537,6 +559,9 @@ const githubAiContextState = {
   token: null,
   selectedRepository: null,
   writableRepositories: [],
+  activePrContext: null,
+  activePrEditorSyncKey: '',
+  hasSyncedActivePrEditorContent: false,
 }
 
 let chatDrawerController = {
@@ -549,9 +574,87 @@ let chatDrawerController = {
 let prDrawerController = {
   setOpen: () => {},
   setSelectedRepository: () => {},
+  getActivePrContext: () => null,
+  clearActivePrContext: () => {},
+  closeActivePullRequestOnGitHub: async () => null,
   setToken: () => {},
   syncRepositories: () => {},
   dispose: () => {},
+}
+
+const setGitHubPrToggleVisual = mode => {
+  if (
+    !(githubPrToggle instanceof HTMLButtonElement) ||
+    !(githubPrToggleLabel instanceof HTMLElement) ||
+    !(githubPrToggleIcon instanceof SVGElement) ||
+    !(githubPrToggleIconPath instanceof SVGPathElement)
+  ) {
+    return
+  }
+
+  const isPushCommitMode = mode === 'push-commit'
+  const label = isPushCommitMode ? 'Push' : 'Open PR'
+  const title = isPushCommitMode
+    ? 'Push commit to active pull request branch'
+    : 'Open pull request'
+  const icon = isPushCommitMode ? githubPrPushCommitIcon : githubPrOpenIcon
+
+  githubPrToggleLabel.textContent = label
+  githubPrToggle.title = title
+  githubPrToggle.setAttribute('aria-label', title)
+  githubPrToggleIcon.setAttribute('viewBox', icon.viewBox)
+  githubPrToggleIconPath.setAttribute('d', icon.path)
+}
+
+const syncEditorPrContextIndicators = shouldShow => {
+  const iconNodes = [componentPrSyncIcon, stylesPrSyncIcon]
+  const iconPathNodes = [componentPrSyncIconPath, stylesPrSyncIconPath]
+
+  for (const iconPath of iconPathNodes) {
+    if (iconPath instanceof SVGPathElement) {
+      iconPath.setAttribute('d', githubPrOpenIcon.path)
+    }
+  }
+
+  for (const icon of iconNodes) {
+    if (!(icon instanceof SVGElement)) {
+      continue
+    }
+
+    icon.setAttribute('viewBox', githubPrOpenIcon.viewBox)
+    icon.toggleAttribute('hidden', !shouldShow)
+  }
+}
+
+const syncActivePrContextUi = activeContext => {
+  githubAiContextState.activePrContext = activeContext ?? null
+  const nextSyncKey = getActivePrContextSyncKey(activeContext)
+
+  if (!nextSyncKey) {
+    githubAiContextState.activePrEditorSyncKey = ''
+    githubAiContextState.hasSyncedActivePrEditorContent = false
+  } else if (githubAiContextState.activePrEditorSyncKey !== nextSyncKey) {
+    githubAiContextState.activePrEditorSyncKey = nextSyncKey
+    githubAiContextState.hasSyncedActivePrEditorContent = false
+  }
+
+  const hasActiveContext = Boolean(activeContext?.prTitle)
+  const shouldShowEditorSyncIndicators =
+    hasActiveContext && githubAiContextState.hasSyncedActivePrEditorContent
+
+  setGitHubPrToggleVisual(hasActiveContext ? 'push-commit' : 'open-pr')
+  syncEditorPrContextIndicators(shouldShowEditorSyncIndicators)
+
+  if (!(githubPrContextClose instanceof HTMLButtonElement)) {
+    return
+  }
+
+  if (!hasActiveContext) {
+    githubPrContextClose.setAttribute('hidden', '')
+    return
+  }
+
+  githubPrContextClose.removeAttribute('hidden')
 }
 
 const syncAiChatTokenVisibility = token => {
@@ -560,6 +663,11 @@ const syncAiChatTokenVisibility = token => {
   if (hasToken) {
     aiChatToggle?.removeAttribute('hidden')
     githubPrToggle?.removeAttribute('hidden')
+    if (githubAiContextState.activePrContext) {
+      githubPrContextClose?.removeAttribute('hidden')
+    } else {
+      githubPrContextClose?.setAttribute('hidden', '')
+    }
     return
   }
 
@@ -567,6 +675,7 @@ const syncAiChatTokenVisibility = token => {
   aiChatToggle?.setAttribute('aria-expanded', 'false')
   githubPrToggle?.setAttribute('hidden', '')
   githubPrToggle?.setAttribute('aria-expanded', 'false')
+  githubPrContextClose?.setAttribute('hidden', '')
   chatDrawerController.setOpen(false)
   prDrawerController.setOpen(false)
 }
@@ -637,6 +746,19 @@ const getTopLevelDeclarations = async source => {
   return collectTopLevelDeclarations({ source, transformJsxSource })
 }
 
+const prEditorSyncController = createGitHubPrEditorSyncController({
+  setComponentSource: setJsxSource,
+  setStylesSource: setCssSource,
+  scheduleRender: () => {
+    if (
+      autoRenderToggle?.checked &&
+      typeof renderRuntime?.scheduleRender === 'function'
+    ) {
+      renderRuntime.scheduleRender()
+    }
+  },
+})
+
 chatDrawerController = createGitHubChatDrawer({
   featureEnabled: aiAssistantFeatureEnabled,
   toggleButton: aiChatToggle,
@@ -677,6 +799,7 @@ prDrawerController = createGitHubPrDrawer({
   prBodyInput: githubPrBody,
   includeAppWrapperToggle: githubPrIncludeAppWrapper,
   submitButton: githubPrSubmit,
+  titleNode: openPrTitle,
   statusNode: githubPrStatus,
   getToken: getCurrentGitHubToken,
   getSelectedRepository: getCurrentSelectedRepository,
@@ -685,6 +808,7 @@ prDrawerController = createGitHubPrDrawer({
   getComponentSource: () => getJsxSource(),
   getStylesSource: () => getCssSource(),
   getTopLevelDeclarations,
+  getRenderMode: () => renderMode.value,
   getDrawerSide: () => {
     const layout = getCurrentLayout()
     return layout === 'preview-left' ? 'left' : 'right'
@@ -698,11 +822,87 @@ prDrawerController = createGitHubPrDrawer({
       : 'Pull request opened successfully.'
     showAppToast(message)
   },
+  onPullRequestCommitPushed: ({ branch, fileUpdates }) => {
+    const fileCount = Array.isArray(fileUpdates) ? fileUpdates.length : 0
+    const message =
+      fileCount > 0
+        ? `Pushed commit to ${branch} (${fileCount} file${fileCount === 1 ? '' : 's'}).`
+        : `Pushed commit to ${branch}.`
+    showAppToast(message)
+  },
+  onActivePrContextChange: activeContext => {
+    syncActivePrContextUi(activeContext)
+    syncAiChatTokenVisibility(githubAiContextState.token)
+  },
+  onSyncActivePrEditorContent: async args => {
+    const result = await prEditorSyncController.syncFromActiveContext(args)
+    const syncedContextKey = getActivePrContextSyncKey(args?.activeContext)
+
+    if (
+      !syncedContextKey ||
+      syncedContextKey !== githubAiContextState.activePrEditorSyncKey
+    ) {
+      return result
+    }
+
+    if (result?.synced === true) {
+      githubAiContextState.hasSyncedActivePrEditorContent = true
+      syncEditorPrContextIndicators(true)
+    }
+
+    return result
+  },
+  onRestoreRenderMode: mode => {
+    applyRenderMode({ mode, fromActivePrContext: true })
+  },
 })
 
 prDrawerController.setToken(githubAiContextState.token)
 prDrawerController.setSelectedRepository(githubAiContextState.selectedRepository)
 prDrawerController.syncRepositories()
+syncActivePrContextUi(prDrawerController.getActivePrContext())
+
+githubPrContextClose?.addEventListener('click', () => {
+  if (!githubAiContextState.activePrContext) {
+    return
+  }
+
+  const activePrReference = formatActivePrReference(githubAiContextState.activePrContext)
+  const referenceLine = activePrReference ? `PR: ${activePrReference}\n` : ''
+
+  confirmAction({
+    title: 'Close active pull request context?',
+    copy: `${referenceLine}PR title: ${githubAiContextState.activePrContext.prTitle}\nHead branch: ${githubAiContextState.activePrContext.headBranch}\n\nThis clears the active pull request context for the selected repository.`,
+    confirmButtonText: 'Close context',
+    fallbackConfirmText: 'Close active pull request context for the selected repository?',
+    onConfirm: () => {
+      void prDrawerController
+        .closeActivePullRequestOnGitHub()
+        .then(result => {
+          const reference = result?.reference
+          setStatus(
+            reference
+              ? `Closed active pull request context (${reference}).`
+              : 'Closed active pull request context.',
+            'neutral',
+          )
+          showAppToast(
+            reference
+              ? `Closed active pull request context (${reference}).`
+              : 'Closed active pull request context.',
+          )
+        })
+        .catch(error => {
+          const message =
+            error instanceof Error
+              ? error.message
+              : 'Could not close pull request context on GitHub.'
+          setStatus(`Close context failed: ${message}`, 'error')
+          showAppToast(`Close context failed: ${message}`)
+        })
+    },
+  })
+})
 
 const getStyleEditorLanguage = mode => {
   if (mode === 'less') return 'less'
@@ -1065,7 +1265,7 @@ renderRuntime = createRenderRuntimeController({
   setCdnLoading,
 })
 
-const setJsxSource = value => {
+function setJsxSource(value) {
   if (jsxCodeEditor) {
     suppressEditorChangeSideEffects = true
     try {
@@ -1077,7 +1277,7 @@ const setJsxSource = value => {
   jsxEditor.value = value
 }
 
-const setCssSource = value => {
+function setCssSource(value) {
   if (cssCodeEditor) {
     suppressEditorChangeSideEffects = true
     try {
@@ -1207,15 +1407,29 @@ const updateRenderButtonVisibility = () => {
   renderButton.hidden = autoRenderToggle.checked
 }
 
-renderMode.addEventListener('change', () => {
+function applyRenderMode({ mode, fromActivePrContext = false }) {
+  const nextMode = mode === 'react' ? 'react' : 'dom'
+
+  if (renderMode.value !== nextMode) {
+    renderMode.value = nextMode
+  }
+
   resetDiagnosticsFlow()
 
-  if (renderMode.value === 'react' && !hasAppliedReactModeDefault) {
+  if (
+    nextMode === 'react' &&
+    !hasAppliedReactModeDefault &&
+    fromActivePrContext !== true
+  ) {
     hasAppliedReactModeDefault = true
     setJsxSource(defaultReactJsx)
   }
 
   maybeRender()
+}
+
+renderMode.addEventListener('change', () => {
+  applyRenderMode({ mode: renderMode.value })
 })
 styleMode.addEventListener('change', () => {
   resetDiagnosticsFlow()

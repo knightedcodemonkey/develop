@@ -24,6 +24,19 @@
   font-size: 1rem;
 }
 
+.panel-header__title-with-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.panel-header__sync-icon {
+  width: 14px;
+  height: 14px;
+  fill: color-mix(in srgb, var(--focus-ring) 78%, var(--panel-text));
+  opacity: 0.9;
+}
+
 .panel-header--grid {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
