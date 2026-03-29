@@ -520,7 +520,7 @@ test('Active PR context updates controls and can be closed from AI controls', as
   const dialog = page.getByRole('dialog')
   await expect(dialog).toBeVisible()
   await expect(page.getByText('PR: develop/pr/2')).toBeVisible()
-  await dialog.getByRole('button', { name: 'Close context' }).click()
+  await dialog.getByRole('button', { name: 'Close PR on GitHub' }).click()
 
   await expect(page.getByRole('button', { name: 'Open pull request' })).toBeVisible()
   await expect(
