@@ -713,34 +713,6 @@ test('Active PR context uses Push commit flow without creating a new pull reques
   )
 
   await page.route(
-    'https://api.github.com/repos/knightedcodemonkey/develop/git/ref/**',
-    async route => {
-      await route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({
-          ref: 'refs/heads/develop/open-pr-test',
-          object: { type: 'commit', sha: 'existing-head-sha' },
-        }),
-      })
-    },
-  )
-
-  await page.route(
-    'https://api.github.com/repos/knightedcodemonkey/develop/git/ref/**',
-    async route => {
-      await route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({
-          ref: 'refs/heads/develop/open-pr-test',
-          object: { type: 'commit', sha: 'existing-head-sha' },
-        }),
-      })
-    },
-  )
-
-  await page.route(
     'https://api.github.com/repos/knightedcodemonkey/develop/contents/**',
     async route => {
       const request = route.request()

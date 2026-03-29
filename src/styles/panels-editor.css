@@ -31,10 +31,15 @@
 }
 
 .panel-header__sync-icon {
+  display: none;
   width: 14px;
   height: 14px;
   fill: color-mix(in srgb, var(--focus-ring) 78%, var(--panel-text));
   opacity: 0.9;
+}
+
+.panel-header__sync-icon[data-visible='true'] {
+  display: inline-block;
 }
 
 .panel-header--grid {

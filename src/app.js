@@ -622,6 +622,7 @@ const syncEditorPrContextIndicators = shouldShow => {
     }
 
     icon.setAttribute('viewBox', githubPrOpenIcon.viewBox)
+    icon.dataset.visible = shouldShow ? 'true' : 'false'
     icon.toggleAttribute('hidden', !shouldShow)
   }
 }
@@ -673,6 +674,11 @@ const syncAiChatTokenVisibility = token => {
 
   aiChatToggle?.setAttribute('hidden', '')
   aiChatToggle?.setAttribute('aria-expanded', 'false')
+  githubAiContextState.activePrContext = null
+  githubAiContextState.activePrEditorSyncKey = ''
+  githubAiContextState.hasSyncedActivePrEditorContent = false
+  syncEditorPrContextIndicators(false)
+  setGitHubPrToggleVisual('open-pr')
   githubPrToggle?.setAttribute('hidden', '')
   githubPrToggle?.setAttribute('aria-expanded', 'false')
   githubPrContextClose?.setAttribute('hidden', '')
@@ -817,6 +823,17 @@ prDrawerController = createGitHubPrDrawer({
     confirmAction(options)
   },
   onPullRequestOpened: ({ url }) => {
+    const activeContextSyncKey = getActivePrContextSyncKey(
+      githubAiContextState.activePrContext,
+    )
+    if (
+      activeContextSyncKey &&
+      activeContextSyncKey === githubAiContextState.activePrEditorSyncKey
+    ) {
+      githubAiContextState.hasSyncedActivePrEditorContent = true
+      syncEditorPrContextIndicators(true)
+    }
+
     const message = url
       ? `Pull request opened: ${url}`
       : 'Pull request opened successfully.'
@@ -1413,6 +1430,10 @@ function applyRenderMode({ mode, fromActivePrContext = false }) {
 
   if (renderMode.value !== nextMode) {
     renderMode.value = nextMode
+  }
+
+  if (fromActivePrContext === true && nextMode === 'react') {
+    hasAppliedReactModeDefault = true
   }
 
   resetDiagnosticsFlow()
