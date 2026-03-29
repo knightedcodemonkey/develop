@@ -1,16 +1,27 @@
 name: Playwright
 
 on:
-  push:
+  pull_request:
     branches:
       - main
-    paths:
+    types:
+      - opened
+      - synchronize
+    paths: &playwright_paths
       - 'src/**'
       - 'playwright/**'
       - 'package-lock.json'
       - 'playwright.config.ts'
       - '.github/workflows/playwright.yml'
+  push:
+    branches:
+      - main
+    paths: *playwright_paths
   workflow_dispatch:
+
+concurrency:
+  group: playwright-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   e2e:

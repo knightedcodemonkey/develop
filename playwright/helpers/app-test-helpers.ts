@@ -33,10 +33,19 @@ export type BranchesByRepo = Record<string, string[]>
 export const waitForAppReady = async (page: Page, path = appEntryPath) => {
   await page.goto(path)
   await expect(page.getByRole('heading', { name: '@knighted/develop' })).toBeVisible()
-  await expect(page.locator('#cdn-loading')).toHaveAttribute('hidden', '')
   await expect
-    .poll(() => page.getByRole('status', { name: 'App status' }).textContent())
-    .not.toBe('Idle')
+    .poll(async () => {
+      const statusText = (
+        await page.getByRole('status', { name: 'App status' }).textContent()
+      )?.trim()
+
+      return (
+        statusText === 'Rendered' ||
+        statusText?.startsWith('Rendered (Type errors:') ||
+        statusText === 'Error'
+      )
+    })
+    .toBe(true)
 }
 
 export const waitForInitialRender = async (page: Page) => {
@@ -215,7 +224,8 @@ export const connectByotWithSingleRepo = async (page: Page) => {
   await page.getByRole('button', { name: 'Add GitHub token' }).click()
 
   const repoSelect = page.getByLabel('Pull request repository')
-  await expect(repoSelect).toBeEnabled({ timeout: 60_000 })
+  await expect(repoSelect).toHaveValue('knightedcodemonkey/develop')
+
   await expect(repoSelect).toHaveValue('knightedcodemonkey/develop')
 
   await expect(

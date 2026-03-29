@@ -798,7 +798,7 @@
               type="text"
               autocomplete="off"
               spellcheck="false"
-              placeholder="develop/repo/editor-sync-yyyymmdd"
+              placeholder="feat/component-ab12"
             />
           </label>
 
@@ -857,6 +857,20 @@
               placeholder="Describe the generated editor updates."
             ></textarea>
           </label>
+
+          <label
+            class="github-pr-field github-pr-field--full"
+            for="github-pr-commit-message"
+          >
+            <span>Commit message</span>
+            <input
+              id="github-pr-commit-message"
+              type="text"
+              autocomplete="off"
+              spellcheck="false"
+              placeholder="chore: sync editor updates from @knighted/develop"
+            />
+          </label>
         </div>
 
         <div class="github-pr-drawer__actions">
@@ -881,7 +895,7 @@
     <div class="cdn-loading" id="cdn-loading" role="status" aria-live="polite">
       <div class="cdn-loading-card">
         <div class="cdn-loading-spinner" aria-hidden="true"></div>
-        <p class="cdn-loading-title">Loading playground assets…</p>
+        <p class="cdn-loading-title">Loading IDE assets…</p>
         <p class="cdn-loading-copy">
           Fetching runtimes and compilers from CDN. This can take a moment.
         </p>
