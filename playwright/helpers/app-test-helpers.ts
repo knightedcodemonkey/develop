@@ -226,8 +226,6 @@ export const connectByotWithSingleRepo = async (page: Page) => {
   const repoSelect = page.getByLabel('Pull request repository')
   await expect(repoSelect).toHaveValue('knightedcodemonkey/develop')
 
-  await expect(repoSelect).toHaveValue('knightedcodemonkey/develop')
-
   await expect(
     page.getByRole('button', {
       name: /Open pull request|Push commit to active pull request branch/,

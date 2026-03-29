@@ -1133,7 +1133,7 @@ test('Reloaded active PR context from URL metadata keeps Push mode and status re
   expect(upsertRequests[1]?.body.message).toBe(defaultCommitMessage)
 })
 
-test('Reloaded active PR context syncs editor content from GitHub branch', async ({
+test('Reloaded active PR context syncs editor content from GitHub branch and restores style mode', async ({
   page,
 }) => {
   const remoteComponentSource = 'export const App = () => <main>Synced from PR</main>'
@@ -1237,6 +1237,7 @@ test('Reloaded active PR context syncs editor content from GitHub branch', async
         componentFilePath: 'examples/component/App.tsx',
         stylesFilePath: 'examples/styles/app.css',
         renderMode: 'react',
+        styleMode: 'sass',
         baseBranch: 'main',
         headBranch: 'develop/open-pr-test',
         prTitle: 'Existing PR context from storage',
@@ -1249,6 +1250,7 @@ test('Reloaded active PR context syncs editor content from GitHub branch', async
 
   await connectByotWithSingleRepo(page)
   await expect(page.getByLabel('Render mode')).toHaveValue('react')
+  await expect(page.getByLabel('Style mode')).toHaveValue('sass')
 
   await expect
     .poll(async () =>
@@ -1267,6 +1269,73 @@ test('Reloaded active PR context syncs editor content from GitHub branch', async
       component: remoteComponentSource,
       styles: remoteStylesSource,
     })
+})
+
+test('Reloaded active PR context falls back to css style mode for unsupported value', async ({
+  page,
+}) => {
+  await page.route('https://api.github.com/user/repos**', async route => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify([
+        {
+          id: 11,
+          owner: { login: 'knightedcodemonkey' },
+          name: 'develop',
+          full_name: 'knightedcodemonkey/develop',
+          default_branch: 'main',
+          permissions: { push: true },
+        },
+      ]),
+    })
+  })
+
+  await mockRepositoryBranches(page, {
+    'knightedcodemonkey/develop': ['main', 'release', 'develop/open-pr-test'],
+  })
+
+  await page.route(
+    'https://api.github.com/repos/knightedcodemonkey/develop/pulls/2',
+    async route => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          number: 2,
+          state: 'open',
+          title: 'Existing PR context from storage',
+          html_url: 'https://github.com/knightedcodemonkey/develop/pull/2',
+          head: { ref: 'develop/open-pr-test' },
+          base: { ref: 'main' },
+        }),
+      })
+    },
+  )
+
+  await waitForAppReady(page, `${appEntryPath}?feature-ai=true`)
+
+  await page.evaluate(() => {
+    localStorage.setItem(
+      'knighted:develop:github-pr-config:knightedcodemonkey/develop',
+      JSON.stringify({
+        componentFilePath: 'examples/component/App.tsx',
+        stylesFilePath: 'examples/styles/app.css',
+        renderMode: 'react',
+        styleMode: 'scss',
+        baseBranch: 'main',
+        headBranch: 'develop/open-pr-test',
+        prTitle: 'Existing PR context from storage',
+        prBody: 'Saved body',
+        isActivePr: true,
+        pullRequestUrl: 'https://github.com/knightedcodemonkey/develop/pull/2',
+      }),
+    )
+  })
+
+  await connectByotWithSingleRepo(page)
+  await expect(page.getByLabel('Render mode')).toHaveValue('react')
+  await expect(page.getByLabel('Style mode')).toHaveValue('css')
 })
 
 test('Open PR drawer validates unsafe filepaths', async ({ page }) => {
