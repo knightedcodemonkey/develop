@@ -240,7 +240,6 @@
 
 .github-repo-wrap select {
   appearance: none;
-  -webkit-appearance: none;
   background-color: var(--surface-select);
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath fill='currentColor' d='M1.2 0 5 3.8 8.8 0 10 1.2 5 6 0 1.2z'/%3E%3C/svg%3E");
   background-repeat: no-repeat;
@@ -551,6 +550,10 @@
   color: var(--text-muted);
 }
 
+.github-pr-field[hidden] {
+  display: none !important;
+}
+
 .github-pr-field--checkbox {
   display: flex;
   align-items: center;
@@ -588,7 +591,6 @@
 
 .github-pr-field select {
   appearance: none;
-  -webkit-appearance: none;
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath fill='currentColor' d='M1.2 0 5 3.8 8.8 0 10 1.2 5 6 0 1.2z'/%3E%3C/svg%3E");
   background-repeat: no-repeat;
   background-position: right 10px center;
@@ -606,6 +608,57 @@
   outline: none;
   border-color: var(--focus-ring);
   box-shadow: 0 0 0 1px color-mix(in srgb, var(--focus-ring) 80%, transparent);
+}
+
+.github-pr-field input[readonly],
+.github-pr-field textarea[readonly],
+.github-pr-field select:disabled,
+.github-pr-field input:disabled,
+.github-pr-field textarea:disabled {
+  background: color-mix(in srgb, var(--surface-select) 82%, var(--surface-panel));
+  border-color: color-mix(in srgb, var(--border-control) 72%, var(--text-subtle));
+  color: color-mix(in srgb, var(--select-text) 78%, var(--text-subtle));
+  cursor: default;
+}
+
+.github-pr-field select:disabled {
+  opacity: 1;
+}
+
+.github-pr-field--checkbox input[type='checkbox']:disabled + span {
+  color: color-mix(in srgb, var(--text-subtle) 82%, var(--border-subtle));
+}
+
+.github-pr-drawer[data-mode='push']
+  .github-pr-field
+  :is(
+    input[readonly],
+    textarea[readonly],
+    select:disabled,
+    input:disabled,
+    textarea:disabled
+  ) {
+  background: color-mix(in srgb, var(--surface-panel-header) 72%, var(--text-muted));
+  border-color: color-mix(in srgb, var(--border-control) 64%, var(--text-muted));
+  color: color-mix(in srgb, var(--select-text) 38%, var(--text-subtle));
+  box-shadow: none;
+}
+
+.github-pr-drawer[data-mode='push']
+  .github-pr-field
+  :is(input[readonly], textarea[readonly]) {
+  color: color-mix(in srgb, var(--select-text) 36%, var(--text-subtle));
+}
+
+.github-pr-drawer[data-mode='push']
+  .github-pr-field
+  :is(input[readonly], textarea[readonly], select:disabled)::placeholder {
+  color: color-mix(in srgb, var(--text-subtle) 62%, var(--border-subtle));
+}
+
+.github-pr-drawer[data-mode='push'] .github-pr-field label,
+.github-pr-drawer[data-mode='push'] .github-pr-field > span {
+  color: color-mix(in srgb, var(--text-muted) 88%, var(--text-subtle));
 }
 
 .github-pr-drawer__actions {
@@ -750,7 +803,6 @@
 
 .ai-chat-model-picker select {
   appearance: none;
-  -webkit-appearance: none;
   width: 100%;
   min-width: 0;
   box-sizing: border-box;

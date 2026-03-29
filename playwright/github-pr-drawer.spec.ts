@@ -14,6 +14,8 @@ import {
   waitForAppReady,
 } from './helpers/app-test-helpers.js'
 
+const defaultCommitMessage = 'chore: sync editor updates from @knighted/develop'
+
 const decodeGitHubFileBodyContent = (body: Record<string, unknown>) => {
   const encoded = typeof body.content === 'string' ? body.content : ''
   return Buffer.from(encoded, 'base64').toString('utf8')
@@ -80,6 +82,7 @@ const expectOpenPrConfirmationPrompt = async (page: Page) => {
 test('Open PR drawer confirms and submits component/styles filepaths', async ({
   page,
 }) => {
+  const customCommitMessage = 'chore: sync develop editor outputs'
   let createdRefBody: CreateRefRequestBody | null = null
   const upsertRequests: Array<{ path: string; body: Record<string, unknown> }> = []
   let pullRequestBody: PullRequestCreateBody | null = null
@@ -184,6 +187,7 @@ test('Open PR drawer confirms and submits component/styles filepaths', async ({
   await page
     .getByLabel('PR description')
     .fill('Generated from editor content in @knighted/develop.')
+  await page.getByLabel('Commit message').fill(customCommitMessage)
 
   await submitOpenPrAndConfirm(page, {
     expectedSummaryLines: [
@@ -208,6 +212,8 @@ test('Open PR drawer confirms and submits component/styles filepaths', async ({
   expect(upsertRequests).toHaveLength(2)
   expect(upsertRequests[0]?.path).toBe('examples/component/App.tsx')
   expect(upsertRequests[1]?.path).toBe('examples/styles/app.css')
+  expect(upsertRequests[0]?.body.message).toBe(customCommitMessage)
+  expect(upsertRequests[1]?.body.message).toBe(customCommitMessage)
   expect(pullRequestPayload?.head).toBe('Develop/Open-Pr-Test')
   expect(pullRequestPayload?.base).toBe('main')
 
@@ -221,15 +227,28 @@ test('Open PR drawer confirms and submits component/styles filepaths', async ({
   await expect(page.getByLabel('PR title')).toHaveValue(
     'Apply editor updates from develop',
   )
-  await expect(page.getByLabel('PR description')).toHaveValue(
-    'Generated from editor content in @knighted/develop.',
-  )
+  await expect(page.getByLabel('PR description')).toBeHidden()
+  await expect(page.getByLabel('Commit message')).toBeVisible()
+  await expect(page.getByLabel('Commit message')).toHaveValue(customCommitMessage)
   await expect(
     page.getByRole('button', { name: 'Push commit to active pull request branch' }),
   ).toBeVisible()
   await expect(
     page.getByRole('button', { name: 'Close active pull request context' }),
   ).toBeVisible()
+})
+
+test('Open PR drawer starts with empty title/description and short default head', async ({
+  page,
+}) => {
+  await waitForAppReady(page, `${appEntryPath}?feature-ai=true`)
+  await connectByotWithSingleRepo(page)
+  await ensureOpenPrDrawerOpen(page)
+
+  const headValue = await page.getByLabel('Head').inputValue()
+  expect(headValue).toMatch(/^feat\/component-[a-z0-9]{4}$/)
+  await expect(page.getByLabel('PR title')).toHaveValue('')
+  await expect(page.getByLabel('PR description')).toHaveValue('')
 })
 
 test('Open PR drawer base dropdown updates from mocked repo branches', async ({
@@ -678,6 +697,79 @@ test('Active PR context is disabled on load when pull request is closed', async 
   expect(isActivePr).toBe(false)
 })
 
+test('Active PR context recovers when saved head branch is missing but PR metadata exists', async ({
+  page,
+}) => {
+  await page.route('https://api.github.com/user/repos**', async route => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify([
+        {
+          id: 11,
+          owner: { login: 'knightedcodemonkey' },
+          name: 'develop',
+          full_name: 'knightedcodemonkey/develop',
+          default_branch: 'main',
+          permissions: { push: true },
+        },
+      ]),
+    })
+  })
+
+  await mockRepositoryBranches(page, {
+    'knightedcodemonkey/develop': ['main', 'release', 'develop/open-pr-test'],
+  })
+
+  await page.route(
+    'https://api.github.com/repos/knightedcodemonkey/develop/pulls/2',
+    async route => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          number: 2,
+          state: 'open',
+          title: 'Recovered PR context title',
+          html_url: 'https://github.com/knightedcodemonkey/develop/pull/2',
+          head: { ref: 'develop/open-pr-test' },
+          base: { ref: 'main' },
+        }),
+      })
+    },
+  )
+
+  await waitForAppReady(page, `${appEntryPath}?feature-ai=true`)
+
+  await page.evaluate(() => {
+    localStorage.setItem(
+      'knighted:develop:github-pr-config:knightedcodemonkey/develop',
+      JSON.stringify({
+        componentFilePath: 'examples/component/App.tsx',
+        stylesFilePath: 'examples/styles/app.css',
+        renderMode: 'react',
+        baseBranch: 'main',
+        headBranch: '',
+        prTitle: 'Recovered PR context title',
+        prBody: 'Saved body',
+        isActivePr: true,
+        pullRequestNumber: 2,
+        pullRequestUrl: 'https://github.com/knightedcodemonkey/develop/pull/2',
+      }),
+    )
+  })
+
+  await connectByotWithSingleRepo(page)
+
+  await expect(
+    page.getByRole('button', { name: 'Push commit to active pull request branch' }),
+  ).toBeVisible()
+
+  await ensureOpenPrDrawerOpen(page)
+  await expect(page.getByRole('button', { name: 'Push commit' }).last()).toBeVisible()
+  await expect(page.getByLabel('Head')).toHaveValue('develop/open-pr-test')
+})
+
 test('Active PR context uses Push commit flow without creating a new pull request', async ({
   page,
 }) => {
@@ -815,8 +907,34 @@ test('Active PR context uses Push commit flow without creating a new pull reques
   await connectByotWithSingleRepo(page)
   await ensureOpenPrDrawerOpen(page)
 
+  await expect(page.getByLabel('Pull request repository')).toBeDisabled()
+  await expect(page.getByLabel('Pull request base branch')).toBeDisabled()
+  await expect(page.getByLabel('Head')).toHaveJSProperty('readOnly', true)
+  await expect(page.getByLabel('Component filename')).toHaveJSProperty('readOnly', true)
+  await expect(page.getByLabel('Styles filename')).toHaveJSProperty('readOnly', true)
+  await expect(page.getByLabel('PR title')).toHaveJSProperty('readOnly', true)
+  await expect(
+    page.getByLabel('Include App wrapper in committed component source'),
+  ).toBeEnabled()
+  await expect(page.getByLabel('Commit message')).toBeEditable()
+
+  await expect(page.getByLabel('PR description')).toBeHidden()
+  await expect(page.getByLabel('Commit message')).toBeVisible()
+
+  const includeWrapperToggle = page.getByLabel(
+    'Include App wrapper in committed component source',
+  )
+  await expect(includeWrapperToggle).toBeEnabled()
+  await includeWrapperToggle.check()
+  await expect(includeWrapperToggle).toBeChecked()
+  await expect(page.getByRole('button', { name: 'Push commit' }).last()).toBeVisible()
+  await expect(page.getByLabel('PR description')).toBeHidden()
+  await expect(page.getByLabel('Commit message')).toBeVisible()
+
   await setComponentEditorSource(page, 'const commitMarker = 1')
   await setStylesEditorSource(page, '.commit-marker { color: red; }')
+  const pushCommitMessage = 'chore: push active context sync'
+  await page.getByLabel('Commit message').fill(pushCommitMessage)
 
   await page.getByRole('button', { name: 'Push commit' }).last().click()
 
@@ -846,6 +964,8 @@ test('Active PR context uses Push commit flow without creating a new pull reques
   expect(upsertRequests).toHaveLength(2)
   expect(upsertRequests[0]?.path).toBe('examples/component/App.tsx')
   expect(upsertRequests[1]?.path).toBe('examples/styles/app.css')
+  expect(upsertRequests[0]?.body.message).toBe(pushCommitMessage)
+  expect(upsertRequests[1]?.body.message).toBe(pushCommitMessage)
 })
 
 test('Reloaded active PR context from URL metadata keeps Push mode and status reference', async ({
@@ -988,6 +1108,8 @@ test('Reloaded active PR context from URL metadata keeps Push mode and status re
   await ensureOpenPrDrawerOpen(page)
   await expect(page.getByRole('button', { name: 'Push commit' }).last()).toBeVisible()
   await expect(page.getByLabel('Head')).toHaveValue('develop/open-pr-test')
+  await expect(page.getByLabel('PR description')).toBeHidden()
+  await expect(page.getByLabel('Commit message')).toBeVisible()
 
   await setComponentEditorSource(page, 'const commitMarker = 1')
   await setStylesEditorSource(page, '.commit-marker { color: red; }')
@@ -1007,6 +1129,8 @@ test('Reloaded active PR context from URL metadata keeps Push mode and status re
   expect(upsertRequests).toHaveLength(2)
   expect(upsertRequests[0]?.path).toBe('examples/component/App.tsx')
   expect(upsertRequests[1]?.path).toBe('examples/styles/app.css')
+  expect(upsertRequests[0]?.body.message).toBe(defaultCommitMessage)
+  expect(upsertRequests[1]?.body.message).toBe(defaultCommitMessage)
 })
 
 test('Reloaded active PR context syncs editor content from GitHub branch', async ({
@@ -1151,6 +1275,7 @@ test('Open PR drawer validates unsafe filepaths', async ({ page }) => {
   await ensureOpenPrDrawerOpen(page)
 
   const componentPath = page.getByLabel('Component filename')
+  await page.getByLabel('PR title').fill('Validate unsafe paths')
   await componentPath.fill('../outside/App.tsx')
   await expect(componentPath).toHaveValue('../outside/App.tsx')
   await componentPath.blur()
@@ -1176,6 +1301,7 @@ test('Open PR drawer allows dotted file segments that are not traversal', async 
   await stylesPath.fill('styles/foo..bar.css')
   await expect(componentPath).toHaveValue('docs/v1.0..v1.1/App.tsx')
   await expect(stylesPath).toHaveValue('styles/foo..bar.css')
+  await page.getByLabel('PR title').fill('Allow dotted file segments')
   await stylesPath.blur()
 
   await expectOpenPrConfirmationPrompt(page)
@@ -1190,6 +1316,7 @@ test('Open PR drawer rejects trailing slash file paths', async ({ page }) => {
   await ensureOpenPrDrawerOpen(page)
 
   await page.getByLabel('Component filename').fill('src/components/')
+  await page.getByLabel('PR title').fill('Reject trailing slash path')
   await clickOpenPrDrawerSubmit(page)
 
   await expect(
@@ -1325,6 +1452,7 @@ test('Open PR drawer strips App wrapper from committed component source by defau
   await ensureOpenPrDrawerOpen(page)
 
   await page.getByLabel('Head').fill('develop/repo/editor-sync-without-app')
+  await page.getByLabel('PR title').fill('Strip App wrapper by default')
   await submitOpenPrAndConfirm(page)
 
   await expect(
@@ -1455,6 +1583,7 @@ test('Open PR drawer includes App wrapper in committed source when toggled on', 
   await includeWrapperToggle.check()
 
   await page.getByLabel('Head').fill('develop/repo/editor-sync-with-app')
+  await page.getByLabel('PR title').fill('Include App wrapper in commit')
   await submitOpenPrAndConfirm(page)
 
   await expect(

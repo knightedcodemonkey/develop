@@ -60,6 +60,7 @@ const githubPrComponentPath = document.getElementById('github-pr-component-path'
 const githubPrStylesPath = document.getElementById('github-pr-styles-path')
 const githubPrTitle = document.getElementById('github-pr-title')
 const githubPrBody = document.getElementById('github-pr-body')
+const githubPrCommitMessage = document.getElementById('github-pr-commit-message')
 const githubPrIncludeAppWrapper = document.getElementById('github-pr-include-app-wrapper')
 const githubPrSubmit = document.getElementById('github-pr-submit')
 const componentPrSyncIcon = document.getElementById('component-pr-sync-icon')
@@ -801,6 +802,7 @@ prDrawerController = createGitHubPrDrawer({
   stylesPathInput: githubPrStylesPath,
   prTitleInput: githubPrTitle,
   prBodyInput: githubPrBody,
+  commitMessageInput: githubPrCommitMessage,
   includeAppWrapperToggle: githubPrIncludeAppWrapper,
   submitButton: githubPrSubmit,
   titleNode: openPrTitle,
