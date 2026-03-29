@@ -1314,7 +1314,6 @@ export const createGitHubPrDrawer = ({
           : 'Open pull request with editor content?',
         copy: summary,
         confirmButtonText: isPushCommitMode ? 'Push commit' : 'Open PR',
-        fallbackConfirmText: summary,
         onConfirm: submitRequest,
       })
       return
