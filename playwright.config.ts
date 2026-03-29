@@ -2,6 +2,7 @@ import { defineConfig, devices } from '@playwright/test'
 
 const env = process.env
 const isCI = env?.CI === 'true'
+const includeWebKit = env?.PLAYWRIGHT_INCLUDE_WEBKIT === 'true'
 const HOST = env?.PLAYWRIGHT_HOST ?? '127.0.0.1'
 const PORT = Number(env?.PLAYWRIGHT_PORT ?? 4174)
 const baseURL = env?.PLAYWRIGHT_BASE_URL ?? `http://${HOST}:${PORT}`
@@ -20,7 +21,7 @@ const projects = [
   },
 ]
 
-if (isCI) {
+if (isCI || includeWebKit) {
   projects.push({
     name: 'webkit',
     use: { ...devices['Desktop Safari'] },

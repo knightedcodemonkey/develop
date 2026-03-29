@@ -27,6 +27,15 @@ const clickOpenPrDrawerSubmit = async (page: Page) => {
   await expect(drawer).toBeVisible()
   const submitButton = drawer.getByRole('button', { name: 'Open PR' })
   await expect(submitButton).toBeEnabled()
+  /*
+   * NOTE: WebKit's HTML <dialog> Top Layer behavior can cause Playwright
+   * actionability checks to fail or time out, even when the control is
+   * visibly ready and works in Safari.
+   *
+   * Keep this evaluate-based click because standard locator.click() and
+   * locator.click({ force: true }) have been flaky here and can fail to
+   * resolve the hit target for this drawer flow.
+   */
   await submitButton.evaluate(element => {
     if (element instanceof HTMLButtonElement) {
       element.click()
@@ -55,6 +64,7 @@ const submitOpenPrAndConfirm = async (
     await expect(dialog.getByText(line, { exact: true })).toBeVisible()
   }
 
+  /* Same WebKit <dialog> Top Layer issue applies to the confirm button. */
   await dialog.locator('button[value="confirm"]').evaluate(element => {
     if (element instanceof HTMLButtonElement) {
       element.click()

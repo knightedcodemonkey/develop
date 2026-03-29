@@ -37,7 +37,7 @@
     "check-types": "tsc -p tsconfig.json",
     "lint:playwright": "eslint playwright playwright.config.ts src/index.html",
     "test:e2e": "npm run build && PLAYWRIGHT_WEB_SERVER_MODE=preview PLAYWRIGHT_PORT=8081 playwright test",
-    "test:e2e:webkit": "npm run build && PLAYWRIGHT_WEB_SERVER_MODE=preview PLAYWRIGHT_PORT=8081 playwright test --project=webkit",
+    "test:e2e:webkit": "npm run build && PLAYWRIGHT_INCLUDE_WEBKIT=true PLAYWRIGHT_WEB_SERVER_MODE=preview PLAYWRIGHT_PORT=8081 playwright test --project=webkit",
     "test:e2e:dev": "playwright test",
     "test:e2e:headed": "npm run build && PLAYWRIGHT_WEB_SERVER_MODE=preview PLAYWRIGHT_PORT=8081 playwright test --headed",
     "test": "echo \"Error: no test specified\" && exit 1",
