@@ -9,6 +9,7 @@ import {
   ensureOpenPrDrawerOpen,
   mockRepositoryBranches,
   setComponentEditorSource,
+  setStylesEditorSource,
   waitForAppReady,
 } from './helpers/app-test-helpers.js'
 
@@ -163,20 +164,19 @@ test('Open PR drawer confirms and submits component/styles filepaths', async ({
   )
   await expect(page.getByLabel('Styles filename')).toHaveValue('examples/styles/app.css')
   await expect(page.getByLabel('Pull request base branch')).toHaveValue('main')
-
-  await expect(page.getByLabel('Head')).toHaveValue(/^develop\/develop\/editor-sync-/)
-  await expect(page.getByLabel('Head')).not.toHaveValue('Develop/Open-Pr-Test')
+  await expect(page.getByLabel('Head')).toHaveValue('Develop/Open-Pr-Test')
   await expect(page.getByLabel('PR title')).toHaveValue(
-    'Apply component and styles edits to knightedcodemonkey/develop',
+    'Apply editor updates from develop',
   )
   await expect(page.getByLabel('PR description')).toHaveValue(
-    [
-      'This PR was created from @knighted/develop editor content.',
-      '',
-      '- Component source -> examples/component/App.tsx',
-      '- Styles source -> examples/styles/app.css',
-    ].join('\n'),
+    'Generated from editor content in @knighted/develop.',
   )
+  await expect(
+    page.getByRole('button', { name: 'Push commit to active pull request branch' }),
+  ).toBeVisible()
+  await expect(
+    page.getByRole('button', { name: 'Close active pull request context' }),
+  ).toBeVisible()
 })
 
 test('Open PR drawer base dropdown updates from mocked repo branches', async ({
@@ -409,6 +409,687 @@ test('Open PR drawer does not prune saved PR context on repo switch before save'
     'knighted:develop:github-pr-config:knightedcodemonkey/develop',
   )
   expect(contexts[0]?.parsed?.componentFilePath).toBe('examples/develop/App.tsx')
+})
+
+test('Active PR context updates controls and can be closed from AI controls', async ({
+  page,
+}) => {
+  let closePullRequestRequestCount = 0
+
+  await page.route('https://api.github.com/user/repos**', async route => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify([
+        {
+          id: 11,
+          owner: { login: 'knightedcodemonkey' },
+          name: 'develop',
+          full_name: 'knightedcodemonkey/develop',
+          default_branch: 'main',
+          permissions: { push: true },
+        },
+      ]),
+    })
+  })
+
+  await mockRepositoryBranches(page, {
+    'knightedcodemonkey/develop': ['main', 'release'],
+  })
+
+  await page.route(
+    'https://api.github.com/repos/knightedcodemonkey/develop/pulls/2',
+    async route => {
+      if (route.request().method() === 'PATCH') {
+        closePullRequestRequestCount += 1
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({
+            number: 2,
+            state: 'closed',
+            title: 'Existing PR context from storage',
+            html_url: 'https://github.com/knightedcodemonkey/develop/pull/2',
+            head: { ref: 'develop/open-pr-test' },
+            base: { ref: 'main' },
+          }),
+        })
+        return
+      }
+
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          number: 2,
+          state: 'open',
+          title: 'Existing PR context from storage',
+          html_url: 'https://github.com/knightedcodemonkey/develop/pull/2',
+          head: { ref: 'develop/open-pr-test' },
+          base: { ref: 'main' },
+        }),
+      })
+    },
+  )
+
+  await page.route(
+    'https://api.github.com/repos/knightedcodemonkey/develop/git/ref/**',
+    async route => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          ref: 'refs/heads/develop/open-pr-test',
+          object: { type: 'commit', sha: 'existing-head-sha' },
+        }),
+      })
+    },
+  )
+
+  await waitForAppReady(page, `${appEntryPath}?feature-ai=true`)
+
+  await page.evaluate(() => {
+    localStorage.setItem(
+      'knighted:develop:github-pr-config:knightedcodemonkey/develop',
+      JSON.stringify({
+        componentFilePath: 'examples/component/App.tsx',
+        stylesFilePath: 'examples/styles/app.css',
+        renderMode: 'react',
+        baseBranch: 'main',
+        headBranch: 'develop/open-pr-test',
+        prTitle: 'Existing PR context from storage',
+        prBody: 'Saved body',
+        isActivePr: true,
+        pullRequestNumber: 2,
+        pullRequestUrl: 'https://github.com/knightedcodemonkey/develop/pull/2',
+      }),
+    )
+  })
+
+  await connectByotWithSingleRepo(page)
+
+  await expect(
+    page.getByRole('button', { name: 'Push commit to active pull request branch' }),
+  ).toBeVisible()
+  await expect(
+    page.getByRole('button', { name: 'Close active pull request context' }),
+  ).toBeVisible()
+
+  await page.getByRole('button', { name: 'Close active pull request context' }).click()
+
+  const dialog = page.getByRole('dialog')
+  await expect(dialog).toBeVisible()
+  await expect(page.getByText('PR: develop/pr/2')).toBeVisible()
+  await dialog.getByRole('button', { name: 'Close PR on GitHub' }).click()
+
+  await expect(page.getByRole('button', { name: 'Open pull request' })).toBeVisible()
+  await expect(
+    page.getByRole('button', { name: 'Close active pull request context' }),
+  ).toBeHidden()
+
+  const storedValue = await page.evaluate(() =>
+    localStorage.getItem('knighted:develop:github-pr-config:knightedcodemonkey/develop'),
+  )
+  expect(storedValue).toBeNull()
+  expect(closePullRequestRequestCount).toBe(1)
+})
+
+test('Active PR context is disabled on load when pull request is closed', async ({
+  page,
+}) => {
+  await page.route('https://api.github.com/user/repos**', async route => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify([
+        {
+          id: 11,
+          owner: { login: 'knightedcodemonkey' },
+          name: 'develop',
+          full_name: 'knightedcodemonkey/develop',
+          default_branch: 'main',
+          permissions: { push: true },
+        },
+      ]),
+    })
+  })
+
+  await mockRepositoryBranches(page, {
+    'knightedcodemonkey/develop': ['main', 'release', 'develop/open-pr-test'],
+  })
+
+  await page.route(
+    'https://api.github.com/repos/knightedcodemonkey/develop/pulls/2',
+    async route => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          number: 2,
+          state: 'closed',
+          title: 'Existing PR context from storage',
+          html_url: 'https://github.com/knightedcodemonkey/develop/pull/2',
+          head: { ref: 'develop/open-pr-test' },
+          base: { ref: 'main' },
+        }),
+      })
+    },
+  )
+
+  await waitForAppReady(page, `${appEntryPath}?feature-ai=true`)
+
+  await page.evaluate(() => {
+    localStorage.setItem(
+      'knighted:develop:github-pr-config:knightedcodemonkey/develop',
+      JSON.stringify({
+        componentFilePath: 'examples/component/App.tsx',
+        stylesFilePath: 'examples/styles/app.css',
+        renderMode: 'react',
+        baseBranch: 'main',
+        headBranch: 'develop/open-pr-test',
+        prTitle: 'Existing PR context from storage',
+        prBody: 'Saved body',
+        isActivePr: true,
+        pullRequestNumber: 2,
+        pullRequestUrl: 'https://github.com/knightedcodemonkey/develop/pull/2',
+      }),
+    )
+  })
+
+  await connectByotWithSingleRepo(page)
+
+  await expect(page.getByRole('button', { name: 'Open pull request' })).toBeVisible()
+  await expect(
+    page.getByRole('button', { name: 'Close active pull request context' }),
+  ).toBeHidden()
+  await expect(
+    page.getByRole('status', { name: 'Open pull request status', includeHidden: true }),
+  ).toContainText('Saved pull request context is not open on GitHub.')
+
+  const isActivePr = await page.evaluate(() => {
+    const raw = localStorage.getItem(
+      'knighted:develop:github-pr-config:knightedcodemonkey/develop',
+    )
+    if (!raw) {
+      return null
+    }
+
+    try {
+      const parsed = JSON.parse(raw)
+      return parsed?.isActivePr === true
+    } catch {
+      return null
+    }
+  })
+
+  expect(isActivePr).toBe(false)
+})
+
+test('Active PR context uses Push commit flow without creating a new pull request', async ({
+  page,
+}) => {
+  const upsertRequests: Array<{ path: string; body: Record<string, unknown> }> = []
+  let createRefRequestCount = 0
+  let pullRequestRequestCount = 0
+
+  await page.route('https://api.github.com/user/repos**', async route => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify([
+        {
+          id: 11,
+          owner: { login: 'knightedcodemonkey' },
+          name: 'develop',
+          full_name: 'knightedcodemonkey/develop',
+          default_branch: 'main',
+          permissions: { push: true },
+        },
+      ]),
+    })
+  })
+
+  await mockRepositoryBranches(page, {
+    'knightedcodemonkey/develop': ['main', 'release', 'develop/open-pr-test'],
+  })
+
+  await page.route(
+    'https://api.github.com/repos/knightedcodemonkey/develop/pulls/2',
+    async route => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          number: 2,
+          state: 'open',
+          title: 'Existing PR context from storage',
+          html_url: 'https://github.com/knightedcodemonkey/develop/pull/2',
+          head: { ref: 'develop/open-pr-test' },
+          base: { ref: 'main' },
+        }),
+      })
+    },
+  )
+
+  await page.route(
+    'https://api.github.com/repos/knightedcodemonkey/develop/git/ref/**',
+    async route => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          ref: 'refs/heads/develop/open-pr-test',
+          object: { type: 'commit', sha: 'existing-head-sha' },
+        }),
+      })
+    },
+  )
+
+  await page.route(
+    'https://api.github.com/repos/knightedcodemonkey/develop/git/refs',
+    async route => {
+      createRefRequestCount += 1
+      await route.fulfill({
+        status: 201,
+        contentType: 'application/json',
+        body: JSON.stringify({ ref: 'refs/heads/unexpected' }),
+      })
+    },
+  )
+
+  await page.route(
+    'https://api.github.com/repos/knightedcodemonkey/develop/pulls',
+    async route => {
+      pullRequestRequestCount += 1
+      await route.fulfill({
+        status: 201,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          number: 999,
+          html_url: 'https://github.com/knightedcodemonkey/develop/pull/999',
+        }),
+      })
+    },
+  )
+
+  await page.route(
+    'https://api.github.com/repos/knightedcodemonkey/develop/contents/**',
+    async route => {
+      const request = route.request()
+      const method = request.method()
+      const url = request.url()
+      const path = new URL(url).pathname.split('/contents/')[1] ?? ''
+
+      if (method === 'GET') {
+        await route.fulfill({
+          status: 404,
+          contentType: 'application/json',
+          body: JSON.stringify({ message: 'Not Found' }),
+        })
+        return
+      }
+
+      const body = request.postDataJSON() as Record<string, unknown>
+      upsertRequests.push({ path: decodeURIComponent(path), body })
+      await route.fulfill({
+        status: 201,
+        contentType: 'application/json',
+        body: JSON.stringify({ commit: { sha: 'commit-sha' } }),
+      })
+    },
+  )
+
+  await waitForAppReady(page, `${appEntryPath}?feature-ai=true`)
+
+  await page.evaluate(() => {
+    localStorage.setItem(
+      'knighted:develop:github-pr-config:knightedcodemonkey/develop',
+      JSON.stringify({
+        componentFilePath: 'examples/component/App.tsx',
+        stylesFilePath: 'examples/styles/app.css',
+        renderMode: 'react',
+        baseBranch: 'main',
+        headBranch: 'develop/open-pr-test',
+        prTitle: 'Existing PR context from storage',
+        prBody: 'Saved body',
+        isActivePr: true,
+        pullRequestNumber: 2,
+        pullRequestUrl: 'https://github.com/knightedcodemonkey/develop/pull/2',
+      }),
+    )
+  })
+
+  await connectByotWithSingleRepo(page)
+  await ensureOpenPrDrawerOpen(page)
+
+  await setComponentEditorSource(page, 'const commitMarker = 1')
+  await setStylesEditorSource(page, '.commit-marker { color: red; }')
+
+  await page.getByRole('button', { name: 'Push commit' }).last().click()
+
+  const dialog = page.getByRole('dialog')
+  await expect(dialog).toBeVisible()
+  await expect(
+    page.getByText('Push commit to active pull request branch?', { exact: true }),
+  ).toHaveText('Push commit to active pull request branch?')
+  await expect(
+    page.getByText('Head branch: develop/open-pr-test', { exact: true }),
+  ).toBeVisible()
+  await expect(
+    page.getByText('Component file path: examples/component/App.tsx', { exact: true }),
+  ).toBeVisible()
+  await expect(
+    page.getByText('Styles file path: examples/styles/app.css', { exact: true }),
+  ).toBeVisible()
+
+  await dialog.getByRole('button', { name: 'Push commit' }).click()
+
+  await expect(
+    page.getByRole('status', { name: 'Open pull request status', includeHidden: true }),
+  ).toContainText('Commit pushed to develop/open-pr-test (develop/pr/2).')
+
+  expect(createRefRequestCount).toBe(0)
+  expect(pullRequestRequestCount).toBe(0)
+  expect(upsertRequests).toHaveLength(2)
+  expect(upsertRequests[0]?.path).toBe('examples/component/App.tsx')
+  expect(upsertRequests[1]?.path).toBe('examples/styles/app.css')
+})
+
+test('Reloaded active PR context from URL metadata keeps Push mode and status reference', async ({
+  page,
+}) => {
+  const upsertRequests: Array<{ path: string; body: Record<string, unknown> }> = []
+  let createRefRequestCount = 0
+  let pullRequestRequestCount = 0
+
+  await page.route('https://api.github.com/user/repos**', async route => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify([
+        {
+          id: 11,
+          owner: { login: 'knightedcodemonkey' },
+          name: 'develop',
+          full_name: 'knightedcodemonkey/develop',
+          default_branch: 'main',
+          permissions: { push: true },
+        },
+      ]),
+    })
+  })
+
+  await mockRepositoryBranches(page, {
+    'knightedcodemonkey/develop': ['main', 'release', 'develop/open-pr-test'],
+  })
+
+  await page.route(
+    'https://api.github.com/repos/knightedcodemonkey/develop/pulls/2',
+    async route => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          number: 2,
+          state: 'open',
+          title: 'Existing PR context from storage',
+          html_url: 'https://github.com/knightedcodemonkey/develop/pull/2',
+          head: { ref: 'develop/open-pr-test' },
+          base: { ref: 'main' },
+        }),
+      })
+    },
+  )
+
+  await page.route(
+    'https://api.github.com/repos/knightedcodemonkey/develop/git/ref/**',
+    async route => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          ref: 'refs/heads/develop/open-pr-test',
+          object: { type: 'commit', sha: 'existing-head-sha' },
+        }),
+      })
+    },
+  )
+
+  await page.route(
+    'https://api.github.com/repos/knightedcodemonkey/develop/git/refs',
+    async route => {
+      createRefRequestCount += 1
+      await route.fulfill({
+        status: 201,
+        contentType: 'application/json',
+        body: JSON.stringify({ ref: 'refs/heads/unexpected-branch' }),
+      })
+    },
+  )
+
+  await page.route(
+    'https://api.github.com/repos/knightedcodemonkey/develop/pulls',
+    async route => {
+      pullRequestRequestCount += 1
+      await route.fulfill({
+        status: 201,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          number: 999,
+          html_url: 'https://github.com/knightedcodemonkey/develop/pull/999',
+        }),
+      })
+    },
+  )
+
+  await page.route(
+    'https://api.github.com/repos/knightedcodemonkey/develop/contents/**',
+    async route => {
+      const request = route.request()
+      const method = request.method()
+      const path = new URL(request.url()).pathname.split('/contents/')[1] ?? ''
+
+      if (method === 'GET') {
+        await route.fulfill({
+          status: 404,
+          contentType: 'application/json',
+          body: JSON.stringify({ message: 'Not Found' }),
+        })
+        return
+      }
+
+      const body = request.postDataJSON() as Record<string, unknown>
+      upsertRequests.push({ path: decodeURIComponent(path), body })
+      await route.fulfill({
+        status: 201,
+        contentType: 'application/json',
+        body: JSON.stringify({ commit: { sha: 'commit-sha' } }),
+      })
+    },
+  )
+
+  await waitForAppReady(page, `${appEntryPath}?feature-ai=true`)
+
+  await page.evaluate(() => {
+    localStorage.setItem(
+      'knighted:develop:github-pr-config:knightedcodemonkey/develop',
+      JSON.stringify({
+        componentFilePath: 'examples/component/App.tsx',
+        stylesFilePath: 'examples/styles/app.css',
+        renderMode: 'react',
+        baseBranch: 'main',
+        headBranch: 'develop/open-pr-test',
+        prTitle: 'Existing PR context from storage',
+        prBody: 'Saved body',
+        isActivePr: true,
+        pullRequestUrl: 'https://github.com/knightedcodemonkey/develop/pull/2',
+      }),
+    )
+  })
+
+  await connectByotWithSingleRepo(page)
+
+  await expect(
+    page.getByRole('button', { name: 'Push commit to active pull request branch' }),
+  ).toBeVisible()
+  await ensureOpenPrDrawerOpen(page)
+  await expect(page.getByRole('button', { name: 'Push commit' }).last()).toBeVisible()
+  await expect(page.getByLabel('Head')).toHaveValue('develop/open-pr-test')
+
+  await setComponentEditorSource(page, 'const commitMarker = 1')
+  await setStylesEditorSource(page, '.commit-marker { color: red; }')
+
+  await page.getByRole('button', { name: 'Push commit' }).last().click()
+
+  const dialog = page.getByRole('dialog')
+  await expect(dialog).toBeVisible()
+  await dialog.getByRole('button', { name: 'Push commit' }).click()
+
+  await expect(
+    page.getByRole('status', { name: 'Open pull request status', includeHidden: true }),
+  ).toContainText('Commit pushed to develop/open-pr-test (develop/pr/2).')
+
+  expect(createRefRequestCount).toBe(0)
+  expect(pullRequestRequestCount).toBe(0)
+  expect(upsertRequests).toHaveLength(2)
+  expect(upsertRequests[0]?.path).toBe('examples/component/App.tsx')
+  expect(upsertRequests[1]?.path).toBe('examples/styles/app.css')
+})
+
+test('Reloaded active PR context syncs editor content from GitHub branch', async ({
+  page,
+}) => {
+  const remoteComponentSource = 'export const App = () => <main>Synced from PR</main>'
+  const remoteStylesSource = '.synced-from-pr { color: tomato; }'
+
+  await page.route('https://api.github.com/user/repos**', async route => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify([
+        {
+          id: 11,
+          owner: { login: 'knightedcodemonkey' },
+          name: 'develop',
+          full_name: 'knightedcodemonkey/develop',
+          default_branch: 'main',
+          permissions: { push: true },
+        },
+      ]),
+    })
+  })
+
+  await mockRepositoryBranches(page, {
+    'knightedcodemonkey/develop': ['main', 'release', 'develop/open-pr-test'],
+  })
+
+  await page.route(
+    'https://api.github.com/repos/knightedcodemonkey/develop/pulls/2',
+    async route => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          number: 2,
+          state: 'open',
+          title: 'Existing PR context from storage',
+          html_url: 'https://github.com/knightedcodemonkey/develop/pull/2',
+          head: { ref: 'develop/open-pr-test' },
+          base: { ref: 'main' },
+        }),
+      })
+    },
+  )
+
+  await page.route(
+    'https://api.github.com/repos/knightedcodemonkey/develop/contents/**',
+    async route => {
+      const request = route.request()
+      const method = request.method()
+      const url = new URL(request.url())
+      const path = decodeURIComponent(url.pathname.split('/contents/')[1] ?? '')
+      const ref = url.searchParams.get('ref')
+
+      if (method !== 'GET' || ref !== 'develop/open-pr-test') {
+        await route.fulfill({
+          status: 404,
+          contentType: 'application/json',
+          body: JSON.stringify({ message: 'Not Found' }),
+        })
+        return
+      }
+
+      if (path === 'examples/component/App.tsx') {
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({
+            sha: 'component-sha',
+            content: Buffer.from(remoteComponentSource, 'utf8').toString('base64'),
+          }),
+        })
+        return
+      }
+
+      if (path === 'examples/styles/app.css') {
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({
+            sha: 'styles-sha',
+            content: Buffer.from(remoteStylesSource, 'utf8').toString('base64'),
+          }),
+        })
+        return
+      }
+
+      await route.fulfill({
+        status: 404,
+        contentType: 'application/json',
+        body: JSON.stringify({ message: 'Not Found' }),
+      })
+    },
+  )
+
+  await waitForAppReady(page, `${appEntryPath}?feature-ai=true`)
+
+  await page.evaluate(() => {
+    localStorage.setItem(
+      'knighted:develop:github-pr-config:knightedcodemonkey/develop',
+      JSON.stringify({
+        componentFilePath: 'examples/component/App.tsx',
+        stylesFilePath: 'examples/styles/app.css',
+        renderMode: 'react',
+        baseBranch: 'main',
+        headBranch: 'develop/open-pr-test',
+        prTitle: 'Existing PR context from storage',
+        prBody: 'Saved body',
+        isActivePr: true,
+        pullRequestUrl: 'https://github.com/knightedcodemonkey/develop/pull/2',
+      }),
+    )
+  })
+
+  await connectByotWithSingleRepo(page)
+  await expect(page.getByLabel('Render mode')).toHaveValue('react')
+
+  await expect
+    .poll(async () =>
+      page.evaluate(() => {
+        const componentEditor = document.getElementById('jsx-editor')
+        const stylesEditor = document.getElementById('css-editor')
+
+        return {
+          component:
+            componentEditor instanceof HTMLTextAreaElement ? componentEditor.value : '',
+          styles: stylesEditor instanceof HTMLTextAreaElement ? stylesEditor.value : '',
+        }
+      }),
+    )
+    .toEqual({
+      component: remoteComponentSource,
+      styles: remoteStylesSource,
+    })
 })
 
 test('Open PR drawer validates unsafe filepaths', async ({ page }) => {

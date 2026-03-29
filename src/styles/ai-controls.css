@@ -339,6 +339,56 @@
   --github-pr-icon-color: var(--github-pr-icon-color-disabled);
 }
 
+.github-pr-context-close {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  --github-pr-close-icon-color: color-mix(
+    in srgb,
+    rgb(var(--danger-rgb)) 84%,
+    var(--panel-text)
+  );
+  --github-pr-close-text-color: color-mix(
+    in srgb,
+    var(--panel-text) 84%,
+    var(--text-subtle)
+  );
+  --github-pr-close-text-color-hover: color-mix(
+    in srgb,
+    rgb(var(--danger-rgb)) 86%,
+    var(--panel-text)
+  );
+
+  color: var(--github-pr-close-text-color);
+}
+
+.github-pr-context-close__icon {
+  width: 14px;
+  height: 14px;
+  fill: var(--github-pr-close-icon-color);
+}
+
+.github-pr-context-close__icon path {
+  fill: var(--github-pr-close-icon-color);
+}
+
+.github-pr-context-close:hover:not(:disabled) {
+  color: var(--github-pr-close-text-color-hover);
+}
+
+.github-pr-context-close__label {
+  color: inherit;
+}
+
+.github-pr-context-close:focus-visible:not(:disabled) {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 1px;
+}
+
+.github-pr-context-close[hidden] {
+  display: none !important;
+}
+
 .github-pr-toggle[hidden] {
   display: none !important;
 }

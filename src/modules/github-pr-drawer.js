@@ -1,4 +1,15 @@
-import { createEditorContentPullRequest, listRepositoryBranches } from './github-api.js'
+import {
+  closeRepositoryPullRequest,
+  commitEditorContentToExistingBranch,
+  createEditorContentPullRequest,
+  findOpenRepositoryPullRequestByHead,
+  getRepositoryPullRequest,
+  listRepositoryBranches,
+} from './github-api.js'
+import {
+  formatActivePrReference,
+  parsePullRequestNumberFromUrl,
+} from './github-pr-context.js'
 import {
   isFunctionLikeDeclaration,
   isFunctionLikeVariableInitializer,
@@ -11,12 +22,22 @@ const defaultPrConfig = {
   stylesFilePath: 'src/styles/app.css',
 }
 
+const supportedRenderModes = new Set(['dom', 'react'])
+
+const normalizeRenderMode = value => {
+  const mode = toSafeText(value).toLowerCase()
+  return supportedRenderModes.has(mode) ? mode : 'dom'
+}
+
+const getRepositoryPrConfigStorageKey = repositoryFullName =>
+  `${prConfigStoragePrefix}${repositoryFullName}`
+
 const pruneRepositoryPrConfigs = repositoryFullName => {
   if (typeof repositoryFullName !== 'string' || !repositoryFullName.trim()) {
     return
   }
 
-  const activeStorageKey = `${prConfigStoragePrefix}${repositoryFullName}`
+  const activeStorageKey = getRepositoryPrConfigStorageKey(repositoryFullName)
 
   try {
     const keysToRemove = []
@@ -46,7 +67,9 @@ const readRepositoryPrConfig = repositoryFullName => {
   }
 
   try {
-    const value = localStorage.getItem(`${prConfigStoragePrefix}${repositoryFullName}`)
+    const value = localStorage.getItem(
+      getRepositoryPrConfigStorageKey(repositoryFullName),
+    )
     if (!value) {
       return {}
     }
@@ -64,7 +87,7 @@ const saveRepositoryPrConfig = ({ repositoryFullName, config }) => {
   }
 
   try {
-    const activeStorageKey = `${prConfigStoragePrefix}${repositoryFullName}`
+    const activeStorageKey = getRepositoryPrConfigStorageKey(repositoryFullName)
 
     localStorage.setItem(activeStorageKey, JSON.stringify(config))
 
@@ -74,27 +97,52 @@ const saveRepositoryPrConfig = ({ repositoryFullName, config }) => {
   }
 }
 
-const clearRepositoryPrDraftFields = ({
-  repositoryFullName,
-  componentFilePath,
-  stylesFilePath,
-  baseBranch,
-}) => {
+const removeRepositoryPrConfig = repositoryFullName => {
   if (typeof repositoryFullName !== 'string' || !repositoryFullName.trim()) {
     return
   }
 
-  saveRepositoryPrConfig({
+  try {
+    localStorage.removeItem(getRepositoryPrConfigStorageKey(repositoryFullName))
+  } catch {
+    /* noop */
+  }
+}
+
+const getActiveRepositoryPrContext = repositoryFullName => {
+  const savedConfig = readRepositoryPrConfig(repositoryFullName)
+
+  if (savedConfig?.isActivePr !== true) {
+    return null
+  }
+
+  const headBranch = sanitizeBranchPart(savedConfig.headBranch)
+  const componentFilePath = validateFilePath(savedConfig.componentFilePath)
+  const stylesFilePath = validateFilePath(savedConfig.stylesFilePath)
+  const prTitle = toSafeText(savedConfig.prTitle)
+  const baseBranch = toSafeText(savedConfig.baseBranch)
+
+  if (!headBranch || !componentFilePath.ok || !stylesFilePath.ok || !prTitle) {
+    return null
+  }
+
+  return {
+    headBranch,
+    componentFilePath: componentFilePath.value,
+    stylesFilePath: stylesFilePath.value,
+    renderMode: normalizeRenderMode(savedConfig.renderMode),
+    prTitle,
+    prBody: typeof savedConfig.prBody === 'string' ? savedConfig.prBody : '',
+    baseBranch,
+    pullRequestNumber:
+      typeof savedConfig.pullRequestNumber === 'number' &&
+      Number.isFinite(savedConfig.pullRequestNumber)
+        ? savedConfig.pullRequestNumber
+        : parsePullRequestNumberFromUrl(savedConfig.pullRequestUrl),
+    pullRequestUrl:
+      typeof savedConfig.pullRequestUrl === 'string' ? savedConfig.pullRequestUrl : '',
     repositoryFullName,
-    config: {
-      componentFilePath,
-      stylesFilePath,
-      baseBranch,
-      headBranch: '',
-      prTitle: '',
-      prBody: '',
-    },
-  })
+  }
 }
 
 const toSafeText = value => (typeof value === 'string' ? value.trim() : '')
@@ -211,19 +259,31 @@ const buildSummary = ({
   componentFilePath,
   stylesFilePath,
   prTitle,
+  actionType,
 }) => {
   const repositoryLabel = toSafeText(repository?.fullName) || 'No repository selected'
+  const isPushCommit = actionType === 'push-commit'
 
-  return [
+  const lines = [
     `Repository: ${repositoryLabel}`,
-    `Base branch: ${baseBranch}`,
     `Head branch: ${headBranch}`,
     `Component file path: ${componentFilePath}`,
     `Styles file path: ${stylesFilePath}`,
     `PR title: ${prTitle}`,
-    '',
-    'Proceed with creating commits and opening this pull request?',
-  ].join('\n')
+  ]
+
+  if (!isPushCommit) {
+    lines.splice(1, 0, `Base branch: ${baseBranch}`)
+  }
+
+  lines.push('')
+  lines.push(
+    isPushCommit
+      ? 'Proceed with committing editor content to the active pull request branch?'
+      : 'Proceed with creating commits and opening this pull request?',
+  )
+
+  return lines.join('\n')
 }
 
 const toBranchCacheKey = repository => {
@@ -354,6 +414,7 @@ export const createGitHubPrDrawer = ({
   prBodyInput,
   includeAppWrapperToggle,
   submitButton,
+  titleNode,
   statusNode,
   getToken,
   getSelectedRepository,
@@ -362,9 +423,14 @@ export const createGitHubPrDrawer = ({
   getComponentSource,
   getStylesSource,
   getTopLevelDeclarations,
+  getRenderMode,
   getDrawerSide,
   confirmBeforeSubmit,
   onPullRequestOpened,
+  onPullRequestCommitPushed,
+  onActivePrContextChange,
+  onSyncActivePrEditorContent,
+  onRestoreRenderMode,
 }) => {
   if (!featureEnabled) {
     toggleButton?.setAttribute('hidden', '')
@@ -375,6 +441,9 @@ export const createGitHubPrDrawer = ({
       isOpen: () => false,
       setToken: () => {},
       setSelectedRepository: () => {},
+      getActivePrContext: () => null,
+      clearActivePrContext: () => {},
+      closeActivePullRequestOnGitHub: async () => null,
       syncRepositories: () => {},
       dispose: () => {},
     }
@@ -384,14 +453,74 @@ export const createGitHubPrDrawer = ({
   let submitting = false
   let pendingAbortController = null
   let pendingBranchesAbortController = null
+  let pendingContextVerifyAbortController = null
+  let pendingActiveContentSyncAbortController = null
   let pendingBranchesRequestKey = ''
   let pendingBranchesPromise = null
-  let resetOnNextOpen = false
+  let lastSyncedRepositoryFullName = ''
+  let lastActiveContentSyncKey = ''
   const baseBranchesByRepository = new Map()
-  const submitButtonDefaultLabel =
-    submitButton instanceof HTMLButtonElement && toSafeText(submitButton.textContent)
-      ? toSafeText(submitButton.textContent)
-      : 'Open PR'
+
+  const getSelectedRepositoryObject = () => getSelectedRepository?.() ?? null
+
+  const getRepositoryFullName = repository =>
+    typeof repository?.fullName === 'string' ? repository.fullName : ''
+
+  const getCurrentActivePrContext = () => {
+    const repository = getSelectedRepositoryObject()
+    const repositoryFullName = getRepositoryFullName(repository)
+    if (!repositoryFullName) {
+      return null
+    }
+
+    return getActiveRepositoryPrContext(repositoryFullName)
+  }
+
+  const setSubmitButtonLabel = ({ isPending = false } = {}) => {
+    if (!(submitButton instanceof HTMLButtonElement)) {
+      return
+    }
+
+    const activeContext = getCurrentActivePrContext()
+    const isPushCommitMode = Boolean(activeContext)
+
+    if (isPending) {
+      submitButton.textContent = isPushCommitMode ? 'Pushing commit...' : 'Opening PR...'
+      if (titleNode instanceof HTMLElement) {
+        titleNode.textContent = isPushCommitMode ? 'Push Commit' : 'Open Pull Request'
+      }
+      return
+    }
+
+    submitButton.textContent = isPushCommitMode ? 'Push commit' : 'Open PR'
+
+    if (titleNode instanceof HTMLElement) {
+      titleNode.textContent = isPushCommitMode ? 'Push Commit' : 'Open Pull Request'
+    }
+  }
+
+  const emitRenderModeRestore = activeContext => {
+    if (typeof onRestoreRenderMode !== 'function') {
+      return
+    }
+
+    if (!activeContext) {
+      return
+    }
+
+    const mode = normalizeRenderMode(activeContext?.renderMode)
+    onRestoreRenderMode(mode)
+  }
+
+  const emitActivePrContextChange = () => {
+    if (typeof onActivePrContextChange !== 'function') {
+      return
+    }
+
+    const activeContext = getCurrentActivePrContext()
+    onActivePrContextChange(activeContext)
+    emitRenderModeRestore(activeContext)
+  }
 
   const setStatus = (text, level = 'neutral') => {
     if (!statusNode) {
@@ -409,7 +538,7 @@ export const createGitHubPrDrawer = ({
       submitButton.disabled = isPending
       submitButton.setAttribute('aria-busy', isPending ? 'true' : 'false')
       submitButton.classList.toggle('render-button--loading', isPending)
-      submitButton.textContent = isPending ? 'Opening PR...' : submitButtonDefaultLabel
+      setSubmitButtonLabel({ isPending })
     }
 
     for (const input of [
@@ -432,11 +561,6 @@ export const createGitHubPrDrawer = ({
     }
   }
 
-  const getSelectedRepositoryObject = () => getSelectedRepository?.() ?? null
-
-  const getRepositoryFullName = repository =>
-    typeof repository?.fullName === 'string' ? repository.fullName : ''
-
   const getFormValues = () => {
     return {
       baseBranch: toSafeText(baseBranchInput?.value),
@@ -451,6 +575,188 @@ export const createGitHubPrDrawer = ({
   const abortPendingBranchesRequest = () => {
     pendingBranchesAbortController?.abort()
     pendingBranchesAbortController = null
+  }
+
+  const abortPendingContextVerifyRequest = () => {
+    pendingContextVerifyAbortController?.abort()
+    pendingContextVerifyAbortController = null
+  }
+
+  const abortPendingActiveContentSyncRequest = () => {
+    pendingActiveContentSyncAbortController?.abort()
+    pendingActiveContentSyncAbortController = null
+  }
+
+  const syncActivePrEditorContent = async () => {
+    if (typeof onSyncActivePrEditorContent !== 'function') {
+      return
+    }
+
+    const repository = getSelectedRepositoryObject()
+    const repositoryFullName = getRepositoryFullName(repository)
+    const token = toSafeText(getToken?.())
+    const activeContext = getCurrentActivePrContext()
+
+    if (!repositoryFullName || !token || !activeContext) {
+      lastActiveContentSyncKey = ''
+      abortPendingActiveContentSyncRequest()
+      return
+    }
+
+    const syncKey = [
+      repositoryFullName,
+      activeContext.headBranch,
+      activeContext.componentFilePath,
+      activeContext.stylesFilePath,
+      String(activeContext.pullRequestNumber ?? ''),
+    ].join('|')
+
+    if (syncKey === lastActiveContentSyncKey) {
+      return
+    }
+
+    abortPendingActiveContentSyncRequest()
+    const abortController = new AbortController()
+    pendingActiveContentSyncAbortController = abortController
+
+    try {
+      await onSyncActivePrEditorContent({
+        token,
+        repository,
+        activeContext,
+        signal: abortController.signal,
+      })
+
+      if (pendingActiveContentSyncAbortController !== abortController) {
+        return
+      }
+
+      lastActiveContentSyncKey = syncKey
+    } catch {
+      if (abortController.signal.aborted) {
+        return
+      }
+    } finally {
+      if (pendingActiveContentSyncAbortController === abortController) {
+        pendingActiveContentSyncAbortController = null
+      }
+    }
+  }
+
+  const verifyActivePullRequestContext = async () => {
+    const repository = getSelectedRepositoryObject()
+    const repositoryFullName = getRepositoryFullName(repository)
+    const owner = toSafeText(repository?.owner)
+    const repo = toSafeText(repository?.name)
+    const token = toSafeText(getToken?.())
+
+    if (!repositoryFullName || !owner || !repo || !token) {
+      return
+    }
+
+    const savedConfig = readRepositoryPrConfig(repositoryFullName)
+    if (savedConfig?.isActivePr !== true) {
+      return
+    }
+
+    const headBranch = sanitizeBranchPart(savedConfig.headBranch)
+    if (!headBranch) {
+      return
+    }
+
+    const pullRequestNumberFromConfig =
+      typeof savedConfig.pullRequestNumber === 'number' &&
+      Number.isFinite(savedConfig.pullRequestNumber)
+        ? savedConfig.pullRequestNumber
+        : parsePullRequestNumberFromUrl(savedConfig.pullRequestUrl)
+
+    abortPendingContextVerifyRequest()
+    const abortController = new AbortController()
+    pendingContextVerifyAbortController = abortController
+
+    try {
+      let resolvedPullRequest = null
+      let pullRequestClosedByNumber = false
+
+      if (pullRequestNumberFromConfig) {
+        const pullRequest = await getRepositoryPullRequest({
+          token,
+          owner,
+          repo,
+          pullRequestNumber: pullRequestNumberFromConfig,
+          signal: abortController.signal,
+        })
+
+        if (pullRequest?.isOpen) {
+          resolvedPullRequest = pullRequest
+        } else if (pullRequest) {
+          pullRequestClosedByNumber = true
+        }
+      }
+
+      if (!resolvedPullRequest && !pullRequestClosedByNumber) {
+        resolvedPullRequest = await findOpenRepositoryPullRequestByHead({
+          token,
+          owner,
+          repo,
+          headOwner: owner,
+          headBranch,
+          baseBranch: toSafeText(savedConfig.baseBranch),
+          signal: abortController.signal,
+        })
+      }
+
+      if (pendingContextVerifyAbortController !== abortController) {
+        return
+      }
+
+      if (resolvedPullRequest?.isOpen) {
+        saveRepositoryPrConfig({
+          repositoryFullName,
+          config: {
+            ...savedConfig,
+            isActivePr: true,
+            renderMode: normalizeRenderMode(savedConfig.renderMode),
+            pullRequestNumber: resolvedPullRequest.number,
+            pullRequestUrl: resolvedPullRequest.htmlUrl,
+            prTitle:
+              toSafeText(savedConfig.prTitle) || toSafeText(resolvedPullRequest.title),
+          },
+        })
+        setSubmitButtonLabel()
+        emitActivePrContextChange()
+        void syncActivePrEditorContent()
+        return
+      }
+
+      saveRepositoryPrConfig({
+        repositoryFullName,
+        config: {
+          ...savedConfig,
+          isActivePr: false,
+        },
+      })
+      setSubmitButtonLabel()
+      emitActivePrContextChange()
+      lastActiveContentSyncKey = ''
+      abortPendingActiveContentSyncRequest()
+      setStatus(
+        'Saved pull request context is not open on GitHub. Open PR mode restored.',
+        'neutral',
+      )
+    } catch (error) {
+      if (abortController.signal.aborted) {
+        return
+      }
+
+      const message =
+        error instanceof Error ? error.message : 'Failed to verify pull request state.'
+      setStatus(`Could not verify saved pull request state: ${message}`, 'error')
+    } finally {
+      if (pendingContextVerifyAbortController === abortController) {
+        pendingContextVerifyAbortController = null
+      }
+    }
   }
 
   const renderBaseBranchOptions = ({ preferredBranch, branchNames, loading = false }) => {
@@ -626,6 +932,8 @@ export const createGitHubPrDrawer = ({
   const syncFormForRepository = ({ resetBranch = false, resetAll = false } = {}) => {
     const repository = getSelectedRepositoryObject()
     const repositoryFullName = getRepositoryFullName(repository)
+    const repositoryChanged =
+      Boolean(repositoryFullName) && repositoryFullName !== lastSyncedRepositoryFullName
     const savedConfig = readRepositoryPrConfig(repositoryFullName)
     const savedDraftConfig = resetAll ? {} : savedConfig
 
@@ -654,7 +962,12 @@ export const createGitHubPrDrawer = ({
     renderBaseBranchOptions({ preferredBranch: baseBranch, branchNames: [] })
 
     if (headBranchInput instanceof HTMLInputElement) {
-      if (resetAll || resetBranch || !toSafeText(headBranchInput.value)) {
+      if (
+        resetAll ||
+        resetBranch ||
+        repositoryChanged ||
+        !toSafeText(headBranchInput.value)
+      ) {
         const savedHeadBranch = sanitizeBranchPart(savedDraftConfig.headBranch)
         headBranchInput.value =
           savedHeadBranch && !isAutoGeneratedHeadBranch(savedHeadBranch)
@@ -664,14 +977,14 @@ export const createGitHubPrDrawer = ({
     }
 
     if (prTitleInput instanceof HTMLInputElement) {
-      if (resetAll || !toSafeText(prTitleInput.value)) {
+      if (resetAll || repositoryChanged || !toSafeText(prTitleInput.value)) {
         prTitleInput.value =
           toSafeText(savedDraftConfig.prTitle) || toDefaultPrTitle(repository)
       }
     }
 
     if (prBodyInput instanceof HTMLTextAreaElement) {
-      if (resetAll || !toSafeText(prBodyInput.value)) {
+      if (resetAll || repositoryChanged || !toSafeText(prBodyInput.value)) {
         prBodyInput.value =
           typeof savedDraftConfig.prBody === 'string' && savedDraftConfig.prBody
             ? savedDraftConfig.prBody
@@ -682,6 +995,8 @@ export const createGitHubPrDrawer = ({
     if (includeAppWrapperToggle instanceof HTMLInputElement) {
       includeAppWrapperToggle.checked = false
     }
+
+    lastSyncedRepositoryFullName = repositoryFullName
   }
 
   const persistCurrentPaths = () => {
@@ -692,6 +1007,9 @@ export const createGitHubPrDrawer = ({
     }
 
     const values = getFormValues()
+    const currentRenderMode = normalizeRenderMode(getRenderMode?.())
+    const existingConfig = readRepositoryPrConfig(repositoryFullName)
+
     saveRepositoryPrConfig({
       repositoryFullName,
       config: {
@@ -701,8 +1019,15 @@ export const createGitHubPrDrawer = ({
         headBranch: isAutoGeneratedHeadBranch(values.headBranch) ? '' : values.headBranch,
         prTitle: values.prTitle,
         prBody: values.prBody,
+        renderMode: currentRenderMode,
+        isActivePr: existingConfig?.isActivePr === true,
+        pullRequestNumber: existingConfig?.pullRequestNumber,
+        pullRequestUrl: existingConfig?.pullRequestUrl,
       },
     })
+
+    setSubmitButtonLabel()
+    emitActivePrContextChange()
   }
 
   const syncRepositories = () => {
@@ -710,6 +1035,9 @@ export const createGitHubPrDrawer = ({
     const selectedRepository = getSelectedRepositoryObject()
     syncRepositorySelect({ repositories, selectedRepository })
     syncFormForRepository()
+    setSubmitButtonLabel()
+    emitActivePrContextChange()
+    void verifyActivePullRequestContext()
     if (!open) {
       return
     }
@@ -737,14 +1065,11 @@ export const createGitHubPrDrawer = ({
       const repositories = getWritableRepositories?.() ?? []
       const selectedRepository = getSelectedRepositoryObject()
       syncRepositorySelect({ repositories, selectedRepository })
-      syncFormForRepository({
-        resetAll: resetOnNextOpen,
-        resetBranch: resetOnNextOpen,
-      })
+      syncFormForRepository()
+      setSubmitButtonLabel()
       void loadBaseBranchesForSelectedRepository({
         preferredBranch: getFormValues().baseBranch,
       })
-      resetOnNextOpen = false
       repositorySelect?.focus()
       return
     }
@@ -756,57 +1081,101 @@ export const createGitHubPrDrawer = ({
     const repository = getSelectedRepositoryObject()
     const repositoryLabel = getRepositoryFullName(repository)
     const token = getToken?.()
+    const activeContext = getCurrentActivePrContext()
+    const isPushCommitMode = Boolean(activeContext)
 
     if (!toSafeText(token)) {
-      setStatus('Add a GitHub token before opening a pull request.', 'error')
+      setStatus(
+        isPushCommitMode
+          ? 'Add a GitHub token before pushing a commit.'
+          : 'Add a GitHub token before opening a pull request.',
+        'error',
+      )
       return
     }
 
     if (!repositoryLabel) {
-      setStatus('Select a writable repository before opening a pull request.', 'error')
+      setStatus(
+        isPushCommitMode
+          ? 'Select a writable repository before pushing a commit.'
+          : 'Select a writable repository before opening a pull request.',
+        'error',
+      )
       return
     }
 
     const values = getFormValues()
+    const targetBaseBranch = isPushCommitMode
+      ? toSafeText(activeContext?.baseBranch)
+      : values.baseBranch
+    const targetHeadBranch = isPushCommitMode
+      ? sanitizeBranchPart(activeContext?.headBranch)
+      : sanitizeBranchPart(values.headBranch)
+    const targetPrTitle = isPushCommitMode
+      ? toSafeText(activeContext?.prTitle)
+      : values.prTitle
+    const targetPrBody = isPushCommitMode
+      ? typeof activeContext?.prBody === 'string'
+        ? activeContext.prBody
+        : ''
+      : values.prBody
+    const currentRenderMode = normalizeRenderMode(getRenderMode?.())
+    const targetComponentPathValue = isPushCommitMode
+      ? activeContext?.componentFilePath
+      : values.componentFilePath
+    const targetStylesPathValue = isPushCommitMode
+      ? activeContext?.stylesFilePath
+      : values.stylesFilePath
+
     const includeAppWrapper =
       includeAppWrapperToggle instanceof HTMLInputElement
         ? includeAppWrapperToggle.checked
         : false
-    const componentPathValidation = validateFilePath(values.componentFilePath)
+    const componentPathValidation = validateFilePath(targetComponentPathValue)
     if (!componentPathValidation.ok) {
       setStatus(`Component path: ${componentPathValidation.reason}`, 'error')
       return
     }
 
-    const stylesPathValidation = validateFilePath(values.stylesFilePath)
+    const stylesPathValidation = validateFilePath(targetStylesPathValue)
     if (!stylesPathValidation.ok) {
       setStatus(`Styles path: ${stylesPathValidation.reason}`, 'error')
       return
     }
 
-    if (!values.baseBranch) {
+    if (!isPushCommitMode && !targetBaseBranch) {
       setStatus('Base branch is required.', 'error')
       return
     }
 
-    const normalizedHeadBranch = sanitizeBranchPart(values.headBranch)
-    if (!normalizedHeadBranch) {
-      setStatus('Head branch name is required.', 'error')
+    if (!targetHeadBranch) {
+      setStatus(
+        isPushCommitMode
+          ? 'Active pull request context is missing a head branch. Close the context and open a new pull request.'
+          : 'Head branch name is required.',
+        'error',
+      )
       return
     }
 
-    if (!values.prTitle) {
-      setStatus('Pull request title is required.', 'error')
+    if (!targetPrTitle) {
+      setStatus(
+        isPushCommitMode
+          ? 'Active pull request context is missing a title. Close the context and open a new pull request.'
+          : 'Pull request title is required.',
+        'error',
+      )
       return
     }
 
     const summary = buildSummary({
       repository,
-      baseBranch: values.baseBranch,
-      headBranch: normalizedHeadBranch,
+      baseBranch: targetBaseBranch,
+      headBranch: targetHeadBranch,
       componentFilePath: componentPathValidation.value,
       stylesFilePath: stylesPathValidation.value,
-      prTitle: values.prTitle,
+      prTitle: targetPrTitle,
+      actionType: isPushCommitMode ? 'push-commit' : 'open-pr',
     })
 
     const originalComponentSource =
@@ -825,31 +1194,83 @@ export const createGitHubPrDrawer = ({
 
       setPendingState(true)
       setStatus(
-        'Creating branch, committing editor files, and opening pull request...',
+        isPushCommitMode
+          ? 'Committing editor files to active pull request branch...'
+          : 'Creating branch, committing editor files, and opening pull request...',
         'pending',
       )
 
-      void createEditorContentPullRequest({
-        token,
-        repository,
-        baseBranch: values.baseBranch,
-        headBranch: normalizedHeadBranch,
-        prTitle: values.prTitle,
-        prBody: values.prBody,
-        componentFilePath: componentPathValidation.value,
-        componentSource,
-        stylesFilePath: stylesPathValidation.value,
-        stylesSource: typeof getStylesSource === 'function' ? getStylesSource() : '',
-        commitMessage: `chore: sync editor component and styles from @knighted/develop`,
-        signal: abortController.signal,
-      })
-        .then(result => {
-          clearRepositoryPrDraftFields({
-            repositoryFullName: repositoryLabel,
+      const runRequest = isPushCommitMode
+        ? commitEditorContentToExistingBranch({
+            token,
+            repository,
+            branch: targetHeadBranch,
             componentFilePath: componentPathValidation.value,
+            componentSource,
             stylesFilePath: stylesPathValidation.value,
-            baseBranch: values.baseBranch,
+            stylesSource: typeof getStylesSource === 'function' ? getStylesSource() : '',
+            commitMessage: `chore: sync editor component and styles from @knighted/develop`,
+            signal: abortController.signal,
           })
+        : createEditorContentPullRequest({
+            token,
+            repository,
+            baseBranch: targetBaseBranch,
+            headBranch: targetHeadBranch,
+            prTitle: targetPrTitle,
+            prBody: targetPrBody,
+            componentFilePath: componentPathValidation.value,
+            componentSource,
+            stylesFilePath: stylesPathValidation.value,
+            stylesSource: typeof getStylesSource === 'function' ? getStylesSource() : '',
+            commitMessage: `chore: sync editor component and styles from @knighted/develop`,
+            signal: abortController.signal,
+          })
+
+      void Promise.resolve(runRequest)
+        .then(result => {
+          if (isPushCommitMode) {
+            const compactPullRequestReference = formatActivePrReference(activeContext)
+            const pullRequestUrl = toSafeText(activeContext?.pullRequestUrl)
+            const pullRequestTitle = toSafeText(activeContext?.prTitle)
+            const pullRequestReference =
+              compactPullRequestReference ||
+              pullRequestUrl ||
+              (pullRequestTitle ? `PR: ${pullRequestTitle}` : '')
+
+            setStatus(
+              pullRequestReference
+                ? `Commit pushed to ${targetHeadBranch} (${pullRequestReference}).`
+                : `Commit pushed to ${targetHeadBranch}.`,
+              'ok',
+            )
+            onPullRequestCommitPushed?.({
+              branch: targetHeadBranch,
+              fileUpdates: Array.isArray(result) ? result : [],
+            })
+            setOpen(false)
+            return
+          }
+
+          saveRepositoryPrConfig({
+            repositoryFullName: repositoryLabel,
+            config: {
+              componentFilePath: componentPathValidation.value,
+              stylesFilePath: stylesPathValidation.value,
+              renderMode: currentRenderMode,
+              baseBranch: targetBaseBranch,
+              headBranch: targetHeadBranch,
+              prTitle: targetPrTitle,
+              prBody: targetPrBody,
+              isActivePr: true,
+              pullRequestNumber: result.pullRequest.number,
+              pullRequestUrl: result.pullRequest.htmlUrl,
+            },
+          })
+
+          emitActivePrContextChange()
+          setSubmitButtonLabel()
+
           const url = result.pullRequest.htmlUrl
           setStatus(
             url ? `Pull request opened: ${url}` : 'Pull request opened successfully.',
@@ -858,8 +1279,8 @@ export const createGitHubPrDrawer = ({
           onPullRequestOpened?.({
             url,
             pullRequestNumber: result.pullRequest.number,
+            branch: targetHeadBranch,
           })
-          resetOnNextOpen = true
           setOpen(false)
         })
         .catch(error => {
@@ -867,16 +1288,16 @@ export const createGitHubPrDrawer = ({
             return
           }
 
-          const message =
-            error instanceof Error ? error.message : 'Failed to open pull request.'
-          setStatus(`Open PR failed: ${message}`, 'error')
-          clearRepositoryPrDraftFields({
-            repositoryFullName: repositoryLabel,
-            componentFilePath: componentPathValidation.value,
-            stylesFilePath: stylesPathValidation.value,
-            baseBranch: values.baseBranch,
-          })
-          resetOnNextOpen = true
+          const fallbackMessage = isPushCommitMode
+            ? 'Failed to push commit.'
+            : 'Failed to open pull request.'
+          const message = error instanceof Error ? error.message : fallbackMessage
+          setStatus(
+            isPushCommitMode
+              ? `Push commit failed: ${message}`
+              : `Open PR failed: ${message}`,
+            'error',
+          )
         })
         .finally(() => {
           if (pendingAbortController === abortController) {
@@ -888,9 +1309,11 @@ export const createGitHubPrDrawer = ({
 
     if (typeof confirmBeforeSubmit === 'function') {
       confirmBeforeSubmit({
-        title: 'Open pull request with editor content?',
+        title: isPushCommitMode
+          ? 'Push commit to active pull request branch?'
+          : 'Open pull request with editor content?',
         copy: summary,
-        confirmButtonText: 'Open PR',
+        confirmButtonText: isPushCommitMode ? 'Push commit' : 'Open PR',
         fallbackConfirmText: summary,
         onConfirm: submitRequest,
       })
@@ -920,6 +1343,9 @@ export const createGitHubPrDrawer = ({
 
     setSelectedRepository?.(repositoryFullName)
     syncFormForRepository({ resetBranch: true })
+    setSubmitButtonLabel()
+    emitActivePrContextChange()
+    void verifyActivePullRequestContext()
     void loadBaseBranchesForSelectedRepository({
       preferredBranch: getFormValues().baseBranch,
     })
@@ -946,13 +1372,83 @@ export const createGitHubPrDrawer = ({
   return {
     setOpen,
     isOpen: () => open,
+    getActivePrContext: () => getCurrentActivePrContext(),
+    clearActivePrContext: () => {
+      const repository = getSelectedRepositoryObject()
+      const repositoryFullName = getRepositoryFullName(repository)
+      if (!repositoryFullName) {
+        return
+      }
+
+      removeRepositoryPrConfig(repositoryFullName)
+      lastActiveContentSyncKey = ''
+      abortPendingActiveContentSyncRequest()
+      syncFormForRepository({ resetAll: true, resetBranch: true })
+      setSubmitButtonLabel()
+      emitActivePrContextChange()
+    },
+    closeActivePullRequestOnGitHub: async () => {
+      const repository = getSelectedRepositoryObject()
+      const repositoryFullName = getRepositoryFullName(repository)
+      const token = toSafeText(getToken?.())
+      const activeContext = getCurrentActivePrContext()
+      const pullRequestNumber =
+        activeContext?.pullRequestNumber ??
+        parsePullRequestNumberFromUrl(activeContext?.pullRequestUrl)
+
+      if (!repositoryFullName || !repository?.owner || !repository?.name) {
+        throw new Error('Select a repository before closing pull request context.')
+      }
+
+      if (!token) {
+        throw new Error('Add a GitHub token before closing a pull request.')
+      }
+
+      if (!pullRequestNumber) {
+        throw new Error('Active pull request context is missing pull request metadata.')
+      }
+
+      setStatus('Closing pull request on GitHub...', 'pending')
+
+      await closeRepositoryPullRequest({
+        token,
+        owner: repository.owner,
+        repo: repository.name,
+        pullRequestNumber,
+      })
+
+      removeRepositoryPrConfig(repositoryFullName)
+      syncFormForRepository({ resetAll: true, resetBranch: true })
+      setSubmitButtonLabel()
+      emitActivePrContextChange()
+
+      const closedReference = formatActivePrReference({
+        repositoryFullName,
+        pullRequestNumber,
+      })
+      setStatus(
+        closedReference
+          ? `Closed pull request ${closedReference}.`
+          : `Closed pull request #${pullRequestNumber}.`,
+        'ok',
+      )
+
+      return { pullRequestNumber, reference: closedReference }
+    },
     setToken: token => {
       const hasToken = typeof token === 'string' && token.trim().length > 0
       if (toggleButton instanceof HTMLButtonElement) {
         toggleButton.disabled = !hasToken
       }
 
+      setSubmitButtonLabel()
+      emitActivePrContextChange()
+      void verifyActivePullRequestContext()
+
       if (!hasToken) {
+        abortPendingContextVerifyRequest()
+        abortPendingActiveContentSyncRequest()
+        lastActiveContentSyncKey = ''
         abortPendingBranchesRequest()
         baseBranchesByRepository.clear()
         setOpen(false)
@@ -975,6 +1471,8 @@ export const createGitHubPrDrawer = ({
     dispose: () => {
       pendingAbortController?.abort()
       pendingAbortController = null
+      abortPendingContextVerifyRequest()
+      abortPendingActiveContentSyncRequest()
       abortPendingBranchesRequest()
     },
   }

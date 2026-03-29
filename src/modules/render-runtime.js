@@ -26,6 +26,8 @@ export const createRenderRuntimeController = ({
   setCdnLoading,
 }) => {
   let scheduled = null
+  let renderInFlight = false
+  let rerenderRequested = false
   let reactRoot = null
   let reactRuntime = null
   let sassCompiler = null
@@ -925,40 +927,72 @@ export const createRenderRuntimeController = ({
   }
 
   const renderPreview = async () => {
-    scheduled = null
-    setStatus(hasCompletedInitialRender ? 'Rendering…' : 'Loading CDN assets…', 'pending')
+    if (renderInFlight) {
+      rerenderRequested = true
+      return
+    }
+
+    renderInFlight = true
+
+    const runRenderPass = async () => {
+      scheduled = null
+      setStatus(
+        hasCompletedInitialRender ? 'Rendering…' : 'Loading CDN assets…',
+        'pending',
+      )
+
+      try {
+        if (renderMode.value === 'react') {
+          await renderReact()
+        } else {
+          await renderDom()
+        }
+        setStatus('Rendered', 'neutral')
+        setRenderedStatus()
+      } catch (error) {
+        setStatus('Error', 'error')
+        const target = getRenderTarget()
+        clearTarget(target)
+        const message = document.createElement('pre')
+        message.textContent = error instanceof Error ? error.message : String(error)
+        message.style.color = '#ff9aa2'
+        target.append(message)
+      } finally {
+        if (!hasCompletedInitialRender) {
+          hasCompletedInitialRender = true
+          onFirstRenderComplete()
+          setCdnLoading(false)
+        }
+      }
+    }
 
     try {
-      if (renderMode.value === 'react') {
-        await renderReact()
-      } else {
-        await renderDom()
+      rerenderRequested = true
+
+      while (rerenderRequested) {
+        rerenderRequested = false
+        // Intentionally sequential to drain queued renders without recursion.
+        // eslint-disable-next-line no-await-in-loop
+        await runRenderPass()
       }
-      setStatus('Rendered', 'neutral')
-      setRenderedStatus()
-    } catch (error) {
-      setStatus('Error', 'error')
-      const target = getRenderTarget()
-      clearTarget(target)
-      const message = document.createElement('pre')
-      message.textContent = error instanceof Error ? error.message : String(error)
-      message.style.color = '#ff9aa2'
-      target.append(message)
     } finally {
-      if (!hasCompletedInitialRender) {
-        hasCompletedInitialRender = true
-        onFirstRenderComplete()
-        setCdnLoading(false)
-      }
+      renderInFlight = false
     }
   }
 
   const scheduleRender = () => {
+    if (renderInFlight) {
+      rerenderRequested = true
+      return
+    }
+
     if (scheduled) {
       clearTimeout(scheduled)
     }
 
-    scheduled = setTimeout(renderPreview, 200)
+    scheduled = setTimeout(() => {
+      void renderPreview()
+    }, 200)
   }
 
   return {

@@ -141,6 +141,18 @@ const toFiniteNumber = value => {
   return Number.isFinite(numberValue) ? numberValue : null
 }
 
+const fromUtf8Base64 = value => {
+  const normalizedValue = typeof value === 'string' ? value.replace(/\s+/g, '') : ''
+  if (!normalizedValue) {
+    return ''
+  }
+
+  const decodedBinary = atob(normalizedValue)
+  const bytes = Uint8Array.from(decodedBinary, character => character.charCodeAt(0))
+  const decoder = new TextDecoder()
+  return decoder.decode(bytes)
+}
+
 const parseRateMetadataFromHeaders = headers => {
   if (!headers || typeof headers.get !== 'function') {
     return {
@@ -704,6 +716,34 @@ export const getRepositoryFileMetadata = async ({
   }
 }
 
+export const getRepositoryFileContent = async ({
+  token,
+  owner,
+  repo,
+  path,
+  ref,
+  signal,
+}) => {
+  const encodedPath = encodePathForApi(path)
+  const query = ref ? `?ref=${encodeURIComponent(ref)}` : ''
+  const response = await requestGitHubJson({
+    token,
+    url: `${githubApiBaseUrl}/repos/${owner}/${repo}/contents/${encodedPath}${query}`,
+    signal,
+    allowNotFound: true,
+  })
+
+  if (!response) {
+    return null
+  }
+
+  return {
+    path,
+    sha: typeof response.sha === 'string' ? response.sha : null,
+    content: fromUtf8Base64(typeof response.content === 'string' ? response.content : ''),
+  }
+}
+
 const toUtf8Base64 = value => {
   const encoder = new TextEncoder()
   const bytes = encoder.encode(value)
@@ -726,7 +766,10 @@ const isMissingShaForExistingFileError = error => {
   const message = error.message.toLowerCase()
   return (
     message.includes('sha') &&
-    (message.includes('already exists') || message.includes('must be supplied'))
+    (message.includes('already exists') ||
+      message.includes('must be supplied') ||
+      message.includes("wasn't supplied") ||
+      message.includes('not supplied'))
   )
 }
 
@@ -741,6 +784,14 @@ export const upsertRepositoryFile = async ({
   signal,
 }) => {
   const encodedPath = encodePathForApi(path)
+  const existingFile = await getRepositoryFileMetadata({
+    token,
+    owner,
+    repo,
+    path,
+    ref: branch,
+    signal,
+  })
 
   const baseBody = {
     message,
@@ -748,26 +799,33 @@ export const upsertRepositoryFile = async ({
     branch,
   }
 
+  const requestBody = existingFile?.sha
+    ? {
+        ...baseBody,
+        sha: existingFile.sha,
+      }
+    : baseBody
+
   try {
     const response = await requestGitHubJson({
       token,
       url: `${githubApiBaseUrl}/repos/${owner}/${repo}/contents/${encodedPath}`,
       method: 'PUT',
-      body: baseBody,
+      body: requestBody,
       signal,
     })
 
     return {
       path,
       commitSha: typeof response?.commit?.sha === 'string' ? response.commit.sha : null,
-      created: true,
+      created: !existingFile?.sha,
     }
   } catch (error) {
-    if (!isMissingShaForExistingFileError(error)) {
+    if (!isMissingShaForExistingFileError(error) || existingFile?.sha) {
       throw error
     }
 
-    const existingFile = await getRepositoryFileMetadata({
+    const latestFile = await getRepositoryFileMetadata({
       token,
       owner,
       repo,
@@ -776,7 +834,7 @@ export const upsertRepositoryFile = async ({
       signal,
     })
 
-    if (!existingFile?.sha) {
+    if (!latestFile?.sha) {
       throw error
     }
 
@@ -786,7 +844,7 @@ export const upsertRepositoryFile = async ({
       method: 'PUT',
       body: {
         ...baseBody,
-        sha: existingFile.sha,
+        sha: latestFile.sha,
       },
       signal,
     })
@@ -827,6 +885,132 @@ export const createRepositoryPullRequest = async ({
     htmlUrl: typeof response?.html_url === 'string' ? response.html_url : '',
     apiUrl: typeof response?.url === 'string' ? response.url : '',
   }
+}
+
+export const closeRepositoryPullRequest = async ({
+  token,
+  owner,
+  repo,
+  pullRequestNumber,
+  signal,
+}) => {
+  const number = Number(pullRequestNumber)
+  if (!Number.isFinite(number) || number <= 0) {
+    throw new Error('A valid pull request number is required to close a pull request.')
+  }
+
+  const response = await requestGitHubJson({
+    token,
+    url: `${githubApiBaseUrl}/repos/${owner}/${repo}/pulls/${number}`,
+    method: 'PATCH',
+    body: {
+      state: 'closed',
+    },
+    signal,
+  })
+
+  return normalizePullRequestSummary(response)
+}
+
+const normalizePullRequestSummary = pullRequest => {
+  if (!pullRequest || typeof pullRequest !== 'object') {
+    return null
+  }
+
+  const number =
+    typeof pullRequest.number === 'number' && Number.isFinite(pullRequest.number)
+      ? pullRequest.number
+      : null
+  const htmlUrl = typeof pullRequest.html_url === 'string' ? pullRequest.html_url : ''
+  const title = typeof pullRequest.title === 'string' ? pullRequest.title : ''
+  const state = typeof pullRequest.state === 'string' ? pullRequest.state : ''
+  const headRef = typeof pullRequest?.head?.ref === 'string' ? pullRequest.head.ref : ''
+  const baseRef = typeof pullRequest?.base?.ref === 'string' ? pullRequest.base.ref : ''
+
+  if (!number) {
+    return null
+  }
+
+  return {
+    number,
+    htmlUrl,
+    title,
+    state,
+    headRef,
+    baseRef,
+    isOpen: state.toLowerCase() === 'open',
+  }
+}
+
+export const getRepositoryPullRequest = async ({
+  token,
+  owner,
+  repo,
+  pullRequestNumber,
+  signal,
+}) => {
+  const number = Number(pullRequestNumber)
+  if (!Number.isFinite(number) || number <= 0) {
+    return null
+  }
+
+  const response = await requestGitHubJson({
+    token,
+    url: `${githubApiBaseUrl}/repos/${owner}/${repo}/pulls/${number}`,
+    signal,
+    allowNotFound: true,
+  })
+
+  if (!response) {
+    return null
+  }
+
+  return normalizePullRequestSummary(response)
+}
+
+export const findOpenRepositoryPullRequestByHead = async ({
+  token,
+  owner,
+  repo,
+  headOwner,
+  headBranch,
+  baseBranch,
+  signal,
+}) => {
+  const normalizedHeadBranch = typeof headBranch === 'string' ? headBranch.trim() : ''
+  if (!normalizedHeadBranch) {
+    return null
+  }
+
+  const normalizedHeadOwner =
+    typeof headOwner === 'string' && headOwner.trim() ? headOwner.trim() : owner
+  const query = new URLSearchParams({
+    state: 'open',
+    head: `${normalizedHeadOwner}:${normalizedHeadBranch}`,
+    per_page: '20',
+  })
+
+  if (typeof baseBranch === 'string' && baseBranch.trim()) {
+    query.set('base', baseBranch.trim())
+  }
+
+  const response = await requestGitHubJson({
+    token,
+    url: `${githubApiBaseUrl}/repos/${owner}/${repo}/pulls?${query.toString()}`,
+    signal,
+  })
+
+  if (!Array.isArray(response) || response.length === 0) {
+    return null
+  }
+
+  const normalized = response.map(normalizePullRequestSummary).filter(Boolean)
+
+  const exactBranchMatch = normalized.find(
+    pullRequest => pullRequest.headRef === normalizedHeadBranch,
+  )
+
+  return exactBranchMatch ?? normalized[0] ?? null
 }
 
 const isReferenceAlreadyExistsError = error => {
@@ -925,35 +1109,17 @@ export const createEditorContentPullRequest = async ({
     signal,
   })
 
-  const fileUpdates = []
-
-  fileUpdates.push(
-    await upsertRepositoryFile({
-      token,
-      owner,
-      repo,
-      branch: nextBranch,
-      path: componentFilePath,
-      content: componentSource,
-      message: commitMessage,
-      signal,
-    }),
-  )
-
-  if (stylesFilePath !== componentFilePath) {
-    fileUpdates.push(
-      await upsertRepositoryFile({
-        token,
-        owner,
-        repo,
-        branch: nextBranch,
-        path: stylesFilePath,
-        content: stylesSource,
-        message: commitMessage,
-        signal,
-      }),
-    )
-  }
+  const fileUpdates = await commitEditorContentToExistingBranch({
+    token,
+    repository,
+    branch: nextBranch,
+    componentFilePath,
+    componentSource,
+    stylesFilePath,
+    stylesSource,
+    commitMessage,
+    signal,
+  })
 
   const pullRequest = await createRepositoryPullRequest({
     token,
@@ -971,4 +1137,67 @@ export const createEditorContentPullRequest = async ({
     branch: nextBranch,
     fileUpdates,
   }
+}
+
+export const commitEditorContentToExistingBranch = async ({
+  token,
+  repository,
+  branch,
+  componentFilePath,
+  componentSource,
+  stylesFilePath,
+  stylesSource,
+  commitMessage,
+  signal,
+}) => {
+  const owner = repository?.owner
+  const repo = repository?.name
+
+  if (typeof owner !== 'string' || !owner || typeof repo !== 'string' || !repo) {
+    throw new Error('A valid repository selection is required.')
+  }
+
+  if (typeof branch !== 'string' || !branch.trim()) {
+    throw new Error('An existing head branch is required.')
+  }
+
+  await getBranchReferenceSha({
+    token,
+    owner,
+    repo,
+    branch,
+    signal,
+  })
+
+  const fileUpdates = []
+
+  fileUpdates.push(
+    await upsertRepositoryFile({
+      token,
+      owner,
+      repo,
+      branch,
+      path: componentFilePath,
+      content: componentSource,
+      message: commitMessage,
+      signal,
+    }),
+  )
+
+  if (stylesFilePath !== componentFilePath) {
+    fileUpdates.push(
+      await upsertRepositoryFile({
+        token,
+        owner,
+        repo,
+        branch,
+        path: stylesFilePath,
+        content: stylesSource,
+        message: commitMessage,
+        signal,
+      }),
+    )
+  }
+
+  return fileUpdates
 }

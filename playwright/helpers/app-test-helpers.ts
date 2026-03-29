@@ -150,7 +150,9 @@ export const ensureAiChatDrawerOpen = async (page: Page) => {
 }
 
 export const ensureOpenPrDrawerOpen = async (page: Page) => {
-  const toggle = page.getByRole('button', { name: 'Open PR' })
+  const toggle = page.getByRole('button', {
+    name: /Open pull request|Push commit to active pull request branch/,
+  })
   await expect(toggle).toBeEnabled({ timeout: 60_000 })
   const isExpanded = await toggle.getAttribute('aria-expanded')
 
@@ -159,7 +161,7 @@ export const ensureOpenPrDrawerOpen = async (page: Page) => {
   }
 
   await expect(
-    page.getByRole('complementary', { name: 'Open Pull Request' }),
+    page.getByRole('complementary', { name: /Open Pull Request|Push Commit/ }),
   ).toBeVisible()
 }
 
@@ -211,10 +213,16 @@ export const connectByotWithSingleRepo = async (page: Page) => {
     .getByRole('textbox', { name: 'GitHub token' })
     .fill('github_pat_fake_chat_1234567890')
   await page.getByRole('button', { name: 'Add GitHub token' }).click()
-  await expect(page.getByRole('status', { name: 'App status' })).toHaveText(
-    'Loaded 1 writable repositories',
-  )
-  await expect(page.getByRole('button', { name: 'Open PR' })).toBeVisible()
+
+  const repoSelect = page.getByLabel('Pull request repository')
+  await expect(repoSelect).toBeEnabled({ timeout: 60_000 })
+  await expect(repoSelect).toHaveValue('knightedcodemonkey/develop')
+
+  await expect(
+    page.getByRole('button', {
+      name: /Open pull request|Push commit to active pull request branch/,
+    }),
+  ).toBeVisible()
 }
 
 export const expectCollapseButtonState = async (
