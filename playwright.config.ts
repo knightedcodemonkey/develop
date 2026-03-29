@@ -31,7 +31,6 @@ export default defineConfig({
   testDir: 'playwright',
   timeout: isCI ? 120_000 : 20_000,
   retries: isCI ? 1 : 0,
-  workers: isCI ? 2 : undefined,
   expect: {
     timeout: isCI ? 90_000 : 15_000,
   },
