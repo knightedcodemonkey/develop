@@ -25,10 +25,16 @@ const defaultPrConfig = {
 const defaultCommitMessage = 'chore: sync editor updates from @knighted/develop'
 
 const supportedRenderModes = new Set(['dom', 'react'])
+const supportedStyleModes = new Set(['css', 'module', 'less', 'sass'])
 
 const normalizeRenderMode = value => {
   const mode = toSafeText(value).toLowerCase()
   return supportedRenderModes.has(mode) ? mode : 'dom'
+}
+
+const normalizeStyleMode = value => {
+  const mode = toSafeText(value).toLowerCase()
+  return supportedStyleModes.has(mode) ? mode : 'css'
 }
 
 const getRepositoryPrConfigStorageKey = repositoryFullName =>
@@ -133,6 +139,7 @@ const getActiveRepositoryPrContext = repositoryFullName => {
     componentFilePath: componentFilePath.value,
     stylesFilePath: stylesFilePath.value,
     renderMode: normalizeRenderMode(savedConfig.renderMode),
+    styleMode: normalizeStyleMode(savedConfig.styleMode),
     prTitle,
     prBody: typeof savedConfig.prBody === 'string' ? savedConfig.prBody : '',
     baseBranch,
@@ -395,6 +402,7 @@ export const createGitHubPrDrawer = ({
   getStylesSource,
   getTopLevelDeclarations,
   getRenderMode,
+  getStyleMode,
   getDrawerSide,
   confirmBeforeSubmit,
   onPullRequestOpened,
@@ -402,6 +410,7 @@ export const createGitHubPrDrawer = ({
   onActivePrContextChange,
   onSyncActivePrEditorContent,
   onRestoreRenderMode,
+  onRestoreStyleMode,
 }) => {
   if (!featureEnabled) {
     toggleButton?.setAttribute('hidden', '')
@@ -548,6 +557,19 @@ export const createGitHubPrDrawer = ({
     onRestoreRenderMode(mode)
   }
 
+  const emitStyleModeRestore = activeContext => {
+    if (typeof onRestoreStyleMode !== 'function') {
+      return
+    }
+
+    if (!activeContext) {
+      return
+    }
+
+    const mode = normalizeStyleMode(activeContext?.styleMode)
+    onRestoreStyleMode(mode)
+  }
+
   const emitActivePrContextChange = () => {
     if (typeof onActivePrContextChange !== 'function') {
       return
@@ -556,6 +578,7 @@ export const createGitHubPrDrawer = ({
     const activeContext = getCurrentActivePrContext()
     onActivePrContextChange(activeContext)
     emitRenderModeRestore(activeContext)
+    emitStyleModeRestore(activeContext)
   }
 
   const setStatus = (text, level = 'neutral') => {
@@ -762,6 +785,7 @@ export const createGitHubPrDrawer = ({
             ...savedConfig,
             isActivePr: true,
             renderMode: normalizeRenderMode(savedConfig.renderMode),
+            styleMode: normalizeStyleMode(savedConfig.styleMode),
             headBranch: nextHeadBranch,
             baseBranch: nextBaseBranch,
             pullRequestNumber: resolvedPullRequest.number,
@@ -1061,6 +1085,7 @@ export const createGitHubPrDrawer = ({
 
     const values = getFormValues()
     const currentRenderMode = normalizeRenderMode(getRenderMode?.())
+    const currentStyleMode = normalizeStyleMode(getStyleMode?.())
     const existingConfig = readRepositoryPrConfig(repositoryFullName)
     const isActivePr = existingConfig?.isActivePr === true
 
@@ -1078,6 +1103,7 @@ export const createGitHubPrDrawer = ({
               ? existingConfig.stylesFilePath
               : values.stylesFilePath,
           renderMode: currentRenderMode,
+          styleMode: currentStyleMode,
           isActivePr: true,
           pullRequestNumber: existingConfig?.pullRequestNumber,
           pullRequestUrl: existingConfig?.pullRequestUrl,
@@ -1099,6 +1125,7 @@ export const createGitHubPrDrawer = ({
         prTitle: values.prTitle,
         prBody: values.prBody,
         renderMode: currentRenderMode,
+        styleMode: currentStyleMode,
         isActivePr: false,
         pullRequestNumber: existingConfig?.pullRequestNumber,
         pullRequestUrl: existingConfig?.pullRequestUrl,
@@ -1199,6 +1226,7 @@ export const createGitHubPrDrawer = ({
         : ''
       : values.prBody
     const currentRenderMode = normalizeRenderMode(getRenderMode?.())
+    const currentStyleMode = normalizeStyleMode(getStyleMode?.())
     const targetComponentPathValue = isPushCommitMode
       ? activeContext?.componentFilePath
       : values.componentFilePath
@@ -1348,6 +1376,7 @@ export const createGitHubPrDrawer = ({
               componentFilePath: componentPathValidation.value,
               stylesFilePath: stylesPathValidation.value,
               renderMode: currentRenderMode,
+              styleMode: currentStyleMode,
               baseBranch: targetBaseBranch,
               headBranch: targetHeadBranch,
               prTitle: targetPrTitle,

@@ -815,6 +815,7 @@ prDrawerController = createGitHubPrDrawer({
   getStylesSource: () => getCssSource(),
   getTopLevelDeclarations,
   getRenderMode: () => renderMode.value,
+  getStyleMode: () => styleMode.value,
   getDrawerSide: () => {
     const layout = getCurrentLayout()
     return layout === 'preview-left' ? 'left' : 'right'
@@ -872,6 +873,9 @@ prDrawerController = createGitHubPrDrawer({
   onRestoreRenderMode: mode => {
     applyRenderMode({ mode, fromActivePrContext: true })
   },
+  onRestoreStyleMode: mode => {
+    applyStyleMode({ mode, fromActivePrContext: true })
+  },
 })
 
 prDrawerController.setToken(githubAiContextState.token)
@@ -921,6 +925,13 @@ githubPrContextClose?.addEventListener('click', () => {
 })
 
 const getStyleEditorLanguage = mode => {
+  if (mode === 'less') return 'less'
+  if (mode === 'sass') return 'sass'
+  return 'css'
+}
+
+const normalizeStyleMode = mode => {
+  if (mode === 'module') return 'module'
   if (mode === 'less') return 'less'
   if (mode === 'sass') return 'sass'
   return 'css'
@@ -1437,21 +1448,32 @@ function applyRenderMode({ mode, fromActivePrContext = false }) {
   maybeRender()
 }
 
-renderMode.addEventListener('change', () => {
-  applyRenderMode({ mode: renderMode.value })
-})
-styleMode.addEventListener('change', () => {
+function applyStyleMode({ mode }) {
+  const nextMode = normalizeStyleMode(mode)
+
+  if (styleMode.value !== nextMode) {
+    styleMode.value = nextMode
+  }
+
   resetDiagnosticsFlow()
 
   if (cssCodeEditor) {
     suppressEditorChangeSideEffects = true
     try {
-      cssCodeEditor.setLanguage(getStyleEditorLanguage(styleMode.value))
+      cssCodeEditor.setLanguage(getStyleEditorLanguage(nextMode))
     } finally {
       suppressEditorChangeSideEffects = false
     }
   }
+
   maybeRender()
+}
+
+renderMode.addEventListener('change', () => {
+  applyRenderMode({ mode: renderMode.value })
+})
+styleMode.addEventListener('change', () => {
+  applyStyleMode({ mode: styleMode.value })
 })
 shadowToggle.addEventListener('change', maybeRender)
 autoRenderToggle.addEventListener('change', () => {
