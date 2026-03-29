@@ -966,20 +966,15 @@ export const createRenderRuntimeController = ({
       }
     }
 
-    const processQueuedRenderPasses = async () => {
-      if (!rerenderRequested) {
-        return
-      }
-
-      rerenderRequested = false
-      await runRenderPass()
-      await processQueuedRenderPasses()
-    }
-
     try {
-      rerenderRequested = false
-      await runRenderPass()
-      await processQueuedRenderPasses()
+      rerenderRequested = true
+
+      while (rerenderRequested) {
+        rerenderRequested = false
+        // Intentionally sequential to drain queued renders without recursion.
+        // eslint-disable-next-line no-await-in-loop
+        await runRenderPass()
+      }
     } finally {
       renderInFlight = false
     }

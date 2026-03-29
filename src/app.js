@@ -871,10 +871,11 @@ githubPrContextClose?.addEventListener('click', () => {
   const referenceLine = activePrReference ? `PR: ${activePrReference}\n` : ''
 
   confirmAction({
-    title: 'Close active pull request context?',
-    copy: `${referenceLine}PR title: ${githubAiContextState.activePrContext.prTitle}\nHead branch: ${githubAiContextState.activePrContext.headBranch}\n\nThis clears the active pull request context for the selected repository.`,
-    confirmButtonText: 'Close context',
-    fallbackConfirmText: 'Close active pull request context for the selected repository?',
+    title: 'Close pull request on GitHub?',
+    copy: `${referenceLine}PR title: ${githubAiContextState.activePrContext.prTitle}\nHead branch: ${githubAiContextState.activePrContext.headBranch}\n\nThis will close the pull request on GitHub and clear the active pull request context for the selected repository.`,
+    confirmButtonText: 'Close PR on GitHub',
+    fallbackConfirmText:
+      'Close this pull request on GitHub and clear the active context for the selected repository?',
     onConfirm: () => {
       void prDrawerController
         .closeActivePullRequestOnGitHub()
@@ -882,14 +883,14 @@ githubPrContextClose?.addEventListener('click', () => {
           const reference = result?.reference
           setStatus(
             reference
-              ? `Closed active pull request context (${reference}).`
-              : 'Closed active pull request context.',
+              ? `Closed pull request on GitHub and cleared active context (${reference}).`
+              : 'Closed pull request on GitHub and cleared active context.',
             'neutral',
           )
           showAppToast(
             reference
-              ? `Closed active pull request context (${reference}).`
-              : 'Closed active pull request context.',
+              ? `Closed pull request on GitHub and cleared active context (${reference}).`
+              : 'Closed pull request on GitHub and cleared active context.',
           )
         })
         .catch(error => {

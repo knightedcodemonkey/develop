@@ -171,8 +171,12 @@ test('Open PR drawer confirms and submits component/styles filepaths', async ({
   await expect(page.getByLabel('PR description')).toHaveValue(
     'Generated from editor content in @knighted/develop.',
   )
-  await expect(page.locator('#github-pr-toggle')).toContainText('Push')
-  await expect(page.locator('#github-pr-context-close')).toBeVisible()
+  await expect(
+    page.getByRole('button', { name: 'Push commit to active pull request branch' }),
+  ).toBeVisible()
+  await expect(
+    page.getByRole('button', { name: 'Close active pull request context' }),
+  ).toBeVisible()
 })
 
 test('Open PR drawer base dropdown updates from mocked repo branches', async ({
@@ -504,8 +508,12 @@ test('Active PR context updates controls and can be closed from AI controls', as
 
   await connectByotWithSingleRepo(page)
 
-  await expect(page.locator('#github-pr-toggle')).toContainText('Push')
-  await expect(page.locator('#github-pr-context-close')).toBeVisible()
+  await expect(
+    page.getByRole('button', { name: 'Push commit to active pull request branch' }),
+  ).toBeVisible()
+  await expect(
+    page.getByRole('button', { name: 'Close active pull request context' }),
+  ).toBeVisible()
 
   await page.getByRole('button', { name: 'Close active pull request context' }).click()
 
@@ -514,8 +522,10 @@ test('Active PR context updates controls and can be closed from AI controls', as
   await expect(page.getByText('PR: develop/pr/2')).toBeVisible()
   await dialog.getByRole('button', { name: 'Close context' }).click()
 
-  await expect(page.locator('#github-pr-toggle')).toContainText('Open PR')
-  await expect(page.locator('#github-pr-context-close')).toBeHidden()
+  await expect(page.getByRole('button', { name: 'Open pull request' })).toBeVisible()
+  await expect(
+    page.getByRole('button', { name: 'Close active pull request context' }),
+  ).toBeHidden()
 
   const storedValue = await page.evaluate(() =>
     localStorage.getItem('knighted:develop:github-pr-config:knightedcodemonkey/develop'),
@@ -588,8 +598,10 @@ test('Active PR context is disabled on load when pull request is closed', async 
 
   await connectByotWithSingleRepo(page)
 
-  await expect(page.locator('#github-pr-toggle')).toContainText('Open PR')
-  await expect(page.locator('#github-pr-context-close')).toBeHidden()
+  await expect(page.getByRole('button', { name: 'Open pull request' })).toBeVisible()
+  await expect(
+    page.getByRole('button', { name: 'Close active pull request context' }),
+  ).toBeHidden()
   await expect(
     page.getByRole('status', { name: 'Open pull request status', includeHidden: true }),
   ).toContainText('Saved pull request context is not open on GitHub.')
@@ -945,10 +957,12 @@ test('Reloaded active PR context from URL metadata keeps Push mode and status re
 
   await connectByotWithSingleRepo(page)
 
-  await expect(page.locator('#github-pr-toggle')).toContainText('Push')
+  await expect(
+    page.getByRole('button', { name: 'Push commit to active pull request branch' }),
+  ).toBeVisible()
   await ensureOpenPrDrawerOpen(page)
   await expect(page.getByRole('button', { name: 'Push commit' }).last()).toBeVisible()
-  await expect(page.locator('#github-pr-head-branch')).toHaveValue('develop/open-pr-test')
+  await expect(page.getByLabel('Head')).toHaveValue('develop/open-pr-test')
 
   await setComponentEditorSource(page, 'const commitMarker = 1')
   await setStylesEditorSource(page, '.commit-marker { color: red; }')
@@ -1085,7 +1099,7 @@ test('Reloaded active PR context syncs editor content from GitHub branch', async
   })
 
   await connectByotWithSingleRepo(page)
-  await expect(page.locator('#render-mode')).toHaveValue('react')
+  await expect(page.getByLabel('Render mode')).toHaveValue('react')
 
   await expect
     .poll(async () =>

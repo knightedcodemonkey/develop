@@ -61,3 +61,10 @@ Focused follow-up work for `@knighted/develop`.
        - `const App = () => <Button />`
    - Suggested implementation prompt:
      - "Document the current implicit App behavior in @knighted/develop for auto-render mode using a compact behavior matrix and concrete component-editor snippets. Clearly distinguish supported implicit wrapping from cases that intentionally require an explicit App (such as top-level JSX mixed with imports/declarations). Keep docs concise, aligned with current runtime behavior, and include at least one positive and one explicit-error example."
+
+7. **Evaluate GitHub file upsert request strategy (metadata-first vs optimistic PUT)**
+   - Revisit the current metadata-first `upsertRepositoryFile` approach and compare it against an optimistic PUT + targeted retry-on-missing-sha flow.
+   - Measure tradeoffs for latency, GitHub API request count/rate-limit impact, and browser-console signal quality during common PR flows.
+   - If beneficial, introduce a configurable/hybrid strategy (for example, optimistic default with metadata fallback) without regressing current reliability.
+   - Suggested implementation prompt:
+     - "Evaluate and optionally optimize @knighted/develop GitHub file upsert behavior. Compare metadata-first preflight GET+PUT against optimistic PUT with retry-on-missing-sha for existing files. Keep current reliability guarantees and avoid reintroducing noisy false-positive failures. If implementing a hybrid/configurable strategy, keep defaults conservative, update docs, and validate with npm run lint plus targeted Playwright PR drawer flows."
