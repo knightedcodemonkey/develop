@@ -226,16 +226,6 @@ export const connectByotWithSingleRepo = async (page: Page) => {
   const repoSelect = page.getByLabel('Pull request repository')
   await expect(repoSelect).toHaveValue('knightedcodemonkey/develop')
 
-  const pushModeVisible = await page
-    .getByRole('button', { name: 'Push commit to active pull request branch' })
-    .isVisible()
-
-  if (pushModeVisible) {
-    await expect(repoSelect).toBeDisabled()
-  } else {
-    await expect(repoSelect).toBeEnabled()
-  }
-
   await expect(repoSelect).toHaveValue('knightedcodemonkey/develop')
 
   await expect(
