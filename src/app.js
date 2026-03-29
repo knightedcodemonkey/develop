@@ -709,8 +709,6 @@ const byotControls = createGitHubByotControls({
       title: 'Remove saved GitHub token?',
       copy: 'This action removes the token from browser storage. You can add another token at any time.',
       confirmButtonText: 'Remove',
-      fallbackConfirmText:
-        'Remove saved GitHub token? This action removes the token from browser storage.',
       onConfirm,
     })
   },
@@ -891,8 +889,6 @@ githubPrContextClose?.addEventListener('click', () => {
     title: 'Close pull request on GitHub?',
     copy: `${referenceLine}PR title: ${githubAiContextState.activePrContext.prTitle}\nHead branch: ${githubAiContextState.activePrContext.headBranch}\n\nThis will close the pull request on GitHub and clear the active pull request context for the selected repository.`,
     confirmButtonText: 'Close PR on GitHub',
-    fallbackConfirmText:
-      'Close this pull request on GitHub and clear the active context for the selected repository?',
     onConfirm: () => {
       void prDrawerController
         .closeActivePullRequestOnGitHub()
@@ -1324,22 +1320,12 @@ const clearStylesSource = () => {
   maybeRender()
 }
 
-const confirmAction = ({
-  title,
-  copy,
-  confirmButtonText = 'Clear',
-  fallbackConfirmText,
-  onConfirm,
-}) => {
+const confirmAction = ({ title, copy, confirmButtonText = 'Clear', onConfirm }) => {
   const toConfirmText = value => (typeof value === 'string' ? value.trim() : '')
-  const supportsModalDialog =
-    clearConfirmDialog instanceof HTMLDialogElement &&
-    typeof clearConfirmDialog.showModal === 'function'
-
-  if (!supportsModalDialog) {
-    if (window.confirm(fallbackConfirmText)) {
-      onConfirm()
-    }
+  if (
+    !(clearConfirmDialog instanceof HTMLDialogElement) ||
+    typeof clearConfirmDialog.showModal !== 'function'
+  ) {
     return
   }
 
@@ -1386,7 +1372,6 @@ const confirmClearSource = ({ label, onConfirm }) => {
   confirmAction({
     title: `Clear ${label} source?`,
     copy: 'This action will remove all text from the editor. This cannot be undone.',
-    fallbackConfirmText: `Clear ${label.toLowerCase()} source? This action will remove all text from the editor.`,
     onConfirm,
   })
 }

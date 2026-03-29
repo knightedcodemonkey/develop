@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test'
+import type { Page } from '@playwright/test'
 import type {
   CreateRefRequestBody,
   PullRequestCreateBody,
@@ -16,6 +17,54 @@ import {
 const decodeGitHubFileBodyContent = (body: Record<string, unknown>) => {
   const encoded = typeof body.content === 'string' ? body.content : ''
   return Buffer.from(encoded, 'base64').toString('utf8')
+}
+
+const getOpenPrDrawer = (page: Page) =>
+  page.getByRole('complementary', { name: /Open Pull Request|Push Commit/ })
+
+const clickOpenPrDrawerSubmit = async (page: Page) => {
+  const drawer = getOpenPrDrawer(page)
+  await expect(drawer).toBeVisible()
+  const submitButton = drawer.getByRole('button', { name: 'Open PR' })
+  await expect(submitButton).toBeEnabled()
+  await submitButton.evaluate(element => {
+    if (element instanceof HTMLButtonElement) {
+      element.click()
+    }
+  })
+}
+
+const triggerOpenPrConfirmation = async (page: Page) => {
+  await clickOpenPrDrawerSubmit(page)
+  const dialog = page.locator('#clear-confirm-dialog')
+  await expect(dialog).toBeVisible()
+  return dialog
+}
+
+const submitOpenPrAndConfirm = async (
+  page: Page,
+  {
+    expectedSummaryLines,
+  }: {
+    expectedSummaryLines?: string[]
+  } = {},
+) => {
+  const dialog = await triggerOpenPrConfirmation(page)
+
+  for (const line of expectedSummaryLines ?? []) {
+    await expect(dialog.getByText(line, { exact: true })).toBeVisible()
+  }
+
+  await dialog.locator('button[value="confirm"]').evaluate(element => {
+    if (element instanceof HTMLButtonElement) {
+      element.click()
+    }
+  })
+}
+
+const expectOpenPrConfirmationPrompt = async (page: Page) => {
+  const dialog = await triggerOpenPrConfirmation(page)
+  await expect(dialog).toBeVisible()
 }
 
 test('Open PR drawer confirms and submits component/styles filepaths', async ({
@@ -126,19 +175,13 @@ test('Open PR drawer confirms and submits component/styles filepaths', async ({
     .getByLabel('PR description')
     .fill('Generated from editor content in @knighted/develop.')
 
-  await page.getByRole('button', { name: 'Open PR' }).last().click()
-
-  const dialog = page.getByRole('dialog')
-  await expect(dialog).toBeVisible()
-  await expect(
-    page.getByText('Open pull request with editor content?', { exact: true }),
-  ).toHaveText('Open pull request with editor content?')
-  await expect(
-    page.getByText('Component file path: examples/component/App.tsx'),
-  ).toBeVisible()
-  await expect(page.getByText('Styles file path: examples/styles/app.css')).toBeVisible()
-
-  await dialog.getByRole('button', { name: 'Open PR' }).click()
+  await submitOpenPrAndConfirm(page, {
+    expectedSummaryLines: [
+      'Open pull request with editor content?',
+      'Component file path: examples/component/App.tsx',
+      'Styles file path: examples/styles/app.css',
+    ],
+  })
 
   await expect(
     page.getByRole('status', { name: 'Open pull request status', includeHidden: true }),
@@ -1097,8 +1140,11 @@ test('Open PR drawer validates unsafe filepaths', async ({ page }) => {
   await connectByotWithSingleRepo(page)
   await ensureOpenPrDrawerOpen(page)
 
-  await page.getByLabel('Component filename').fill('../outside/App.tsx')
-  await page.getByRole('button', { name: 'Open PR' }).last().click()
+  const componentPath = page.getByLabel('Component filename')
+  await componentPath.fill('../outside/App.tsx')
+  await expect(componentPath).toHaveValue('../outside/App.tsx')
+  await componentPath.blur()
+  await clickOpenPrDrawerSubmit(page)
 
   await expect(
     page.getByRole('status', { name: 'Open pull request status', includeHidden: true }),
@@ -1113,11 +1159,16 @@ test('Open PR drawer allows dotted file segments that are not traversal', async 
   await connectByotWithSingleRepo(page)
   await ensureOpenPrDrawerOpen(page)
 
-  await page.getByLabel('Component filename').fill('docs/v1.0..v1.1/App.tsx')
-  await page.getByLabel('Styles filename').fill('styles/foo..bar.css')
-  await page.getByRole('button', { name: 'Open PR' }).last().click()
+  const componentPath = page.getByLabel('Component filename')
+  const stylesPath = page.getByLabel('Styles filename')
 
-  await expect(page.getByRole('dialog')).toBeVisible()
+  await componentPath.fill('docs/v1.0..v1.1/App.tsx')
+  await stylesPath.fill('styles/foo..bar.css')
+  await expect(componentPath).toHaveValue('docs/v1.0..v1.1/App.tsx')
+  await expect(stylesPath).toHaveValue('styles/foo..bar.css')
+  await stylesPath.blur()
+
+  await expectOpenPrConfirmationPrompt(page)
   await expect(
     page.getByRole('status', { name: 'Open pull request status', includeHidden: true }),
   ).not.toContainText('File path cannot include parent directory traversal.')
@@ -1129,7 +1180,7 @@ test('Open PR drawer rejects trailing slash file paths', async ({ page }) => {
   await ensureOpenPrDrawerOpen(page)
 
   await page.getByLabel('Component filename').fill('src/components/')
-  await page.getByRole('button', { name: 'Open PR' }).last().click()
+  await clickOpenPrDrawerSubmit(page)
 
   await expect(
     page.getByRole('status', { name: 'Open pull request status', includeHidden: true }),
@@ -1264,8 +1315,7 @@ test('Open PR drawer strips App wrapper from committed component source by defau
   await ensureOpenPrDrawerOpen(page)
 
   await page.getByLabel('Head').fill('develop/repo/editor-sync-without-app')
-  await page.getByRole('button', { name: 'Open PR' }).last().click()
-  await page.getByRole('dialog').getByRole('button', { name: 'Open PR' }).click()
+  await submitOpenPrAndConfirm(page)
 
   await expect(
     page.getByRole('status', { name: 'Open pull request status', includeHidden: true }),
@@ -1395,8 +1445,7 @@ test('Open PR drawer includes App wrapper in committed source when toggled on', 
   await includeWrapperToggle.check()
 
   await page.getByLabel('Head').fill('develop/repo/editor-sync-with-app')
-  await page.getByRole('button', { name: 'Open PR' }).last().click()
-  await page.getByRole('dialog').getByRole('button', { name: 'Open PR' }).click()
+  await submitOpenPrAndConfirm(page)
 
   await expect(
     page.getByRole('status', { name: 'Open pull request status', includeHidden: true }),
