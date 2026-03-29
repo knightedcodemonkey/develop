@@ -874,7 +874,7 @@ prDrawerController = createGitHubPrDrawer({
     applyRenderMode({ mode, fromActivePrContext: true })
   },
   onRestoreStyleMode: mode => {
-    applyStyleMode({ mode, fromActivePrContext: true })
+    applyStyleMode({ mode })
   },
 })
 
