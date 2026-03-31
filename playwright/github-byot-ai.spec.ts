@@ -16,12 +16,18 @@ test('PR/BYOT controls are visible without feature flag, but chat stays hidden',
   await waitForAppReady(page)
 
   const byotControls = page.getByRole('group', { name: 'GitHub controls' })
+  const prToggle = page.getByRole('button', {
+    name: 'Open pull request',
+    exact: true,
+    includeHidden: true,
+  })
   await expect(byotControls).toBeVisible()
   await expect(page.getByRole('textbox', { name: 'GitHub token' })).toBeVisible()
   await expect(page.getByRole('button', { name: 'Add GitHub token' })).toBeVisible()
   await expect(page.getByRole('button', { name: 'Chat' })).toBeHidden()
   await expect(page.getByRole('heading', { name: 'AI Chat' })).toBeHidden()
-  await expect(page.getByRole('button', { name: 'Open PR' })).toBeHidden()
+  await expect(prToggle).toHaveCount(1)
+  await expect(prToggle).toBeHidden()
 })
 
 test('chat remains hidden without feature flag after token connect', async ({ page }) => {
@@ -38,11 +44,17 @@ test('BYOT controls render when feature flag is enabled by query param', async (
   await waitForAppReady(page, `${appEntryPath}?feature-ai=true`)
 
   const byotControls = page.getByRole('group', { name: 'GitHub controls' })
+  const prToggle = page.getByRole('button', {
+    name: 'Open pull request',
+    exact: true,
+    includeHidden: true,
+  })
   await expect(byotControls).toBeVisible()
   await expect(page.getByRole('textbox', { name: 'GitHub token' })).toBeVisible()
   await expect(page.getByRole('button', { name: 'Add GitHub token' })).toBeVisible()
   await expect(page.getByRole('button', { name: 'Chat' })).toBeHidden()
-  await expect(page.getByRole('button', { name: 'Open PR' })).toBeHidden()
+  await expect(prToggle).toHaveCount(1)
+  await expect(prToggle).toBeHidden()
 })
 
 test('GitHub token info panel reflects missing and present token states', async ({
