@@ -41,9 +41,13 @@ browser acts as the runtime host for render, lint, and typecheck flows.
 
 - GitHub PAT setup and usage: [docs/byot.md](docs/byot.md)
 
+AI chat features remain opt-in behind
+`?feature-ai=true`.
+
 ## Fine-Grained PAT Quick Setup
 
-For AI/BYOT flows, use a fine-grained GitHub PAT and follow the existing setup guide:
+For PR/BYOT and AI chat flows, use a fine-grained GitHub PAT and follow the
+existing setup guide:
 
 - Full setup and behavior: [docs/byot.md](docs/byot.md)
 - Repository permissions screenshot: [docs/media/byot-repo-perms.png](docs/media/byot-repo-perms.png)
