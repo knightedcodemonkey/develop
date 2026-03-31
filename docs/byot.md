@@ -4,13 +4,14 @@ This guide explains how to create and use a fine-grained GitHub Personal Access 
 
 ## What BYOT does in the app
 
-When the AI/BYOT feature is enabled, the token is used to:
+BYOT controls are available by default. The token is used to:
 
 - authenticate GitHub API requests
 - load repositories where you have write access
 - let you choose which repository to work with
+- use PR context features (Open PR / Push Commit flows)
 
-As additional AI/PR features roll out, the same token is also used for model and repository operations that require the configured permissions.
+When AI chat is enabled, the same token is also used for GitHub Models requests.
 
 ## Privacy and storage behavior
 
@@ -18,9 +19,10 @@ As additional AI/PR features roll out, the same token is also used for model and
 - The token is never sent to any service except the GitHub endpoints required by the feature.
 - You can remove it at any time using the delete button in the BYOT controls.
 
-## Enable the BYOT feature
+## Enable AI chat features
 
-Use one of these options:
+BYOT/PR controls do not require a feature flag. To enable AI chat features, use one
+of these options:
 
 1. Add `?feature-ai=true` to the app URL.
 2. Set `localStorage` key `knighted:develop:feature:ai-assistant` to `true`.
@@ -57,10 +59,11 @@ Use either of these scopes depending on your needs:
 ## Recommended setup flow
 
 1. Create token with the permissions above.
-2. Open `@knighted/develop` with `?feature-ai=true`.
+2. Open `@knighted/develop`.
 3. Paste token into the BYOT input and click add.
 4. Verify repository list loads.
 5. Select your target repository.
+6. Optional: enable AI chat with `?feature-ai=true`.
 
 ## Screenshots
 

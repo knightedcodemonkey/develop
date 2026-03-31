@@ -398,7 +398,6 @@ const stripTopLevelAppWrapper = async ({ source, getTopLevelDeclarations }) => {
 }
 
 export const createGitHubPrDrawer = ({
-  featureEnabled,
   toggleButton,
   drawer,
   closeButton,
@@ -432,23 +431,6 @@ export const createGitHubPrDrawer = ({
   onRestoreRenderMode,
   onRestoreStyleMode,
 }) => {
-  if (!featureEnabled) {
-    toggleButton?.setAttribute('hidden', '')
-    drawer?.setAttribute('hidden', '')
-
-    return {
-      setOpen: () => {},
-      isOpen: () => false,
-      setToken: () => {},
-      setSelectedRepository: () => {},
-      getActivePrContext: () => null,
-      clearActivePrContext: () => {},
-      closeActivePullRequestOnGitHub: async () => null,
-      syncRepositories: () => {},
-      dispose: () => {},
-    }
-  }
-
   let open = false
   let submitting = false
   let pendingAbortController = null

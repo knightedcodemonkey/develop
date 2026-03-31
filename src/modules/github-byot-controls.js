@@ -48,7 +48,6 @@ const createDefaultRepoOption = ({
 }
 
 export const createGitHubByotControls = ({
-  featureEnabled,
   controlsRoot,
   tokenInput,
   tokenInfoButton,
@@ -61,16 +60,6 @@ export const createGitHubByotControls = ({
   onTokenChange,
   setStatus,
 }) => {
-  if (!featureEnabled) {
-    controlsRoot?.setAttribute('hidden', '')
-    return {
-      getSelectedRepository: () => null,
-      getWritableRepositories: () => [],
-      setSelectedRepository: () => false,
-      getToken: () => null,
-    }
-  }
-
   let savedToken = loadGitHubToken()
   let currentRepoRequestAbortController = null
   let displayingMaskedToken = false

@@ -224,16 +224,6 @@ const setCompactAiControlsOpen = isOpen => {
     return
   }
 
-  if (!aiAssistantFeatureEnabled) {
-    compactAiControlsOpen = false
-    setGitHubTokenInfoOpen(false)
-    aiControlsToggle.setAttribute('hidden', '')
-    aiControlsToggle.setAttribute('aria-expanded', 'false')
-    githubAiControls.removeAttribute('data-compact-open')
-    githubAiControls.setAttribute('hidden', '')
-    return
-  }
-
   aiControlsToggle.removeAttribute('hidden')
 
   if (!isCompactViewport()) {
@@ -663,8 +653,15 @@ const syncAiChatTokenVisibility = token => {
   const hasToken = typeof token === 'string' && token.trim().length > 0
 
   if (hasToken) {
-    aiChatToggle?.removeAttribute('hidden')
+    if (aiAssistantFeatureEnabled) {
+      aiChatToggle?.removeAttribute('hidden')
+    } else {
+      aiChatToggle?.setAttribute('hidden', '')
+      aiChatToggle?.setAttribute('aria-expanded', 'false')
+    }
+
     githubPrToggle?.removeAttribute('hidden')
+
     if (githubAiContextState.activePrContext) {
       githubPrContextClose?.removeAttribute('hidden')
     } else {
@@ -688,7 +685,6 @@ const syncAiChatTokenVisibility = token => {
 }
 
 const byotControls = createGitHubByotControls({
-  featureEnabled: aiAssistantFeatureEnabled,
   controlsRoot: githubAiControls,
   tokenInput: githubTokenInput,
   tokenInfoButton: githubTokenInfo,
@@ -791,7 +787,6 @@ chatDrawerController = createGitHubChatDrawer({
 })
 
 prDrawerController = createGitHubPrDrawer({
-  featureEnabled: aiAssistantFeatureEnabled,
   toggleButton: githubPrToggle,
   drawer: githubPrDrawer,
   closeButton: githubPrClose,
