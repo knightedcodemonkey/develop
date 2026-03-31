@@ -154,6 +154,27 @@ const getActiveRepositoryPrContext = repositoryFullName => {
   }
 }
 
+export const findRepositoryWithActivePrContext = repositories => {
+  if (!Array.isArray(repositories) || repositories.length === 0) {
+    return null
+  }
+
+  for (const repository of repositories) {
+    const repositoryFullName =
+      typeof repository?.fullName === 'string' ? repository.fullName.trim() : ''
+
+    if (!repositoryFullName) {
+      continue
+    }
+
+    if (getActiveRepositoryPrContext(repositoryFullName)) {
+      return repositoryFullName
+    }
+  }
+
+  return null
+}
+
 const toSafeText = value => (typeof value === 'string' ? value.trim() : '')
 
 const normalizeFilePath = value =>
