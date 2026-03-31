@@ -685,7 +685,6 @@ const syncAiChatTokenVisibility = token => {
 }
 
 const byotControls = createGitHubByotControls({
-  featureEnabled: true,
   controlsRoot: githubAiControls,
   tokenInput: githubTokenInput,
   tokenInfoButton: githubTokenInfo,
@@ -788,7 +787,6 @@ chatDrawerController = createGitHubChatDrawer({
 })
 
 prDrawerController = createGitHubPrDrawer({
-  featureEnabled: true,
   toggleButton: githubPrToggle,
   drawer: githubPrDrawer,
   closeButton: githubPrClose,
