@@ -27,6 +27,8 @@ const defaultCommitMessage = 'chore: sync editor updates from @knighted/develop'
 const supportedRenderModes = new Set(['dom', 'react'])
 const supportedStyleModes = new Set(['css', 'module', 'less', 'sass'])
 
+const toSafeText = value => (typeof value === 'string' ? value.trim() : '')
+
 const normalizeRenderMode = value => {
   const mode = toSafeText(value).toLowerCase()
   return supportedRenderModes.has(mode) ? mode : 'dom'
@@ -154,7 +156,25 @@ const getActiveRepositoryPrContext = repositoryFullName => {
   }
 }
 
-const toSafeText = value => (typeof value === 'string' ? value.trim() : '')
+export const findRepositoryWithActivePrContext = repositories => {
+  if (!Array.isArray(repositories) || repositories.length === 0) {
+    return null
+  }
+
+  for (const repository of repositories) {
+    const repositoryFullName = toSafeText(repository?.fullName)
+
+    if (!repositoryFullName) {
+      continue
+    }
+
+    if (getActiveRepositoryPrContext(repositoryFullName)) {
+      return repositoryFullName
+    }
+  }
+
+  return null
+}
 
 const normalizeFilePath = value =>
   toSafeText(value).replace(/\\/g, '/').replace(/\/+/g, '/')

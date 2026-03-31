@@ -5,6 +5,7 @@ import {
   saveGitHubToken,
 } from './github-token-store.js'
 import { listWritableRepositories } from './github-api.js'
+import { findRepositoryWithActivePrContext } from './github-pr-drawer.js'
 
 const selectedRepositoryStorageKey = 'knighted:develop:github-repository'
 
@@ -243,7 +244,7 @@ export const createGitHubByotControls = ({
 
     const selectedRepositoryFullName = hasStoredSelection
       ? lastSelectedRepository
-      : repos[0].fullName
+      : (findRepositoryWithActivePrContext(repos) ?? repos[0].fullName)
 
     saveSelectedRepository(selectedRepositoryFullName)
     lastSelectedRepository = selectedRepositoryFullName

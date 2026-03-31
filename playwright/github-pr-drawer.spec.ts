@@ -79,6 +79,19 @@ const expectOpenPrConfirmationPrompt = async (page: Page) => {
   await expect(dialog).toBeVisible()
 }
 
+const removeSavedGitHubToken = async (page: Page) => {
+  await page.getByRole('button', { name: 'Delete GitHub token' }).click()
+
+  const dialog = page.getByRole('dialog', {
+    name: 'Remove saved GitHub token?',
+    includeHidden: true,
+  })
+
+  await expect(dialog).toHaveAttribute('open', '')
+  await dialog.getByRole('button', { name: 'Remove' }).click()
+  await expect(dialog).not.toHaveAttribute('open', '')
+}
+
 test('Open PR drawer confirms and submits component/styles filepaths', async ({
   page,
 }) => {
@@ -681,6 +694,239 @@ test('Active PR context is disabled on load when pull request is closed', async 
   const isActivePr = await page.evaluate(() => {
     const raw = localStorage.getItem(
       'knighted:develop:github-pr-config:knightedcodemonkey/develop',
+    )
+    if (!raw) {
+      return null
+    }
+
+    try {
+      const parsed = JSON.parse(raw)
+      return parsed?.isActivePr === true
+    } catch {
+      return null
+    }
+  })
+
+  expect(isActivePr).toBe(false)
+})
+
+test('Active PR context rehydrates after token remove and re-add', async ({ page }) => {
+  await page.route('https://api.github.com/user/repos**', async route => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify([
+        {
+          id: 11,
+          owner: { login: 'knightedcodemonkey' },
+          name: 'develop',
+          full_name: 'knightedcodemonkey/develop',
+          default_branch: 'main',
+          permissions: { push: true },
+        },
+        {
+          id: 12,
+          owner: { login: 'knightedcodemonkey' },
+          name: 'css',
+          full_name: 'knightedcodemonkey/css',
+          default_branch: 'main',
+          permissions: { push: true },
+        },
+      ]),
+    })
+  })
+
+  await mockRepositoryBranches(page, {
+    'knightedcodemonkey/develop': ['main', 'release'],
+    'knightedcodemonkey/css': ['main', 'release', 'css/rehydrate-test'],
+  })
+
+  await page.route(
+    'https://api.github.com/repos/knightedcodemonkey/css/pulls/7',
+    async route => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          number: 7,
+          state: 'open',
+          title: 'Saved css PR context',
+          html_url: 'https://github.com/knightedcodemonkey/css/pull/7',
+          head: { ref: 'css/rehydrate-test' },
+          base: { ref: 'main' },
+        }),
+      })
+    },
+  )
+
+  await waitForAppReady(page, `${appEntryPath}?feature-ai=true`)
+
+  await page.evaluate(() => {
+    localStorage.setItem('knighted:develop:github-repository', 'knightedcodemonkey/css')
+    localStorage.setItem(
+      'knighted:develop:github-pr-config:knightedcodemonkey/css',
+      JSON.stringify({
+        componentFilePath: 'examples/component/App.tsx',
+        stylesFilePath: 'examples/styles/app.css',
+        renderMode: 'react',
+        baseBranch: 'main',
+        headBranch: 'css/rehydrate-test',
+        prTitle: 'Saved css PR context',
+        prBody: 'Saved body',
+        isActivePr: true,
+        pullRequestNumber: 7,
+        pullRequestUrl: 'https://github.com/knightedcodemonkey/css/pull/7',
+      }),
+    )
+  })
+
+  await page
+    .getByRole('textbox', { name: 'GitHub token' })
+    .fill('github_pat_fake_1234567890')
+  await page.getByRole('button', { name: 'Add GitHub token' }).click()
+
+  await ensureOpenPrDrawerOpen(page)
+  await expect(page.getByLabel('Pull request repository')).toHaveValue(
+    'knightedcodemonkey/css',
+  )
+  await expect(
+    page.getByRole('button', { name: 'Push commit to active pull request branch' }),
+  ).toBeVisible()
+
+  await removeSavedGitHubToken(page)
+  await expect(page.getByRole('status', { name: 'App status' })).toHaveText(
+    'GitHub token removed',
+  )
+
+  await page
+    .getByRole('textbox', { name: 'GitHub token' })
+    .fill('github_pat_fake_1234567890')
+  await page.getByRole('button', { name: 'Add GitHub token' }).click()
+
+  await ensureOpenPrDrawerOpen(page)
+  await expect(page.getByLabel('Pull request repository')).toHaveValue(
+    'knightedcodemonkey/css',
+  )
+  await expect(
+    page.getByRole('button', { name: 'Push commit to active pull request branch' }),
+  ).toBeVisible()
+
+  const selectedRepository = await page.evaluate(() =>
+    localStorage.getItem('knighted:develop:github-repository'),
+  )
+  expect(selectedRepository).toBe('knightedcodemonkey/css')
+})
+
+test('Active PR context deactivates after token remove and re-add when PR is closed', async ({
+  page,
+}) => {
+  let useClosedPullRequest = false
+
+  await page.route('https://api.github.com/user/repos**', async route => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify([
+        {
+          id: 11,
+          owner: { login: 'knightedcodemonkey' },
+          name: 'develop',
+          full_name: 'knightedcodemonkey/develop',
+          default_branch: 'main',
+          permissions: { push: true },
+        },
+        {
+          id: 12,
+          owner: { login: 'knightedcodemonkey' },
+          name: 'css',
+          full_name: 'knightedcodemonkey/css',
+          default_branch: 'main',
+          permissions: { push: true },
+        },
+      ]),
+    })
+  })
+
+  await mockRepositoryBranches(page, {
+    'knightedcodemonkey/develop': ['main', 'release'],
+    'knightedcodemonkey/css': ['main', 'release', 'css/rehydrate-test'],
+  })
+
+  await page.route(
+    'https://api.github.com/repos/knightedcodemonkey/css/pulls/7',
+    async route => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          number: 7,
+          state: useClosedPullRequest ? 'closed' : 'open',
+          title: 'Saved css PR context',
+          html_url: 'https://github.com/knightedcodemonkey/css/pull/7',
+          head: { ref: 'css/rehydrate-test' },
+          base: { ref: 'main' },
+        }),
+      })
+    },
+  )
+
+  await waitForAppReady(page, `${appEntryPath}?feature-ai=true`)
+
+  await page.evaluate(() => {
+    localStorage.setItem('knighted:develop:github-repository', 'knightedcodemonkey/css')
+    localStorage.setItem(
+      'knighted:develop:github-pr-config:knightedcodemonkey/css',
+      JSON.stringify({
+        componentFilePath: 'examples/component/App.tsx',
+        stylesFilePath: 'examples/styles/app.css',
+        renderMode: 'react',
+        baseBranch: 'main',
+        headBranch: 'css/rehydrate-test',
+        prTitle: 'Saved css PR context',
+        prBody: 'Saved body',
+        isActivePr: true,
+        pullRequestNumber: 7,
+        pullRequestUrl: 'https://github.com/knightedcodemonkey/css/pull/7',
+      }),
+    )
+  })
+
+  await page
+    .getByRole('textbox', { name: 'GitHub token' })
+    .fill('github_pat_fake_1234567890')
+  await page.getByRole('button', { name: 'Add GitHub token' }).click()
+  await expect(
+    page.getByRole('button', { name: 'Push commit to active pull request branch' }),
+  ).toBeVisible()
+
+  await removeSavedGitHubToken(page)
+  await expect(page.getByRole('status', { name: 'App status' })).toHaveText(
+    'GitHub token removed',
+  )
+
+  useClosedPullRequest = true
+  await page
+    .getByRole('textbox', { name: 'GitHub token' })
+    .fill('github_pat_fake_1234567890')
+  await page.getByRole('button', { name: 'Add GitHub token' }).click()
+
+  await ensureOpenPrDrawerOpen(page)
+  await expect(page.getByLabel('Pull request repository')).toHaveValue(
+    'knightedcodemonkey/css',
+  )
+  await expect(
+    page.getByRole('button', { name: 'Open pull request', exact: true }),
+  ).toBeVisible()
+  await expect(
+    page.getByRole('button', { name: 'Close active pull request context' }),
+  ).toBeHidden()
+  await expect(
+    page.getByRole('status', { name: 'Open pull request status', includeHidden: true }),
+  ).toContainText('Saved pull request context is not open on GitHub.')
+
+  const isActivePr = await page.evaluate(() => {
+    const raw = localStorage.getItem(
+      'knighted:develop:github-pr-config:knightedcodemonkey/css',
     )
     if (!raw) {
       return null
