@@ -463,6 +463,29 @@ test('supports export default App without redeclaration', async ({ page }) => {
   ).toContainText('export default App')
 })
 
+test('auto render supports export default named component without App redeclaration', async ({
+  page,
+}) => {
+  await waitForInitialRender(page)
+
+  await ensurePanelToolsVisible(page, 'component')
+  await page.getByLabel('ShadowRoot').uncheck()
+
+  await setComponentEditorSource(
+    page,
+    [
+      'const Button = () => <button type="button">export default Button</button>',
+      'export default Button',
+    ].join('\n'),
+  )
+
+  await expect(page.getByRole('status', { name: 'App status' })).toHaveText('Rendered')
+  await expect(
+    page.getByRole('region', { name: 'Preview output' }).getByRole('button').first(),
+  ).toContainText('export default Button')
+  await expect(page.locator('#preview-host pre')).toHaveCount(0)
+})
+
 test('persists layout and theme across reload', async ({ page }) => {
   await waitForInitialRender(page)
 

@@ -16,6 +16,15 @@ export type ChatRequestBody = {
   messages?: ChatRequestMessage[]
   model?: string
   stream?: boolean
+  tool_choice?: 'auto' | 'required' | 'none'
+  tools?: Array<{
+    type?: string
+    function?: {
+      name?: string
+      description?: string
+      parameters?: unknown
+    }
+  }>
 }
 
 export type CreateRefRequestBody = {

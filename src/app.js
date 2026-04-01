@@ -8,7 +8,7 @@ import { createCodeMirrorEditor } from './modules/editor-codemirror.js'
 import { defaultCss, defaultJsx, defaultReactJsx } from './modules/defaults.js'
 import { createDiagnosticsUiController } from './modules/diagnostics-ui.js'
 import { isAiAssistantFeatureEnabled } from './modules/feature-flags.js'
-import { createGitHubChatDrawer } from './modules/github-chat-drawer.js'
+import { createGitHubChatDrawer } from './modules/github-chat-drawer/drawer.js'
 import { createGitHubByotControls } from './modules/github-byot-controls.js'
 import {
   formatActivePrReference,
@@ -41,7 +41,6 @@ const aiChatModel = document.getElementById('ai-chat-model')
 const aiChatIncludeEditors = document.getElementById('ai-chat-include-editors')
 const aiChatSend = document.getElementById('ai-chat-send')
 const aiChatStatus = document.getElementById('ai-chat-status')
-const aiChatRate = document.getElementById('ai-chat-rate')
 const aiChatRepository = document.getElementById('ai-chat-repository')
 const aiChatMessages = document.getElementById('ai-chat-messages')
 const githubPrToggle = document.getElementById('github-pr-toggle')
@@ -771,13 +770,22 @@ chatDrawerController = createGitHubChatDrawer({
   sendButton: aiChatSend,
   clearButton: aiChatClear,
   statusNode: aiChatStatus,
-  rateNode: aiChatRate,
   repositoryNode: aiChatRepository,
   messagesNode: aiChatMessages,
   getToken: getCurrentGitHubToken,
   getSelectedRepository: getCurrentSelectedRepository,
   getComponentSource: () => getJsxSource(),
+  setComponentSource: value => setJsxSource(value),
   getStylesSource: () => getCssSource(),
+  setStylesSource: value => setCssSource(value),
+  scheduleRender: () => {
+    if (
+      autoRenderToggle?.checked &&
+      typeof renderRuntime?.scheduleRender === 'function'
+    ) {
+      renderRuntime.scheduleRender()
+    }
+  },
   getRenderMode: () => renderMode.value,
   getStyleMode: () => styleMode.value,
   getDrawerSide: () => {
