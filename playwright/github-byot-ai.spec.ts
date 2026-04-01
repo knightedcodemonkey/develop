@@ -12,7 +12,7 @@ import {
   waitForAppReady,
 } from './helpers/app-test-helpers.js'
 
-test('PR/BYOT controls are visible without feature flag, but chat stays hidden', async ({
+test('PR/BYOT controls are visible and chat stays hidden until token connect', async ({
   page,
 }) => {
   await waitForAppReady(page)
@@ -32,18 +32,16 @@ test('PR/BYOT controls are visible without feature flag, but chat stays hidden',
   await expect(prToggle).toBeHidden()
 })
 
-test('chat remains hidden without feature flag after token connect', async ({ page }) => {
+test('chat becomes available after token connect', async ({ page }) => {
   await waitForAppReady(page)
   await connectByotWithSingleRepo(page)
 
   await expect(page.getByRole('button', { name: 'Open pull request' })).toBeVisible()
-  await expect(page.getByRole('button', { name: 'Chat' })).toBeHidden()
+  await expect(page.getByRole('button', { name: 'Chat' })).toBeVisible()
 })
 
-test('BYOT controls render when feature flag is enabled by query param', async ({
-  page,
-}) => {
-  await waitForAppReady(page, `${appEntryPath}?feature-ai=true`)
+test('BYOT controls render with default app entry', async ({ page }) => {
+  await waitForAppReady(page, appEntryPath)
 
   const byotControls = page.getByRole('group', { name: 'GitHub controls' })
   const prToggle = page.getByRole('button', {
@@ -62,7 +60,7 @@ test('BYOT controls render when feature flag is enabled by query param', async (
 test('GitHub token info panel reflects missing and present token states', async ({
   page,
 }) => {
-  await waitForAppReady(page, `${appEntryPath}?feature-ai=true`)
+  await waitForAppReady(page, `${appEntryPath}`)
 
   const infoButtonMissing = page.getByRole('button', {
     name: 'About GitHub token features and privacy',
@@ -107,7 +105,7 @@ test('GitHub token info panel reflects missing and present token states', async 
 })
 
 test('deleting saved GitHub token requires confirmation modal', async ({ page }) => {
-  await waitForAppReady(page, `${appEntryPath}?feature-ai=true`)
+  await waitForAppReady(page, `${appEntryPath}`)
   await connectByotWithSingleRepo(page)
 
   const dialog = page.getByRole('dialog', {
@@ -154,8 +152,8 @@ test('deleting saved GitHub token requires confirmation modal', async ({ page })
   await expect(tokenInput).toHaveValue('')
 })
 
-test('AI chat drawer opens and closes when feature flag is enabled', async ({ page }) => {
-  await waitForAppReady(page, `${appEntryPath}?feature-ai=true`)
+test('AI chat drawer opens and closes', async ({ page }) => {
+  await waitForAppReady(page, appEntryPath)
   await connectByotWithSingleRepo(page)
 
   const chatToggle = page.getByRole('button', { name: 'Chat', exact: true })
@@ -193,7 +191,7 @@ test('AI chat prefers streaming responses when available', async ({ page }) => {
     })
   })
 
-  await waitForAppReady(page, `${appEntryPath}?feature-ai=true`)
+  await waitForAppReady(page, `${appEntryPath}`)
   await connectByotWithSingleRepo(page)
   await ensureAiChatDrawerOpen(page)
 
@@ -255,7 +253,7 @@ test('AI chat can disable editor context payload via checkbox', async ({ page })
     })
   })
 
-  await waitForAppReady(page, `${appEntryPath}?feature-ai=true`)
+  await waitForAppReady(page, `${appEntryPath}`)
   await connectByotWithSingleRepo(page)
   await ensureAiChatDrawerOpen(page)
 
@@ -350,7 +348,7 @@ test('AI chat proposals can be confirmed, applied, and undone for component and 
     })
   })
 
-  await waitForAppReady(page, `${appEntryPath}?feature-ai=true`)
+  await waitForAppReady(page, `${appEntryPath}`)
   await connectByotWithSingleRepo(page)
   await setComponentEditorSource(page, 'const App = () => <button>Before</button>')
   await setStylesEditorSource(page, '.button { color: red; }')
@@ -462,7 +460,7 @@ test('AI chat shows a single apply action when both editor proposals are availab
     })
   })
 
-  await waitForAppReady(page, `${appEntryPath}?feature-ai=true`)
+  await waitForAppReady(page, `${appEntryPath}`)
   await connectByotWithSingleRepo(page)
   await setComponentEditorSource(page, 'const App = () => <button>Before</button>')
   await setStylesEditorSource(page, '.button { color: red; }')
@@ -560,7 +558,7 @@ test('AI chat streaming text still updates while latest undo actions are visible
     })
   })
 
-  await waitForAppReady(page, `${appEntryPath}?feature-ai=true`)
+  await waitForAppReady(page, `${appEntryPath}`)
   await connectByotWithSingleRepo(page)
   await setStylesEditorSource(page, '.button { color: red; }')
   await ensureAiChatDrawerOpen(page)
@@ -626,7 +624,7 @@ test('AI chat falls back to non-streaming response when streaming fails', async 
     })
   })
 
-  await waitForAppReady(page, `${appEntryPath}?feature-ai=true`)
+  await waitForAppReady(page, `${appEntryPath}`)
   await connectByotWithSingleRepo(page)
   await ensureAiChatDrawerOpen(page)
 
@@ -678,7 +676,7 @@ test('clearing chat removes previous conversation context from new request', asy
     })
   })
 
-  await waitForAppReady(page, `${appEntryPath}?feature-ai=true`)
+  await waitForAppReady(page, `${appEntryPath}`)
   await connectByotWithSingleRepo(page)
   await ensureAiChatDrawerOpen(page)
 
@@ -738,7 +736,7 @@ test('BYOT remembers selected repository across reloads', async ({ page }) => {
     'knightedcodemonkey/css': ['main', 'release/1.x'],
   })
 
-  await waitForAppReady(page, `${appEntryPath}?feature-ai=true`)
+  await waitForAppReady(page, `${appEntryPath}`)
 
   await page
     .getByRole('textbox', { name: 'GitHub token' })

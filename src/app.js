@@ -7,7 +7,6 @@ import {
 import { createCodeMirrorEditor } from './modules/editor-codemirror.js'
 import { defaultCss, defaultJsx, defaultReactJsx } from './modules/defaults.js'
 import { createDiagnosticsUiController } from './modules/diagnostics-ui.js'
-import { isAiAssistantFeatureEnabled } from './modules/feature-flags.js'
 import { createGitHubChatDrawer } from './modules/github-chat-drawer/drawer.js'
 import { createGitHubByotControls } from './modules/github-byot-controls.js'
 import {
@@ -120,7 +119,6 @@ let suppressEditorChangeSideEffects = false
 let hasAppliedReactModeDefault = false
 let appToastDismissTimer = null
 const clipboardSupported = Boolean(navigator.clipboard?.writeText)
-const aiAssistantFeatureEnabled = isAiAssistantFeatureEnabled()
 const githubPrOpenIcon = {
   viewBox: '0 0 16 16',
   path: 'M1.5 3.25a2.25 2.25 0 1 1 3 2.122v5.256a2.251 2.251 0 1 1-1.5 0V5.372A2.25 2.25 0 0 1 1.5 3.25Zm5.677-.177L9.573.677A.25.25 0 0 1 10 .854V2.5h1A2.5 2.5 0 0 1 13.5 5v5.628a2.251 2.251 0 1 1-1.5 0V5a1 1 0 0 0-1-1h-1v1.646a.25.25 0 0 1-.427.177L7.177 3.427a.25.25 0 0 1 0-.354ZM3.75 2.5a.75.75 0 1 0 0 1.5.75.75 0 0 0 0-1.5Zm0 9.5a.75.75 0 1 0 0 1.5.75.75 0 0 0 0-1.5Zm8.25.75a.75.75 0 1 0 1.5 0 .75.75 0 0 0-1.5 0Z',
@@ -652,12 +650,7 @@ const syncAiChatTokenVisibility = token => {
   const hasToken = typeof token === 'string' && token.trim().length > 0
 
   if (hasToken) {
-    if (aiAssistantFeatureEnabled) {
-      aiChatToggle?.removeAttribute('hidden')
-    } else {
-      aiChatToggle?.setAttribute('hidden', '')
-      aiChatToggle?.setAttribute('aria-expanded', 'false')
-    }
+    aiChatToggle?.removeAttribute('hidden')
 
     githubPrToggle?.removeAttribute('hidden')
 
@@ -760,7 +753,6 @@ const prEditorSyncController = createGitHubPrEditorSyncController({
 })
 
 chatDrawerController = createGitHubChatDrawer({
-  featureEnabled: aiAssistantFeatureEnabled,
   toggleButton: aiChatToggle,
   drawer: aiChatDrawer,
   closeButton: aiChatClose,
