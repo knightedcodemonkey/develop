@@ -11,21 +11,13 @@ BYOT controls are available by default. The token is used to:
 - let you choose which repository to work with
 - use PR context features (Open PR / Push Commit flows)
 
-When AI chat is enabled, the same token is also used for GitHub Models requests.
+The same token is also used for GitHub Models requests in AI chat flows.
 
 ## Privacy and storage behavior
 
 - Your token is stored only in your browser `localStorage`.
 - The token is never sent to any service except the GitHub endpoints required by the feature.
 - You can remove it at any time using the delete button in the BYOT controls.
-
-## Enable AI chat features
-
-BYOT/PR controls do not require a feature flag. To enable AI chat features, use one
-of these options:
-
-1. Add `?feature-ai=true` to the app URL.
-2. Set `localStorage` key `knighted:develop:feature:ai-assistant` to `true`.
 
 ## Create a fine-grained PAT
 
@@ -63,7 +55,7 @@ Use either of these scopes depending on your needs:
 3. Paste token into the BYOT input and click add.
 4. Verify repository list loads.
 5. Select your target repository.
-6. Optional: enable AI chat with `?feature-ai=true`.
+6. Use AI chat as needed after connecting your token.
 
 ## Screenshots
 

@@ -42,7 +42,6 @@ const createMessageLabelIconTemplate = role => {
 }
 
 export const createGitHubChatDrawer = ({
-  featureEnabled,
   toggleButton,
   drawer,
   closeButton,
@@ -65,19 +64,6 @@ export const createGitHubChatDrawer = ({
   getStyleMode,
   getDrawerSide,
 }) => {
-  if (!featureEnabled) {
-    toggleButton?.setAttribute('hidden', '')
-    drawer?.setAttribute('hidden', '')
-
-    return {
-      setOpen: () => {},
-      isOpen: () => false,
-      setSelectedRepository: () => {},
-      setToken: () => {},
-      dispose: () => {},
-    }
-  }
-
   let open = false
   let pendingAbortController = null
   const messages = []

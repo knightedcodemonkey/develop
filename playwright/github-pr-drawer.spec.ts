@@ -189,7 +189,7 @@ test('Open PR drawer confirms and submits component/styles filepaths', async ({
     },
   )
 
-  await waitForAppReady(page, `${appEntryPath}?feature-ai=true`)
+  await waitForAppReady(page, `${appEntryPath}`)
   await connectByotWithSingleRepo(page)
   await ensureOpenPrDrawerOpen(page)
 
@@ -254,7 +254,7 @@ test('Open PR drawer confirms and submits component/styles filepaths', async ({
 test('Open PR drawer starts with empty title/description and short default head', async ({
   page,
 }) => {
-  await waitForAppReady(page, `${appEntryPath}?feature-ai=true`)
+  await waitForAppReady(page, `${appEntryPath}`)
   await connectByotWithSingleRepo(page)
   await ensureOpenPrDrawerOpen(page)
 
@@ -309,7 +309,7 @@ test('Open PR drawer base dropdown updates from mocked repo branches', async ({
     })
   })
 
-  await waitForAppReady(page, `${appEntryPath}?feature-ai=true`)
+  await waitForAppReady(page, `${appEntryPath}`)
 
   await page
     .getByRole('textbox', { name: 'GitHub token' })
@@ -377,7 +377,7 @@ test('Open PR drawer keeps a single active PR context in localStorage', async ({
     'knightedcodemonkey/css': ['stable', 'release/1.x'],
   })
 
-  await waitForAppReady(page, `${appEntryPath}?feature-ai=true`)
+  await waitForAppReady(page, `${appEntryPath}`)
 
   await page
     .getByRole('textbox', { name: 'GitHub token' })
@@ -452,7 +452,7 @@ test('Open PR drawer does not prune saved PR context on repo switch before save'
     'knightedcodemonkey/css': ['stable', 'release/1.x'],
   })
 
-  await waitForAppReady(page, `${appEntryPath}?feature-ai=true`)
+  await waitForAppReady(page, `${appEntryPath}`)
 
   await page
     .getByRole('textbox', { name: 'GitHub token' })
@@ -571,7 +571,7 @@ test('Active PR context updates controls and can be closed from AI controls', as
     },
   )
 
-  await waitForAppReady(page, `${appEntryPath}?feature-ai=true`)
+  await waitForAppReady(page, `${appEntryPath}`)
 
   await page.evaluate(() => {
     localStorage.setItem(
@@ -661,7 +661,7 @@ test('Active PR context is disabled on load when pull request is closed', async 
     },
   )
 
-  await waitForAppReady(page, `${appEntryPath}?feature-ai=true`)
+  await waitForAppReady(page, `${appEntryPath}`)
 
   await page.evaluate(() => {
     localStorage.setItem(
@@ -759,7 +759,7 @@ test('Active PR context rehydrates after token remove and re-add', async ({ page
     },
   )
 
-  await waitForAppReady(page, `${appEntryPath}?feature-ai=true`)
+  await waitForAppReady(page, `${appEntryPath}`)
 
   await page.evaluate(() => {
     localStorage.setItem('knighted:develop:github-repository', 'knightedcodemonkey/css')
@@ -870,7 +870,7 @@ test('Active PR context deactivates after token remove and re-add when PR is clo
     },
   )
 
-  await waitForAppReady(page, `${appEntryPath}?feature-ai=true`)
+  await waitForAppReady(page, `${appEntryPath}`)
 
   await page.evaluate(() => {
     localStorage.setItem('knighted:develop:github-repository', 'knightedcodemonkey/css')
@@ -985,7 +985,7 @@ test('Active PR context recovers when saved head branch is missing but PR metada
     },
   )
 
-  await waitForAppReady(page, `${appEntryPath}?feature-ai=true`)
+  await waitForAppReady(page, `${appEntryPath}`)
 
   await page.evaluate(() => {
     localStorage.setItem(
@@ -1130,7 +1130,7 @@ test('Active PR context uses Push commit flow without creating a new pull reques
     },
   )
 
-  await waitForAppReady(page, `${appEntryPath}?feature-ai=true`)
+  await waitForAppReady(page, `${appEntryPath}`)
 
   await page.evaluate(() => {
     localStorage.setItem(
@@ -1327,7 +1327,7 @@ test('Reloaded active PR context from URL metadata keeps Push mode and status re
     },
   )
 
-  await waitForAppReady(page, `${appEntryPath}?feature-ai=true`)
+  await waitForAppReady(page, `${appEntryPath}`)
 
   await page.evaluate(() => {
     localStorage.setItem(
@@ -1474,7 +1474,7 @@ test('Reloaded active PR context syncs editor content from GitHub branch and res
     },
   )
 
-  await waitForAppReady(page, `${appEntryPath}?feature-ai=true`)
+  await waitForAppReady(page, `${appEntryPath}`)
 
   await page.evaluate(() => {
     localStorage.setItem(
@@ -1559,7 +1559,7 @@ test('Reloaded active PR context falls back to css style mode for unsupported va
     },
   )
 
-  await waitForAppReady(page, `${appEntryPath}?feature-ai=true`)
+  await waitForAppReady(page, `${appEntryPath}`)
 
   await page.evaluate(() => {
     localStorage.setItem(
@@ -1585,7 +1585,7 @@ test('Reloaded active PR context falls back to css style mode for unsupported va
 })
 
 test('Open PR drawer validates unsafe filepaths', async ({ page }) => {
-  await waitForAppReady(page, `${appEntryPath}?feature-ai=true`)
+  await waitForAppReady(page, `${appEntryPath}`)
   await connectByotWithSingleRepo(page)
   await ensureOpenPrDrawerOpen(page)
 
@@ -1605,7 +1605,7 @@ test('Open PR drawer validates unsafe filepaths', async ({ page }) => {
 test('Open PR drawer allows dotted file segments that are not traversal', async ({
   page,
 }) => {
-  await waitForAppReady(page, `${appEntryPath}?feature-ai=true`)
+  await waitForAppReady(page, `${appEntryPath}`)
   await connectByotWithSingleRepo(page)
   await ensureOpenPrDrawerOpen(page)
 
@@ -1626,7 +1626,7 @@ test('Open PR drawer allows dotted file segments that are not traversal', async 
 })
 
 test('Open PR drawer rejects trailing slash file paths', async ({ page }) => {
-  await waitForAppReady(page, `${appEntryPath}?feature-ai=true`)
+  await waitForAppReady(page, `${appEntryPath}`)
   await connectByotWithSingleRepo(page)
   await ensureOpenPrDrawerOpen(page)
 
@@ -1645,7 +1645,7 @@ test('Open PR drawer rejects trailing slash file paths', async ({ page }) => {
 test('Open PR drawer include App wrapper checkbox defaults off and resets on reopen', async ({
   page,
 }) => {
-  await waitForAppReady(page, `${appEntryPath}?feature-ai=true`)
+  await waitForAppReady(page, `${appEntryPath}`)
   await connectByotWithSingleRepo(page)
   await ensureOpenPrDrawerOpen(page)
 
@@ -1755,7 +1755,7 @@ test('Open PR drawer strips App wrapper from committed component source by defau
     },
   )
 
-  await waitForAppReady(page, `${appEntryPath}?feature-ai=true`)
+  await waitForAppReady(page, `${appEntryPath}`)
   await connectByotWithSingleRepo(page)
 
   const componentSource = [
@@ -1880,7 +1880,7 @@ test('Open PR drawer includes App wrapper in committed source when toggled on', 
     },
   )
 
-  await waitForAppReady(page, `${appEntryPath}?feature-ai=true`)
+  await waitForAppReady(page, `${appEntryPath}`)
   await connectByotWithSingleRepo(page)
 
   await setComponentEditorSource(
