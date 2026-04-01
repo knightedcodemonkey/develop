@@ -105,7 +105,6 @@ export const createGitHubChatDrawer = ({
         continue
       }
 
-      message.confirmTarget = null
       message.appliedTargets = null
     }
   }
@@ -881,15 +880,15 @@ export const createGitHubChatDrawer = ({
   renderMessages()
   setChatStatus('Idle', 'neutral')
 
-  toggleButton?.addEventListener('click', () => {
+  const onToggleButtonClick = () => {
     setOpen(!open)
-  })
+  }
 
-  closeButton?.addEventListener('click', () => {
+  const onCloseButtonClick = () => {
     setOpen(false)
-  })
+  }
 
-  clearButton?.addEventListener('click', () => {
+  const onClearButtonClick = () => {
     stopPendingRequest()
     setPendingState(false)
     cancelPendingAssistantBodyUpdate()
@@ -898,9 +897,9 @@ export const createGitHubChatDrawer = ({
     messages.length = 0
     renderMessages()
     setChatStatus('Chat cleared.', 'neutral')
-  })
+  }
 
-  drawer?.addEventListener('click', event => {
+  const onDrawerClick = event => {
     const target = event.target
     if (!(target instanceof HTMLElement)) {
       return
@@ -1002,20 +1001,20 @@ export const createGitHubChatDrawer = ({
       renderMessages()
       return
     }
-  })
+  }
 
-  sendButton?.addEventListener('click', () => {
+  const onSendButtonClick = () => {
     void runChatRequest()
-  })
+  }
 
-  promptInput?.addEventListener('keydown', event => {
+  const onPromptInputKeydown = event => {
     if (event.key !== 'Enter' || (!event.metaKey && !event.ctrlKey)) {
       return
     }
 
     event.preventDefault()
     void runChatRequest()
-  })
+  }
 
   const onDocumentKeydown = event => {
     if (event.key === 'Escape' && open) {
@@ -1023,6 +1022,12 @@ export const createGitHubChatDrawer = ({
     }
   }
 
+  toggleButton?.addEventListener('click', onToggleButtonClick)
+  closeButton?.addEventListener('click', onCloseButtonClick)
+  clearButton?.addEventListener('click', onClearButtonClick)
+  drawer?.addEventListener('click', onDrawerClick)
+  sendButton?.addEventListener('click', onSendButtonClick)
+  promptInput?.addEventListener('keydown', onPromptInputKeydown)
   document.addEventListener('keydown', onDocumentKeydown)
 
   return {
@@ -1044,6 +1049,12 @@ export const createGitHubChatDrawer = ({
         undoActionsNode.remove()
         undoActionsNode = null
       }
+      toggleButton?.removeEventListener('click', onToggleButtonClick)
+      closeButton?.removeEventListener('click', onCloseButtonClick)
+      clearButton?.removeEventListener('click', onClearButtonClick)
+      drawer?.removeEventListener('click', onDrawerClick)
+      sendButton?.removeEventListener('click', onSendButtonClick)
+      promptInput?.removeEventListener('keydown', onPromptInputKeydown)
       document.removeEventListener('keydown', onDocumentKeydown)
     },
   }

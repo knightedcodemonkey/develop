@@ -58,14 +58,26 @@ const mergeConversationSummary = ({ existingSummary, droppedMessages }) => {
   return `${merged.slice(0, chatMaxSummaryChars)}...`
 }
 
+const toModeDisplayText = value => {
+  const mode = toChatText(value)
+  return mode || 'unknown'
+}
+
+const toModeKey = value => toChatText(value).toLowerCase()
+
 const collectModePolicyContext = ({ renderMode, styleMode }) => {
+  const renderModeText = toModeDisplayText(renderMode)
+  const styleModeText = toModeDisplayText(styleMode)
+  const renderModeKey = toModeKey(renderMode)
+  const styleModeKey = toModeKey(styleMode)
+
   const policyLines = [
     'Mode-aware policy:',
-    `- Render mode: ${renderMode || 'unknown'}`,
-    `- Style mode: ${styleMode || 'unknown'}`,
+    `- Render mode: ${renderModeText}`,
+    `- Style mode: ${styleModeText}`,
   ]
 
-  if (renderMode.toLowerCase() === 'dom') {
+  if (renderModeKey === 'dom') {
     policyLines.push(
       '- In DOM mode, avoid React hook/state guidance unless the user explicitly asks for React migration.',
     )
@@ -74,11 +86,11 @@ const collectModePolicyContext = ({ renderMode, styleMode }) => {
     )
   }
 
-  if (renderMode.toLowerCase() === 'react') {
+  if (renderModeKey === 'react') {
     policyLines.push('- In React mode, prefer component-based React guidance.')
   }
 
-  if (styleMode.toLowerCase() === 'css') {
+  if (styleModeKey === 'css') {
     policyLines.push(
       '- Keep style advice compatible with plain CSS unless user asks for a preprocessor.',
     )
