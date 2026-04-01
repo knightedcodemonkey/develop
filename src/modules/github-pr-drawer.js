@@ -439,6 +439,8 @@ export const createGitHubPrDrawer = ({
   let pendingActiveContentSyncAbortController = null
   let pendingBranchesRequestKey = ''
   let pendingBranchesPromise = null
+  let pendingContextVerifyRequestKey = ''
+  let pendingContextVerifyPromise = null
   let lastSyncedRepositoryFullName = ''
   let lastActiveContentSyncKey = ''
   const baseBranchesByRepository = new Map()
@@ -645,6 +647,8 @@ export const createGitHubPrDrawer = ({
   const abortPendingContextVerifyRequest = () => {
     pendingContextVerifyAbortController?.abort()
     pendingContextVerifyAbortController = null
+    pendingContextVerifyRequestKey = ''
+    pendingContextVerifyPromise = null
   }
 
   const abortPendingActiveContentSyncRequest = () => {
@@ -735,100 +739,127 @@ export const createGitHubPrDrawer = ({
       return
     }
 
+    const requestKey = [
+      repositoryFullName,
+      String(pullRequestNumberFromConfig || ''),
+      headBranch,
+      toSafeText(savedConfig.baseBranch),
+    ].join('|')
+
+    if (pendingContextVerifyPromise && pendingContextVerifyRequestKey === requestKey) {
+      await pendingContextVerifyPromise
+      return
+    }
+
     abortPendingContextVerifyRequest()
     const abortController = new AbortController()
     pendingContextVerifyAbortController = abortController
 
-    try {
-      let resolvedPullRequest = null
-      let pullRequestClosedByNumber = false
+    const runVerifyRequest = async () => {
+      try {
+        let resolvedPullRequest = null
+        let pullRequestClosedByNumber = false
 
-      if (pullRequestNumberFromConfig) {
-        const pullRequest = await getRepositoryPullRequest({
-          token,
-          owner,
-          repo,
-          pullRequestNumber: pullRequestNumberFromConfig,
-          signal: abortController.signal,
-        })
+        if (pullRequestNumberFromConfig) {
+          const pullRequest = await getRepositoryPullRequest({
+            token,
+            owner,
+            repo,
+            pullRequestNumber: pullRequestNumberFromConfig,
+            signal: abortController.signal,
+          })
 
-        if (pullRequest?.isOpen) {
-          resolvedPullRequest = pullRequest
-        } else if (pullRequest) {
-          pullRequestClosedByNumber = true
+          if (pullRequest?.isOpen) {
+            resolvedPullRequest = pullRequest
+          } else if (pullRequest) {
+            pullRequestClosedByNumber = true
+          }
         }
-      }
 
-      if (!resolvedPullRequest && !pullRequestClosedByNumber) {
-        resolvedPullRequest = await findOpenRepositoryPullRequestByHead({
-          token,
-          owner,
-          repo,
-          headOwner: owner,
-          headBranch,
-          baseBranch: toSafeText(savedConfig.baseBranch),
-          signal: abortController.signal,
-        })
-      }
+        if (!resolvedPullRequest && !pullRequestClosedByNumber) {
+          resolvedPullRequest = await findOpenRepositoryPullRequestByHead({
+            token,
+            owner,
+            repo,
+            headOwner: owner,
+            headBranch,
+            baseBranch: toSafeText(savedConfig.baseBranch),
+            signal: abortController.signal,
+          })
+        }
 
-      if (pendingContextVerifyAbortController !== abortController) {
-        return
-      }
+        if (pendingContextVerifyAbortController !== abortController) {
+          return
+        }
 
-      if (resolvedPullRequest?.isOpen) {
-        const nextHeadBranch =
-          sanitizeBranchPart(resolvedPullRequest.headRef) || headBranch
-        const nextBaseBranch =
-          toSafeText(resolvedPullRequest.baseRef) || toSafeText(savedConfig.baseBranch)
+        if (resolvedPullRequest?.isOpen) {
+          const nextHeadBranch =
+            sanitizeBranchPart(resolvedPullRequest.headRef) || headBranch
+          const nextBaseBranch =
+            toSafeText(resolvedPullRequest.baseRef) || toSafeText(savedConfig.baseBranch)
+
+          saveRepositoryPrConfig({
+            repositoryFullName,
+            config: {
+              ...savedConfig,
+              isActivePr: true,
+              renderMode: normalizeRenderMode(savedConfig.renderMode),
+              styleMode: normalizeStyleMode(savedConfig.styleMode),
+              headBranch: nextHeadBranch,
+              baseBranch: nextBaseBranch,
+              pullRequestNumber: resolvedPullRequest.number,
+              pullRequestUrl: resolvedPullRequest.htmlUrl,
+              prTitle:
+                toSafeText(savedConfig.prTitle) || toSafeText(resolvedPullRequest.title),
+            },
+          })
+          syncFormForRepository({ resetBranch: true })
+          setSubmitButtonLabel()
+          emitActivePrContextChange()
+          void syncActivePrEditorContent()
+          return
+        }
 
         saveRepositoryPrConfig({
           repositoryFullName,
           config: {
             ...savedConfig,
-            isActivePr: true,
-            renderMode: normalizeRenderMode(savedConfig.renderMode),
-            styleMode: normalizeStyleMode(savedConfig.styleMode),
-            headBranch: nextHeadBranch,
-            baseBranch: nextBaseBranch,
-            pullRequestNumber: resolvedPullRequest.number,
-            pullRequestUrl: resolvedPullRequest.htmlUrl,
-            prTitle:
-              toSafeText(savedConfig.prTitle) || toSafeText(resolvedPullRequest.title),
+            isActivePr: false,
           },
         })
-        syncFormForRepository({ resetBranch: true })
         setSubmitButtonLabel()
         emitActivePrContextChange()
-        void syncActivePrEditorContent()
-        return
-      }
+        lastActiveContentSyncKey = ''
+        abortPendingActiveContentSyncRequest()
+        setStatus(
+          'Saved pull request context is not open on GitHub. Open PR mode restored.',
+          'neutral',
+        )
+      } catch (error) {
+        if (abortController.signal.aborted) {
+          return
+        }
 
-      saveRepositoryPrConfig({
-        repositoryFullName,
-        config: {
-          ...savedConfig,
-          isActivePr: false,
-        },
-      })
-      setSubmitButtonLabel()
-      emitActivePrContextChange()
-      lastActiveContentSyncKey = ''
-      abortPendingActiveContentSyncRequest()
-      setStatus(
-        'Saved pull request context is not open on GitHub. Open PR mode restored.',
-        'neutral',
-      )
-    } catch (error) {
-      if (abortController.signal.aborted) {
-        return
+        const message =
+          error instanceof Error ? error.message : 'Failed to verify pull request state.'
+        setStatus(`Could not verify saved pull request state: ${message}`, 'error')
+      } finally {
+        if (pendingContextVerifyAbortController === abortController) {
+          pendingContextVerifyAbortController = null
+        }
       }
+    }
 
-      const message =
-        error instanceof Error ? error.message : 'Failed to verify pull request state.'
-      setStatus(`Could not verify saved pull request state: ${message}`, 'error')
+    const requestPromise = runVerifyRequest()
+    pendingContextVerifyRequestKey = requestKey
+    pendingContextVerifyPromise = requestPromise
+
+    try {
+      await requestPromise
     } finally {
-      if (pendingContextVerifyAbortController === abortController) {
-        pendingContextVerifyAbortController = null
+      if (pendingContextVerifyPromise === requestPromise) {
+        pendingContextVerifyPromise = null
+        pendingContextVerifyRequestKey = ''
       }
     }
   }

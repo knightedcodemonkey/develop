@@ -460,6 +460,10 @@ export const createRenderRuntimeController = ({
       return source
     }
 
+    if (/^\s*export\s+default\b/m.test(source)) {
+      return source
+    }
+
     const {
       declarations,
       importCount,

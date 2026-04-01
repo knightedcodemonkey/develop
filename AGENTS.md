@@ -39,6 +39,7 @@ Repository structure:
 ## Code style and conventions
 
 - Preserve current project formatting: single quotes, no semicolons, print width 90, arrowParens avoid.
+- Do not use index files or barrel-file architecture; prefer explicit file names and explicit import paths.
 - Keep UI changes intentional and lightweight; avoid broad visual rewrites unless requested.
 - Keep runtime logic defensive for flaky/slow CDN conditions.
 - Preserve progressive loading behavior (lazy-load optional compilers/runtime pieces where possible).
