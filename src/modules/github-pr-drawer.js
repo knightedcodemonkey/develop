@@ -1532,6 +1532,18 @@ export const createGitHubPrDrawer = ({
       }
 
       const savedConfig = readRepositoryPrConfig(repositoryFullName)
+      const previousActiveContext =
+        savedConfig?.isActivePr === true
+          ? {
+              repositoryFullName,
+              pullRequestNumber:
+                typeof savedConfig.pullRequestNumber === 'number' &&
+                Number.isFinite(savedConfig.pullRequestNumber)
+                  ? savedConfig.pullRequestNumber
+                  : parsePullRequestNumberFromUrl(savedConfig.pullRequestUrl),
+            }
+          : null
+
       if (Object.keys(savedConfig).length > 0) {
         saveRepositoryPrConfig({
           repositoryFullName,
@@ -1541,11 +1553,6 @@ export const createGitHubPrDrawer = ({
           },
         })
       }
-
-      const previousActiveContext =
-        savedConfig?.isActivePr === true
-          ? getActiveRepositoryPrContext(repositoryFullName)
-          : null
 
       lastActiveContentSyncKey = ''
       abortPendingActiveContentSyncRequest()
