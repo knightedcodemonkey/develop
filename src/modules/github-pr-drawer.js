@@ -1524,6 +1524,45 @@ export const createGitHubPrDrawer = ({
     setOpen,
     isOpen: () => open,
     getActivePrContext: () => getCurrentActivePrContext(),
+    disconnectActivePrContext: () => {
+      const repository = getSelectedRepositoryObject()
+      const repositoryFullName = getRepositoryFullName(repository)
+      if (!repositoryFullName) {
+        return { reference: '' }
+      }
+
+      const savedConfig = readRepositoryPrConfig(repositoryFullName)
+      const previousActiveContext =
+        savedConfig?.isActivePr === true
+          ? {
+              repositoryFullName,
+              pullRequestNumber:
+                typeof savedConfig.pullRequestNumber === 'number' &&
+                Number.isFinite(savedConfig.pullRequestNumber)
+                  ? savedConfig.pullRequestNumber
+                  : parsePullRequestNumberFromUrl(savedConfig.pullRequestUrl),
+            }
+          : null
+
+      if (Object.keys(savedConfig).length > 0) {
+        saveRepositoryPrConfig({
+          repositoryFullName,
+          config: {
+            ...savedConfig,
+            isActivePr: false,
+          },
+        })
+      }
+
+      lastActiveContentSyncKey = ''
+      abortPendingActiveContentSyncRequest()
+      setSubmitButtonLabel()
+      emitActivePrContextChange()
+
+      return {
+        reference: formatActivePrReference(previousActiveContext),
+      }
+    },
     clearActivePrContext: () => {
       const repository = getSelectedRepositoryObject()
       const repositoryFullName = getRepositoryFullName(repository)

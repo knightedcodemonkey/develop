@@ -496,6 +496,179 @@ test('Open PR drawer does not prune saved PR context on repo switch before save'
   expect(contexts[0]?.parsed?.componentFilePath).toBe('examples/develop/App.tsx')
 })
 
+test('Active PR context disconnect uses local-only confirmation flow', async ({
+  page,
+}) => {
+  let closePullRequestRequestCount = 0
+
+  await page.route('https://api.github.com/user/repos**', async route => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify([
+        {
+          id: 11,
+          owner: { login: 'knightedcodemonkey' },
+          name: 'develop',
+          full_name: 'knightedcodemonkey/develop',
+          default_branch: 'main',
+          permissions: { push: true },
+        },
+      ]),
+    })
+  })
+
+  await mockRepositoryBranches(page, {
+    'knightedcodemonkey/develop': ['main', 'release'],
+  })
+
+  await page.route(
+    'https://api.github.com/repos/knightedcodemonkey/develop/pulls/2',
+    async route => {
+      if (route.request().method() === 'PATCH') {
+        closePullRequestRequestCount += 1
+        await route.fulfill({
+          status: 200,
+          contentType: 'application/json',
+          body: JSON.stringify({
+            number: 2,
+            state: 'closed',
+            title: 'Existing PR context from storage',
+            html_url: 'https://github.com/knightedcodemonkey/develop/pull/2',
+            head: { ref: 'develop/open-pr-test' },
+            base: { ref: 'main' },
+          }),
+        })
+        return
+      }
+
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          number: 2,
+          state: 'open',
+          title: 'Existing PR context from storage',
+          html_url: 'https://github.com/knightedcodemonkey/develop/pull/2',
+          head: { ref: 'develop/open-pr-test' },
+          base: { ref: 'main' },
+        }),
+      })
+    },
+  )
+
+  await page.route(
+    'https://api.github.com/repos/knightedcodemonkey/develop/git/ref/**',
+    async route => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          ref: 'refs/heads/develop/open-pr-test',
+          object: { type: 'commit', sha: 'existing-head-sha' },
+        }),
+      })
+    },
+  )
+
+  await waitForAppReady(page, `${appEntryPath}`)
+
+  await page.evaluate(() => {
+    localStorage.setItem(
+      'knighted:develop:github-pr-config:knightedcodemonkey/develop',
+      JSON.stringify({
+        componentFilePath: 'examples/component/App.tsx',
+        stylesFilePath: 'examples/styles/app.css',
+        renderMode: 'react',
+        baseBranch: 'main',
+        headBranch: 'develop/open-pr-test',
+        prTitle: 'Existing PR context from storage',
+        prBody: 'Saved body',
+        isActivePr: true,
+        pullRequestNumber: 2,
+        pullRequestUrl: 'https://github.com/knightedcodemonkey/develop/pull/2',
+      }),
+    )
+  })
+
+  await connectByotWithSingleRepo(page)
+
+  await expect(
+    page.getByRole('button', { name: 'Disconnect active pull request context' }),
+  ).toBeVisible()
+
+  await page
+    .getByRole('button', { name: 'Disconnect active pull request context' })
+    .click()
+
+  const dialog = page.getByRole('dialog')
+  await expect(dialog).toBeVisible()
+  await expect(dialog).toContainText('Disconnect PR context?')
+  await expect(dialog).toContainText(
+    'This will disconnect the active pull request context in this app only.',
+  )
+  await expect(dialog).toContainText('Your pull request will stay open on GitHub.')
+  await expect(dialog).toContainText(
+    'Your GitHub token and selected repository will stay connected.',
+  )
+
+  await dialog.getByRole('button', { name: 'Cancel' }).click()
+
+  await expect(
+    page.getByRole('button', { name: 'Push commit to active pull request branch' }),
+  ).toBeVisible()
+
+  const savedActiveStateAfterCancel = await page.evaluate(() => {
+    const raw = localStorage.getItem(
+      'knighted:develop:github-pr-config:knightedcodemonkey/develop',
+    )
+
+    if (!raw) {
+      return null
+    }
+
+    try {
+      const parsed = JSON.parse(raw)
+      return parsed?.isActivePr === true
+    } catch {
+      return null
+    }
+  })
+
+  expect(savedActiveStateAfterCancel).toBe(true)
+
+  await page
+    .getByRole('button', { name: 'Disconnect active pull request context' })
+    .click()
+  await dialog.getByRole('button', { name: 'Disconnect' }).click()
+
+  await expect(page.getByRole('button', { name: 'Open pull request' })).toBeVisible()
+  await expect(
+    page.getByRole('button', { name: 'Disconnect active pull request context' }),
+  ).toBeHidden()
+
+  const savedContextAfterDisconnect = await page.evaluate(() => {
+    const raw = localStorage.getItem(
+      'knighted:develop:github-pr-config:knightedcodemonkey/develop',
+    )
+
+    if (!raw) {
+      return null
+    }
+
+    try {
+      return JSON.parse(raw)
+    } catch {
+      return null
+    }
+  })
+
+  expect(savedContextAfterDisconnect).not.toBeNull()
+  expect(savedContextAfterDisconnect?.isActivePr).toBe(false)
+  expect(savedContextAfterDisconnect?.pullRequestNumber).toBe(2)
+  expect(closePullRequestRequestCount).toBe(0)
+})
+
 test('Active PR context updates controls and can be closed from AI controls', async ({
   page,
 }) => {
