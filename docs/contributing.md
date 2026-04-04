@@ -2,9 +2,9 @@
 
 Thanks for contributing to `@knighted/develop`.
 
-This project is a CDN-first browser IDE for showcasing `@knighted/jsx` and
-`@knighted/css`, so local workflows should preserve browser execution behavior
-and avoid bundler-only assumptions in `src/` runtime code.
+This project is a CDN-first UI component workbench for showcasing `@knighted/jsx`
+and `@knighted/css`, so local workflows should preserve browser execution
+behavior and avoid bundler-only assumptions in `src/` runtime code.
 
 ## Project docs
 

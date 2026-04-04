@@ -1,14 +1,15 @@
 {
   "name": "@knighted/develop",
   "version": "0.2.0",
-  "description": "Develop UI components directly in the browser using JSX and CSS.",
+  "description": "CDN-first UI component workbench for rapid browser prototyping with JSX and CSS.",
   "keywords": [
     "ui",
     "components",
     "realtime",
     "browser",
     "development",
-    "ide",
+    "workbench",
+    "prototyping",
     "jsx",
     "css",
     "importmap",

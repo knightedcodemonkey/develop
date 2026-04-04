@@ -1,4 +1,4 @@
-# Forget The Build Step: A Browser-Native IDE For JSX + CSS
+# Forget The Build Step: A Browser-Native Workbench For JSX + CSS
 
 Frontend tooling has become incredibly capable.
 
@@ -12,7 +12,7 @@ What if the browser is the dev environment?
 
 That idea became [@knighted/develop](https://github.com/knightedcodemonkey/develop).
 
-It is a lightweight in-browser IDE built to showcase [@knighted/jsx](https://github.com/knightedcodemonkey/jsx) and [@knighted/css](https://github.com/knightedcodemonkey/css), with dependencies delivered over CDN ESM instead of requiring a local build step in the inner loop.
+It is a lightweight in-browser UI component workbench built to showcase [@knighted/jsx](https://github.com/knightedcodemonkey/jsx) and [@knighted/css](https://github.com/knightedcodemonkey/css), with dependencies delivered over CDN ESM instead of requiring a local build step in the inner loop.
 
 ## The Loop, In Practice
 
@@ -66,7 +66,7 @@ For prototyping and component iteration, that is a meaningful shift.
 
 ## Try It
 
-- Live IDE: https://knightedcodemonkey.github.io/develop/
+- Live workbench: https://knightedcodemonkey.github.io/develop/
 - Source: https://github.com/knightedcodemonkey/develop
 
 If you are curious, start by toggling:
