@@ -47,6 +47,7 @@ const githubPrToggleLabel = document.getElementById('github-pr-toggle-label')
 const githubPrToggleIcon = document.getElementById('github-pr-toggle-icon')
 const githubPrToggleIconPath = document.getElementById('github-pr-toggle-icon-path')
 const githubPrContextClose = document.getElementById('github-pr-context-close')
+const githubPrContextDisconnect = document.getElementById('github-pr-context-disconnect')
 const githubPrDrawer = document.getElementById('github-pr-drawer')
 const openPrTitle = document.getElementById('open-pr-title')
 const githubPrClose = document.getElementById('github-pr-close')
@@ -634,16 +635,14 @@ const syncActivePrContextUi = activeContext => {
   setGitHubPrToggleVisual(hasActiveContext ? 'push-commit' : 'open-pr')
   syncEditorPrContextIndicators(shouldShowEditorSyncIndicators)
 
-  if (!(githubPrContextClose instanceof HTMLButtonElement)) {
-    return
-  }
-
   if (!hasActiveContext) {
-    githubPrContextClose.setAttribute('hidden', '')
+    githubPrContextClose?.setAttribute('hidden', '')
+    githubPrContextDisconnect?.setAttribute('hidden', '')
     return
   }
 
-  githubPrContextClose.removeAttribute('hidden')
+  githubPrContextClose?.removeAttribute('hidden')
+  githubPrContextDisconnect?.removeAttribute('hidden')
 }
 
 const syncAiChatTokenVisibility = token => {
@@ -656,8 +655,10 @@ const syncAiChatTokenVisibility = token => {
 
     if (githubAiContextState.activePrContext) {
       githubPrContextClose?.removeAttribute('hidden')
+      githubPrContextDisconnect?.removeAttribute('hidden')
     } else {
       githubPrContextClose?.setAttribute('hidden', '')
+      githubPrContextDisconnect?.setAttribute('hidden', '')
     }
     return
   }
@@ -672,6 +673,7 @@ const syncAiChatTokenVisibility = token => {
   githubPrToggle?.setAttribute('hidden', '')
   githubPrToggle?.setAttribute('aria-expanded', 'false')
   githubPrContextClose?.setAttribute('hidden', '')
+  githubPrContextDisconnect?.setAttribute('hidden', '')
   chatDrawerController.setOpen(false)
   prDrawerController.setOpen(false)
 }
@@ -915,6 +917,31 @@ githubPrContextClose?.addEventListener('click', () => {
           setStatus(`Close context failed: ${message}`, 'error')
           showAppToast(`Close context failed: ${message}`)
         })
+    },
+  })
+})
+
+githubPrContextDisconnect?.addEventListener('click', () => {
+  if (!githubAiContextState.activePrContext) {
+    return
+  }
+
+  const activePrReference = formatActivePrReference(githubAiContextState.activePrContext)
+  const referenceLine = activePrReference ? `PR: ${activePrReference}\n` : ''
+
+  confirmAction({
+    title: 'Disconnect PR context?',
+    copy: `${referenceLine}This will disconnect the active pull request context in this app only.\nYour pull request will stay open on GitHub.\nYour GitHub token and selected repository will stay connected.`,
+    confirmButtonText: 'Disconnect',
+    onConfirm: () => {
+      const result = prDrawerController.disconnectActivePrContext()
+      const reference = result?.reference
+      setStatus(
+        reference
+          ? `Disconnected PR context (${reference}). Pull request remains open on GitHub.`
+          : 'Disconnected PR context. Pull request remains open on GitHub.',
+        'neutral',
+      )
     },
   })
 })

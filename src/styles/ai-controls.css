@@ -1,3 +1,11 @@
+.app-grid {
+  --ai-chat-sparkle-color: color-mix(in srgb, #fbbf24 86%, var(--panel-text));
+}
+
+:root[data-theme='light'] .app-grid {
+  --ai-chat-sparkle-color: color-mix(in srgb, #b7791f 90%, var(--panel-text));
+}
+
 .app-grid-layout-controls {
   flex-wrap: wrap;
   position: relative;
@@ -268,17 +276,39 @@
   color: var(--select-option-disabled);
 }
 
-.ai-chat-toggle {
+.diagnostics-toggle.ai-chat-toggle {
+  --ai-chat-icon-color: var(--ai-chat-sparkle-color);
+  --ai-chat-text-color: var(--shell-text);
+  --ai-chat-text-color-hover: var(--ai-chat-sparkle-color);
   margin-left: 2px;
   display: inline-flex;
   align-items: center;
   gap: 6px;
+  color: var(--ai-chat-text-color);
+  transition: color 140ms ease;
+}
+
+.diagnostics-toggle.ai-chat-toggle:hover:not(:disabled) {
+  color: var(--ai-chat-text-color-hover);
+}
+
+.ai-chat-toggle__icon {
+  width: 16px;
+  height: 16px;
+  fill: var(--ai-chat-icon-color);
+}
+
+.ai-chat-toggle__icon path {
+  fill: var(--ai-chat-icon-color);
 }
 
 .diagnostics-toggle.github-pr-toggle {
   --github-pr-icon-color: color-mix(in srgb, #2da44e 82%, var(--panel-text));
   --github-pr-icon-color-hover: color-mix(in srgb, #2da44e 92%, var(--panel-text));
   --github-pr-icon-color-active: color-mix(in srgb, #1f883d 94%, var(--panel-text));
+  --github-pr-text-color: color-mix(in srgb, var(--panel-text) 84%, var(--text-subtle));
+  --github-pr-text-color-hover: color-mix(in srgb, #2da44e 86%, var(--panel-text));
+  --github-pr-text-color-active: color-mix(in srgb, #1f883d 90%, var(--panel-text));
   --github-pr-icon-color-disabled: color-mix(
     in srgb,
     var(--shell-text) 58%,
@@ -289,7 +319,9 @@
   display: inline-flex;
   align-items: center;
   gap: 6px;
+  color: var(--github-pr-text-color);
   transition:
+    color 140ms ease,
     box-shadow 140ms ease,
     transform 140ms ease;
 }
@@ -298,6 +330,9 @@
   --github-pr-icon-color: color-mix(in srgb, #1f883d 88%, var(--panel-text));
   --github-pr-icon-color-hover: color-mix(in srgb, #1a7f37 92%, var(--panel-text));
   --github-pr-icon-color-active: color-mix(in srgb, #116329 95%, var(--panel-text));
+  --github-pr-text-color: color-mix(in srgb, var(--panel-text) 82%, var(--text-subtle));
+  --github-pr-text-color-hover: color-mix(in srgb, #1a7f37 88%, var(--panel-text));
+  --github-pr-text-color-active: color-mix(in srgb, #116329 92%, var(--panel-text));
   --github-pr-icon-color-disabled: color-mix(
     in srgb,
     var(--shell-text) 52%,
@@ -318,10 +353,12 @@
 
 .diagnostics-toggle.github-pr-toggle:hover:not(:disabled) {
   --github-pr-icon-color: var(--github-pr-icon-color-hover);
+  color: var(--github-pr-text-color-hover);
 }
 
 .diagnostics-toggle.github-pr-toggle[aria-expanded='true']:not(:disabled) {
   --github-pr-icon-color: var(--github-pr-icon-color-active);
+  color: var(--github-pr-text-color-active);
 }
 
 .diagnostics-toggle.github-pr-toggle:focus-visible:not(:disabled) {
@@ -388,29 +425,67 @@
   display: none !important;
 }
 
+.diagnostics-toggle.github-pr-context-disconnect {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  --github-pr-disconnect-icon-color: color-mix(
+    in srgb,
+    var(--accent) 78%,
+    var(--panel-text)
+  );
+  --github-pr-disconnect-text-color: var(--shell-text);
+  --github-pr-disconnect-text-color-hover: color-mix(
+    in srgb,
+    var(--accent) 78%,
+    var(--panel-text)
+  );
+
+  color: var(--github-pr-disconnect-text-color);
+}
+
+:root[data-theme='light'] .diagnostics-toggle.github-pr-context-disconnect {
+  --github-pr-disconnect-icon-color: color-mix(in srgb, #6d28d9 84%, var(--panel-text));
+  --github-pr-disconnect-text-color-hover: color-mix(
+    in srgb,
+    #6d28d9 88%,
+    var(--panel-text)
+  );
+}
+
+.github-pr-context-disconnect__icon {
+  width: 14px;
+  height: 14px;
+  fill: var(--github-pr-disconnect-icon-color);
+}
+
+.github-pr-context-disconnect__icon path {
+  fill: var(--github-pr-disconnect-icon-color);
+}
+
+.diagnostics-toggle.github-pr-context-disconnect:hover:not(:disabled) {
+  color: var(--github-pr-disconnect-text-color-hover);
+}
+
+.github-pr-context-disconnect__label {
+  color: inherit;
+}
+
+.github-pr-context-disconnect:focus-visible:not(:disabled) {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 1px;
+}
+
+.github-pr-context-disconnect[hidden] {
+  display: none !important;
+}
+
 .github-pr-toggle[hidden] {
   display: none !important;
 }
 
 .ai-chat-toggle[hidden] {
   display: none !important;
-}
-
-.ai-chat-toggle__emoji--light {
-  display: none;
-}
-
-.ai-chat-toggle__emoji {
-  font-size: 1.25em;
-  line-height: 1;
-}
-
-:root[data-theme='light'] .ai-chat-toggle__emoji--dark {
-  display: none;
-}
-
-:root[data-theme='light'] .ai-chat-toggle__emoji--light {
-  display: inline;
 }
 
 .ai-chat-drawer {
@@ -428,7 +503,7 @@
   backdrop-filter: blur(8px);
   overflow: hidden;
   display: grid;
-  grid-template-rows: auto auto auto minmax(120px, 1fr) auto auto;
+  grid-template-rows: auto auto minmax(120px, 1fr) auto auto auto;
   gap: 10px;
   z-index: 95;
 }
@@ -687,7 +762,7 @@
 .ai-chat-title svg {
   width: 1.05rem;
   height: 1.05rem;
-  color: color-mix(in srgb, var(--accent) 58%, var(--panel-text));
+  color: var(--ai-chat-sparkle-color);
   fill: currentColor;
 }
 
@@ -802,6 +877,8 @@
   display: flex;
   flex-wrap: wrap;
   align-items: center;
+  align-content: flex-start;
+  align-self: start;
   gap: 6px;
 }
 
