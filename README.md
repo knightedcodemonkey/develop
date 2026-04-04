@@ -3,14 +3,14 @@
 	<code>@knighted/develop</code>
 </h1>
 
-CDN-first browser IDE for building UI components with [`@knighted/jsx`](https://github.com/knightedcodemonkey/jsx) and [`@knighted/css`](https://github.com/knightedcodemonkey/css).
+CDN-first UI component workbench for rapid prototyping with [`@knighted/jsx`](https://github.com/knightedcodemonkey/jsx) and [`@knighted/css`](https://github.com/knightedcodemonkey/css).
 
 ![Animated flow showing editing, diagnostics, jump-to-source, and fix loop](docs/media/develop-ide-flow.gif)
 
 ## What it is
 
-`@knighted/develop` is a browser-native IDE that demonstrates modern component
-authoring without a local bundler-first inner loop.
+`@knighted/develop` is a browser-native UI component workbench that demonstrates
+modern component authoring without a local bundler-first inner loop.
 
 The app is designed to showcase two libraries:
 
@@ -34,7 +34,7 @@ browser acts as the runtime host for render, lint, and typecheck flows.
 
 ## Try it
 
-- Live IDE: https://knightedcodemonkey.github.io/develop/
+- Live workbench: https://knightedcodemonkey.github.io/develop/
 - Source repository: https://github.com/knightedcodemonkey/develop
 
 ## BYOT Guide
