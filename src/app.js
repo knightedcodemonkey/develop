@@ -1331,22 +1331,6 @@ const setActiveWorkspaceTab = tabId => {
   })
 }
 
-const setActiveWorkspaceTabForKind = kind => {
-  const normalizedKind = kind === 'styles' ? 'styles' : 'component'
-  const preferredId =
-    normalizedKind === 'styles' ? loadedStylesTabId : loadedComponentTabId
-  const preferredTab = workspaceTabsState.getTab(preferredId)
-  if (preferredTab && getTabKind(preferredTab) === normalizedKind) {
-    setActiveWorkspaceTab(preferredTab.id)
-    return
-  }
-
-  const fallbackTab = getWorkspaceTabByKind(normalizedKind)
-  if (fallbackTab) {
-    setActiveWorkspaceTab(fallbackTab.id)
-  }
-}
-
 const syncEditorFromActiveWorkspaceTab = () => {
   const activeTab = getActiveWorkspaceTab()
   if (!activeTab) {
@@ -1432,10 +1416,14 @@ const removeWorkspaceTab = tabId => {
       const activeTab = getActiveWorkspaceTab()
       if (activeTab) {
         loadWorkspaceTabIntoEditor(activeTab)
-      } else if (removedKind === 'styles') {
-        setActiveWorkspaceTabForKind('component')
       } else {
-        setActiveWorkspaceTabForKind('styles')
+        const fallbackTab =
+          getWorkspaceTabByKind(removedKind === 'styles' ? 'component' : 'styles') ||
+          workspaceTabsState.getTabs()[0] ||
+          null
+        if (fallbackTab) {
+          setActiveWorkspaceTab(fallbackTab.id)
+        }
       }
 
       renderWorkspaceTabs()
@@ -1996,9 +1984,6 @@ const initializeCodeEditors = async () => {
           markTypeDiagnosticsStale()
           markComponentLintDiagnosticsStale()
         },
-        onFocus: () => {
-          setActiveWorkspaceTabForKind('component')
-        },
       }),
       createCodeMirrorEditor({
         parent: cssHost,
@@ -2027,9 +2012,6 @@ const initializeCodeEditors = async () => {
           queueWorkspaceSave()
           maybeRender()
           markStylesLintDiagnosticsStale()
-        },
-        onFocus: () => {
-          setActiveWorkspaceTabForKind('styles')
         },
       }),
     ])
@@ -2680,9 +2662,6 @@ jsxEditor.addEventListener('input', maybeRender)
 jsxEditor.addEventListener('input', markTypeDiagnosticsStale)
 jsxEditor.addEventListener('input', markComponentLintDiagnosticsStale)
 jsxEditor.addEventListener('input', queueWorkspaceSave)
-jsxEditor.addEventListener('focus', () => {
-  setActiveWorkspaceTabForKind('component')
-})
 jsxEditor.addEventListener('blur', () => {
   void flushWorkspaceSave().catch(() => {
     /* Save failures are already surfaced through saver onError. */
@@ -2691,9 +2670,6 @@ jsxEditor.addEventListener('blur', () => {
 cssEditor.addEventListener('input', maybeRender)
 cssEditor.addEventListener('input', markStylesLintDiagnosticsStale)
 cssEditor.addEventListener('input', queueWorkspaceSave)
-cssEditor.addEventListener('focus', () => {
-  setActiveWorkspaceTabForKind('styles')
-})
 cssEditor.addEventListener('blur', () => {
   void flushWorkspaceSave().catch(() => {
     /* Save failures are already surfaced through saver onError. */
