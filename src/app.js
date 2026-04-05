@@ -78,19 +78,15 @@ const componentPrSyncIcon = document.getElementById('component-pr-sync-icon')
 const componentPrSyncIconPath = document.getElementById('component-pr-sync-icon-path')
 const stylesPrSyncIcon = document.getElementById('styles-pr-sync-icon')
 const stylesPrSyncIconPath = document.getElementById('styles-pr-sync-icon-path')
-const componentHeaderLabel = document.querySelector('#component-header span')
-const stylesHeaderLabel = document.querySelector('#styles-header span')
-const viewControlsToggle = document.getElementById('view-controls-toggle')
-const viewControlsDrawer = document.getElementById('view-controls-drawer')
+const componentEditorHeaderLabel = document.querySelector('#editor-header-component span')
+const stylesEditorHeaderLabel = document.querySelector('#editor-header-styles span')
 const aiControlsToggle = document.getElementById('ai-controls-toggle')
-const appGridLayoutButtons = document.querySelectorAll('[data-app-grid-layout]')
 const appThemeButtons = document.querySelectorAll('[data-app-theme]')
 const workspaceTabsStrip = document.getElementById('workspace-tabs-strip')
-const workspaceTabAdd = document.getElementById('workspace-tab-add')
 const editorToolsButtons = document.querySelectorAll('[data-editor-tools-toggle]')
 const panelCollapseButtons = document.querySelectorAll('[data-panel-collapse]')
-const componentPanel = document.getElementById('component-panel')
-const stylesPanel = document.getElementById('styles-panel')
+const componentEditorPanel = document.getElementById('editor-panel-component')
+const stylesEditorPanel = document.getElementById('editor-panel-styles')
 const previewPanel = document.getElementById('preview-panel')
 const renderMode = document.getElementById('render-mode')
 const autoRenderToggle = document.getElementById('auto-render')
@@ -127,6 +123,19 @@ const defaultStylesTabPath = 'src/styles/app.css'
 const defaultComponentTabName = 'App.tsx'
 const defaultStylesTabName = 'app.css'
 const allowedEntryTabPaths = new Set(['src/components/App.tsx', 'src/components/App.jsx'])
+const editorKinds = ['component', 'styles']
+const editorPanelsByKind = {
+  component: componentEditorPanel,
+  styles: stylesEditorPanel,
+}
+const editorHeaderLabelByKind = {
+  component: componentEditorHeaderLabel,
+  styles: stylesEditorHeaderLabel,
+}
+const defaultTabNameByKind = {
+  component: defaultComponentTabName,
+  styles: defaultStylesTabName,
+}
 
 jsxEditor.value = defaultJsx
 cssEditor.value = defaultCss
@@ -213,49 +222,16 @@ const previewBackground = createPreviewBackgroundController({
 })
 
 const layoutTheme = createLayoutThemeController({
-  appGrid,
-  appGridLayoutButtons,
   appThemeButtons,
   syncPreviewBackgroundPickerFromTheme: () =>
     previewBackground.syncPreviewBackgroundPickerFromTheme(),
 })
 
-const { applyAppGridLayout, applyTheme, getInitialAppGridLayout, getInitialTheme } =
-  layoutTheme
+const { applyTheme, getInitialTheme } = layoutTheme
 
 const compactViewportMediaQuery = window.matchMedia('(max-width: 900px)')
-const stackedRailMediaQuery = window.matchMedia('(max-width: 1090px)')
-let stackedRailViewControlsOpen = false
 let compactAiControlsOpen = false
 let githubTokenInfoOpen = false
-
-const isStackedRailViewport = () => stackedRailMediaQuery.matches
-
-const setStackedRailViewControlsOpen = isOpen => {
-  if (!(viewControlsToggle instanceof HTMLButtonElement) || !viewControlsDrawer) {
-    return
-  }
-
-  if (!isStackedRailViewport()) {
-    stackedRailViewControlsOpen = false
-    viewControlsToggle.setAttribute('aria-expanded', 'false')
-    viewControlsDrawer.removeAttribute('hidden')
-    return
-  }
-
-  stackedRailViewControlsOpen = Boolean(isOpen)
-  viewControlsToggle.setAttribute(
-    'aria-expanded',
-    stackedRailViewControlsOpen ? 'true' : 'false',
-  )
-
-  if (stackedRailViewControlsOpen) {
-    viewControlsDrawer.removeAttribute('hidden')
-    return
-  }
-
-  viewControlsDrawer.setAttribute('hidden', '')
-}
 
 const setGitHubTokenInfoOpen = isOpen => {
   if (!(githubTokenInfo instanceof HTMLButtonElement) || !githubTokenInfoPanel) {
@@ -298,18 +274,6 @@ const setCompactAiControlsOpen = isOpen => {
   }
 }
 
-const getCurrentLayout = () => {
-  if (appGrid.classList.contains('app-grid--preview-right')) {
-    return 'preview-right'
-  }
-
-  if (appGrid.classList.contains('app-grid--preview-left')) {
-    return 'preview-left'
-  }
-
-  return 'default'
-}
-
 const isCompactViewport = () => compactViewportMediaQuery.matches
 
 const getPanelCollapseAxis = panelName => {
@@ -317,14 +281,12 @@ const getPanelCollapseAxis = panelName => {
     return 'vertical'
   }
 
-  const layout = getCurrentLayout()
-
   if (panelName === 'preview') {
-    return layout === 'default' ? 'vertical' : 'horizontal'
+    return 'horizontal'
   }
 
   if (panelName === 'component' || panelName === 'styles') {
-    return layout === 'default' ? 'horizontal' : 'vertical'
+    return 'vertical'
   }
 
   return 'vertical'
@@ -336,10 +298,8 @@ const getPanelCollapseDirection = panelName => {
     return 'none'
   }
 
-  const layout = getCurrentLayout()
-
   if (panelName === 'preview') {
-    return layout === 'preview-left' ? 'left' : 'right'
+    return 'right'
   }
 
   if (panelName === 'component') {
@@ -365,8 +325,12 @@ const panelToolsState = {
 }
 
 const applyEditorToolsVisibility = () => {
-  componentPanel?.classList.toggle('panel--tools-hidden', !panelToolsState.component)
-  stylesPanel?.classList.toggle('panel--tools-hidden', !panelToolsState.styles)
+  for (const editorKind of editorKinds) {
+    editorPanelsByKind[editorKind]?.classList.toggle(
+      'panel--tools-hidden',
+      !panelToolsState[editorKind],
+    )
+  }
 
   for (const button of editorToolsButtons) {
     const panelName = button.dataset.editorToolsToggle
@@ -432,25 +396,25 @@ const applyPanelCollapseState = () => {
   const componentAxis = getPanelCollapseAxis('component')
   const stylesAxis = getPanelCollapseAxis('styles')
 
-  if (componentPanel) {
+  if (componentEditorPanel) {
     const isCollapsed = panelCollapseState.component
-    componentPanel.classList.toggle(
+    componentEditorPanel.classList.toggle(
       'panel--collapsed-vertical',
       isCollapsed && componentAxis === 'vertical',
     )
-    componentPanel.classList.toggle(
+    componentEditorPanel.classList.toggle(
       'panel--collapsed-horizontal',
       isCollapsed && componentAxis === 'horizontal',
     )
   }
 
-  if (stylesPanel) {
+  if (stylesEditorPanel) {
     const isCollapsed = panelCollapseState.styles
-    stylesPanel.classList.toggle(
+    stylesEditorPanel.classList.toggle(
       'panel--collapsed-vertical',
       isCollapsed && stylesAxis === 'vertical',
     )
-    stylesPanel.classList.toggle(
+    stylesEditorPanel.classList.toggle(
       'panel--collapsed-horizontal',
       isCollapsed && stylesAxis === 'horizontal',
     )
@@ -866,19 +830,19 @@ const toStyleModeForTabLanguage = language => {
 }
 
 const syncHeaderLabels = () => {
-  const componentTab =
-    workspaceTabsState.getTab(loadedComponentTabId) ?? getWorkspaceTabByKind('component')
-  const stylesTab =
-    workspaceTabsState.getTab(loadedStylesTabId) ?? getWorkspaceTabByKind('styles')
+  for (const editorKind of editorKinds) {
+    const tab =
+      editorKind === 'styles'
+        ? (workspaceTabsState.getTab(loadedStylesTabId) ??
+          getWorkspaceTabByKind('styles'))
+        : (workspaceTabsState.getTab(loadedComponentTabId) ??
+          getWorkspaceTabByKind('component'))
+    const headerLabel = editorHeaderLabelByKind[editorKind]
 
-  if (componentHeaderLabel) {
-    componentHeaderLabel.textContent =
-      toNonEmptyWorkspaceText(componentTab?.name) || defaultComponentTabName
-  }
-
-  if (stylesHeaderLabel) {
-    stylesHeaderLabel.textContent =
-      toNonEmptyWorkspaceText(stylesTab?.name) || defaultStylesTabName
+    if (headerLabel) {
+      headerLabel.textContent =
+        toNonEmptyWorkspaceText(tab?.name) || defaultTabNameByKind[editorKind]
+    }
   }
 }
 
@@ -965,14 +929,21 @@ const normalizeEntryTabPath = path => {
 }
 
 const setVisibleEditorPanelForKind = kind => {
-  if (kind === 'styles') {
-    stylesPanel?.removeAttribute('hidden')
-    componentPanel?.setAttribute('hidden', '')
-    return
-  }
+  const nextVisibleKind = kind === 'styles' ? 'styles' : 'component'
 
-  componentPanel?.removeAttribute('hidden')
-  stylesPanel?.setAttribute('hidden', '')
+  for (const editorKind of editorKinds) {
+    const panel = editorPanelsByKind[editorKind]
+    if (!panel) {
+      continue
+    }
+
+    if (editorKind === nextVisibleKind) {
+      panel.removeAttribute('hidden')
+      continue
+    }
+
+    panel.setAttribute('hidden', '')
+  }
 }
 
 const makeUniqueTabPath = ({ basePath, suffix = '' }) => {
@@ -1608,6 +1579,18 @@ const renderWorkspaceTabs = () => {
 
       workspaceTabsStrip.append(tabContainer)
     }
+
+    const addButton = document.createElement('button')
+    addButton.className = 'workspace-tab-add workspace-tab-add--strip'
+    addButton.id = 'workspace-tab-add'
+    addButton.type = 'button'
+    addButton.textContent = '+'
+    addButton.setAttribute('aria-label', 'Add tab')
+    addButton.title = 'Add tab'
+    addButton.addEventListener('click', () => {
+      addWorkspaceTab()
+    })
+    workspaceTabsStrip.append(addButton)
   } finally {
     isRenderingWorkspaceTabs = false
   }
@@ -1766,8 +1749,7 @@ chatDrawerController = createGitHubChatDrawer({
   getRenderMode: () => renderMode.value,
   getStyleMode: () => styleMode.value,
   getDrawerSide: () => {
-    const layout = getCurrentLayout()
-    return layout === 'preview-left' ? 'left' : 'right'
+    return 'right'
   },
 })
 
@@ -1797,8 +1779,7 @@ prDrawerController = createGitHubPrDrawer({
   getRenderMode: () => renderMode.value,
   getStyleMode: () => styleMode.value,
   getDrawerSide: () => {
-    const layout = getCurrentLayout()
-    return layout === 'preview-left' ? 'left' : 'right'
+    return 'right'
   },
   confirmBeforeSubmit: options => {
     confirmAction(options)
@@ -2045,22 +2026,24 @@ const initializeCodeEditors = async () => {
 
     editorPool.register('component', {
       isMounted: () =>
-        componentPanel instanceof HTMLElement && !componentPanel.hasAttribute('hidden'),
+        componentEditorPanel instanceof HTMLElement &&
+        !componentEditorPanel.hasAttribute('hidden'),
       mount: () => {
-        componentPanel?.removeAttribute('hidden')
+        componentEditorPanel?.removeAttribute('hidden')
       },
       unmount: () => {
-        componentPanel?.setAttribute('hidden', '')
+        componentEditorPanel?.setAttribute('hidden', '')
       },
     })
     editorPool.register('styles', {
       isMounted: () =>
-        stylesPanel instanceof HTMLElement && !stylesPanel.hasAttribute('hidden'),
+        stylesEditorPanel instanceof HTMLElement &&
+        !stylesEditorPanel.hasAttribute('hidden'),
       mount: () => {
-        stylesPanel?.removeAttribute('hidden')
+        stylesEditorPanel?.removeAttribute('hidden')
       },
       unmount: () => {
-        stylesPanel?.setAttribute('hidden', '')
+        stylesEditorPanel?.setAttribute('hidden', '')
       },
     })
 
@@ -2652,12 +2635,6 @@ clearStylesButton.addEventListener('click', () => {
   })
 })
 
-if (workspaceTabAdd instanceof HTMLButtonElement) {
-  workspaceTabAdd.addEventListener('click', () => {
-    addWorkspaceTab()
-  })
-}
-
 jsxEditor.addEventListener('input', maybeRender)
 jsxEditor.addEventListener('input', markTypeDiagnosticsStale)
 jsxEditor.addEventListener('input', markComponentLintDiagnosticsStale)
@@ -2759,21 +2736,6 @@ if (githubPrLocalContextRemove instanceof HTMLButtonElement) {
   })
 }
 
-for (const button of appGridLayoutButtons) {
-  button.addEventListener('click', () => {
-    const nextLayout = button.dataset.appGridLayout
-    if (!nextLayout) {
-      return
-    }
-    applyAppGridLayout(nextLayout)
-    applyPanelCollapseState()
-
-    if (isStackedRailViewport()) {
-      setStackedRailViewControlsOpen(false)
-    }
-  })
-}
-
 for (const button of appThemeButtons) {
   button.addEventListener('click', () => {
     const nextTheme = button.dataset.appTheme
@@ -2781,24 +2743,6 @@ for (const button of appThemeButtons) {
       return
     }
     applyTheme(nextTheme)
-
-    if (isStackedRailViewport()) {
-      setStackedRailViewControlsOpen(false)
-    }
-  })
-}
-
-if (viewControlsToggle instanceof HTMLButtonElement) {
-  viewControlsToggle.addEventListener('click', () => {
-    if (!isStackedRailViewport()) {
-      return
-    }
-
-    if (isCompactViewport()) {
-      setCompactAiControlsOpen(false)
-    }
-
-    setStackedRailViewControlsOpen(!stackedRailViewControlsOpen)
   })
 }
 
@@ -2808,7 +2752,6 @@ if (aiControlsToggle instanceof HTMLButtonElement) {
       return
     }
 
-    setStackedRailViewControlsOpen(false)
     setCompactAiControlsOpen(!compactAiControlsOpen)
   })
 }
@@ -2824,15 +2767,6 @@ document.addEventListener('click', event => {
   const clickTarget = event.target
   if (!(clickTarget instanceof Node)) {
     return
-  }
-
-  if (isStackedRailViewport() && stackedRailViewControlsOpen) {
-    if (
-      !viewControlsDrawer?.contains(clickTarget) &&
-      !viewControlsToggle?.contains(clickTarget)
-    ) {
-      setStackedRailViewControlsOpen(false)
-    }
   }
 
   if (isCompactViewport() && compactAiControlsOpen) {
@@ -2859,7 +2793,6 @@ document.addEventListener('keydown', event => {
     return
   }
 
-  setStackedRailViewControlsOpen(false)
   setCompactAiControlsOpen(false)
   setGitHubTokenInfoOpen(false)
 })
@@ -2892,20 +2825,10 @@ const handleCompactViewportChange = () => {
   setCompactAiControlsOpen(false)
 }
 
-const handleStackedRailViewportChange = () => {
-  setStackedRailViewControlsOpen(false)
-}
-
 if (typeof compactViewportMediaQuery.addEventListener === 'function') {
   compactViewportMediaQuery.addEventListener('change', handleCompactViewportChange)
 } else {
   compactViewportMediaQuery.onchange = handleCompactViewportChange
-}
-
-if (typeof stackedRailMediaQuery.addEventListener === 'function') {
-  stackedRailMediaQuery.addEventListener('change', handleStackedRailViewportChange)
-} else {
-  stackedRailMediaQuery.onchange = handleStackedRailViewportChange
 }
 
 window.addEventListener('beforeunload', () => {
@@ -2925,13 +2848,11 @@ window.addEventListener('beforeunload', () => {
   prDrawerController.dispose()
 })
 
-applyAppGridLayout(getInitialAppGridLayout(), { persist: false })
 applyTheme(getInitialTheme(), { persist: false })
 applyEditorToolsVisibility()
 applyPanelCollapseState()
 syncHeaderLabels()
 renderWorkspaceTabs()
-setStackedRailViewControlsOpen(false)
 setCompactAiControlsOpen(false)
 setGitHubTokenInfoOpen(false)
 syncAiChatTokenVisibility(githubAiContextState.token)

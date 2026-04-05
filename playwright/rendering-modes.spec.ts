@@ -486,10 +486,9 @@ test('auto render supports export default named component without App redeclarat
   await expect(page.locator('#preview-host pre')).toHaveCount(0)
 })
 
-test('persists layout and theme across reload', async ({ page }) => {
+test('persists theme across reload with fixed layout', async ({ page }) => {
   await waitForInitialRender(page)
 
-  await page.getByLabel('Use side preview layout').click()
   await page.getByLabel('Use light theme').click()
   await expect(page.getByRole('main')).toHaveClass(/app-grid--preview-right/)
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'light')

@@ -25,6 +25,7 @@ browser acts as the runtime host for render, lint, and typecheck flows.
 `@knighted/develop` lets you:
 
 - write component code in the browser
+- manage dynamic workspace tabs with add, rename, remove, and entry-role protection
 - switch render mode between DOM and React
 - switch style mode between native CSS, CSS Modules, Less, and Sass
 - run in-browser lint and type diagnostics
@@ -40,6 +41,10 @@ browser acts as the runtime host for render, lint, and typecheck flows.
 ## BYOT Guide
 
 - GitHub PAT setup and usage: [docs/byot.md](docs/byot.md)
+
+## Editor Architecture
+
+- Workspace-first editor architecture and migration notes: [docs/editor-workspace-architecture.md](docs/editor-workspace-architecture.md)
 
 ## Fine-Grained PAT Quick Setup
 

@@ -71,18 +71,24 @@ export const expectPreviewHasRenderedContent = async (page: Page) => {
 }
 
 export const setComponentEditorSource = async (page: Page, source: string) => {
-  const editorContent = page.locator('.component-panel .cm-content').first()
+  await page.getByRole('tab', { name: 'Open tab App.tsx' }).click()
+  const editorContent = page
+    .locator('.editor-panel[data-editor-kind="component"] .cm-content')
+    .first()
   await editorContent.fill(source)
 }
 
 export const setStylesEditorSource = async (page: Page, source: string) => {
-  const editorContent = page.locator('.styles-panel .cm-content').first()
+  await page.getByRole('tab', { name: 'Open tab app.css' }).click()
+  const editorContent = page
+    .locator('.editor-panel[data-editor-kind="styles"] .cm-content')
+    .first()
   await editorContent.fill(source)
 }
 
 export const getActiveComponentEditorLineNumber = async (page: Page) => {
   return page
-    .locator('#component-panel .cm-activeLineGutter')
+    .locator('#editor-panel-component .cm-activeLineGutter')
     .first()
     .innerText()
     .then(text => text.trim())
@@ -105,7 +111,7 @@ export const runStylesLint = async (page: Page) => {
 
 export const getActiveStylesEditorLineNumber = async (page: Page) => {
   return page
-    .locator('#styles-panel .cm-activeLineGutter')
+    .locator('#editor-panel-styles .cm-activeLineGutter')
     .first()
     .innerText()
     .then(text => text.trim())
@@ -123,6 +129,12 @@ export const ensurePanelToolsVisible = async (
   page: Page,
   panelName: 'component' | 'styles',
 ) => {
+  if (panelName === 'styles') {
+    await page.getByRole('tab', { name: 'Open tab app.css' }).click()
+  } else {
+    await page.getByRole('tab', { name: 'Open tab App.tsx' }).click()
+  }
+
   const button = getToolsButton(page, panelName)
   const isPressed = await button.getAttribute('aria-pressed')
   if (isPressed !== 'true') {

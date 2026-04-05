@@ -8,6 +8,10 @@
   overflow: hidden;
 }
 
+.panel[hidden] {
+  display: none;
+}
+
 .panel-header {
   display: flex;
   align-items: center;
@@ -71,13 +75,11 @@
   justify-content: flex-start;
 }
 
-.component-panel.panel--tools-hidden .panel-header-main-actions,
-.styles-panel.panel--tools-hidden .panel-header-main-actions {
+.editor-panel.panel--tools-hidden .panel-header-main-actions {
   display: none;
 }
 
-.component-panel.panel--tools-hidden .panel-header--grid,
-.styles-panel.panel--tools-hidden .panel-header--grid {
+.editor-panel.panel--tools-hidden .panel-header--grid {
   grid-template-areas: 'title quick';
   align-items: center;
   row-gap: 0;
@@ -350,6 +352,11 @@
   border-bottom: none;
 }
 
+.workspace-tab-add--strip {
+  margin-left: auto;
+  flex: none;
+}
+
 textarea {
   flex: 1;
   background: transparent;
@@ -395,8 +402,7 @@ textarea:focus {
   min-height: auto;
 }
 
-.component-panel.panel--collapsed-vertical,
-.styles-panel.panel--collapsed-vertical {
+.editor-panel.panel--collapsed-vertical {
   align-self: start;
 }
 
@@ -404,28 +410,22 @@ textarea:focus {
   min-height: 0;
 }
 
-.component-panel.panel--collapsed-vertical .editor-host,
-.component-panel.panel--collapsed-vertical textarea,
-.styles-panel.panel--collapsed-vertical .editor-host,
-.styles-panel.panel--collapsed-vertical textarea,
+.editor-panel.panel--collapsed-vertical .editor-host,
+.editor-panel.panel--collapsed-vertical textarea,
 .preview-panel.panel--collapsed-vertical .preview-host,
-.component-panel.panel--collapsed-vertical .panel-content,
-.styles-panel.panel--collapsed-vertical .panel-content,
+.editor-panel.panel--collapsed-vertical .panel-content,
 .preview-panel.panel--collapsed-vertical .panel-content {
   display: none;
 }
 
-.component-panel.panel--collapsed-vertical .panel-header-main-actions,
-.styles-panel.panel--collapsed-vertical .panel-header-main-actions,
-.component-panel.panel--collapsed-vertical .panel-header .icon-button,
-.styles-panel.panel--collapsed-vertical .panel-header .icon-button,
+.editor-panel.panel--collapsed-vertical .panel-header-main-actions,
+.editor-panel.panel--collapsed-vertical .panel-header .icon-button,
 .preview-panel.panel--collapsed-vertical .controls label,
 .preview-panel.panel--collapsed-vertical .controls .hint-icon {
   display: none;
 }
 
-.component-panel.panel--collapsed-vertical .panel-header--grid,
-.styles-panel.panel--collapsed-vertical .panel-header--grid {
+.editor-panel.panel--collapsed-vertical .panel-header--grid {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -477,26 +477,19 @@ textarea:focus {
   display: none;
 }
 
-.component-panel.panel--collapsed-horizontal,
-.styles-panel.panel--collapsed-horizontal {
+.editor-panel.panel--collapsed-horizontal {
   min-height: auto;
 }
 
-.component-panel.panel--collapsed-horizontal .editor-host,
-.component-panel.panel--collapsed-horizontal textarea,
-.component-panel.panel--collapsed-horizontal .panel-content,
-.component-panel.panel--collapsed-horizontal .panel-header-main-actions,
-.component-panel.panel--collapsed-horizontal .panel-header .icon-button,
-.styles-panel.panel--collapsed-horizontal .editor-host,
-.styles-panel.panel--collapsed-horizontal textarea,
-.styles-panel.panel--collapsed-horizontal .panel-content,
-.styles-panel.panel--collapsed-horizontal .panel-header-main-actions,
-.styles-panel.panel--collapsed-horizontal .panel-header .icon-button {
+.editor-panel.panel--collapsed-horizontal .editor-host,
+.editor-panel.panel--collapsed-horizontal textarea,
+.editor-panel.panel--collapsed-horizontal .panel-content,
+.editor-panel.panel--collapsed-horizontal .panel-header-main-actions,
+.editor-panel.panel--collapsed-horizontal .panel-header .icon-button {
   display: none;
 }
 
-.component-panel.panel--collapsed-horizontal .panel-header,
-.styles-panel.panel--collapsed-horizontal .panel-header {
+.editor-panel.panel--collapsed-horizontal .panel-header {
   height: 100%;
   padding: 12px 8px;
   border-bottom: none;
@@ -507,21 +500,18 @@ textarea:focus {
   gap: 12px;
 }
 
-.component-panel.panel--collapsed-horizontal .panel-header h2,
-.styles-panel.panel--collapsed-horizontal .panel-header h2 {
+.editor-panel.panel--collapsed-horizontal .panel-header h2 {
   writing-mode: vertical-rl;
   transform: rotate(180deg);
   font-size: 0.8rem;
 }
 
-.component-panel.panel--collapsed-horizontal .panel-header-quick-actions,
-.styles-panel.panel--collapsed-horizontal .panel-header-quick-actions {
+.editor-panel.panel--collapsed-horizontal .panel-header-quick-actions {
   width: 100%;
   justify-content: center;
 }
 
-.component-panel.panel--collapsed-horizontal .panel-collapse-toggle,
-.styles-panel.panel--collapsed-horizontal .panel-collapse-toggle {
+.editor-panel.panel--collapsed-horizontal .panel-collapse-toggle {
   width: 32px;
   min-width: 32px;
   height: 32px;
@@ -533,8 +523,7 @@ textarea:focus {
     height: 32px;
   }
 
-  .component-panel,
-  .styles-panel {
+  .editor-panel {
     min-height: min(360px, var(--mobile-editor-max-height));
   }
 }
