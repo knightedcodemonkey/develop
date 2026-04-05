@@ -3,6 +3,7 @@ import {
   getFunctionLikeDeclarationNames,
   hasFunctionLikeDeclarationNamed,
 } from './jsx-top-level-declarations.js'
+import { canRenderPreview } from './preview-entry-resolver.js'
 import { ensureJsxTransformSource } from './jsx-transform-runtime.js'
 
 export const createRenderRuntimeController = ({
@@ -14,6 +15,7 @@ export const createRenderRuntimeController = ({
   isAutoRenderEnabled = () => false,
   getCssSource,
   getJsxSource,
+  getWorkspaceTabs,
   getPreviewHost,
   setPreviewHost,
   applyPreviewBackgroundColor,
@@ -866,7 +868,14 @@ export const createRenderRuntimeController = ({
     }
   }
 
-  const hasComponentSource = () => getJsxSource().trim().length > 0
+  const hasComponentSource = () => {
+    const tabs = typeof getWorkspaceTabs === 'function' ? getWorkspaceTabs() : undefined
+
+    return canRenderPreview({
+      tabs,
+      fallbackSource: getJsxSource(),
+    })
+  }
 
   const clearPreview = () => {
     const target = getRenderTarget()

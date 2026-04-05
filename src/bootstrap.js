@@ -13,6 +13,7 @@ const preloadImportKeys = [
   'jsxReact',
   'react',
   'reactDomClient',
+  'idb',
 ]
 
 const isImportMapPrimary =
