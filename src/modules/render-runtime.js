@@ -3,7 +3,8 @@ import {
   getFunctionLikeDeclarationNames,
   hasFunctionLikeDeclarationNamed,
 } from './jsx-top-level-declarations.js'
-import { canRenderPreview } from './preview-entry-resolver.js'
+import { canRenderPreview, resolvePreviewEntryTab } from './preview-entry-resolver.js'
+import { createPreviewWorkspaceGraphCache } from './preview-workspace-graph.js'
 import { ensureJsxTransformSource } from './jsx-transform-runtime.js'
 
 export const createRenderRuntimeController = ({
@@ -46,6 +47,7 @@ export const createRenderRuntimeController = ({
     value: null,
   }
   let hasCompletedInitialRender = false
+  const workspaceGraphCache = createPreviewWorkspaceGraphCache()
 
   const setStyleCompiling = isCompiling => {
     const previewHost = getPreviewHost()
@@ -298,7 +300,12 @@ export const createRenderRuntimeController = ({
     Number.isInteger(range[1])
 
   const stripImportDeclarations = (code, imports) => {
+    return stripImportDeclarationsBy(code, imports, () => true)
+  }
+
+  const stripImportDeclarationsBy = (code, imports, shouldStrip) => {
     const ranges = imports
+      .filter(entry => shouldStrip(entry))
       .map(entry => entry?.range)
       .filter(isImportRange)
       .slice()
@@ -455,6 +462,197 @@ export const createRenderRuntimeController = ({
     }
 
     return value
+  }
+
+  const toModuleSpecifierKey = value => {
+    if (typeof value !== 'string') {
+      return ''
+    }
+
+    return value.trim().replace(/\\/g, '/').replace(/^\.\//, '')
+  }
+
+  const toTabModuleKey = tab => {
+    if (!tab || typeof tab !== 'object') {
+      return ''
+    }
+
+    if (typeof tab.path === 'string' && tab.path.trim().length > 0) {
+      return toModuleSpecifierKey(tab.path)
+    }
+
+    if (typeof tab.name === 'string' && tab.name.trim().length > 0) {
+      return toModuleSpecifierKey(tab.name)
+    }
+
+    return typeof tab.id === 'string' ? toModuleSpecifierKey(tab.id) : ''
+  }
+
+  const isRelativeSpecifier = specifier =>
+    typeof specifier === 'string' &&
+    (specifier.startsWith('./') || specifier.startsWith('../'))
+
+  const buildWorkspaceTabLookup = tabs => {
+    const byId = new Map()
+    const byModuleKey = new Map()
+
+    for (const tab of tabs) {
+      if (!tab || typeof tab !== 'object' || typeof tab.id !== 'string' || !tab.id) {
+        continue
+      }
+
+      byId.set(tab.id, tab)
+
+      const moduleKey = toTabModuleKey(tab)
+      if (!moduleKey) {
+        continue
+      }
+
+      if (!byModuleKey.has(moduleKey)) {
+        byModuleKey.set(moduleKey, tab)
+      }
+
+      if (!byModuleKey.has(`./${moduleKey}`)) {
+        byModuleKey.set(`./${moduleKey}`, tab)
+      }
+    }
+
+    return {
+      byId,
+      byModuleKey,
+    }
+  }
+
+  const normalizeWorkspaceModuleCode = code =>
+    stripEmptyExportStatements(
+      code
+        .replace(/^\s*export\s+(?=function|const|let|var|class)/gm, '')
+        .replace(/^\s*export\s+\{[^}]*\}\s*;?\s*$/gm, ''),
+    )
+
+  const parseWorkspaceImports = ({ source, transformJsxSource }) => {
+    const analysis = transformJsxSource(source, {
+      sourceType: 'module',
+      typescript: 'preserve',
+    })
+
+    if (analysis.diagnostics.length > 0) {
+      throw new Error(formatTransformDiagnosticsError(analysis.diagnostics))
+    }
+
+    return analysis.imports ?? []
+  }
+
+  const createRelativeImportAliases = imports => {
+    const lines = []
+
+    for (const entry of imports) {
+      if (!isRelativeSpecifier(entry?.source)) {
+        continue
+      }
+
+      for (const binding of entry.bindings ?? []) {
+        if (!binding || binding.isTypeOnly) {
+          continue
+        }
+
+        if (binding.kind === 'namespace' || binding.kind === 'default') {
+          throw new Error(
+            `Preview hydration does not support default or namespace imports for ${entry.source}.`,
+          )
+        }
+
+        if (binding.kind === 'named') {
+          if (binding.imported === 'default') {
+            throw new Error(
+              `Preview hydration does not support default imports for ${entry.source}.`,
+            )
+          }
+
+          if (binding.local && binding.local !== binding.imported) {
+            lines.push(`const ${binding.local} = ${binding.imported}`)
+          }
+        }
+      }
+    }
+
+    return lines
+  }
+
+  const resolveWorkspacePreviewSource = ({ tabs, entryTab, transformJsxSource }) => {
+    if (!entryTab || typeof entryTab.content !== 'string') {
+      return ''
+    }
+
+    const { byId, byModuleKey } = buildWorkspaceTabLookup(tabs)
+    const visited = new Set()
+    const dependencyOrder = []
+
+    const visit = tab => {
+      if (!tab || visited.has(tab.id)) {
+        return
+      }
+
+      visited.add(tab.id)
+
+      const source = typeof tab.content === 'string' ? tab.content : ''
+      const imports = parseWorkspaceImports({ source, transformJsxSource })
+
+      workspaceGraphCache.upsert({
+        tabId: tab.id,
+        imports: imports.map(entry => entry?.source).filter(Boolean),
+        lastUpdated: Date.now(),
+      })
+
+      for (const entry of imports) {
+        if (!isRelativeSpecifier(entry?.source)) {
+          continue
+        }
+
+        const target = byModuleKey.get(entry.source)
+        if (!target) {
+          throw new Error(
+            `Preview entry references missing workspace module: ${entry.source}`,
+          )
+        }
+
+        visit(target)
+      }
+
+      dependencyOrder.push(tab.id)
+    }
+
+    visit(entryTab)
+
+    const hydratedChunks = []
+
+    for (const tabId of dependencyOrder) {
+      const tab = byId.get(tabId)
+
+      if (!tab) {
+        continue
+      }
+
+      const source = typeof tab.content === 'string' ? tab.content : ''
+      const imports = parseWorkspaceImports({ source, transformJsxSource })
+      const aliases = createRelativeImportAliases(imports)
+      const withoutRelativeImports = stripImportDeclarationsBy(source, imports, entry =>
+        isRelativeSpecifier(entry?.source),
+      )
+      const moduleCode = normalizeWorkspaceModuleCode(withoutRelativeImports)
+
+      if (/^\s*export\s+default\b/m.test(moduleCode)) {
+        throw new Error(
+          `Preview hydration does not support default export in ${toTabModuleKey(tab) || tab.id}.`,
+        )
+      }
+
+      const label = toTabModuleKey(tab) || tab.id
+      const aliasBlock = aliases.length > 0 ? `\n${aliases.join('\n')}` : ''
+      hydratedChunks.push(`/* workspace:${label} */\n${moduleCode}${aliasBlock}`)
+    }
+
+    return hydratedChunks.join('\n\n')
   }
 
   const withImplicitAppWrapper = (source, transformJsxSource) => {
@@ -709,7 +907,21 @@ export const createRenderRuntimeController = ({
   const evaluateUserModule = async (helpers = {}) => {
     const { jsx, transformJsxSource } = await ensureCoreRuntime()
     let runtimeHelpers = helpers
-    const source = getJsxSource()
+    let source = getJsxSource()
+
+    const workspaceTabs = typeof getWorkspaceTabs === 'function' ? getWorkspaceTabs() : []
+    if (Array.isArray(workspaceTabs) && workspaceTabs.length > 0) {
+      const entryTab = resolvePreviewEntryTab(workspaceTabs)
+
+      if (entryTab) {
+        source = resolveWorkspacePreviewSource({
+          tabs: workspaceTabs,
+          entryTab,
+          transformJsxSource,
+        })
+      }
+    }
+
     const executableSource = isAutoRenderEnabled()
       ? withImplicitAppWrapper(source, transformJsxSource)
       : source

@@ -222,6 +222,134 @@
   color: var(--select-option-disabled);
 }
 
+.workspace-tab,
+.workspace-tab-add {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid var(--border-control);
+  border-radius: 8px 8px 0 0;
+  background: var(--surface-control);
+  color: var(--text-subtle);
+  min-height: 32px;
+  padding: 6px 8px 5px 10px;
+  white-space: nowrap;
+  margin-bottom: -1px;
+}
+
+.workspace-tab[aria-selected='true'] {
+  background: color-mix(in srgb, var(--surface-panel-header) 92%, var(--accent-soft));
+  border-color: color-mix(in srgb, var(--accent) 68%, transparent);
+  color: var(--select-text);
+}
+
+.workspace-tab-add:hover {
+  background: color-mix(in srgb, var(--surface-panel-header) 92%, var(--accent-soft));
+  border-color: color-mix(in srgb, var(--accent) 68%, transparent);
+  color: var(--select-text);
+}
+
+.workspace-tab__select {
+  border: none;
+  background: transparent;
+  color: inherit;
+  padding: 0;
+  margin: 0;
+  font: inherit;
+  cursor: pointer;
+}
+
+.workspace-tab__select:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+  border-radius: 8px;
+}
+
+.workspace-tab__name-input {
+  width: min(220px, 40vw);
+  border: 1px solid var(--border-control);
+  border-radius: 8px;
+  background: var(--surface-select);
+  color: var(--select-text);
+  padding: 3px 8px;
+  font: inherit;
+}
+
+.workspace-tab__name-input:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 1px;
+}
+
+.workspace-tab__remove {
+  border: none;
+  background: transparent;
+  color: inherit;
+  opacity: 0.72;
+  width: 22px;
+  height: 22px;
+  border-radius: 999px;
+  cursor: pointer;
+  line-height: 1;
+  padding: 0;
+}
+
+.workspace-tab__rename {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: transparent;
+  color: inherit;
+  opacity: 0.76;
+  border-radius: 6px;
+  cursor: pointer;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+}
+
+.workspace-tab__rename:hover {
+  opacity: 1;
+  background: color-mix(in srgb, var(--surface-control-hover) 90%, transparent);
+}
+
+.workspace-tab__rename:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 1px;
+}
+
+.workspace-tab__rename svg {
+  width: 13px;
+  height: 13px;
+  stroke: currentColor;
+  fill: none;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.workspace-tab__remove:hover {
+  opacity: 1;
+  background: color-mix(in srgb, rgb(var(--danger-rgb)) 18%, transparent);
+}
+
+.workspace-tab__remove:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 1px;
+}
+
+.workspace-tab__meta {
+  font-size: 0.72rem;
+  opacity: 0.8;
+}
+
+.workspace-tab-add {
+  justify-content: center;
+  min-width: 34px;
+  cursor: pointer;
+  border-bottom: none;
+}
+
 textarea {
   flex: 1;
   background: transparent;

@@ -95,12 +95,13 @@
   --preview-row-flex: 0.75fr;
   display: grid;
   grid-template-columns: repeat(2, minmax(320px, 1fr));
-  grid-template-rows: auto minmax(0, var(--editors-row-flex)) minmax(
+  grid-template-rows: auto auto minmax(0, var(--editors-row-flex)) minmax(
       0,
       var(--preview-row-flex)
     );
   grid-template-areas:
     'layout-controls layout-controls'
+    'workspace-tabs workspace-tabs'
     'editors editors'
     'preview preview';
   gap: 18px;
@@ -114,83 +115,60 @@
   min-width: 0;
 }
 
-.panels-stack--editors {
+.workspace-editors-stack {
   grid-area: editors;
+  min-width: 0;
+  min-height: 0;
+}
+
+.app-grid-workspace-tabs {
+  grid-area: workspace-tabs;
+  min-width: 0;
+  width: 100%;
+  padding-top: 8px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.panels-stack--editors {
   display: grid;
-  grid-template-columns: repeat(2, minmax(320px, 1fr));
+  grid-template-columns: minmax(320px, 1fr);
   grid-template-rows: minmax(0, 1fr);
   gap: 18px;
   min-width: 0;
   min-height: 0;
 }
 
-.app-grid.app-grid--component-collapsed-horizontal:not(.app-grid--preview-right):not(
-    .app-grid--preview-left
-  )
-  .panels-stack--editors {
-  grid-template-columns: 72px minmax(320px, 1fr);
-}
-
-.app-grid.app-grid--styles-collapsed-horizontal:not(.app-grid--preview-right):not(
-    .app-grid--preview-left
-  )
-  .panels-stack--editors {
-  grid-template-columns: minmax(320px, 1fr) 72px;
-}
-
 .app-grid.app-grid--component-collapsed-horizontal.app-grid--styles-collapsed-horizontal:not(
     .app-grid--preview-right
   ):not(.app-grid--preview-left) {
-  grid-template-rows: auto auto minmax(0, 1fr);
+  grid-template-rows: auto auto auto minmax(0, 1fr);
   grid-template-areas:
     'layout-controls layout-controls'
+    'workspace-tabs workspace-tabs'
     'editors editors'
     'preview preview';
-}
-
-.app-grid.app-grid--component-collapsed-horizontal.app-grid--styles-collapsed-horizontal:not(
-    .app-grid--preview-right
-  ):not(.app-grid--preview-left)
-  .panels-stack--editors {
-  grid-template-columns: 72px 72px;
-  justify-content: start;
 }
 
 .app-grid.app-grid--preview-collapsed:not(.app-grid--preview-right):not(
     .app-grid--preview-left
   ) {
-  grid-template-rows: auto minmax(0, 1fr) auto;
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
 }
 
 .app-grid--preview-right {
   grid-template-columns: repeat(2, minmax(320px, 1fr));
-  grid-template-rows: auto minmax(0, 1fr);
+  grid-template-rows: auto auto minmax(0, 1fr);
   grid-template-areas:
     'layout-controls layout-controls'
+    'workspace-tabs workspace-tabs'
     'editors preview';
 }
 
 .app-grid--preview-right .panels-stack--editors {
   grid-template-columns: minmax(0, 1fr);
-  grid-template-rows: minmax(0, 1fr) minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
   height: 100%;
   min-height: 0;
-}
-
-.app-grid--preview-right.app-grid--component-collapsed:not(.app-grid--styles-collapsed)
-  .panels-stack--editors {
-  grid-template-rows: auto minmax(0, 1fr);
-}
-
-.app-grid--preview-right.app-grid--styles-collapsed:not(.app-grid--component-collapsed)
-  .panels-stack--editors {
-  grid-template-rows: minmax(0, 1fr) auto;
-}
-
-.app-grid--preview-right.app-grid--component-collapsed.app-grid--styles-collapsed
-  .panels-stack--editors {
-  grid-template-rows: auto auto;
-  align-content: start;
 }
 
 .app-grid--preview-right.app-grid--preview-collapsed-horizontal {
@@ -199,33 +177,43 @@
 
 .app-grid--preview-left {
   grid-template-columns: repeat(2, minmax(320px, 1fr));
-  grid-template-rows: auto minmax(0, 1fr);
+  grid-template-rows: auto auto minmax(0, 1fr);
   grid-template-areas:
     'layout-controls layout-controls'
+    'workspace-tabs workspace-tabs'
     'preview editors';
 }
 
 .app-grid--preview-left .panels-stack--editors {
   grid-template-columns: minmax(0, 1fr);
-  grid-template-rows: minmax(0, 1fr) minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
   height: 100%;
   min-height: 0;
 }
 
-.app-grid--preview-left.app-grid--component-collapsed:not(.app-grid--styles-collapsed)
-  .panels-stack--editors {
-  grid-template-rows: auto minmax(0, 1fr);
+.workspace-tabs-shell {
+  display: flex;
+  align-items: flex-end;
+  gap: 10px;
+  min-width: 0;
+  width: 100%;
 }
 
-.app-grid--preview-left.app-grid--styles-collapsed:not(.app-grid--component-collapsed)
-  .panels-stack--editors {
-  grid-template-rows: minmax(0, 1fr) auto;
+.workspace-tabs-strip {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  overflow-x: auto;
+  min-width: 0;
+  scrollbar-width: thin;
+  flex: 1;
 }
 
-.app-grid--preview-left.app-grid--component-collapsed.app-grid--styles-collapsed
-  .panels-stack--editors {
-  grid-template-rows: auto auto;
-  align-content: start;
+.workspace-tabs-actions {
+  display: inline-flex;
+  align-items: flex-end;
+  gap: 8px;
+  flex: none;
 }
 
 .app-grid--preview-left.app-grid--preview-collapsed-horizontal {
@@ -316,6 +304,15 @@
     margin-right: 0;
     padding-right: 0;
     border-right: none;
+  }
+
+  .workspace-tabs-shell {
+    flex-wrap: wrap;
+  }
+
+  .workspace-tabs-actions {
+    width: 100%;
+    justify-content: flex-end;
   }
 
   .app-grid-view-toggle {
