@@ -3,6 +3,8 @@ import { cdnImports, importFromCdnWithFallback } from './cdn.js'
 const workspaceDbName = 'knighted-develop-workspaces'
 const workspaceDbVersion = 1
 const workspaceStoreName = 'prWorkspaces'
+const workspaceByRepoIndexName = 'byRepo'
+const workspaceByLastModifiedIndexName = 'byLastModified'
 
 const normalizeTabRecord = tab => {
   if (!tab || typeof tab !== 'object') {
@@ -93,8 +95,8 @@ const openWorkspaceDb = async ({ loadRuntime } = {}) => {
         const store = db.createObjectStore(workspaceStoreName, {
           keyPath: 'id',
         })
-        store.createIndex('byRepo', 'repo')
-        store.createIndex('byLastModified', 'lastModified')
+        store.createIndex(workspaceByRepoIndexName, 'repo')
+        store.createIndex(workspaceByLastModifiedIndexName, 'lastModified')
       }
     },
   })
@@ -112,7 +114,10 @@ export const createWorkspaceStorageAdapter = ({ loadRuntime } = {}) => {
 
   const ensureDb = () => {
     if (!dbPromise) {
-      dbPromise = openWorkspaceDb({ loadRuntime })
+      dbPromise = openWorkspaceDb({ loadRuntime }).catch(error => {
+        dbPromise = null
+        throw error
+      })
     }
 
     return dbPromise
@@ -135,15 +140,24 @@ export const createWorkspaceStorageAdapter = ({ loadRuntime } = {}) => {
 
   const listWorkspaces = async ({ repo } = {}) => {
     const db = await ensureDb()
-    const items = await db.getAll(workspaceStoreName)
+    const hasRepoFilter = typeof repo === 'string' && repo.length > 0
 
-    const normalized = items.map(normalizeWorkspaceRecord)
-    const filtered =
-      typeof repo === 'string' && repo.length > 0
-        ? normalized.filter(item => item.repo === repo)
-        : normalized
+    if (hasRepoFilter) {
+      const byRepo = await db.getAllFromIndex(
+        workspaceStoreName,
+        workspaceByRepoIndexName,
+        repo,
+      )
 
-    return filtered.sort(byLastModifiedDesc)
+      return byRepo.map(normalizeWorkspaceRecord).sort(byLastModifiedDesc)
+    }
+
+    const byLastModified = await db.getAllFromIndex(
+      workspaceStoreName,
+      workspaceByLastModifiedIndexName,
+    )
+
+    return byLastModified.map(normalizeWorkspaceRecord).reverse()
   }
 
   const upsertWorkspace = async record => {
@@ -186,17 +200,37 @@ export const createWorkspaceStorageAdapter = ({ loadRuntime } = {}) => {
     const existingIndex = nextTabs.findIndex(tab => tab.id === tabId)
     const previous = existingIndex >= 0 ? nextTabs[existingIndex] : null
 
-    const next = normalizeTabRecord({
-      ...previous,
+    const nextTabRecord = {
+      ...(previous ?? {}),
       id: tabId,
-      name,
-      path,
-      language,
-      content,
-      scroll,
-      isActive,
       lastModified: Date.now(),
-    })
+    }
+
+    if (name !== undefined) {
+      nextTabRecord.name = name
+    }
+
+    if (path !== undefined) {
+      nextTabRecord.path = path
+    }
+
+    if (language !== undefined) {
+      nextTabRecord.language = language
+    }
+
+    if (content !== undefined) {
+      nextTabRecord.content = content
+    }
+
+    if (scroll !== undefined) {
+      nextTabRecord.scroll = scroll
+    }
+
+    if (isActive !== undefined) {
+      nextTabRecord.isActive = isActive
+    }
+
+    const next = normalizeTabRecord(nextTabRecord)
 
     if (!next) {
       throw new Error('Unable to persist tab content because tab record is invalid.')
@@ -255,6 +289,7 @@ export const createWorkspaceStorageAdapter = ({ loadRuntime } = {}) => {
 
 export const createDebouncedWorkspaceSaver = ({
   save,
+  onError,
   waitMs = 800,
   now = () => Date.now(),
   schedule = setTimeout,
@@ -269,6 +304,18 @@ export const createDebouncedWorkspaceSaver = ({
   let inFlight = Promise.resolve()
   let lastScheduledAt = 0
 
+  const reportSaveError = ({ error, payload }) => {
+    if (typeof onError !== 'function') {
+      return
+    }
+
+    try {
+      onError(error, payload)
+    } catch {
+      /* Swallow reporter failures so saving can continue. */
+    }
+  }
+
   const flush = async () => {
     if (!pendingPayload) {
       return
@@ -277,8 +324,15 @@ export const createDebouncedWorkspaceSaver = ({
     const payload = pendingPayload
     pendingPayload = null
 
-    inFlight = inFlight.then(() => save(payload))
-    await inFlight
+    const continueChain = inFlight.catch(() => undefined)
+    inFlight = continueChain.then(() => save(payload))
+
+    try {
+      await inFlight
+    } catch (error) {
+      reportSaveError({ error, payload })
+      throw error
+    }
   }
 
   const queue = payload => {
@@ -291,7 +345,11 @@ export const createDebouncedWorkspaceSaver = ({
 
     timer = schedule(async () => {
       timer = null
-      await flush()
+      try {
+        await flush()
+      } catch {
+        /* Background flush errors are surfaced through onError when provided. */
+      }
     }, waitMs)
   }
 
