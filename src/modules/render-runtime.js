@@ -586,40 +586,94 @@ export const createRenderRuntimeController = ({
 
     const { byId, byModuleKey } = buildWorkspaceTabLookup(tabs)
     const visited = new Set()
+    const visiting = new Set()
+    const visitStack = []
     const dependencyOrder = []
+    const importsByTabId = new Map()
 
-    const visit = tab => {
-      if (!tab || visited.has(tab.id)) {
-        return
+    const toCycleTabLabel = tab => toTabModuleKey(tab) || tab.id
+
+    const getParsedImportsForTab = tab => {
+      if (!tab || typeof tab.id !== 'string' || tab.id.length === 0) {
+        return []
       }
 
-      visited.add(tab.id)
+      if (importsByTabId.has(tab.id)) {
+        return importsByTabId.get(tab.id)
+      }
 
       const source = typeof tab.content === 'string' ? tab.content : ''
       const imports = parseWorkspaceImports({ source, transformJsxSource })
+      importsByTabId.set(tab.id, imports)
+      return imports
+    }
 
-      workspaceGraphCache.upsert({
-        tabId: tab.id,
-        imports: imports.map(entry => entry?.source).filter(Boolean),
-        lastUpdated: Date.now(),
-      })
-
-      for (const entry of imports) {
-        if (!isRelativeSpecifier(entry?.source)) {
-          continue
-        }
-
-        const target = byModuleKey.get(entry.source)
-        if (!target) {
-          throw new Error(
-            `Preview entry references missing workspace module: ${entry.source}`,
-          )
-        }
-
-        visit(target)
+    const visit = (tab, { viaSpecifier = '' } = {}) => {
+      if (!tab) {
+        return
       }
 
-      dependencyOrder.push(tab.id)
+      if (visiting.has(tab.id)) {
+        const cycleStartIndex = visitStack.findIndex(entry => entry.id === tab.id)
+        const cycleEntries =
+          cycleStartIndex >= 0 ? visitStack.slice(cycleStartIndex) : [...visitStack]
+        const cycleLabels = [
+          ...cycleEntries.map(entry => entry.label),
+          toCycleTabLabel(tab),
+        ].join(' -> ')
+        const importPath = [
+          ...cycleEntries.slice(1).map(entry => entry.viaSpecifier),
+          viaSpecifier,
+        ]
+          .filter(Boolean)
+          .join(' -> ')
+
+        const importHint = importPath ? ` Import chain: ${importPath}.` : ''
+        throw new Error(
+          `Preview entry contains circular workspace import: ${cycleLabels}.${importHint}`,
+        )
+      }
+
+      if (visited.has(tab.id)) {
+        return
+      }
+
+      visiting.add(tab.id)
+      visitStack.push({
+        id: tab.id,
+        label: toCycleTabLabel(tab),
+        viaSpecifier,
+      })
+      try {
+        const imports = getParsedImportsForTab(tab)
+
+        workspaceGraphCache.upsert({
+          tabId: tab.id,
+          imports: imports.map(entry => entry?.source).filter(Boolean),
+          lastUpdated: Date.now(),
+        })
+
+        for (const entry of imports) {
+          if (!isRelativeSpecifier(entry?.source)) {
+            continue
+          }
+
+          const target = byModuleKey.get(entry.source)
+          if (!target) {
+            throw new Error(
+              `Preview entry references missing workspace module: ${entry.source}`,
+            )
+          }
+
+          visit(target, { viaSpecifier: entry.source })
+        }
+
+        visited.add(tab.id)
+        dependencyOrder.push(tab.id)
+      } finally {
+        visitStack.pop()
+        visiting.delete(tab.id)
+      }
     }
 
     visit(entryTab)
@@ -634,7 +688,7 @@ export const createRenderRuntimeController = ({
       }
 
       const source = typeof tab.content === 'string' ? tab.content : ''
-      const imports = parseWorkspaceImports({ source, transformJsxSource })
+      const imports = getParsedImportsForTab(tab)
       const aliases = createRelativeImportAliases(imports)
       const withoutRelativeImports = stripImportDeclarationsBy(source, imports, entry =>
         isRelativeSpecifier(entry?.source),
