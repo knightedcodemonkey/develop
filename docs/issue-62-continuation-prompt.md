@@ -1,106 +1,109 @@
-# Issue #62 Continuation Prompt: Pick Up Where We Left Off
+# Issue #62 Continuation Prompt: Remaining Hardening Scope
 
-Use this as the handoff prompt for continuing work on:
+Use this as the handoff prompt for any remaining work related to:
 https://github.com/knightedcodemonkey/develop/issues/62
 
 ## Prompt
 
-You are resuming implementation for issue #62 in `@knighted/develop`.
+You are continuing issue #62 in `@knighted/develop` after the main multi-tab
+workspace refactor is already complete.
 
 ### Goal
 
-Finish the dynamic multi-tab workspace/editor refactor and close remaining
-behavior gaps without doing a broad visual redesign.
+Harden the current tab-id-first workspace/editor behavior and close any
+remaining edge-case regressions without broad UI redesign.
 
 ### Current project constraints
 
 - Keep changes localized to `@knighted/develop`.
 - Preserve CDN-first runtime/fallback behavior.
-- Preserve existing lint/build pipeline.
+- Preserve existing lint/build/test pipeline.
 - Do not add dependencies without asking first.
 - Prefer focused, minimal diffs over broad rewrites.
 
-### What is already done
+### What is already complete
 
-- Dynamic workspace tabs exist with add, rename, remove, and local persistence.
-- Entry-role guard exists (entry tab cannot be removed).
-- Tab strip was moved to a dedicated full-width row in the editor area.
-- Tab visuals were updated toward IDE-like tabs.
-- Rename flow was hardened against re-entrant render races.
-- Add-tab naming prompt was removed in favor of generated default names.
-- Active tab is re-applied on startup to reduce initial-load drift.
-- Focus-based kind switching was removed from editor focus handlers.
-- `setActiveWorkspaceTabForKind` has been removed.
-- Lint/build were passing after the most recent structural change.
+- Dynamic workspace tabs are in place (add/rename/remove) with persistence.
+- Entry-role guard is in place (entry tab cannot be removed).
+- Entry filename contract is enforced (`App.tsx` or `App.js`).
+- One-visible-editor behavior is in place with tab-driven visibility.
+- Full Playwright suite was passing after test cleanup and refactor alignment.
 
-### Known remaining risk areas
+### Remaining focus areas
 
-- Residual component/styles lane assumptions still exist in `src/app.js`
-  (for example cached loaded tab ids and kind-based branches).
-- App entry tab selection on initial load has historically been flaky.
-- Remove-tab fallback and active-tab/editor sync should stay strictly
-  tab-id-driven.
-- Preview entry/hydration behavior must remain consistent with tab metadata.
+1. Tab-id-first activation hardening
 
-### Required outcomes for this continuation
+- Keep active tab id as the single source of truth for visible editor content.
+- Prevent hidden-panel interactions or stale branch logic from mutating active tab state.
 
-1. Make active tab id the single source of truth
+2. Entry and startup determinism
 
-- Eliminate or isolate remaining lane-coupled activation logic.
-- Ensure selecting a tab always controls visible editor content.
+- Verify entry tab restore and initial-load selection remain stable.
+- Keep preview entry resolution aligned with tab metadata (`role: entry`) and documented fallback behavior.
 
-2. Preserve entry contract and startup determinism
+3. Remove/add/rename coherence
 
-- Entry tab path should remain `src/components/App.tsx` or `src/components/App.jsx`.
-- On first load/restore, App entry tab must be selectable and render correctly.
+- Keep fallback tab selection deterministic after remove.
+- Ensure add and rename flows do not drift name/path/content synchronization.
 
-3. Keep one-visible-editor behavior stable
+4. Dead migration branch cleanup
 
-- Only one editor panel should be visible at a time.
-- Internal pooling can remain, but hidden editor focus/state must not mutate
-  active tab.
+- Remove clearly obsolete helper paths or style/DOM hooks that are no longer used.
+- Avoid speculative cleanup outside touched areas.
 
-4. Keep remove/add/rename flows coherent
+5. Workspace import specifier compatibility
 
-- Remove fallback must be deterministic and tab-first.
-- Rename/add should not produce stale active state or content drift.
+- Support ESM-style runtime specifiers for workspace modules (for example importing
+  `./src/components/module.js` from an underlying `.ts`/`.tsx` tab when appropriate).
+- Keep resolution deterministic: exact-match path first, extension-compat fallback second,
+  with explicit handling for ambiguous matches.
 
-5. Clean dead branches introduced during migration
+6. Extension-driven tab kind detection
 
-- Remove obsolete helpers and stale wiring once replacement paths are active.
-- Remove only clearly dead CSS/DOM hooks tied to removed behavior.
+- Ensure new tabs can be created as CSS tabs without relying on active-tab lane assumptions.
+- Add flow should expose explicit editor type selection (`Component`, `Styles`, `Auto`)
+  so users can disambiguate toolsets at creation time.
+- Infer tab kind from filename extension/path when adding or renaming tabs
+  (for example `.css`, `.less`, `.sass` -> styles tab behavior).
+- `Auto` should infer from extension, while explicit user selection should override inference.
+- Keep editor language, tools, and render pipeline wiring aligned with inferred tab kind.
 
 ### Suggested execution sequence
 
-1. Audit active-tab flow in `src/app.js`:
+1. Audit high-risk flows in `src/app.js`:
 
 - `setActiveWorkspaceTab`
 - `loadWorkspaceTabIntoEditor`
 - remove-tab fallback logic
-- startup restore logic
+- startup restore path
 
-2. Convert remaining kind-branch activation to tab-id-first selection.
+2. Confirm entry resolution consistency with `src/modules/preview-entry-resolver.js`.
 
-3. Re-test high-risk interactions manually:
+3. Re-test high-risk interactions:
 
-- initial load with App entry tab
-- select between multiple component and style tabs
+- first load/restore with entry tab
+- tab switching across component and style tabs
 - add tab, rename tab, remove non-entry tab
-- switch style modes and verify preview keeps rendering
+- style mode switches with preview render continuity
+- importing workspace modules via `.js` specifiers when source tabs are `.ts`/`.tsx`
+- creating and renaming tabs with style extensions to verify styles-tab behavior
 
 4. Run validation:
 
 ```bash
 npm run lint
 npm run build
+npm run test:e2e
 ```
 
-5. If behavior changed, update docs briefly in `docs/`.
+5. Update docs only if behavior contract changes.
 
 ### Definition of done
 
-- App entry tab is reliably selectable on initial load.
-- No hidden-focus path can override active tab unexpectedly.
-- Active tab, visible editor, and persisted content stay in sync.
-- Remove/add/rename flows are stable and deterministic.
-- Lint/build pass.
+- Active tab id, visible editor, and persisted content remain synchronized.
+- Entry tab is stable on startup and remains renderable.
+- Remove/add/rename flows are deterministic under rapid interaction.
+- Workspace import resolution supports documented ESM-style extension compatibility.
+- New tab behavior correctly recognizes style-file extensions and routes to styles semantics.
+- No stale migration branches remain in touched code.
+- Lint/build/e2e pass.

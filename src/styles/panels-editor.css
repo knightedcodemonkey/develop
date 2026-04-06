@@ -28,6 +28,16 @@
   font-size: 1rem;
 }
 
+#editor-header-component span,
+#editor-header-styles span {
+  display: inline-block;
+  max-width: min(42vw, 420px);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: bottom;
+}
+
 .panel-header__title-with-status {
   display: inline-flex;
   align-items: center;
@@ -239,6 +249,12 @@
   margin-bottom: -1px;
 }
 
+.workspace-tab {
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: min(200px, 36vw);
+}
+
 .workspace-tab[aria-selected='true'] {
   background: color-mix(in srgb, var(--surface-panel-header) 92%, var(--accent-soft));
   border-color: color-mix(in srgb, var(--accent) 68%, transparent);
@@ -259,6 +275,23 @@
   margin: 0;
   font: inherit;
   cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  flex: 1 1 auto;
+  min-width: 0;
+  position: relative;
+}
+
+.workspace-tab__path-file {
+  flex: 1 1 auto;
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  direction: rtl;
+  text-align: left;
 }
 
 .workspace-tab__select:focus-visible {
@@ -343,6 +376,7 @@
 .workspace-tab__meta {
   font-size: 0.72rem;
   opacity: 0.8;
+  flex: none;
 }
 
 .workspace-tab-add {
@@ -354,6 +388,11 @@
 
 .workspace-tab-add--strip {
   margin-left: auto;
+  flex: none;
+}
+
+.workspace-tab__rename,
+.workspace-tab__remove {
   flex: none;
 }
 

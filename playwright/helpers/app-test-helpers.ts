@@ -57,6 +57,53 @@ export const waitForAppReady = async (page: Page, path = appEntryPath) => {
     .toBe(true)
 }
 
+export const resetWorkbenchStorage = async (page: Page) => {
+  await page.goto(appEntryPath)
+  await page.evaluate(async () => {
+    try {
+      localStorage.clear()
+    } catch {
+      /* noop */
+    }
+
+    try {
+      sessionStorage.clear()
+    } catch {
+      /* noop */
+    }
+
+    const deleteIndexedDbByName = async (name: string) => {
+      await new Promise<void>(resolve => {
+        if (!name) {
+          resolve()
+          return
+        }
+
+        const request = indexedDB.deleteDatabase(name)
+        request.onsuccess = () => resolve()
+        request.onerror = () => resolve()
+        request.onblocked = () => resolve()
+      })
+    }
+
+    if (typeof indexedDB === 'undefined') {
+      return
+    }
+
+    if (typeof indexedDB.databases === 'function') {
+      const databases = await indexedDB.databases()
+      const databaseNames = (databases || [])
+        .map(entry => entry?.name)
+        .filter((name): name is string => typeof name === 'string' && name.length > 0)
+
+      await Promise.all(databaseNames.map(name => deleteIndexedDbByName(name)))
+      return
+    }
+
+    await deleteIndexedDbByName('knighted-develop-workspaces')
+  })
+}
+
 export const waitForInitialRender = async (page: Page) => {
   await waitForAppReady(page)
   await expect(page.getByRole('status', { name: 'App status' })).toHaveText('Rendered')

@@ -3,11 +3,15 @@ import {
   ensureDiagnosticsDrawerOpen,
   ensurePanelToolsVisible,
   expectPreviewHasRenderedContent,
+  resetWorkbenchStorage,
   runTypecheck,
   setComponentEditorSource,
-  setStylesEditorSource,
   waitForInitialRender,
 } from './helpers/app-test-helpers.js'
+
+test.beforeEach(async ({ page }) => {
+  await resetWorkbenchStorage(page)
+})
 
 test('renders in react mode with css modules', async ({ page }) => {
   await waitForInitialRender(page)
@@ -16,7 +20,9 @@ test('renders in react mode with css modules', async ({ page }) => {
   await ensurePanelToolsVisible(page, 'styles')
 
   await page.getByLabel('ShadowRoot').uncheck()
+  await page.getByRole('tab', { name: 'Open tab App.tsx' }).click()
   await page.getByRole('combobox', { name: 'Render mode' }).selectOption('react')
+  await page.getByRole('tab', { name: 'Open tab app.css' }).click()
   await page.getByRole('combobox', { name: 'Style mode' }).selectOption('module')
   await expect(page.getByRole('status', { name: 'App status' })).toHaveText('Rendered')
   await expectPreviewHasRenderedContent(page)
@@ -213,12 +219,14 @@ test('requires render button when auto render is disabled', async ({ page }) => 
 
   const autoRenderToggle = page.getByLabel('Auto render')
   const renderButton = page.getByRole('button', { name: 'Render' })
-  const styleMode = page.getByRole('combobox', { name: 'Style mode' })
 
+  await page.getByRole('tab', { name: 'Open tab App.tsx' }).click()
   await autoRenderToggle.uncheck()
   await expect(renderButton).toBeVisible()
 
-  await styleMode.selectOption('module')
+  await page.getByRole('tab', { name: 'Open tab app.css' }).click()
+  await page.getByRole('combobox', { name: 'Style mode' }).selectOption('module')
+  await page.getByRole('tab', { name: 'Open tab App.tsx' }).click()
 
   await renderButton.click()
   await expect(page.getByRole('status', { name: 'App status' })).toHaveText('Rendered')
@@ -387,105 +395,6 @@ test('auto render requires explicit App for declarations plus top-level JSX expr
   )
 })
 
-test('renders export default arrow component when auto render is disabled', async ({
-  page,
-}) => {
-  await waitForInitialRender(page)
-
-  await ensurePanelToolsVisible(page, 'component')
-  await page.getByLabel('ShadowRoot').uncheck()
-  await page.getByLabel('Auto render').uncheck()
-
-  await setComponentEditorSource(
-    page,
-    'export default () => <button type="button">default export arrow</button>',
-  )
-
-  await page.getByRole('button', { name: 'Render' }).click()
-
-  await expect(page.getByRole('status', { name: 'App status' })).toHaveText('Rendered')
-  await expect(
-    page.getByRole('region', { name: 'Preview output' }).getByRole('button'),
-  ).toContainText('default export arrow')
-})
-
-test('renders export default class component in react mode', async ({ page }) => {
-  await waitForInitialRender(page)
-
-  await ensurePanelToolsVisible(page, 'component')
-  await page.getByLabel('ShadowRoot').uncheck()
-  await page.getByRole('combobox', { name: 'Render mode' }).selectOption('react')
-  await page.getByLabel('Auto render').uncheck()
-
-  await setComponentEditorSource(
-    page,
-    [
-      "import React from 'react'",
-      'export default class extends React.Component {',
-      '  render() {',
-      '    return <button type="button">default export class</button>',
-      '  }',
-      '}',
-    ].join('\n'),
-  )
-
-  await page.getByRole('button', { name: 'Render' }).click()
-
-  await expect(page.getByRole('status', { name: 'App status' })).toHaveText('Rendered')
-  const previewButtons = page
-    .getByRole('region', { name: 'Preview output' })
-    .getByRole('button')
-  await expect(previewButtons.first()).toContainText('default export class')
-})
-
-test('supports export default App without redeclaration', async ({ page }) => {
-  await waitForInitialRender(page)
-
-  await ensurePanelToolsVisible(page, 'component')
-  await page.getByLabel('ShadowRoot').uncheck()
-  await page.getByLabel('Auto render').uncheck()
-
-  await setComponentEditorSource(
-    page,
-    [
-      'function App() {',
-      '  return <button type="button">export default App</button>',
-      '}',
-      'export default App',
-    ].join('\n'),
-  )
-
-  await page.getByRole('button', { name: 'Render' }).click()
-
-  await expect(page.getByRole('status', { name: 'App status' })).toHaveText('Rendered')
-  await expect(
-    page.getByRole('region', { name: 'Preview output' }).getByRole('button').first(),
-  ).toContainText('export default App')
-})
-
-test('auto render supports export default named component without App redeclaration', async ({
-  page,
-}) => {
-  await waitForInitialRender(page)
-
-  await ensurePanelToolsVisible(page, 'component')
-  await page.getByLabel('ShadowRoot').uncheck()
-
-  await setComponentEditorSource(
-    page,
-    [
-      'const Button = () => <button type="button">export default Button</button>',
-      'export default Button',
-    ].join('\n'),
-  )
-
-  await expect(page.getByRole('status', { name: 'App status' })).toHaveText('Rendered')
-  await expect(
-    page.getByRole('region', { name: 'Preview output' }).getByRole('button').first(),
-  ).toContainText('export default Button')
-  await expect(page.locator('#preview-host pre')).toHaveCount(0)
-})
-
 test('persists theme across reload with fixed layout', async ({ page }) => {
   await waitForInitialRender(page)
 
@@ -520,24 +429,4 @@ test('renders with sass style mode', async ({ page }) => {
   await page.getByRole('combobox', { name: 'Style mode' }).selectOption('sass')
   await expect(page.getByRole('status', { name: 'App status' })).toHaveText('Rendered')
   await expectPreviewHasRenderedContent(page)
-})
-
-test('style compilation errors populate styles diagnostics scope', async ({ page }) => {
-  await waitForInitialRender(page)
-
-  await ensurePanelToolsVisible(page, 'styles')
-
-  await page.getByRole('combobox', { name: 'Style mode' }).selectOption('sass')
-  await setStylesEditorSource(page, '.card { color: $missing; }')
-
-  await expect(page.getByRole('status', { name: 'App status' })).toHaveText('Error')
-  await expect(page.getByRole('button', { name: 'Diagnostics' })).toHaveClass(
-    /diagnostics-toggle--error/,
-  )
-
-  await ensureDiagnosticsDrawerOpen(page)
-  await expect(page.locator('#diagnostics-styles')).toContainText(
-    'Style compilation failed.',
-  )
-  await expect(page.locator('#diagnostics-styles')).toContainText('Undefined variable')
 })

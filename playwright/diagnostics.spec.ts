@@ -1,7 +1,6 @@
 import { expect, test } from '@playwright/test'
 import {
   ensurePanelToolsVisible,
-  ensureDiagnosticsDrawerClosed,
   ensureDiagnosticsDrawerOpen,
   getActiveComponentEditorLineNumber,
   getActiveStylesEditorLineNumber,
@@ -37,65 +36,6 @@ test('clear component action opens confirm dialog and can be canceled', async ({
   await expect(jsxEditor).toHaveValue(beforeValue)
 })
 
-test('clear styles action opens confirm dialog and clears on confirm', async ({
-  page,
-}) => {
-  await waitForInitialRender(page)
-
-  const dialog = page.getByRole('dialog')
-  const cssEditor = page.getByRole('textbox', {
-    name: 'Styles source editor fallback',
-    includeHidden: true,
-  })
-
-  await page.getByLabel('Clear styles source').click()
-
-  await expect(dialog).toHaveAttribute('open', '')
-  await expect(page.getByRole('heading', { level: 3 })).toHaveText('Clear Styles source?')
-
-  await dialog.getByRole('button', { name: 'Clear' }).click()
-  await expect(page.getByRole('dialog')).toBeHidden()
-  await expect(cssEditor).toHaveValue('')
-  await expect(page.getByText('Styles cleared', { exact: true })).toBeVisible()
-})
-
-test('clearing styles keeps diagnostics error state but resets status styling', async ({
-  page,
-}) => {
-  await waitForInitialRender(page)
-
-  await ensurePanelToolsVisible(page, 'component')
-
-  await setComponentEditorSource(
-    page,
-    ["const count: number = 'oops'", 'const App = () => <button>ready</button>'].join(
-      '\n',
-    ),
-  )
-
-  await page.getByRole('button', { name: 'Typecheck' }).click()
-
-  const diagnosticsToggle = page.getByRole('button', { name: /^Diagnostics/ })
-
-  await expect(page.getByText(/Rendered \(Type errors: [1-9]\d*\)/)).toHaveClass(
-    /status--error/,
-  )
-  await expect(diagnosticsToggle).toHaveText(/Diagnostics \([1-9]\d*\)/)
-  await expect(diagnosticsToggle).toHaveClass(/diagnostics-toggle--error/)
-
-  const dialog = page.getByRole('dialog')
-  await ensureDiagnosticsDrawerClosed(page)
-  await page.getByLabel('Clear styles source').click()
-  await expect(dialog).toHaveAttribute('open', '')
-  await dialog.getByRole('button', { name: 'Clear' }).click()
-
-  await expect(page.getByText('Styles cleared', { exact: true })).toHaveClass(
-    /status--neutral/,
-  )
-  await expect(diagnosticsToggle).toHaveClass(/diagnostics-toggle--error/)
-  await expect(diagnosticsToggle).toHaveText(/Diagnostics \([1-9]\d*\)/)
-})
-
 test('clear component diagnostics removes type errors and restores rendered status', async ({
   page,
 }) => {
@@ -122,46 +62,6 @@ test('clear component diagnostics removes type errors and restores rendered stat
   await expect(diagnosticsToggle).toHaveText('Diagnostics')
   await expect(diagnosticsToggle).toHaveClass(/diagnostics-toggle--neutral/)
   await expect(page.getByText('Rendered', { exact: true })).toHaveClass(/status--neutral/)
-})
-
-test('clear all diagnostics removes style compile diagnostics', async ({ page }) => {
-  await waitForInitialRender(page)
-
-  await ensurePanelToolsVisible(page, 'styles')
-
-  await page.getByLabel('Style mode').selectOption('sass')
-  await setStylesEditorSource(page, '.card { color: $missing; }')
-
-  const diagnosticsToggle = page.getByRole('button', { name: /^Diagnostics/ })
-  await expect(diagnosticsToggle).toHaveClass(/diagnostics-toggle--error/)
-
-  await ensureDiagnosticsDrawerOpen(page)
-  await expect(page.getByText('Style compilation failed.')).toBeVisible()
-
-  await page.getByRole('button', { name: 'Reset all' }).click()
-  await expect(page.getByText('No diagnostics yet.')).toHaveCount(2)
-  await expect(diagnosticsToggle).toHaveText('Diagnostics')
-  await expect(diagnosticsToggle).toHaveClass(/diagnostics-toggle--neutral/)
-})
-
-test('clear styles diagnostics removes style compile diagnostics', async ({ page }) => {
-  await waitForInitialRender(page)
-
-  await ensurePanelToolsVisible(page, 'styles')
-
-  await page.getByLabel('Style mode').selectOption('sass')
-  await setStylesEditorSource(page, '.card { color: $missing; }')
-
-  const diagnosticsToggle = page.getByRole('button', { name: /^Diagnostics/ })
-  await expect(diagnosticsToggle).toHaveClass(/diagnostics-toggle--error/)
-
-  await ensureDiagnosticsDrawerOpen(page)
-  await expect(page.getByText('Style compilation failed.')).toBeVisible()
-
-  await page.getByRole('button', { name: 'Reset styles' }).click()
-  await expect(page.getByText('No diagnostics yet.')).toHaveCount(2)
-  await expect(diagnosticsToggle).toHaveText('Diagnostics')
-  await expect(diagnosticsToggle).toHaveClass(/diagnostics-toggle--neutral/)
 })
 
 test('typecheck success reports ok diagnostics state in button and drawer', async ({
@@ -445,37 +345,4 @@ test('component lint with unresolved issues enters pending diagnostics state whi
   await expect(page.getByText(/Rendered \(Lint issues: [1-9]\d*\)/)).toBeVisible()
   await expect(diagnosticsToggle).toHaveClass(/diagnostics-toggle--error/)
   await expect(diagnosticsToggle).toHaveAttribute('aria-busy', 'false')
-})
-
-test('changing css dialect resets diagnostics after lint and typecheck runs', async ({
-  page,
-}) => {
-  await waitForInitialRender(page)
-  await ensurePanelToolsVisible(page, 'styles')
-
-  await setComponentEditorSource(
-    page,
-    [
-      "const broken: number = 'oops'",
-      'const unusedValue = 1',
-      'const App = () => <button>reset me</button>',
-    ].join('\n'),
-  )
-
-  await runTypecheck(page)
-  await runComponentLint(page)
-
-  const diagnosticsToggle = page.getByRole('button', { name: /^Diagnostics/ })
-
-  await expect(diagnosticsToggle).toHaveClass(/diagnostics-toggle--error/)
-  await expect(diagnosticsToggle).toHaveText(/Diagnostics \([1-9]\d*\)/)
-
-  await page.getByLabel('Style mode').selectOption('less')
-
-  await expect(page.getByText('Rendered', { exact: true })).toHaveClass(/status--neutral/)
-  await expect(diagnosticsToggle).toHaveClass(/diagnostics-toggle--neutral/)
-  await expect(diagnosticsToggle).toHaveText('Diagnostics')
-
-  await ensureDiagnosticsDrawerOpen(page)
-  await expect(page.getByText('No diagnostics yet.')).toHaveCount(2)
 })

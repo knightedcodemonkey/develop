@@ -122,7 +122,8 @@ const defaultComponentTabPath = 'src/components/App.tsx'
 const defaultStylesTabPath = 'src/styles/app.css'
 const defaultComponentTabName = 'App.tsx'
 const defaultStylesTabName = 'app.css'
-const allowedEntryTabPaths = new Set(['src/components/App.tsx', 'src/components/App.jsx'])
+const defaultEntryTabDirectory = 'src/components'
+const allowedEntryTabFileNames = new Set(['app.tsx', 'app.js'])
 const editorKinds = ['component', 'styles']
 const editorPanelsByKind = {
   component: componentEditorPanel,
@@ -909,23 +910,58 @@ const createWorkspaceTabId = prefix => {
   return `${prefix}-${Date.now().toString(36)}-${seed}`
 }
 
-const getPathFileName = path => {
-  const normalized = toNonEmptyWorkspaceText(path)
+const splitWorkspacePath = value => {
+  const normalized = toNonEmptyWorkspaceText(value)
   if (!normalized) {
-    return ''
+    return []
   }
 
-  const segments = normalized.split('/').filter(Boolean)
+  return normalized.split(/[\\/]+/).filter(Boolean)
+}
+
+const getPathFileName = path => {
+  const segments = splitWorkspacePath(path)
   return segments.length > 0 ? segments[segments.length - 1] : ''
 }
 
-const normalizeEntryTabPath = path => {
-  const normalizedPath = toNonEmptyWorkspaceText(path)
-  if (allowedEntryTabPaths.has(normalizedPath)) {
-    return normalizedPath
+const getPathDirectory = path => {
+  const segments = splitWorkspacePath(path)
+  if (segments.length <= 1) {
+    return defaultEntryTabDirectory
   }
 
-  return defaultComponentTabPath
+  return segments.slice(0, -1).join('/')
+}
+
+const normalizeEntryTabName = value => {
+  const normalized = toNonEmptyWorkspaceText(value)
+  if (allowedEntryTabFileNames.has(normalized.toLowerCase())) {
+    return normalized
+  }
+
+  return defaultComponentTabName
+}
+
+const getWorkspaceTabDisplay = tab => {
+  const fullPath =
+    toNonEmptyWorkspaceText(tab?.path) || toNonEmptyWorkspaceText(tab?.name)
+  const explicitName = toNonEmptyWorkspaceText(tab?.name)
+  const explicitFileName = getPathFileName(explicitName)
+  return {
+    fileName: explicitFileName || explicitName || getPathFileName(fullPath),
+    fullPath,
+  }
+}
+
+const normalizeEntryTabPath = (path, { preferredFileName = '' } = {}) => {
+  const normalizedPath = toNonEmptyWorkspaceText(path)
+  const directory = getPathDirectory(normalizedPath || defaultComponentTabPath)
+  const requestedFileName =
+    toNonEmptyWorkspaceText(preferredFileName) ||
+    getPathFileName(normalizedPath || defaultComponentTabPath)
+  const fileName = normalizeEntryTabName(requestedFileName)
+
+  return `${directory}/${fileName}`
 }
 
 const setVisibleEditorPanelForKind = kind => {
@@ -1002,18 +1038,15 @@ const ensureWorkspaceTabsShape = tabs => {
 
   return nextTabs.map(tab => {
     if (tab?.id === 'component') {
-      const normalizedEntryPath = normalizeEntryTabPath(tab.path)
-      const normalizedEntryNameInput = toNonEmptyWorkspaceText(tab.name)
+      const normalizedEntryPath = normalizeEntryTabPath(tab.path, {
+        preferredFileName: tab.name,
+      })
       return {
         ...tab,
         role: 'entry',
         language: 'javascript-jsx',
         path: normalizedEntryPath,
-        name:
-          !normalizedEntryNameInput ||
-          normalizedEntryNameInput.toLowerCase() === 'component'
-            ? getPathFileName(normalizedEntryPath) || defaultComponentTabName
-            : normalizedEntryNameInput,
+        name: getPathFileName(normalizedEntryPath) || defaultComponentTabName,
       }
     }
 
@@ -1338,11 +1371,34 @@ const finishWorkspaceTabRename = ({ tabId, nextName, cancelled = false }) => {
     return
   }
 
+  if (
+    tab.role === 'entry' &&
+    !allowedEntryTabFileNames.has(normalizedName.toLowerCase())
+  ) {
+    setStatus('Entry tab name must be App.tsx or App.js.', 'error')
+    renderWorkspaceTabs()
+    return
+  }
+
+  const normalizedEntryPath =
+    tab.role === 'entry'
+      ? normalizeEntryTabPath(tab.path, { preferredFileName: normalizedName })
+      : toNonEmptyWorkspaceText(tab.path)
+  const normalizedTabName =
+    tab.role === 'entry'
+      ? getPathFileName(normalizedEntryPath) || defaultComponentTabName
+      : normalizedName
+
   workspaceTabsState.upsertTab({
     ...tab,
-    name: normalizedName,
+    name: normalizedTabName,
+    path: normalizedEntryPath,
     lastModified: Date.now(),
   })
+
+  if (tab.role === 'entry' && githubPrComponentPath instanceof HTMLInputElement) {
+    githubPrComponentPath.value = normalizedEntryPath
+  }
 
   syncHeaderLabels()
   renderWorkspaceTabs()
@@ -1408,7 +1464,7 @@ const addWorkspaceTab = () => {
   const activeTab = getActiveWorkspaceTab()
   const normalizedKind = getTabKind(activeTab) === 'styles' ? 'styles' : 'component'
   const basePath =
-    normalizedKind === 'styles' ? 'src/styles/module.css' : 'src/components/Module.tsx'
+    normalizedKind === 'styles' ? 'src/styles/module.css' : 'src/components/module.tsx'
   const language = normalizedKind === 'styles' ? 'css' : 'javascript-jsx'
   const path = makeUniqueTabPath({ basePath })
   const tabId = createWorkspaceTabId(normalizedKind === 'styles' ? 'style' : 'module')
@@ -1524,7 +1580,16 @@ const renderWorkspaceTabs = () => {
       const selectButton = document.createElement('button')
       selectButton.className = 'workspace-tab__select'
       selectButton.type = 'button'
-      selectButton.textContent = tab.name
+      const tabDisplay = getWorkspaceTabDisplay(tab)
+      if (tabDisplay.fullPath) {
+        selectButton.title = tabDisplay.fullPath
+      }
+
+      const fileNameNode = document.createElement('span')
+      fileNameNode.className = 'workspace-tab__path-file'
+      fileNameNode.textContent = tabDisplay.fileName || tab.name
+      selectButton.append(fileNameNode)
+
       selectButton.setAttribute('role', 'tab')
       selectButton.setAttribute('aria-selected', isActive ? 'true' : 'false')
       selectButton.setAttribute('aria-label', `Open tab ${tab.name}`)
