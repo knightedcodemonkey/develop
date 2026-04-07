@@ -34,21 +34,21 @@ remaining edge-case regressions without broad UI redesign.
 
 ### Remaining focus areas
 
-1. Tab-id-first activation hardening
+1. Remove/add/rename coherence
+
+- Keep fallback tab selection deterministic after remove.
+- Ensure add and rename flows do not drift name/path/content synchronization.
+
+2. Tab-id-first activation hardening
 
 - Keep active tab id as the single source of truth for visible editor content.
 - Prevent hidden-panel interactions or stale branch logic from mutating active tab state.
 
-2. Entry and startup determinism
+3. Entry and startup determinism
 
 - Verify entry tab restore and initial-load selection remain stable.
 - Keep preview entry resolution aligned with tab metadata (`role: entry`) and documented fallback behavior.
 - Ensure startup render order cannot race editor hydration (component/styles) and silently use stale defaults.
-
-3. Remove/add/rename coherence
-
-- Keep fallback tab selection deterministic after remove.
-- Ensure add and rename flows do not drift name/path/content synchronization.
 
 4. Workspace import specifier compatibility
 
@@ -67,19 +67,17 @@ remaining edge-case regressions without broad UI redesign.
 - `Auto` should infer from extension, while explicit user selection should override inference.
 - Keep editor language, tools, and render pipeline wiring aligned with inferred tab kind.
 
-6. Render cadence and stale-error recovery
-
-- Preserve dependency-aware auto-render gating across add/remove/rename and entry changes.
-- Eliminate stale error carryover: previous errors must not persist once source/runtime state is corrected.
-- Ensure success transitions always clear prior preview error state and stale diagnostics payloads.
-- Confirm blob/module disposal and rerender cleanup cannot preserve stale failing module graphs.
-
-7. React runtime correctness in iframe preview
+6. React runtime correctness in iframe preview
 
 - Verify React mode event handlers execute against the latest compiled module output.
 - Investigate and fix runtime regressions such as `TypeError: Assignment to constant variable` (for example from stale/cached module execution or invalid transform output).
 - Ensure React mode uses consistent runtime contracts between transpile options, module prelude, and iframe bootstrap render path.
 - Ensure React and DOM mode switching does not leave stale runtime state in the iframe.
+
+7. Render cadence and stale-error recovery
+
+- Validate stale-error recovery under remaining edge transitions (rapid mode switches, tab churn, and startup sequencing).
+- Confirm blob/module disposal and rerender cleanup cannot preserve stale failing module graphs.
 
 ### Suggested execution sequence
 
@@ -110,8 +108,7 @@ remaining edge-case regressions without broad UI redesign.
 - JSX syntax/transform failures still reported as `[jsx] ...`
 - iframe runtime exceptions surfaced with stable, non-duplicated messaging
 - repeated source edits do not trigger runaway rerender loops or duplicate execution
-- unrelated non-entry module edits do not rerender preview unless the module is in the active entry import graph
-- correcting an error fully recovers preview output without requiring unrelated edits
+- correcting an error fully recovers preview output without requiring unrelated edits, including rapid mode/tab transitions
 - React mode click handlers work reliably after multiple rerenders/mode switches
 - importing workspace modules via `.js` specifiers when source tabs are `.ts`/`.tsx`
 - creating and renaming tabs with style extensions to verify styles-tab behavior
