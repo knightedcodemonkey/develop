@@ -167,6 +167,42 @@ test('react mode executes default React import without TDZ runtime failure', asy
   await expect(page.locator('#preview-host pre')).toHaveCount(0)
 })
 
+test('react mode mounts into internal non-div host to avoid div selector bleed', async ({
+  page,
+}) => {
+  await waitForInitialRender(page)
+
+  await ensurePanelToolsVisible(page, 'component')
+  await ensurePanelToolsVisible(page, 'styles')
+  await openWorkspaceTab(page, 'App.tsx')
+  await page.getByRole('combobox', { name: 'Render mode' }).selectOption('react')
+
+  await setWorkspaceTabSource(page, {
+    fileName: 'app.css',
+    kind: 'styles',
+    source: ['div { border: 1px dotted green; }'].join('\n'),
+  })
+
+  await setComponentEditorSource(
+    page,
+    [
+      "import React from 'react'",
+      'export const App = () => (',
+      '  <>',
+      '    <div>inner</div>',
+      '    <button type="button">btn</button>',
+      '  </>',
+      ')',
+    ].join('\n'),
+  )
+
+  await expect(page.getByRole('status', { name: 'App status' })).toHaveText('Rendered')
+
+  await expect(getPreviewFrame(page).locator('body > knighted-preview-root')).toHaveCount(
+    1,
+  )
+})
+
 test('clearing component source reports clear action without error status', async ({
   page,
 }) => {

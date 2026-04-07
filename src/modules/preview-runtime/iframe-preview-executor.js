@@ -64,7 +64,7 @@ import { jsx as __knightedDomJsxRuntime } from '${runtimeSpecifiers.jsxDom}'
   if (!output) {
     throw new Error('Expected a function or const named App.')
   }
-  const host = document.createElement('div')
+  const host = document.createElement('knighted-preview-root')
   document.body.append(host)
   const root = createRoot(host)
   root.render(output)
