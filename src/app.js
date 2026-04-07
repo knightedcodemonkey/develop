@@ -5,7 +5,7 @@ import {
   importFromCdnWithFallback,
 } from './modules/cdn.js'
 import { createCodeMirrorEditor } from './modules/editor-codemirror.js'
-import { defaultCss, defaultJsx, defaultReactJsx } from './modules/defaults.js'
+import { defaultCss, defaultJsx } from './modules/defaults.js'
 import { createDiagnosticsUiController } from './modules/diagnostics-ui.js'
 import { createGitHubChatDrawer } from './modules/github-chat-drawer/drawer.js'
 import { createGitHubByotControls } from './modules/github-byot-controls.js'
@@ -99,7 +99,6 @@ const clearComponentButton = document.getElementById('clear-component')
 const styleMode = document.getElementById('style-mode')
 const copyStylesButton = document.getElementById('copy-styles')
 const clearStylesButton = document.getElementById('clear-styles')
-const shadowToggle = document.getElementById('shadow-toggle')
 const jsxEditor = document.getElementById('jsx-editor')
 const cssEditor = document.getElementById('css-editor')
 const diagnosticsToggle = document.getElementById('diagnostics-toggle')
@@ -149,7 +148,6 @@ let getCssSource = () => cssEditor.value
 let renderRuntime = null
 let pendingClearAction = null
 let suppressEditorChangeSideEffects = false
-let hasAppliedReactModeDefault = false
 let appToastDismissTimer = null
 const workspaceStorage = createWorkspaceStorageAdapter()
 let workspaceSaver = null
@@ -1113,6 +1111,22 @@ const buildWorkspaceTabsSnapshot = () => {
   })
 }
 
+const getPreviewStylesSource = () => {
+  const loadedStylesTab = workspaceTabsState.getTab(loadedStylesTabId)
+
+  if (!loadedStylesTab || getTabKind(loadedStylesTab) !== 'styles') {
+    return getCssSource()
+  }
+
+  if (workspaceTabsState.getActiveTabId() === loadedStylesTab.id) {
+    return getCssSource()
+  }
+
+  return typeof loadedStylesTab.content === 'string'
+    ? loadedStylesTab.content
+    : getCssSource()
+}
+
 const buildWorkspaceRecordSnapshot = ({ recordId } = {}) => {
   const context = getWorkspaceContextSnapshot()
   const id =
@@ -1130,6 +1144,7 @@ const buildWorkspaceRecordSnapshot = ({ recordId } = {}) => {
     head: context.headBranch || '',
     prNumber: null,
     prTitle: context.prTitle || '',
+    renderMode: normalizeRenderMode(renderMode.value),
     tabs: buildWorkspaceTabsSnapshot(),
     activeTabId: workspaceTabsState.getActiveTabId(),
     createdAt: activeWorkspaceCreatedAt ?? Date.now(),
@@ -1236,6 +1251,11 @@ const applyWorkspaceRecord = async (workspace, { silent = false } = {}) => {
       activeTabId: workspace.activeTabId,
     })
 
+    const nextRenderMode = normalizeRenderMode(workspace.renderMode)
+    if (renderMode.value !== nextRenderMode) {
+      renderMode.value = nextRenderMode
+    }
+
     if (typeof componentTab?.path === 'string' && githubPrComponentPath) {
       githubPrComponentPath.value = componentTab.path
     }
@@ -1247,6 +1267,10 @@ const applyWorkspaceRecord = async (workspace, { silent = false } = {}) => {
     const activeTab = getActiveWorkspaceTab()
     if (activeTab) {
       loadWorkspaceTabIntoEditor(activeTab)
+    }
+
+    if (stylesTab && typeof stylesTab.content === 'string') {
+      setCssSource(stylesTab.content)
     }
 
     renderWorkspaceTabs()
@@ -1327,8 +1351,6 @@ const setActiveWorkspaceTab = tabId => {
   if (!changed) {
     return
   }
-
-  maybeRender()
 
   void flushWorkspaceSave().catch(() => {
     /* Save failures are already surfaced through saver onError. */
@@ -1981,6 +2003,8 @@ const getStyleEditorLanguage = mode => {
   return 'css'
 }
 
+const normalizeRenderMode = mode => (mode === 'react' ? 'react' : 'dom')
+
 const normalizeStyleMode = mode => {
   if (mode === 'module') return 'module'
   if (mode === 'less') return 'less'
@@ -2026,7 +2050,7 @@ const initializeCodeEditors = async () => {
             )
           }
           queueWorkspaceSave()
-          maybeRender()
+          maybeRenderFromComponentEditorChange()
           markTypeDiagnosticsStale()
           markComponentLintDiagnosticsStale()
         },
@@ -2395,22 +2419,32 @@ const maybeRender = () => {
   }
 }
 
+const maybeRenderFromComponentEditorChange = () => {
+  if (!autoRenderToggle.checked) {
+    return
+  }
+
+  const activeTab = getActiveWorkspaceTab()
+  if (activeTab && getTabKind(activeTab) === 'component') {
+    const shouldRender = renderRuntime.shouldAutoRenderForTabChange(activeTab.id)
+    if (!shouldRender) {
+      return
+    }
+  }
+
+  renderRuntime.scheduleRender()
+}
+
 renderRuntime = createRenderRuntimeController({
   cdnImports,
   importFromCdnWithFallback,
   renderMode,
   styleMode,
-  shadowToggle,
   isAutoRenderEnabled: () => autoRenderToggle.checked,
-  getCssSource: () => getCssSource(),
+  getCssSource: () => getPreviewStylesSource(),
   getJsxSource: () => getJsxSource(),
   getWorkspaceTabs: () => buildWorkspaceTabsSnapshot(),
   getPreviewHost: () => previewHost,
-  setPreviewHost: nextHost => {
-    previewHost = nextHost
-  },
-  applyPreviewBackgroundColor: color =>
-    previewBackground.applyPreviewBackgroundColor(color),
   getPreviewBackgroundColor: () => previewBackground.getPreviewBackgroundColor(),
   clearStyleDiagnostics: () => clearDiagnosticsScope('styles'),
   setStyleDiagnosticsDetails,
@@ -2553,29 +2587,19 @@ const updateRenderButtonVisibility = () => {
   renderButton.hidden = autoRenderToggle.checked
 }
 
-function applyRenderMode({ mode, fromActivePrContext = false }) {
-  const nextMode = mode === 'react' ? 'react' : 'dom'
+function applyRenderMode({ mode, fromActivePrContext: _fromActivePrContext = false }) {
+  const nextMode = normalizeRenderMode(mode)
 
   if (renderMode.value !== nextMode) {
     renderMode.value = nextMode
   }
 
-  if (fromActivePrContext === true && nextMode === 'react') {
-    hasAppliedReactModeDefault = true
-  }
-
   resetDiagnosticsFlow()
 
-  if (
-    nextMode === 'react' &&
-    !hasAppliedReactModeDefault &&
-    fromActivePrContext !== true
-  ) {
-    hasAppliedReactModeDefault = true
-    setJsxSource(defaultReactJsx)
-  }
-
   maybeRender()
+  void flushWorkspaceSave().catch(() => {
+    /* Save failures are already surfaced through saver onError. */
+  })
 }
 
 function applyStyleMode({ mode }) {
@@ -2605,7 +2629,6 @@ renderMode.addEventListener('change', () => {
 styleMode.addEventListener('change', () => {
   applyStyleMode({ mode: styleMode.value })
 })
-shadowToggle.addEventListener('change', maybeRender)
 autoRenderToggle.addEventListener('change', () => {
   renderRuntime.clearPreview()
   updateRenderButtonVisibility()
@@ -2700,7 +2723,7 @@ clearStylesButton.addEventListener('click', () => {
   })
 })
 
-jsxEditor.addEventListener('input', maybeRender)
+jsxEditor.addEventListener('input', maybeRenderFromComponentEditorChange)
 jsxEditor.addEventListener('input', markTypeDiagnosticsStale)
 jsxEditor.addEventListener('input', markComponentLintDiagnosticsStale)
 jsxEditor.addEventListener('input', queueWorkspaceSave)
@@ -2935,10 +2958,17 @@ initializePreviewBackgroundPicker()
 void loadPreferredWorkspaceContext().catch(() => {
   setStatus('Could not restore local workspace context.', 'neutral')
 })
-void initializeCodeEditors().then(() => {
+void initializeCodeEditors().then(async () => {
   const activeTab = getActiveWorkspaceTab()
   if (activeTab) {
     setActiveWorkspaceTab(activeTab.id)
   }
+
+  const stylesTab =
+    workspaceTabsState.getTab(loadedStylesTabId) ?? getWorkspaceTabByKind('styles')
+  if (stylesTab && typeof stylesTab.content === 'string') {
+    setCssSource(stylesTab.content)
+  }
+
+  await renderPreview()
 })
-renderPreview()

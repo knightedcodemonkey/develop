@@ -10,7 +10,6 @@ import {
 test('renders default playground preview', async ({ page }) => {
   await waitForInitialRender(page)
 
-  await page.getByLabel('ShadowRoot').uncheck()
   await expect(page.getByRole('status', { name: 'App status' })).toHaveText('Rendered')
   await expectPreviewHasRenderedContent(page)
 })

@@ -117,12 +117,50 @@ export const expectPreviewHasRenderedContent = async (page: Page) => {
     .toBeGreaterThan(0)
 }
 
+const escapeRegex = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+
+export const getPreviewFrame = (page: Page) => page.frameLocator('#preview-host iframe')
+
+export const addWorkspaceTab = async (page: Page) => {
+  await page.getByRole('button', { name: 'Add tab' }).click()
+}
+
+export const openWorkspaceTab = async (page: Page, fileName: string) => {
+  const pattern = new RegExp(`^Open tab ${escapeRegex(fileName)}$`)
+  await page.getByRole('tab', { name: pattern }).click()
+}
+
+export const setWorkspaceTabSource = async (
+  page: Page,
+  {
+    fileName,
+    source,
+    kind = 'component',
+  }: {
+    fileName: string
+    source: string
+    kind?: 'component' | 'styles'
+  },
+) => {
+  await openWorkspaceTab(page, fileName)
+  const editorContent = page
+    .locator(`.editor-panel[data-editor-kind="${kind}"] .cm-content`)
+    .first()
+  await editorContent.fill(source)
+  await editorContent.press('End')
+  await editorContent.type(' ')
+  await editorContent.press('Backspace')
+}
+
 export const setComponentEditorSource = async (page: Page, source: string) => {
   await page.getByRole('tab', { name: 'Open tab App.tsx' }).click()
   const editorContent = page
     .locator('.editor-panel[data-editor-kind="component"] .cm-content')
     .first()
   await editorContent.fill(source)
+  await editorContent.press('End')
+  await editorContent.type(' ')
+  await editorContent.press('Backspace')
 }
 
 export const setStylesEditorSource = async (page: Page, source: string) => {
@@ -131,6 +169,9 @@ export const setStylesEditorSource = async (page: Page, source: string) => {
     .locator('.editor-panel[data-editor-kind="styles"] .cm-content')
     .first()
   await editorContent.fill(source)
+  await editorContent.press('End')
+  await editorContent.type(' ')
+  await editorContent.press('Backspace')
 }
 
 export const getActiveComponentEditorLineNumber = async (page: Page) => {

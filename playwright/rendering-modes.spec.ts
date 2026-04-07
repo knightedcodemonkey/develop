@@ -1,11 +1,15 @@
 import { expect, test } from '@playwright/test'
 import {
+  addWorkspaceTab,
   ensureDiagnosticsDrawerOpen,
   ensurePanelToolsVisible,
   expectPreviewHasRenderedContent,
+  getPreviewFrame,
+  openWorkspaceTab,
   resetWorkbenchStorage,
   runTypecheck,
   setComponentEditorSource,
+  setWorkspaceTabSource,
   waitForInitialRender,
 } from './helpers/app-test-helpers.js'
 
@@ -19,7 +23,6 @@ test('renders in react mode with css modules', async ({ page }) => {
   await ensurePanelToolsVisible(page, 'component')
   await ensurePanelToolsVisible(page, 'styles')
 
-  await page.getByLabel('ShadowRoot').uncheck()
   await page.getByRole('tab', { name: 'Open tab App.tsx' }).click()
   await page.getByRole('combobox', { name: 'Render mode' }).selectOption('react')
   await page.getByRole('tab', { name: 'Open tab app.css' }).click()
@@ -31,7 +34,6 @@ test('renders in react mode with css modules', async ({ page }) => {
 test('transpiles TypeScript annotations in component source', async ({ page }) => {
   await waitForInitialRender(page)
 
-  await page.getByLabel('ShadowRoot').uncheck()
   await setComponentEditorSource(
     page,
     [
@@ -41,9 +43,7 @@ test('transpiles TypeScript annotations in component source', async ({ page }) =
   )
 
   await expect(page.getByRole('status', { name: 'App status' })).toHaveText('Rendered')
-  await expect(
-    page.getByRole('region', { name: 'Preview output' }).getByRole('button'),
-  ).toContainText('typed')
+  await expect(getPreviewFrame(page).getByRole('button')).toContainText('typed')
 })
 
 test('dom mode supports type-only imports without runtime export syntax errors', async ({
@@ -52,7 +52,6 @@ test('dom mode supports type-only imports without runtime export syntax errors',
   await waitForInitialRender(page)
 
   await ensurePanelToolsVisible(page, 'component')
-  await page.getByLabel('ShadowRoot').uncheck()
   await page.getByRole('combobox', { name: 'Render mode' }).selectOption('dom')
 
   await setComponentEditorSource(
@@ -76,9 +75,9 @@ test('dom mode supports type-only imports without runtime export syntax errors',
 
   await expect(page.getByRole('status', { name: 'App status' })).toHaveText('Rendered')
   await expect(page.locator('#preview-host pre')).toHaveCount(0)
-  await expect(
-    page.getByRole('region', { name: 'Preview output' }).getByRole('button'),
-  ).toContainText('typed children import')
+  await expect(getPreviewFrame(page).getByRole('button')).toContainText(
+    'typed children import',
+  )
 })
 
 test('react mode typecheck loads types without malformed URL fetches', async ({
@@ -152,7 +151,6 @@ test('react mode executes default React import without TDZ runtime failure', asy
 
   await ensurePanelToolsVisible(page, 'component')
 
-  await page.getByLabel('ShadowRoot').uncheck()
   await page.getByRole('combobox', { name: 'Render mode' }).selectOption('react')
   await setComponentEditorSource(
     page,
@@ -163,9 +161,9 @@ test('react mode executes default React import without TDZ runtime failure', asy
   )
 
   await expect(page.getByRole('status', { name: 'App status' })).toHaveText('Rendered')
-  await expect(
-    page.getByRole('region', { name: 'Preview output' }).getByRole('button'),
-  ).toContainText('react default import works')
+  await expect(getPreviewFrame(page).getByRole('button')).toContainText(
+    'react default import works',
+  )
   await expect(page.locator('#preview-host pre')).toHaveCount(0)
 })
 
@@ -179,9 +177,7 @@ test('clearing component source reports clear action without error status', asyn
   await expect(dialog).toHaveAttribute('open', '')
   await dialog.getByRole('button', { name: 'Clear' }).click()
 
-  await expect(
-    page.getByRole('region', { name: 'Preview output' }).getByRole('button'),
-  ).toHaveCount(0)
+  await expect(getPreviewFrame(page).getByRole('button')).toHaveCount(0)
   await expect(page.locator('#preview-host pre')).toHaveCount(0)
   await expect(page.getByRole('status', { name: 'App status' })).toHaveText(
     'Component cleared',
@@ -209,6 +205,94 @@ test('jsx syntax errors affect status but not diagnostics toggle severity', asyn
   const diagnosticsToggle = page.getByRole('button', { name: 'Diagnostics' })
   await expect(diagnosticsToggle).toHaveText('Diagnostics')
   await expect(diagnosticsToggle).toHaveClass(/diagnostics-toggle--neutral/)
+})
+
+test('high-signal runtime errors surface as runtime diagnostics without uncaught page errors', async ({
+  page,
+}) => {
+  await waitForInitialRender(page)
+
+  const pageErrors: string[] = []
+  page.on('pageerror', error => {
+    pageErrors.push(error.message)
+  })
+
+  await setComponentEditorSource(
+    page,
+    ["const App = () => { throw new TypeError('intentional runtime failure') }"].join(
+      '\n',
+    ),
+  )
+
+  await expect(page.getByRole('status', { name: 'App status' })).toHaveText('Error')
+  await expect(page.locator('#preview-host pre')).toContainText('[runtime]')
+  await expect(page.locator('#preview-host pre')).toContainText(
+    'intentional runtime failure',
+  )
+  await expect(page.locator('#preview-host pre')).toContainText(
+    'Entry: @knighted/workspace/',
+  )
+  await expect(page.locator('#preview-host pre')).toContainText('Source:')
+
+  expect(pageErrors).toEqual([])
+})
+
+test('editing-transient missing reference runtime errors are suppressed', async ({
+  page,
+}) => {
+  await waitForInitialRender(page)
+  await ensurePanelToolsVisible(page, 'component')
+  await page.getByRole('combobox', { name: 'Render mode' }).selectOption('react')
+
+  await setComponentEditorSource(
+    page,
+    [
+      "import { useState, useCallback } from 'react'",
+      '',
+      'const App = () => {',
+      '  const [count, setCount] = useState(0)',
+      '  const handleOnClick = useCallback(() => {',
+      '    setCount(count + 1)',
+      '  }, [count])',
+      '  co',
+      '  return (',
+      '    <button type="button" onClick={handleOnClick}>{count}</button>',
+      '  )',
+      '}',
+    ].join('\n'),
+  )
+
+  await expect(page.locator('#preview-host pre')).toHaveCount(0)
+  await expect(page.getByRole('status', { name: 'App status' })).not.toHaveText('Error')
+})
+
+test('post-render runtime exceptions from iframe are reported in preview panel', async ({
+  page,
+}) => {
+  await waitForInitialRender(page)
+  await ensurePanelToolsVisible(page, 'component')
+  await page.getByRole('combobox', { name: 'Render mode' }).selectOption('react')
+
+  await setComponentEditorSource(
+    page,
+    [
+      "import React from 'react'",
+      'export const App = () => (',
+      '  <button type="button" onClick={() => {',
+      "    throw new Error('clicked boom')",
+      '  }}>',
+      '    click boom',
+      '  </button>',
+      ')',
+    ].join('\n'),
+  )
+
+  await expect(page.getByRole('status', { name: 'App status' })).toHaveText('Rendered')
+  await getPreviewFrame(page).getByRole('button', { name: 'click boom' }).click()
+
+  await expect(page.getByRole('status', { name: 'App status' })).toHaveText('Error')
+  await expect(page.locator('#preview-host pre')).toContainText('[runtime]')
+  await expect(page.locator('#preview-host pre')).toContainText('clicked boom')
 })
 
 test('requires render button when auto render is disabled', async ({ page }) => {
@@ -239,16 +323,15 @@ test('clears preview when auto render is toggled', async ({ page }) => {
   await ensurePanelToolsVisible(page, 'component')
 
   const autoRenderToggle = page.getByLabel('Auto render')
+  const previewHost = page.locator('#preview-host')
 
-  await expect(
-    page.getByRole('region', { name: 'Preview output' }).getByRole('button'),
-  ).toHaveCount(1)
+  await expect
+    .poll(() => previewHost.evaluate(node => node.childElementCount))
+    .toBeGreaterThan(0)
 
   await autoRenderToggle.uncheck()
 
-  await expect(
-    page.getByRole('region', { name: 'Preview output' }).getByRole('button'),
-  ).toHaveCount(0)
+  await expect.poll(() => previewHost.evaluate(node => node.childElementCount)).toBe(0)
   await expect(page.locator('#preview-host pre')).toHaveCount(0)
 })
 
@@ -282,7 +365,6 @@ test('auto render implicitly wraps source with App in dom and react modes', asyn
   await waitForInitialRender(page)
 
   await ensurePanelToolsVisible(page, 'component')
-  await page.getByLabel('ShadowRoot').uncheck()
 
   await setComponentEditorSource(
     page,
@@ -290,9 +372,9 @@ test('auto render implicitly wraps source with App in dom and react modes', asyn
   )
 
   await expect(page.getByRole('status', { name: 'App status' })).toHaveText('Rendered')
-  await expect(
-    page.getByRole('region', { name: 'Preview output' }).getByRole('button'),
-  ).toContainText('implicit app dom')
+  await expect(getPreviewFrame(page).getByRole('button')).toContainText(
+    'implicit app dom',
+  )
 
   await page.getByRole('combobox', { name: 'Render mode' }).selectOption('react')
   await setComponentEditorSource(
@@ -301,9 +383,9 @@ test('auto render implicitly wraps source with App in dom and react modes', asyn
   )
 
   await expect(page.getByRole('status', { name: 'App status' })).toHaveText('Rendered')
-  await expect(
-    page.getByRole('region', { name: 'Preview output' }).getByRole('button'),
-  ).toContainText('implicit app react')
+  await expect(getPreviewFrame(page).getByRole('button')).toContainText(
+    'implicit app react',
+  )
 })
 
 test('auto render implicit App includes multiple component declarations', async ({
@@ -312,7 +394,6 @@ test('auto render implicit App includes multiple component declarations', async 
   await waitForInitialRender(page)
 
   await ensurePanelToolsVisible(page, 'component')
-  await page.getByLabel('ShadowRoot').uncheck()
 
   await setComponentEditorSource(
     page,
@@ -323,12 +404,8 @@ test('auto render implicit App includes multiple component declarations', async 
   )
 
   await expect(page.getByRole('status', { name: 'App status' })).toHaveText('Rendered')
-  await expect(
-    page.getByRole('region', { name: 'Preview output' }).getByRole('button'),
-  ).toHaveCount(2)
-  await expect(
-    page.getByRole('region', { name: 'Preview output' }).getByRole('button'),
-  ).toContainText(['bar', 'foo'])
+  await expect(getPreviewFrame(page).getByRole('button')).toHaveCount(2)
+  await expect(getPreviewFrame(page).getByRole('button')).toContainText(['bar', 'foo'])
 })
 
 test('auto render does not treat lowercase helpers as implicit components', async ({
@@ -337,7 +414,6 @@ test('auto render does not treat lowercase helpers as implicit components', asyn
   await waitForInitialRender(page)
 
   await ensurePanelToolsVisible(page, 'component')
-  await page.getByLabel('ShadowRoot').uncheck()
 
   await setComponentEditorSource(
     page,
@@ -359,7 +435,6 @@ test('auto render wraps standalone JSX with trailing semicolon and comment', asy
   await waitForInitialRender(page)
 
   await ensurePanelToolsVisible(page, 'component')
-  await page.getByLabel('ShadowRoot').uncheck()
 
   await setComponentEditorSource(
     page,
@@ -367,9 +442,9 @@ test('auto render wraps standalone JSX with trailing semicolon and comment', asy
   )
 
   await expect(page.getByRole('status', { name: 'App status' })).toHaveText('Rendered')
-  await expect(
-    page.getByRole('region', { name: 'Preview output' }).getByRole('button'),
-  ).toContainText('implicit app from jsx expression')
+  await expect(getPreviewFrame(page).getByRole('button')).toContainText(
+    'implicit app from jsx expression',
+  )
 })
 
 test('auto render requires explicit App for declarations plus top-level JSX expression', async ({
@@ -378,7 +453,6 @@ test('auto render requires explicit App for declarations plus top-level JSX expr
   await waitForInitialRender(page)
 
   await ensurePanelToolsVisible(page, 'component')
-  await page.getByLabel('ShadowRoot').uncheck()
 
   await setComponentEditorSource(
     page,
@@ -409,12 +483,25 @@ test('persists theme across reload with fixed layout', async ({ page }) => {
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'light')
 })
 
+test('persists render mode across reload', async ({ page }) => {
+  await waitForInitialRender(page)
+
+  await ensurePanelToolsVisible(page, 'component')
+  await page.getByRole('combobox', { name: 'Render mode' }).selectOption('react')
+  await expect(page.getByRole('status', { name: 'App status' })).toHaveText('Rendered')
+
+  await page.reload()
+  await waitForInitialRender(page)
+  await ensurePanelToolsVisible(page, 'component')
+
+  await expect(page.getByRole('combobox', { name: 'Render mode' })).toHaveValue('react')
+})
+
 test('renders with less style mode', async ({ page }) => {
   await waitForInitialRender(page)
 
   await ensurePanelToolsVisible(page, 'styles')
 
-  await page.getByLabel('ShadowRoot').uncheck()
   await page.getByRole('combobox', { name: 'Style mode' }).selectOption('less')
   await expect(page.getByRole('status', { name: 'App status' })).toHaveText('Rendered')
   await expectPreviewHasRenderedContent(page)
@@ -425,8 +512,185 @@ test('renders with sass style mode', async ({ page }) => {
 
   await ensurePanelToolsVisible(page, 'styles')
 
-  await page.getByLabel('ShadowRoot').uncheck()
   await page.getByRole('combobox', { name: 'Style mode' }).selectOption('sass')
   await expect(page.getByRole('status', { name: 'App status' })).toHaveText('Rendered')
   await expectPreviewHasRenderedContent(page)
+})
+
+test('workspace tabs isolate duplicate exported identifiers in iframe module scope', async ({
+  page,
+}) => {
+  await waitForInitialRender(page)
+
+  await ensurePanelToolsVisible(page, 'component')
+
+  await addWorkspaceTab(page)
+  await setWorkspaceTabSource(page, {
+    fileName: 'module.tsx',
+    source: 'export const Button = () => <button type="button">workspace button</button>',
+  })
+
+  await openWorkspaceTab(page, 'App.tsx')
+  await setComponentEditorSource(
+    page,
+    [
+      "import { Button as WorkspaceButton } from './module'",
+      'const Button = () => <button type="button">local button</button>',
+      'export const App = () => (',
+      '  <>',
+      '    <Button />',
+      '    <WorkspaceButton />',
+      '  </>',
+      ')',
+    ].join('\n'),
+  )
+
+  await expect(page.getByRole('status', { name: 'App status' })).toHaveText('Rendered')
+  await expect(getPreviewFrame(page).getByRole('button')).toHaveCount(2)
+  await expect(getPreviewFrame(page).getByRole('button')).toContainText([
+    'local button',
+    'workspace button',
+  ])
+})
+
+test('workspace tabs resolve extensionless relative imports through virtual module map', async ({
+  page,
+}) => {
+  await waitForInitialRender(page)
+
+  await ensurePanelToolsVisible(page, 'component')
+
+  await addWorkspaceTab(page)
+  await addWorkspaceTab(page)
+
+  await setWorkspaceTabSource(page, {
+    fileName: 'module-2.tsx',
+    source: "export const label = 'extensionless import ok'",
+  })
+
+  await setWorkspaceTabSource(page, {
+    fileName: 'module.tsx',
+    source: [
+      "import { label } from './module-2'",
+      'export const Button = () => <button type="button">{label}</button>',
+    ].join('\n'),
+  })
+
+  await setWorkspaceTabSource(page, {
+    fileName: 'App.tsx',
+    source: [
+      "import { Button } from './module'",
+      'export const App = () => <Button />',
+    ].join('\n'),
+  })
+
+  await expect(page.getByRole('status', { name: 'App status' })).toHaveText('Rendered')
+  await expect(getPreviewFrame(page).getByRole('button')).toContainText(
+    'extensionless import ok',
+  )
+})
+
+test('workspace graph errors for missing modules remain deterministic', async ({
+  page,
+}) => {
+  await waitForInitialRender(page)
+
+  await ensurePanelToolsVisible(page, 'component')
+  await setComponentEditorSource(
+    page,
+    [
+      "import { MissingThing } from './does-not-exist'",
+      'export const App = () => <button>{String(MissingThing)}</button>',
+    ].join('\n'),
+  )
+
+  await expect(page.getByRole('status', { name: 'App status' })).toHaveText('Error')
+  await expect(page.locator('#preview-host pre')).toContainText(
+    'Preview entry references missing workspace module: ./does-not-exist',
+  )
+})
+
+test('workspace graph errors for circular imports remain deterministic', async ({
+  page,
+}) => {
+  await waitForInitialRender(page)
+
+  await ensurePanelToolsVisible(page, 'component')
+
+  await addWorkspaceTab(page)
+  await setWorkspaceTabSource(page, {
+    fileName: 'module.tsx',
+    source: ["import { App } from './App'", 'export const ping = () => App'].join('\n'),
+  })
+
+  await setWorkspaceTabSource(page, {
+    fileName: 'App.tsx',
+    source: [
+      "import { ping } from './module'",
+      'export const App = () => <button>{String(Boolean(ping))}</button>',
+    ].join('\n'),
+  })
+
+  await expect(page.getByRole('status', { name: 'App status' })).toHaveText('Error')
+  await expect(page.locator('#preview-host pre')).toContainText(
+    'Preview entry contains circular workspace import:',
+  )
+  await expect(page.locator('#preview-host pre')).toContainText('Import chain: ./module')
+})
+
+test('auto-render skips unrelated component tab edits outside entry dependency graph', async ({
+  page,
+}) => {
+  await waitForInitialRender(page)
+
+  await ensurePanelToolsVisible(page, 'component')
+
+  await addWorkspaceTab(page)
+  await setWorkspaceTabSource(page, {
+    fileName: 'module.tsx',
+    source: "export const value = 'first'",
+  })
+
+  await setWorkspaceTabSource(page, {
+    fileName: 'App.tsx',
+    source: "export const App = () => <button type='button'>entry only</button>",
+  })
+
+  await expect(page.getByRole('status', { name: 'App status' })).toHaveText('Rendered')
+
+  const pendingWatcher = page.evaluate(() => {
+    const status = document.getElementById('status')
+
+    return new Promise(resolve => {
+      if (!status) {
+        resolve(false)
+        return
+      }
+
+      let sawPending = false
+      const observer = new MutationObserver(() => {
+        if (status.textContent?.trim() === 'Rendering…') {
+          sawPending = true
+        }
+      })
+
+      observer.observe(status, {
+        childList: true,
+        subtree: true,
+        characterData: true,
+      })
+
+      setTimeout(() => {
+        observer.disconnect()
+        resolve(sawPending)
+      }, 700)
+    })
+  })
+
+  await setWorkspaceTabSource(page, {
+    fileName: 'module.tsx',
+    source: "export const value = 'second'",
+  })
+
+  await expect(pendingWatcher).resolves.toBe(false)
 })

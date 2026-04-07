@@ -568,18 +568,6 @@
               <span class="preview-bg-label">Background</span>
               <input id="preview-bg-color" type="color" value="#12141c" />
             </label>
-            <label class="toggle">
-              <input id="shadow-toggle" type="checkbox" checked />
-              ShadowRoot
-            </label>
-            <button
-              class="hint-icon shadow-hint"
-              type="button"
-              aria-label="About preview isolation mode"
-              data-tooltip="Turning ShadowRoot off renders the preview in light DOM, so @knighted/develop styles can affect preview output."
-            >
-              i
-            </button>
             <button
               class="panel-collapse-toggle"
               id="collapse-preview"
@@ -588,7 +576,7 @@
               data-collapse-axis="vertical"
               data-collapsed="false"
               aria-expanded="true"
-              aria-controls="preview-panel-content"
+              aria-controls="preview-host"
               aria-label="Collapse preview panel"
               title="Collapse preview panel"
             >
@@ -599,14 +587,12 @@
             </button>
           </div>
         </div>
-        <div class="panel-content" id="preview-panel-content">
-          <div
-            class="preview-host"
-            id="preview-host"
-            role="region"
-            aria-label="Preview output"
-          ></div>
-        </div>
+        <div
+          class="panel-content preview-host"
+          id="preview-host"
+          role="region"
+          aria-label="Preview output"
+        ></div>
       </section>
 
       <aside

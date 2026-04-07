@@ -4,23 +4,23 @@ import {
   hasFunctionLikeDeclarationNamed,
 } from './jsx-top-level-declarations.js'
 import { canRenderPreview, resolvePreviewEntryTab } from './preview-entry-resolver.js'
+import { executeWorkspaceIframePreview } from './preview-runtime/iframe-preview-executor.js'
+import { planWorkspaceVirtualModules } from './preview-runtime/virtual-workspace-modules.js'
 import { createPreviewWorkspaceGraphCache } from './preview-workspace-graph.js'
 import { ensureJsxTransformSource } from './jsx-transform-runtime.js'
+import { getCdnImportUrl } from './cdn.js'
 
 export const createRenderRuntimeController = ({
   cdnImports,
   importFromCdnWithFallback,
   renderMode,
   styleMode,
-  shadowToggle,
   isAutoRenderEnabled = () => false,
   getCssSource,
   getJsxSource,
   getWorkspaceTabs,
   getPreviewHost,
-  setPreviewHost,
-  applyPreviewBackgroundColor,
-  getPreviewBackgroundColor,
+  getPreviewBackgroundColor = () => '',
   clearStyleDiagnostics,
   setStyleDiagnosticsDetails,
   setStatus,
@@ -32,7 +32,6 @@ export const createRenderRuntimeController = ({
   let renderInFlight = false
   let rerenderRequested = false
   let reactRoot = null
-  let reactRuntime = null
   let sassCompiler = null
   let lessCompiler = null
   let lightningCssWasm = null
@@ -41,6 +40,10 @@ export const createRenderRuntimeController = ({
     key: null,
     value: null,
   }
+  let disposeWorkspaceVirtualModules = null
+  let disposeIframeRuntimeBridge = null
+  let lastRenderedEntryTabId = ''
+  let lastRenderedDependencyTabIds = new Set()
   let topLevelTransformMetadataCache = {
     source: null,
     transformJsxSource: null,
@@ -95,40 +98,8 @@ export const createRenderRuntimeController = ({
     }
   }
 
-  const recreatePreviewHost = () => {
-    const previewHost = getPreviewHost()
-    const nextHost = document.createElement('div')
-    nextHost.id = 'preview-host'
-    nextHost.className = previewHost.className
-    nextHost.setAttribute('role', 'region')
-    nextHost.setAttribute('aria-label', 'Preview output')
-    previewHost.replaceWith(nextHost)
-    setPreviewHost(nextHost)
-
-    applyPreviewBackgroundColor(getPreviewBackgroundColor())
-  }
-
   const getRenderTarget = () => {
-    const previewHost = getPreviewHost()
-
-    if (!shadowToggle.checked && previewHost.shadowRoot) {
-      /* ShadowRoot cannot be detached, so recreate the host for light DOM mode. */
-      if (reactRoot) {
-        reactRoot.unmount()
-        reactRoot = null
-      }
-      recreatePreviewHost()
-    }
-
-    const currentHost = getPreviewHost()
-    if (shadowToggle.checked) {
-      if (!currentHost.shadowRoot) {
-        currentHost.attachShadow({ mode: 'open' })
-      }
-      return currentHost.shadowRoot
-    }
-
-    return currentHost
+    return getPreviewHost()
   }
 
   const clearTarget = target => {
@@ -140,30 +111,11 @@ export const createRenderRuntimeController = ({
     target.innerHTML = ''
   }
 
-  const shadowPreviewBaseStyles = `
-:host {
-  all: initial;
-  display: var(--preview-host-display, block);
-  flex: var(--preview-host-flex, 1 1 auto);
-  min-height: var(--preview-host-min-height, 180px);
-  padding: var(--preview-host-padding, 18px);
-  overflow: var(--preview-host-overflow, auto);
-  position: var(--preview-host-position, relative);
-  background: var(--surface-preview);
-  color-scheme: var(--control-color-scheme, dark);
-  z-index: var(--preview-host-z-index, 1);
-  box-sizing: border-box;
-}
-`
-
   const applyStyles = (target, cssText) => {
     if (!target) return
 
     const styleTag = document.createElement('style')
-    const isShadowTarget = target instanceof ShadowRoot
-    styleTag.textContent = isShadowTarget
-      ? `${shadowPreviewBaseStyles}\n${cssText}`
-      : `@scope (#preview-host) {\n${cssText}\n}`
+    styleTag.textContent = `@scope (#preview-host) {\n${cssText}\n}`
     target.append(styleTag)
   }
 
@@ -218,181 +170,6 @@ export const createRenderRuntimeController = ({
     }
 
     return output
-  }
-
-  const remapClassTokens = (className, moduleExports) => {
-    if (!className || !moduleExports) return className
-    return className
-      .split(/\s+/)
-      .filter(Boolean)
-      .map(token => {
-        const mapped = normalizeCssModuleExport(moduleExports[token])
-        return mapped || token
-      })
-      .join(' ')
-  }
-
-  const remapDomClassNames = (target, moduleExports) => {
-    if (!target || !moduleExports) return
-    const elements = [target, ...(target.querySelectorAll?.('*') ?? [])]
-    for (const node of elements) {
-      if (!(node instanceof Element)) continue
-      const className = node.getAttribute('class')
-      if (!className) continue
-      const remapped = remapClassTokens(className, moduleExports)
-      if (remapped !== className) {
-        node.setAttribute('class', remapped)
-      }
-    }
-  }
-
-  const remapReactClassNames = (value, moduleExports, React) => {
-    if (!moduleExports || !React.isValidElement(value)) {
-      return value
-    }
-
-    const nextProps = {}
-    let hasChanges = false
-
-    if (typeof value.props.className === 'string') {
-      const remappedClassName = remapClassTokens(value.props.className, moduleExports)
-      if (remappedClassName !== value.props.className) {
-        nextProps.className = remappedClassName
-        hasChanges = true
-      }
-    }
-
-    if (Object.prototype.hasOwnProperty.call(value.props, 'children')) {
-      const remappedChildren = React.Children.map(value.props.children, child =>
-        remapReactClassNames(child, moduleExports, React),
-      )
-      if (remappedChildren !== value.props.children) {
-        nextProps.children = remappedChildren
-        hasChanges = true
-      }
-    }
-
-    if (!hasChanges) {
-      return value
-    }
-
-    return React.cloneElement(value, nextProps)
-  }
-
-  const shouldAttemptTranspileFallback = error => {
-    if (error instanceof SyntaxError) {
-      return true
-    }
-
-    if (!(error instanceof Error)) {
-      return false
-    }
-
-    return /Unexpected token|Cannot use import statement|Unexpected identifier/.test(
-      error.message,
-    )
-  }
-
-  const isImportRange = range =>
-    Array.isArray(range) &&
-    range.length === 2 &&
-    Number.isInteger(range[0]) &&
-    Number.isInteger(range[1])
-
-  const stripImportDeclarations = (code, imports) => {
-    return stripImportDeclarationsBy(code, imports, () => true)
-  }
-
-  const stripImportDeclarationsBy = (code, imports, shouldStrip) => {
-    const ranges = imports
-      .filter(entry => shouldStrip(entry))
-      .map(entry => entry?.range)
-      .filter(isImportRange)
-      .slice()
-      .sort((first, second) => second[0] - first[0])
-
-    let output = code
-
-    for (const [start, end] of ranges) {
-      if (start < 0 || end < start || end > output.length) {
-        continue
-      }
-
-      output = `${output.slice(0, start)}${output.slice(end)}`
-    }
-
-    return output
-  }
-
-  const stripEmptyExportStatements = code =>
-    code.replace(/(?:^|\n)\s*export\s*\{\s*\}\s*;?\s*(?=\n|$)/g, '\n')
-
-  const buildRuntimeImportPlan = imports => {
-    const preamble = []
-    const unsupportedSources = new Set()
-    let requiresReactRuntime = false
-    let hasReactRuntimeAlias = false
-
-    const ensureReactRuntimeAlias = () => {
-      if (hasReactRuntimeAlias) {
-        return '__knightedReactRuntime'
-      }
-
-      hasReactRuntimeAlias = true
-      preamble.push('const __knightedReactRuntime = React')
-      return '__knightedReactRuntime'
-    }
-
-    for (const entry of imports) {
-      if (!entry || entry.importKind !== 'value') {
-        continue
-      }
-
-      if (entry.source !== 'react') {
-        unsupportedSources.add(entry.source)
-        continue
-      }
-
-      requiresReactRuntime = true
-
-      for (const binding of entry.bindings ?? []) {
-        if (!binding || binding.isTypeOnly) {
-          continue
-        }
-
-        if (binding.kind === 'default' || binding.kind === 'namespace') {
-          if (binding.local === 'React') {
-            continue
-          }
-
-          preamble.push(`const ${binding.local} = React`)
-          continue
-        }
-
-        if (binding.kind === 'named') {
-          if (binding.imported === 'default') {
-            if (binding.local === 'React') {
-              continue
-            }
-
-            preamble.push(`const ${binding.local} = React`)
-          } else {
-            if (binding.local === 'React') {
-              const reactRuntimeAlias = ensureReactRuntimeAlias()
-              preamble.push(`const React = ${reactRuntimeAlias}.${binding.imported}`)
-            } else {
-              preamble.push(`const ${binding.local} = React.${binding.imported}`)
-            }
-          }
-        }
-      }
-    }
-
-    return {
-      preamble,
-      requiresReactRuntime,
-      unsupportedSources: [...unsupportedSources],
-    }
   }
 
   const formatTransformDiagnosticsError = diagnostics => {
@@ -464,251 +241,6 @@ export const createRenderRuntimeController = ({
     return value
   }
 
-  const toModuleSpecifierKey = value => {
-    if (typeof value !== 'string') {
-      return ''
-    }
-
-    return value.trim().replace(/\\/g, '/').replace(/^\.\//, '')
-  }
-
-  const toTabModuleKey = tab => {
-    if (!tab || typeof tab !== 'object') {
-      return ''
-    }
-
-    if (typeof tab.path === 'string' && tab.path.trim().length > 0) {
-      return toModuleSpecifierKey(tab.path)
-    }
-
-    if (typeof tab.name === 'string' && tab.name.trim().length > 0) {
-      return toModuleSpecifierKey(tab.name)
-    }
-
-    return typeof tab.id === 'string' ? toModuleSpecifierKey(tab.id) : ''
-  }
-
-  const isRelativeSpecifier = specifier =>
-    typeof specifier === 'string' &&
-    (specifier.startsWith('./') || specifier.startsWith('../'))
-
-  const buildWorkspaceTabLookup = tabs => {
-    const byId = new Map()
-    const byModuleKey = new Map()
-
-    for (const tab of tabs) {
-      if (!tab || typeof tab !== 'object' || typeof tab.id !== 'string' || !tab.id) {
-        continue
-      }
-
-      byId.set(tab.id, tab)
-
-      const moduleKey = toTabModuleKey(tab)
-      if (!moduleKey) {
-        continue
-      }
-
-      if (!byModuleKey.has(moduleKey)) {
-        byModuleKey.set(moduleKey, tab)
-      }
-
-      if (!byModuleKey.has(`./${moduleKey}`)) {
-        byModuleKey.set(`./${moduleKey}`, tab)
-      }
-    }
-
-    return {
-      byId,
-      byModuleKey,
-    }
-  }
-
-  const normalizeWorkspaceModuleCode = code =>
-    stripEmptyExportStatements(
-      code
-        .replace(/^\s*export\s+(?=function|const|let|var|class)/gm, '')
-        .replace(/^\s*export\s+\{[^}]*\}\s*;?\s*$/gm, ''),
-    )
-
-  const parseWorkspaceImports = ({ source, transformJsxSource }) => {
-    const analysis = transformJsxSource(source, {
-      sourceType: 'module',
-      typescript: 'preserve',
-    })
-
-    if (analysis.diagnostics.length > 0) {
-      throw new Error(formatTransformDiagnosticsError(analysis.diagnostics))
-    }
-
-    return analysis.imports ?? []
-  }
-
-  const createRelativeImportAliases = imports => {
-    const lines = []
-
-    for (const entry of imports) {
-      if (!isRelativeSpecifier(entry?.source)) {
-        continue
-      }
-
-      for (const binding of entry.bindings ?? []) {
-        if (!binding || binding.isTypeOnly) {
-          continue
-        }
-
-        if (binding.kind === 'namespace' || binding.kind === 'default') {
-          throw new Error(
-            `Preview hydration does not support default or namespace imports for ${entry.source}.`,
-          )
-        }
-
-        if (binding.kind === 'named') {
-          if (binding.imported === 'default') {
-            throw new Error(
-              `Preview hydration does not support default imports for ${entry.source}.`,
-            )
-          }
-
-          if (binding.local && binding.local !== binding.imported) {
-            lines.push(`const ${binding.local} = ${binding.imported}`)
-          }
-        }
-      }
-    }
-
-    return lines
-  }
-
-  const resolveWorkspacePreviewSource = ({ tabs, entryTab, transformJsxSource }) => {
-    if (!entryTab || typeof entryTab.content !== 'string') {
-      return ''
-    }
-
-    const { byId, byModuleKey } = buildWorkspaceTabLookup(tabs)
-    const visited = new Set()
-    const visiting = new Set()
-    const visitStack = []
-    const dependencyOrder = []
-    const importsByTabId = new Map()
-
-    const toCycleTabLabel = tab => toTabModuleKey(tab) || tab.id
-
-    const getParsedImportsForTab = tab => {
-      if (!tab || typeof tab.id !== 'string' || tab.id.length === 0) {
-        return []
-      }
-
-      if (importsByTabId.has(tab.id)) {
-        return importsByTabId.get(tab.id)
-      }
-
-      const source = typeof tab.content === 'string' ? tab.content : ''
-      const imports = parseWorkspaceImports({ source, transformJsxSource })
-      importsByTabId.set(tab.id, imports)
-      return imports
-    }
-
-    const visit = (tab, { viaSpecifier = '' } = {}) => {
-      if (!tab) {
-        return
-      }
-
-      if (visiting.has(tab.id)) {
-        const cycleStartIndex = visitStack.findIndex(entry => entry.id === tab.id)
-        const cycleEntries =
-          cycleStartIndex >= 0 ? visitStack.slice(cycleStartIndex) : [...visitStack]
-        const cycleLabels = [
-          ...cycleEntries.map(entry => entry.label),
-          toCycleTabLabel(tab),
-        ].join(' -> ')
-        const importPath = [
-          ...cycleEntries.slice(1).map(entry => entry.viaSpecifier),
-          viaSpecifier,
-        ]
-          .filter(Boolean)
-          .join(' -> ')
-
-        const importHint = importPath ? ` Import chain: ${importPath}.` : ''
-        throw new Error(
-          `Preview entry contains circular workspace import: ${cycleLabels}.${importHint}`,
-        )
-      }
-
-      if (visited.has(tab.id)) {
-        return
-      }
-
-      visiting.add(tab.id)
-      visitStack.push({
-        id: tab.id,
-        label: toCycleTabLabel(tab),
-        viaSpecifier,
-      })
-      try {
-        const imports = getParsedImportsForTab(tab)
-
-        workspaceGraphCache.upsert({
-          tabId: tab.id,
-          imports: imports.map(entry => entry?.source).filter(Boolean),
-          lastUpdated: Date.now(),
-        })
-
-        for (const entry of imports) {
-          if (!isRelativeSpecifier(entry?.source)) {
-            continue
-          }
-
-          const target = byModuleKey.get(entry.source)
-          if (!target) {
-            throw new Error(
-              `Preview entry references missing workspace module: ${entry.source}`,
-            )
-          }
-
-          visit(target, { viaSpecifier: entry.source })
-        }
-
-        visited.add(tab.id)
-        dependencyOrder.push(tab.id)
-      } finally {
-        visitStack.pop()
-        visiting.delete(tab.id)
-      }
-    }
-
-    visit(entryTab)
-
-    const hydratedChunks = []
-
-    for (const tabId of dependencyOrder) {
-      const tab = byId.get(tabId)
-
-      if (!tab) {
-        continue
-      }
-
-      const source = typeof tab.content === 'string' ? tab.content : ''
-      const imports = getParsedImportsForTab(tab)
-      const aliases = createRelativeImportAliases(imports)
-      const withoutRelativeImports = stripImportDeclarationsBy(source, imports, entry =>
-        isRelativeSpecifier(entry?.source),
-      )
-      const moduleCode = normalizeWorkspaceModuleCode(withoutRelativeImports)
-
-      if (/^\s*export\s+default\b/m.test(moduleCode)) {
-        throw new Error(
-          `Preview hydration does not support default export in ${toTabModuleKey(tab) || tab.id}.`,
-        )
-      }
-
-      const label = toTabModuleKey(tab) || tab.id
-      const aliasBlock = aliases.length > 0 ? `\n${aliases.join('\n')}` : ''
-      hydratedChunks.push(`/* workspace:${label} */\n${moduleCode}${aliasBlock}`)
-    }
-
-    return hydratedChunks.join('\n\n')
-  }
-
   const withImplicitAppWrapper = (source, transformJsxSource) => {
     if (!source.trim()) {
       return source
@@ -757,19 +289,6 @@ export const createRenderRuntimeController = ({
 
     return source
   }
-
-  const createUserModuleFactory = source =>
-    new Function(
-      'jsx',
-      'reactJsx',
-      'React',
-      `"use strict";\n${source}\nconst __renderComponent = (Component, jsxTag) => {\n  if (typeof Component !== 'function') return null;\n  return jsxTag\`<\${Component} />\`;\n};\nconst __renderEntry = jsxTag => {\n  if (typeof App !== 'function') return null;\n  return __renderComponent(App, jsxTag);\n};\nreturn __renderEntry;`,
-    )
-
-  const isDomNode = value => typeof Node !== 'undefined' && value instanceof Node
-
-  const isReactElementLike = value =>
-    Boolean(value && typeof value === 'object' && '$$typeof' in value)
 
   const isSassCompiler = candidate =>
     Boolean(
@@ -958,182 +477,6 @@ export const createRenderRuntimeController = ({
     }
   }
 
-  const evaluateUserModule = async (helpers = {}) => {
-    const { jsx, transformJsxSource } = await ensureCoreRuntime()
-    let runtimeHelpers = helpers
-    let source = getJsxSource()
-
-    const workspaceTabs = typeof getWorkspaceTabs === 'function' ? getWorkspaceTabs() : []
-    if (Array.isArray(workspaceTabs) && workspaceTabs.length > 0) {
-      const entryTab = resolvePreviewEntryTab(workspaceTabs)
-
-      if (entryTab) {
-        source = resolveWorkspacePreviewSource({
-          tabs: workspaceTabs,
-          entryTab,
-          transformJsxSource,
-        })
-      }
-    }
-
-    const executableSource = isAutoRenderEnabled()
-      ? withImplicitAppWrapper(source, transformJsxSource)
-      : source
-    const userCode = executableSource
-      .replace(
-        /^\s*export\s+default\s+([A-Za-z_$][\w$]*)\s*;?\s*$/gm,
-        (match, identifier) => {
-          if (identifier === 'App') {
-            return ''
-          }
-
-          return `const App = ${identifier}`
-        },
-      )
-      .replace(/^\s*export\s+default\s+/gm, 'const App = ')
-      .replace(/^\s*export\s+(?=function|const|let|var|class)/gm, '')
-      .replace(/^\s*export\s*\{[^}]*\}\s*;?\s*$/gm, '')
-    try {
-      const moduleFactory = createUserModuleFactory(userCode)
-      return moduleFactory(helpers.jsx ?? jsx, helpers.reactJsx, helpers.React)
-    } catch (error) {
-      if (!shouldAttemptTranspileFallback(error)) {
-        throw error
-      }
-
-      const transpileMode = helpers.React && helpers.reactJsx ? 'react' : 'dom'
-      const transpileOptionsByMode = {
-        dom: {
-          sourceType: 'module',
-          createElement: 'jsx.createElement',
-          fragment: 'jsx.Fragment',
-          typescript: 'strip',
-        },
-        react: {
-          sourceType: 'module',
-          createElement: 'React.createElement',
-          fragment: 'React.Fragment',
-          typescript: 'strip',
-        },
-      }
-      const transformedResult = transformJsxSource(
-        userCode,
-        transpileOptionsByMode[transpileMode],
-      )
-
-      if (transformedResult.diagnostics.length > 0) {
-        throw new Error(formatTransformDiagnosticsError(transformedResult.diagnostics), {
-          cause: error,
-        })
-      }
-
-      const importAnalysisResult = transformJsxSource(transformedResult.code, {
-        sourceType: 'module',
-        typescript: 'preserve',
-      })
-
-      if (importAnalysisResult.diagnostics.length > 0) {
-        throw new Error(
-          formatTransformDiagnosticsError(importAnalysisResult.diagnostics),
-          {
-            cause: error,
-          },
-        )
-      }
-
-      const runtimeImportPlan = buildRuntimeImportPlan(importAnalysisResult.imports)
-
-      if (runtimeImportPlan.unsupportedSources.length > 0) {
-        throw new Error(
-          `Unsupported runtime imports in playground execution: ${runtimeImportPlan.unsupportedSources
-            .map(specifier => `'${specifier}'`)
-            .join(', ')}.`,
-          {
-            cause: error,
-          },
-        )
-      }
-
-      if (runtimeImportPlan.requiresReactRuntime && !runtimeHelpers.React) {
-        const { React, reactJsx } = await ensureReactRuntime()
-        runtimeHelpers = {
-          ...runtimeHelpers,
-          React,
-          reactJsx: runtimeHelpers.reactJsx ?? reactJsx,
-        }
-      }
-
-      const runtimeCode = stripImportDeclarations(
-        transformedResult.code,
-        importAnalysisResult.imports,
-      )
-      const sanitizedRuntimeCode = stripEmptyExportStatements(runtimeCode)
-      const executableUserCode = runtimeImportPlan.preamble.length
-        ? `${runtimeImportPlan.preamble.join('\n')}\n${sanitizedRuntimeCode}`
-        : sanitizedRuntimeCode
-
-      const moduleFactory = createUserModuleFactory(executableUserCode)
-
-      if (runtimeHelpers.React && runtimeHelpers.reactJsx) {
-        return moduleFactory(
-          runtimeHelpers.jsx ?? jsx,
-          runtimeHelpers.reactJsx,
-          runtimeHelpers.React,
-        )
-      }
-
-      if (transpileMode === 'dom') {
-        return moduleFactory(
-          runtimeHelpers.jsx ?? jsx,
-          runtimeHelpers.reactJsx,
-          runtimeHelpers.React,
-        )
-      }
-
-      const { React, reactJsx } = await ensureReactRuntime()
-      return moduleFactory(
-        runtimeHelpers.jsx ?? jsx,
-        runtimeHelpers.reactJsx ?? reactJsx,
-        React,
-      )
-    }
-  }
-
-  const ensureReactRuntime = async () => {
-    if (reactRuntime) return reactRuntime
-
-    try {
-      const [jsxReact, react, reactDomClient] = await Promise.all([
-        importFromCdnWithFallback(cdnImports.jsxReact),
-        importFromCdnWithFallback(cdnImports.react),
-        importFromCdnWithFallback(cdnImports.reactDomClient),
-      ])
-
-      const reactJsx = jsxReact.module.reactJsx
-      const React = react.module.default ?? react.module
-      const createRoot = reactDomClient.module.createRoot
-
-      if (typeof reactJsx !== 'function') {
-        throw new Error(`reactJsx export was not found from ${jsxReact.url}`)
-      }
-      if (!React || typeof React.isValidElement !== 'function') {
-        throw new Error(`React runtime export was not found from ${react.url}`)
-      }
-      if (typeof createRoot !== 'function') {
-        throw new Error(`createRoot export was not found from ${reactDomClient.url}`)
-      }
-
-      reactRuntime = { reactJsx, React, createRoot }
-      return reactRuntime
-    } catch (error) {
-      const message =
-        error instanceof Error ? error.message : 'Unknown React module loading failure'
-      throw new Error(`Unable to load React runtime from CDN: ${message}`, {
-        cause: error,
-      })
-    }
-  }
-
   const hasComponentSource = () => {
     const tabs = typeof getWorkspaceTabs === 'function' ? getWorkspaceTabs() : undefined
 
@@ -1143,66 +486,209 @@ export const createRenderRuntimeController = ({
     })
   }
 
+  const disposeWorkspaceModules = () => {
+    if (typeof disposeWorkspaceVirtualModules !== 'function') {
+      return
+    }
+
+    disposeWorkspaceVirtualModules()
+    disposeWorkspaceVirtualModules = null
+  }
+
+  const disposeIframeBridge = () => {
+    if (typeof disposeIframeRuntimeBridge !== 'function') {
+      return
+    }
+
+    disposeIframeRuntimeBridge()
+    disposeIframeRuntimeBridge = null
+  }
+
+  const renderPreviewError = error => {
+    disposeWorkspaceModules()
+    disposeIframeBridge()
+    setStatus('Error', 'error')
+
+    const target = getRenderTarget()
+    clearTarget(target)
+    const message = document.createElement('pre')
+    message.className = 'preview-runtime-error'
+    message.textContent = error instanceof Error ? error.message : String(error)
+    target.append(message)
+  }
+
+  const getRuntimeSpecifier = importKey => {
+    const importCandidates = cdnImports?.[importKey]
+
+    if (!Array.isArray(importCandidates) || importCandidates.length === 0) {
+      throw new Error(`Unknown CDN import key: ${String(importKey)}`)
+    }
+
+    return getCdnImportUrl(importCandidates[0])
+  }
+
+  const getWorkspaceRuntimeSpecifiers = () => ({
+    jsxDom: getRuntimeSpecifier('jsxDom'),
+    jsxReact: getRuntimeSpecifier('jsxReact'),
+    react: getRuntimeSpecifier('react'),
+    reactDomClient: getRuntimeSpecifier('reactDomClient'),
+  })
+
+  const withPreparedEntrySource = ({ tabs, entryTab, transformJsxSource }) => {
+    if (!isAutoRenderEnabled()) {
+      return tabs
+    }
+
+    const entrySource = typeof entryTab?.content === 'string' ? entryTab.content : ''
+    const wrappedEntrySource = withImplicitAppWrapper(entrySource, transformJsxSource)
+
+    if (wrappedEntrySource === entrySource) {
+      return tabs
+    }
+
+    return tabs.map(tab =>
+      tab?.id === entryTab.id
+        ? {
+            ...tab,
+            content: wrappedEntrySource,
+          }
+        : tab,
+    )
+  }
+
+  const renderWorkspaceInIframe = async ({ mode, cssText }) => {
+    const workspaceTabsSnapshot =
+      typeof getWorkspaceTabs === 'function' ? getWorkspaceTabs() : []
+    const workspaceTabs =
+      Array.isArray(workspaceTabsSnapshot) && workspaceTabsSnapshot.length > 0
+        ? workspaceTabsSnapshot
+        : [
+            {
+              id: 'component',
+              name: 'App.tsx',
+              path: 'src/components/App.tsx',
+              language: 'javascript-jsx',
+              role: 'entry',
+              content: getJsxSource(),
+            },
+          ]
+
+    const entryTab =
+      resolvePreviewEntryTab(workspaceTabs) ??
+      workspaceTabs.find(tab => tab?.id === 'component') ??
+      workspaceTabs[0]
+
+    if (!entryTab) {
+      throw new Error('Unable to resolve workspace preview entry tab.')
+    }
+
+    const { transformJsxSource } = await ensureCoreRuntime()
+    const tabsForExecution = withPreparedEntrySource({
+      tabs: workspaceTabs,
+      entryTab,
+      transformJsxSource,
+    })
+    const entryTabForExecution =
+      resolvePreviewEntryTab(tabsForExecution) ??
+      tabsForExecution.find(tab => tab?.id === entryTab.id) ??
+      tabsForExecution[0]
+
+    if (!entryTabForExecution) {
+      throw new Error('Unable to resolve prepared workspace preview entry tab.')
+    }
+
+    const runtimeSpecifiers = getWorkspaceRuntimeSpecifiers()
+    const hostPadding =
+      getComputedStyle(getRenderTarget()).getPropertyValue('--preview-host-padding') || ''
+    const virtualModulePlan = planWorkspaceVirtualModules({
+      tabs: tabsForExecution,
+      entryTab: entryTabForExecution,
+      transformJsxSource,
+      formatTransformDiagnosticsError,
+      workspaceGraphCache,
+      mode,
+      runtimeSpecifiers,
+    })
+
+    if (!virtualModulePlan) {
+      throw new Error('Unable to construct virtual workspace module plan.')
+    }
+
+    lastRenderedEntryTabId =
+      typeof virtualModulePlan.entryTabId === 'string' ? virtualModulePlan.entryTabId : ''
+    lastRenderedDependencyTabIds = new Set(
+      Array.isArray(virtualModulePlan.includedTabIds)
+        ? virtualModulePlan.includedTabIds
+        : [],
+    )
+
+    disposeWorkspaceModules()
+    disposeIframeBridge()
+    disposeWorkspaceVirtualModules = virtualModulePlan.dispose
+
+    try {
+      const execution = await executeWorkspaceIframePreview({
+        target: getRenderTarget(),
+        mode,
+        entrySpecifier: virtualModulePlan.entrySpecifier,
+        entryExportName: virtualModulePlan.entryExportName,
+        importMap: virtualModulePlan.importMap,
+        cssText,
+        hostPadding,
+        backgroundColor: getPreviewBackgroundColor(),
+        runtimeSpecifiers,
+        onRuntimeError: error => {
+          renderPreviewError(error)
+        },
+      })
+
+      disposeIframeRuntimeBridge = execution.dispose
+    } catch (error) {
+      disposeWorkspaceModules()
+      disposeIframeBridge()
+      throw error
+    }
+  }
+
   const clearPreview = () => {
+    disposeWorkspaceModules()
+    disposeIframeBridge()
     const target = getRenderTarget()
     clearTarget(target)
   }
 
   const renderDom = async () => {
-    const { jsx } = await ensureCoreRuntime()
-    const target = getRenderTarget()
-    clearTarget(target)
     const compiledStyles = await compileStyles()
-    applyStyles(target, compiledStyles.css)
 
     if (!hasComponentSource()) {
+      disposeIframeBridge()
+      const target = getRenderTarget()
+      clearTarget(target)
+      applyStyles(target, compiledStyles.css)
       return
     }
 
-    const renderFn = await evaluateUserModule()
-    const output = renderFn ? renderFn(jsx) : null
-    if (isDomNode(output)) {
-      target.append(output)
-      remapDomClassNames(target, compiledStyles.moduleExports)
-    } else if (isReactElementLike(output)) {
-      const { createRoot, React } = await ensureReactRuntime()
-      const host = document.createElement('div')
-      target.append(host)
-      reactRoot = createRoot(host)
-      reactRoot.render(remapReactClassNames(output, compiledStyles.moduleExports, React))
-    } else {
-      throw new Error('Expected a function or const named App.')
-    }
+    await renderWorkspaceInIframe({
+      mode: 'dom',
+      cssText: compiledStyles.css,
+    })
   }
 
   const renderReact = async () => {
-    const target = getRenderTarget()
-    clearTarget(target)
     const compiledStyles = await compileStyles()
-    applyStyles(target, compiledStyles.css)
 
     if (!hasComponentSource()) {
+      disposeIframeBridge()
+      const target = getRenderTarget()
+      clearTarget(target)
+      applyStyles(target, compiledStyles.css)
       return
     }
 
-    const { reactJsx, createRoot, React } = await ensureReactRuntime()
-    const renderFn = await evaluateUserModule({ jsx: reactJsx, reactJsx, React })
-    if (!renderFn) {
-      throw new Error('Expected a function or const named App.')
-    }
-
-    const host = document.createElement('div')
-    target.append(host)
-    reactRoot = createRoot(host)
-    const output = remapReactClassNames(
-      renderFn(reactJsx),
-      compiledStyles.moduleExports,
-      React,
-    )
-    if (!output) {
-      throw new Error('Expected a function or const named App.')
-    }
-    reactRoot.render(output)
+    await renderWorkspaceInIframe({
+      mode: 'react',
+      cssText: compiledStyles.css,
+    })
   }
 
   const renderPreview = async () => {
@@ -1229,13 +715,7 @@ export const createRenderRuntimeController = ({
         setStatus('Rendered', 'neutral')
         setRenderedStatus()
       } catch (error) {
-        setStatus('Error', 'error')
-        const target = getRenderTarget()
-        clearTarget(target)
-        const message = document.createElement('pre')
-        message.textContent = error instanceof Error ? error.message : String(error)
-        message.style.color = '#ff9aa2'
-        target.append(message)
+        renderPreviewError(error)
       } finally {
         if (!hasCompletedInitialRender) {
           hasCompletedInitialRender = true
@@ -1274,10 +754,46 @@ export const createRenderRuntimeController = ({
     }, 200)
   }
 
+  const shouldAutoRenderForTabChange = tabId => {
+    if (typeof tabId !== 'string' || tabId.length === 0) {
+      return true
+    }
+
+    if (lastRenderedDependencyTabIds.size === 0) {
+      return true
+    }
+
+    if (lastRenderedDependencyTabIds.has(tabId)) {
+      return true
+    }
+
+    const workspaceTabsSnapshot =
+      typeof getWorkspaceTabs === 'function' ? getWorkspaceTabs() : []
+    const workspaceTabs = Array.isArray(workspaceTabsSnapshot)
+      ? workspaceTabsSnapshot
+      : []
+    const entryTab = resolvePreviewEntryTab(workspaceTabs)
+
+    if (!entryTab || typeof entryTab.id !== 'string') {
+      return true
+    }
+
+    if (entryTab.id === tabId) {
+      return true
+    }
+
+    if (lastRenderedEntryTabId && entryTab.id !== lastRenderedEntryTabId) {
+      return true
+    }
+
+    return false
+  }
+
   return {
     clearPreview,
     renderPreview,
     scheduleRender,
+    shouldAutoRenderForTabChange,
     setStyleCompiling,
   }
 }

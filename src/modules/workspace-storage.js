@@ -11,6 +11,8 @@ const toTabRole = value => {
   return normalized === 'entry' ? 'entry' : 'module'
 }
 
+const normalizeRenderMode = value => (value === 'react' ? 'react' : 'dom')
+
 const normalizeTabRecord = tab => {
   if (!tab || typeof tab !== 'object') {
     return null
@@ -63,6 +65,7 @@ const normalizeWorkspaceRecord = record => {
         ? record.prNumber
         : null,
     prTitle: typeof record.prTitle === 'string' ? record.prTitle : '',
+    renderMode: normalizeRenderMode(record.renderMode),
     tabs: normalizedTabs,
     activeTabId: typeof record.activeTabId === 'string' ? record.activeTabId : null,
     schemaVersion:

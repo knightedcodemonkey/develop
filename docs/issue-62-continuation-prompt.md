@@ -27,7 +27,10 @@ remaining edge-case regressions without broad UI redesign.
 - Entry-role guard is in place (entry tab cannot be removed).
 - Entry filename contract is enforced (`App.tsx` or `App.js`).
 - One-visible-editor behavior is in place with tab-driven visibility.
-- Full Playwright suite was passing after test cleanup and refactor alignment.
+- Workspace preview runs in iframe with per-tab virtual module scope (no shared-scope hydration concatenation).
+- Deterministic workspace graph errors for missing/circular imports are covered.
+- Focused Playwright coverage for workspace isolation and preview regressions is in place.
+- Auto-render now gates component edits to the active entry dependency graph (unrelated component-module edits do not rerender preview).
 
 ### Remaining focus areas
 
@@ -40,25 +43,21 @@ remaining edge-case regressions without broad UI redesign.
 
 - Verify entry tab restore and initial-load selection remain stable.
 - Keep preview entry resolution aligned with tab metadata (`role: entry`) and documented fallback behavior.
+- Ensure startup render order cannot race editor hydration (component/styles) and silently use stale defaults.
 
 3. Remove/add/rename coherence
 
 - Keep fallback tab selection deterministic after remove.
 - Ensure add and rename flows do not drift name/path/content synchronization.
 
-4. Dead migration branch cleanup
-
-- Remove clearly obsolete helper paths or style/DOM hooks that are no longer used.
-- Avoid speculative cleanup outside touched areas.
-
-5. Workspace import specifier compatibility
+4. Workspace import specifier compatibility
 
 - Support ESM-style runtime specifiers for workspace modules (for example importing
   `./src/components/module.js` from an underlying `.ts`/`.tsx` tab when appropriate).
 - Keep resolution deterministic: exact-match path first, extension-compat fallback second,
   with explicit handling for ambiguous matches.
 
-6. Extension-driven tab kind detection
+5. Extension-driven tab kind detection
 
 - Ensure new tabs can be created as CSS tabs without relying on active-tab lane assumptions.
 - Add flow should expose explicit editor type selection (`Component`, `Styles`, `Auto`)
@@ -68,27 +67,56 @@ remaining edge-case regressions without broad UI redesign.
 - `Auto` should infer from extension, while explicit user selection should override inference.
 - Keep editor language, tools, and render pipeline wiring aligned with inferred tab kind.
 
+6. Render cadence and stale-error recovery
+
+- Preserve dependency-aware auto-render gating across add/remove/rename and entry changes.
+- Eliminate stale error carryover: previous errors must not persist once source/runtime state is corrected.
+- Ensure success transitions always clear prior preview error state and stale diagnostics payloads.
+- Confirm blob/module disposal and rerender cleanup cannot preserve stale failing module graphs.
+
+7. React runtime correctness in iframe preview
+
+- Verify React mode event handlers execute against the latest compiled module output.
+- Investigate and fix runtime regressions such as `TypeError: Assignment to constant variable` (for example from stale/cached module execution or invalid transform output).
+- Ensure React mode uses consistent runtime contracts between transpile options, module prelude, and iframe bootstrap render path.
+- Ensure React and DOM mode switching does not leave stale runtime state in the iframe.
+
 ### Suggested execution sequence
 
-1. Audit high-risk flows in `src/app.js`:
+1. Audit iframe diagnostics pipeline end-to-end:
+
+- `src/modules/preview-runtime/iframe-preview-executor.js` (postMessage/error bridge)
+- `src/modules/render-runtime.js` (error normalization/surfacing)
+- `src/modules/jsx-transform-runtime.js` and transform diagnostics formatting path
+
+2. Verify active-tab/startup coherence in `src/app.js`:
 
 - `setActiveWorkspaceTab`
 - `loadWorkspaceTabIntoEditor`
 - remove-tab fallback logic
 - startup restore path
 
-2. Confirm entry resolution consistency with `src/modules/preview-entry-resolver.js`.
+3. Confirm entry resolution and module planning consistency:
 
-3. Re-test high-risk interactions:
+- `src/modules/preview-entry-resolver.js`
+- `src/modules/preview-runtime/virtual-workspace-modules.js`
+
+4. Re-test high-risk interactions:
 
 - first load/restore with entry tab
 - tab switching across component and style tabs
 - add tab, rename tab, remove non-entry tab
 - style mode switches with preview render continuity
+- JSX syntax/transform failures still reported as `[jsx] ...`
+- iframe runtime exceptions surfaced with stable, non-duplicated messaging
+- repeated source edits do not trigger runaway rerender loops or duplicate execution
+- unrelated non-entry module edits do not rerender preview unless the module is in the active entry import graph
+- correcting an error fully recovers preview output without requiring unrelated edits
+- React mode click handlers work reliably after multiple rerenders/mode switches
 - importing workspace modules via `.js` specifiers when source tabs are `.ts`/`.tsx`
 - creating and renaming tabs with style extensions to verify styles-tab behavior
 
-4. Run validation:
+5. Run validation:
 
 ```bash
 npm run lint
@@ -96,14 +124,17 @@ npm run build
 npm run test:e2e
 ```
 
-5. Update docs only if behavior contract changes.
+6. Update docs only if behavior contract changes.
 
 ### Definition of done
 
 - Active tab id, visible editor, and persisted content remain synchronized.
 - Entry tab is stable on startup and remains renderable.
 - Remove/add/rename flows are deterministic under rapid interaction.
+- JSX transform failures are surfaced as `[jsx]` diagnostics with codeframe/help when available.
+- Iframe runtime and module errors are surfaced deterministically without duplicate/noisy reporting.
+- Render pipeline does not over-execute, and stale error state is fully cleared on valid rerender.
+- React mode event handlers execute correctly without stale-cache/runtime corruption errors.
 - Workspace import resolution supports documented ESM-style extension compatibility.
 - New tab behavior correctly recognizes style-file extensions and routes to styles semantics.
-- No stale migration branches remain in touched code.
 - Lint/build/e2e pass.
