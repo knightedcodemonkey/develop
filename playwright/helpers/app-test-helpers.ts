@@ -143,12 +143,13 @@ export const reorderWorkspaceTabBefore = async (
   page: Page,
   { from, to }: { from: string; to: string },
 ) => {
-  const source = page
-    .getByRole('button', { name: new RegExp(`^Open tab ${escapeRegex(from)}$`) })
-    .locator('..')
-  const target = page
-    .getByRole('button', { name: new RegExp(`^Open tab ${escapeRegex(to)}$`) })
-    .locator('..')
+  const tabList = page.getByRole('list', { name: 'Workspace editor tabs' })
+  const source = tabList.getByRole('listitem', {
+    name: new RegExp(`^Workspace tab ${escapeRegex(from)}$`),
+  })
+  const target = tabList.getByRole('listitem', {
+    name: new RegExp(`^Workspace tab ${escapeRegex(to)}$`),
+  })
 
   await source.dragTo(target)
 }

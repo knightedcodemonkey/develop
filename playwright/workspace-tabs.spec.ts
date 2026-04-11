@@ -180,16 +180,20 @@ test('workspace tab drag reorder persists across reload', async ({ page }) => {
     to: 'App.tsx',
   })
 
-  const orderedTabs = page.locator('#workspace-tabs-strip .workspace-tab__select')
-  await expect(orderedTabs.nth(0)).toHaveAttribute('aria-label', 'Open tab module-2.tsx')
-  await expect(orderedTabs.nth(1)).toHaveAttribute('aria-label', 'Open tab App.tsx')
+  const orderedTabs = page
+    .getByRole('list', { name: 'Workspace editor tabs' })
+    .getByRole('listitem')
+  await expect(orderedTabs.nth(0)).toHaveAccessibleName('Workspace tab module-2.tsx')
+  await expect(orderedTabs.nth(1)).toHaveAccessibleName('Workspace tab App.tsx')
 
   await page.reload()
   await waitForInitialRender(page)
 
-  const restoredTabs = page.locator('#workspace-tabs-strip .workspace-tab__select')
-  await expect(restoredTabs.nth(0)).toHaveAttribute('aria-label', 'Open tab module-2.tsx')
-  await expect(restoredTabs.nth(1)).toHaveAttribute('aria-label', 'Open tab App.tsx')
+  const restoredTabs = page
+    .getByRole('list', { name: 'Workspace editor tabs' })
+    .getByRole('listitem')
+  await expect(restoredTabs.nth(0)).toHaveAccessibleName('Workspace tab module-2.tsx')
+  await expect(restoredTabs.nth(1)).toHaveAccessibleName('Workspace tab App.tsx')
 })
 
 test('workspace tab drag onto itself keeps order unchanged', async ({ page }) => {
@@ -199,7 +203,8 @@ test('workspace tab drag onto itself keeps order unchanged', async ({ page }) =>
   await addWorkspaceTab(page)
 
   const labelsBefore = await page
-    .locator('#workspace-tabs-strip .workspace-tab__select')
+    .getByRole('list', { name: 'Workspace editor tabs' })
+    .getByRole('listitem')
     .evaluateAll(nodes =>
       nodes
         .map(node => node.getAttribute('aria-label'))
@@ -212,7 +217,8 @@ test('workspace tab drag onto itself keeps order unchanged', async ({ page }) =>
   })
 
   const labelsAfter = await page
-    .locator('#workspace-tabs-strip .workspace-tab__select')
+    .getByRole('list', { name: 'Workspace editor tabs' })
+    .getByRole('listitem')
     .evaluateAll(nodes =>
       nodes
         .map(node => node.getAttribute('aria-label'))

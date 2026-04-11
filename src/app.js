@@ -1655,6 +1655,7 @@ const renderWorkspaceTabs = () => {
       tabContainer.className = 'workspace-tab'
       tabContainer.dataset.active = isActive ? 'true' : 'false'
       tabContainer.dataset.tabId = tab.id
+      tabContainer.setAttribute('aria-label', `Workspace tab ${tab.name}`)
       tabContainer.draggable = true
       tabContainer.dataset.dragOver =
         dragOverWorkspaceTabId && dragOverWorkspaceTabId === tab.id ? 'true' : 'false'
