@@ -255,7 +255,7 @@
   max-width: min(200px, 36vw);
 }
 
-.workspace-tab[aria-selected='true'] {
+.workspace-tab[data-active='true'] {
   background: color-mix(in srgb, var(--surface-panel-header) 92%, var(--accent-soft));
   border-color: color-mix(in srgb, var(--accent) 68%, transparent);
   color: var(--select-text);
@@ -505,8 +505,7 @@ textarea:focus {
 
 .editor-panel.panel--collapsed-vertical .panel-header-main-actions,
 .editor-panel.panel--collapsed-vertical .panel-header .icon-button,
-.preview-panel.panel--collapsed-vertical .controls label,
-.preview-panel.panel--collapsed-vertical .controls .hint-icon {
+.preview-panel.panel--collapsed-vertical .controls label {
   display: none;
 }
 
@@ -527,8 +526,7 @@ textarea:focus {
 
 .preview-panel.panel--collapsed-horizontal .preview-host,
 .preview-panel.panel--collapsed-horizontal .panel-content,
-.preview-panel.panel--collapsed-horizontal .controls label,
-.preview-panel.panel--collapsed-horizontal .controls .hint-icon {
+.preview-panel.panel--collapsed-horizontal .controls label {
   display: none;
 }
 

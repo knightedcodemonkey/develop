@@ -39,20 +39,18 @@ test('removing active tab selects deterministic adjacent tab', async ({ page }) 
   await addWorkspaceTab(page)
   await addWorkspaceTab(page)
 
-  await page.getByRole('tab', { name: 'Open tab module-2.tsx' }).click()
-  await expect(page.getByRole('tab', { name: 'Open tab module-2.tsx' })).toHaveAttribute(
-    'aria-selected',
-    'true',
-  )
+  await page.getByRole('button', { name: 'Open tab module-2.tsx' }).click()
+  await expect(
+    page.getByRole('button', { name: 'Open tab module-2.tsx' }),
+  ).toHaveAttribute('aria-pressed', 'true')
 
   await page.getByRole('button', { name: 'Remove tab module-2.tsx' }).click()
   await confirmRemoveDialog(page)
 
-  await expect(page.getByRole('tab', { name: 'Open tab module-2.tsx' })).toHaveCount(0)
-  await expect(page.getByRole('tab', { name: 'Open tab module-3.tsx' })).toHaveAttribute(
-    'aria-selected',
-    'true',
-  )
+  await expect(page.getByRole('button', { name: 'Open tab module-2.tsx' })).toHaveCount(0)
+  await expect(
+    page.getByRole('button', { name: 'Open tab module-3.tsx' }),
+  ).toHaveAttribute('aria-pressed', 'true')
 })
 
 test('removing non-active tab does not change active tab', async ({ page }) => {
@@ -62,20 +60,18 @@ test('removing non-active tab does not change active tab', async ({ page }) => {
   await addWorkspaceTab(page)
   await addWorkspaceTab(page)
 
-  await page.getByRole('tab', { name: 'Open tab module-3.tsx' }).click()
-  await expect(page.getByRole('tab', { name: 'Open tab module-3.tsx' })).toHaveAttribute(
-    'aria-selected',
-    'true',
-  )
+  await page.getByRole('button', { name: 'Open tab module-3.tsx' }).click()
+  await expect(
+    page.getByRole('button', { name: 'Open tab module-3.tsx' }),
+  ).toHaveAttribute('aria-pressed', 'true')
 
   await page.getByRole('button', { name: 'Remove tab module-2.tsx' }).click()
   await confirmRemoveDialog(page)
 
-  await expect(page.getByRole('tab', { name: 'Open tab module-2.tsx' })).toHaveCount(0)
-  await expect(page.getByRole('tab', { name: 'Open tab module-3.tsx' })).toHaveAttribute(
-    'aria-selected',
-    'true',
-  )
+  await expect(page.getByRole('button', { name: 'Open tab module-2.tsx' })).toHaveCount(0)
+  await expect(
+    page.getByRole('button', { name: 'Open tab module-3.tsx' }),
+  ).toHaveAttribute('aria-pressed', 'true')
 })
 
 test('renaming module tab keeps name and path synchronized', async ({ page }) => {
@@ -87,9 +83,9 @@ test('renaming module tab keeps name and path synchronized', async ({ page }) =>
     to: 'card-item.tsx',
   })
 
-  const tab = page.getByRole('tab', { name: 'Open tab card-item.tsx' })
+  const tab = page.getByRole('button', { name: 'Open tab card-item.tsx' })
   await expect(tab).toHaveAttribute('title', 'src/components/card-item.tsx')
-  await expect(page.getByRole('tab', { name: 'Open tab module.tsx' })).toHaveCount(0)
+  await expect(page.getByRole('button', { name: 'Open tab module.tsx' })).toHaveCount(0)
 })
 
 test('renaming module tab preserves source content', async ({ page }) => {
@@ -107,8 +103,8 @@ test('renaming module tab preserves source content', async ({ page }) => {
     to: 'value-card.tsx',
   })
 
-  await page.getByRole('tab', { name: 'Open tab App.tsx' }).click()
-  await page.getByRole('tab', { name: 'Open tab value-card.tsx' }).click()
+  await page.getByRole('button', { name: 'Open tab App.tsx' }).click()
+  await page.getByRole('button', { name: 'Open tab value-card.tsx' }).click()
 
   const editorContent = page
     .locator('.editor-panel[data-editor-kind="component"] .cm-content')
@@ -125,27 +121,26 @@ test('active tab remains source of truth for visible editor panel', async ({ pag
   const componentPanel = page.locator('#editor-panel-component')
   const stylesPanel = page.locator('#editor-panel-styles')
 
-  await page.getByRole('tab', { name: 'Open tab app.css' }).click()
-  await expect(page.getByRole('tab', { name: 'Open tab app.css' })).toHaveAttribute(
-    'aria-selected',
+  await page.getByRole('button', { name: 'Open tab app.css' }).click()
+  await expect(page.getByRole('button', { name: 'Open tab app.css' })).toHaveAttribute(
+    'aria-pressed',
     'true',
   )
   await expect(stylesPanel).not.toHaveAttribute('hidden', '')
   await expect(componentPanel).toHaveAttribute('hidden', '')
 
-  await page.getByRole('tab', { name: 'Open tab module-2.tsx' }).click()
-  await expect(page.getByRole('tab', { name: 'Open tab module-2.tsx' })).toHaveAttribute(
-    'aria-selected',
-    'true',
-  )
+  await page.getByRole('button', { name: 'Open tab module-2.tsx' }).click()
+  await expect(
+    page.getByRole('button', { name: 'Open tab module-2.tsx' }),
+  ).toHaveAttribute('aria-pressed', 'true')
   await expect(componentPanel).not.toHaveAttribute('hidden', '')
   await expect(stylesPanel).toHaveAttribute('hidden', '')
 
   await page.locator('#collapse-component').click()
-  await page.getByRole('tab', { name: 'Open tab app.css' }).click()
+  await page.getByRole('button', { name: 'Open tab app.css' }).click()
 
-  await expect(page.getByRole('tab', { name: 'Open tab app.css' })).toHaveAttribute(
-    'aria-selected',
+  await expect(page.getByRole('button', { name: 'Open tab app.css' })).toHaveAttribute(
+    'aria-pressed',
     'true',
   )
   await expect(stylesPanel).not.toHaveAttribute('hidden', '')
@@ -158,19 +153,17 @@ test('startup restores last active workspace tab after reload', async ({ page })
   await addWorkspaceTab(page)
   await addWorkspaceTab(page)
 
-  await page.getByRole('tab', { name: 'Open tab module-2.tsx' }).click()
-  await expect(page.getByRole('tab', { name: 'Open tab module-2.tsx' })).toHaveAttribute(
-    'aria-selected',
-    'true',
-  )
+  await page.getByRole('button', { name: 'Open tab module-2.tsx' }).click()
+  await expect(
+    page.getByRole('button', { name: 'Open tab module-2.tsx' }),
+  ).toHaveAttribute('aria-pressed', 'true')
 
   await page.reload()
   await waitForInitialRender(page)
 
-  await expect(page.getByRole('tab', { name: 'Open tab module-2.tsx' })).toHaveAttribute(
-    'aria-selected',
-    'true',
-  )
+  await expect(
+    page.getByRole('button', { name: 'Open tab module-2.tsx' }),
+  ).toHaveAttribute('aria-pressed', 'true')
   await expect(page.locator('#editor-panel-component')).not.toHaveAttribute('hidden', '')
   await expect(page.locator('#editor-panel-styles')).toHaveAttribute('hidden', '')
 })
@@ -178,11 +171,11 @@ test('startup restores last active workspace tab after reload', async ({ page })
 test('add menu can create styles tab while component tab is active', async ({ page }) => {
   await waitForInitialRender(page)
 
-  await page.getByRole('tab', { name: 'Open tab App.tsx' }).click()
+  await page.getByRole('button', { name: 'Open tab App.tsx' }).click()
   await addWorkspaceTab(page, { kind: 'styles' })
 
-  await expect(page.getByRole('tab', { name: 'Open tab module.css' })).toHaveAttribute(
-    'aria-selected',
+  await expect(page.getByRole('button', { name: 'Open tab module.css' })).toHaveAttribute(
+    'aria-pressed',
     'true',
   )
   await expect(page.locator('#editor-panel-styles')).not.toHaveAttribute('hidden', '')
@@ -197,8 +190,8 @@ test('add menu stays closed until triggered and closes on outside click', async 
 }) => {
   await waitForInitialRender(page)
 
-  const addButton = page.getByRole('button', { name: 'Add tab options' })
-  const addMenu = page.getByRole('menu', { name: 'Add tab type' })
+  const addButton = page.getByRole('button', { name: 'Add workspace tab' })
+  const addMenu = page.getByRole('group', { name: 'Add workspace tab' })
 
   await expect(addMenu).toBeHidden()
   await addButton.click()
@@ -206,4 +199,25 @@ test('add menu stays closed until triggered and closes on outside click', async 
 
   await page.getByRole('status', { name: 'App status' }).click()
   await expect(addMenu).toBeHidden()
+})
+
+test('add menu keyboard interaction manages focus on open and escape close', async ({
+  page,
+}) => {
+  await waitForInitialRender(page)
+
+  const addButton = page.getByRole('button', { name: 'Add workspace tab' })
+  const addMenu = page.getByRole('group', { name: 'Add workspace tab' })
+  const addModuleButton = page.getByRole('button', { name: 'Add module tab' })
+
+  await addButton.focus()
+  await page.keyboard.press('ArrowDown')
+
+  await expect(addMenu).toBeVisible()
+  await expect(addModuleButton).toBeFocused()
+
+  await page.keyboard.press('Escape')
+
+  await expect(addMenu).toBeHidden()
+  await expect(addButton).toBeFocused()
 })
