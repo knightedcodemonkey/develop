@@ -25,6 +25,7 @@ browser acts as the runtime host for render, lint, and typecheck flows.
 `@knighted/develop` lets you:
 
 - write component code in the browser
+- manage dynamic workspace tabs with add, rename, remove, and entry-role protection
 - switch render mode between DOM and React
 - switch style mode between native CSS, CSS Modules, Less, and Sass
 - run in-browser lint and type diagnostics

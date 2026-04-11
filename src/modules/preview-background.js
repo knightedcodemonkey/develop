@@ -45,12 +45,27 @@ export const createPreviewBackgroundController = ({
       return
     }
 
+    const iframe = previewHost.querySelector('iframe')
+    const iframeDocument = iframe?.contentDocument ?? null
+
     if (typeof color === 'string' && color.length > 0) {
       previewHost.style.backgroundColor = color
+      previewHost.style.setProperty('--preview-iframe-background-color', color)
+
+      if (iframeDocument) {
+        iframeDocument.documentElement.style.backgroundColor = color
+        iframeDocument.body.style.backgroundColor = color
+      }
       return
     }
 
     previewHost.style.removeProperty('background-color')
+    previewHost.style.removeProperty('--preview-iframe-background-color')
+
+    if (iframeDocument) {
+      iframeDocument.documentElement.style.removeProperty('background-color')
+      iframeDocument.body.style.removeProperty('background-color')
+    }
   }
 
   const syncPreviewBackgroundPickerFromTheme = () => {
@@ -72,13 +87,16 @@ export const createPreviewBackgroundController = ({
       return
     }
 
-    const initialColor = normalizeColorToHex(
+    const configuredColor = normalizeColorToHex(previewBgColorInput.value)
+    const computedColor = normalizeColorToHex(
       getComputedStyle(previewHost).backgroundColor,
     )
-    previewBackgroundColor = null
+    const initialColor = configuredColor || computedColor
+
+    previewBackgroundColor = initialColor
     previewBackgroundCustomized = false
     previewBgColorInput.value = initialColor
-    applyPreviewBackgroundColor(null)
+    applyPreviewBackgroundColor(initialColor)
 
     previewBgColorInput.addEventListener('input', () => {
       previewBackgroundColor = previewBgColorInput.value

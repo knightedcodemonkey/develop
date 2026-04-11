@@ -24,6 +24,14 @@ export const resolvePreviewEntryTab = tabs => {
     return null
   }
 
+  const explicitEntry = tabs.find(
+    tab => tab && typeof tab === 'object' && tab.role === 'entry',
+  )
+
+  if (explicitEntry) {
+    return explicitEntry
+  }
+
   return tabs.find(isPreviewEntryTab) ?? null
 }
 

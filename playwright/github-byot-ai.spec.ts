@@ -389,20 +389,22 @@ test('AI chat proposals can be confirmed, applied, and undone for component and 
     page.getByRole('button', { name: 'Undo last Component apply' }),
   ).toBeVisible()
   await expect(page.getByRole('button', { name: 'Undo last Styles apply' })).toBeVisible()
-  await expect(page.locator('.component-panel .cm-content').first()).toContainText(
-    'Updated',
-  )
-  await expect(page.locator('.styles-panel .cm-content').first()).toContainText(
-    'rgb(10 20 30)',
-  )
+  await expect(
+    page.locator('.editor-panel[data-editor-kind="component"] .cm-content').first(),
+  ).toContainText('Updated')
+  await expect(
+    page.locator('.editor-panel[data-editor-kind="styles"] .cm-content').first(),
+  ).toContainText('rgb(10 20 30)')
 
   await page.getByRole('button', { name: 'Undo last Component apply' }).click()
-  await expect(page.locator('.component-panel .cm-content').first()).toContainText(
-    'Before',
-  )
+  await expect(
+    page.locator('.editor-panel[data-editor-kind="component"] .cm-content').first(),
+  ).toContainText('Before')
 
   await page.getByRole('button', { name: 'Undo last Styles apply' }).click()
-  await expect(page.locator('.styles-panel .cm-content').first()).toContainText('red')
+  await expect(
+    page.locator('.editor-panel[data-editor-kind="styles"] .cm-content').first(),
+  ).toContainText('red')
 })
 
 test('AI chat shows a single apply action when both editor proposals are available', async ({

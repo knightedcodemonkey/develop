@@ -57,6 +57,53 @@ export const waitForAppReady = async (page: Page, path = appEntryPath) => {
     .toBe(true)
 }
 
+export const resetWorkbenchStorage = async (page: Page) => {
+  await page.goto(appEntryPath)
+  await page.evaluate(async () => {
+    try {
+      localStorage.clear()
+    } catch {
+      /* noop */
+    }
+
+    try {
+      sessionStorage.clear()
+    } catch {
+      /* noop */
+    }
+
+    const deleteIndexedDbByName = async (name: string) => {
+      await new Promise<void>(resolve => {
+        if (!name) {
+          resolve()
+          return
+        }
+
+        const request = indexedDB.deleteDatabase(name)
+        request.onsuccess = () => resolve()
+        request.onerror = () => resolve()
+        request.onblocked = () => resolve()
+      })
+    }
+
+    if (typeof indexedDB === 'undefined') {
+      return
+    }
+
+    if (typeof indexedDB.databases === 'function') {
+      const databases = await indexedDB.databases()
+      const databaseNames = (databases || [])
+        .map(entry => entry?.name)
+        .filter((name): name is string => typeof name === 'string' && name.length > 0)
+
+      await Promise.all(databaseNames.map(name => deleteIndexedDbByName(name)))
+      return
+    }
+
+    await deleteIndexedDbByName('knighted-develop-workspaces')
+  })
+}
+
 export const waitForInitialRender = async (page: Page) => {
   await waitForAppReady(page)
   await expect(page.getByRole('status', { name: 'App status' })).toHaveText('Rendered')
@@ -70,19 +117,75 @@ export const expectPreviewHasRenderedContent = async (page: Page) => {
     .toBeGreaterThan(0)
 }
 
-export const setComponentEditorSource = async (page: Page, source: string) => {
-  const editorContent = page.locator('.component-panel .cm-content').first()
+const escapeRegex = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+
+export const getPreviewFrame = (page: Page) => page.frameLocator('#preview-host iframe')
+
+export const addWorkspaceTab = async (
+  page: Page,
+  { kind = 'component' }: { kind?: 'component' | 'styles' } = {},
+) => {
+  await page.getByRole('button', { name: 'Add tab options' }).click()
+  if (kind === 'styles') {
+    await page.getByRole('menuitem', { name: 'styles' }).click()
+    return
+  }
+
+  await page.getByRole('menuitem', { name: 'module' }).click()
+}
+
+export const openWorkspaceTab = async (page: Page, fileName: string) => {
+  const pattern = new RegExp(`^Open tab ${escapeRegex(fileName)}$`)
+  await page.getByRole('tab', { name: pattern }).click()
+}
+
+export const setWorkspaceTabSource = async (
+  page: Page,
+  {
+    fileName,
+    source,
+    kind = 'component',
+  }: {
+    fileName: string
+    source: string
+    kind?: 'component' | 'styles'
+  },
+) => {
+  await openWorkspaceTab(page, fileName)
+  const editorContent = page
+    .locator(`.editor-panel[data-editor-kind="${kind}"] .cm-content`)
+    .first()
   await editorContent.fill(source)
+  await editorContent.press('End')
+  await editorContent.type(' ')
+  await editorContent.press('Backspace')
+}
+
+export const setComponentEditorSource = async (page: Page, source: string) => {
+  await page.getByRole('tab', { name: 'Open tab App.tsx' }).click()
+  const editorContent = page
+    .locator('.editor-panel[data-editor-kind="component"] .cm-content')
+    .first()
+  await editorContent.fill(source)
+  await editorContent.press('End')
+  await editorContent.type(' ')
+  await editorContent.press('Backspace')
 }
 
 export const setStylesEditorSource = async (page: Page, source: string) => {
-  const editorContent = page.locator('.styles-panel .cm-content').first()
+  await page.getByRole('tab', { name: 'Open tab app.css' }).click()
+  const editorContent = page
+    .locator('.editor-panel[data-editor-kind="styles"] .cm-content')
+    .first()
   await editorContent.fill(source)
+  await editorContent.press('End')
+  await editorContent.type(' ')
+  await editorContent.press('Backspace')
 }
 
 export const getActiveComponentEditorLineNumber = async (page: Page) => {
   return page
-    .locator('#component-panel .cm-activeLineGutter')
+    .locator('#editor-panel-component .cm-activeLineGutter')
     .first()
     .innerText()
     .then(text => text.trim())
@@ -105,7 +208,7 @@ export const runStylesLint = async (page: Page) => {
 
 export const getActiveStylesEditorLineNumber = async (page: Page) => {
   return page
-    .locator('#styles-panel .cm-activeLineGutter')
+    .locator('#editor-panel-styles .cm-activeLineGutter')
     .first()
     .innerText()
     .then(text => text.trim())
@@ -123,6 +226,12 @@ export const ensurePanelToolsVisible = async (
   page: Page,
   panelName: 'component' | 'styles',
 ) => {
+  if (panelName === 'styles') {
+    await page.getByRole('tab', { name: 'Open tab app.css' }).click()
+  } else {
+    await page.getByRole('tab', { name: 'Open tab App.tsx' }).click()
+  }
+
   const button = getToolsButton(page, panelName)
   const isPressed = await button.getAttribute('aria-pressed')
   if (isPressed !== 'true') {

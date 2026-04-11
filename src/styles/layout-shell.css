@@ -91,18 +91,13 @@
 
 .app-grid {
   --expanded-panel-min-height: 360px;
-  --editors-row-flex: 1.25fr;
-  --preview-row-flex: 0.75fr;
   display: grid;
   grid-template-columns: repeat(2, minmax(320px, 1fr));
-  grid-template-rows: auto minmax(0, var(--editors-row-flex)) minmax(
-      0,
-      var(--preview-row-flex)
-    );
+  grid-template-rows: auto auto minmax(0, 1fr);
   grid-template-areas:
     'layout-controls layout-controls'
-    'editors editors'
-    'preview preview';
+    'workspace-tabs workspace-tabs'
+    'editors preview';
   gap: 18px;
   padding: 24px;
   min-height: 0;
@@ -114,122 +109,55 @@
   min-width: 0;
 }
 
-.panels-stack--editors {
+.workspace-editors-stack {
   grid-area: editors;
+  min-width: 0;
+  min-height: 0;
+}
+
+.app-grid-workspace-tabs {
+  grid-area: workspace-tabs;
+  min-width: 0;
+  width: 100%;
+  padding-top: 8px;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.panels-stack--editors {
   display: grid;
-  grid-template-columns: repeat(2, minmax(320px, 1fr));
+  grid-template-columns: minmax(320px, 1fr);
   grid-template-rows: minmax(0, 1fr);
   gap: 18px;
   min-width: 0;
   min-height: 0;
 }
 
-.app-grid.app-grid--component-collapsed-horizontal:not(.app-grid--preview-right):not(
-    .app-grid--preview-left
-  )
-  .panels-stack--editors {
-  grid-template-columns: 72px minmax(320px, 1fr);
-}
-
-.app-grid.app-grid--styles-collapsed-horizontal:not(.app-grid--preview-right):not(
-    .app-grid--preview-left
-  )
-  .panels-stack--editors {
-  grid-template-columns: minmax(320px, 1fr) 72px;
-}
-
-.app-grid.app-grid--component-collapsed-horizontal.app-grid--styles-collapsed-horizontal:not(
-    .app-grid--preview-right
-  ):not(.app-grid--preview-left) {
-  grid-template-rows: auto auto minmax(0, 1fr);
-  grid-template-areas:
-    'layout-controls layout-controls'
-    'editors editors'
-    'preview preview';
-}
-
-.app-grid.app-grid--component-collapsed-horizontal.app-grid--styles-collapsed-horizontal:not(
-    .app-grid--preview-right
-  ):not(.app-grid--preview-left)
-  .panels-stack--editors {
-  grid-template-columns: 72px 72px;
-  justify-content: start;
-}
-
-.app-grid.app-grid--preview-collapsed:not(.app-grid--preview-right):not(
-    .app-grid--preview-left
-  ) {
-  grid-template-rows: auto minmax(0, 1fr) auto;
-}
-
-.app-grid--preview-right {
-  grid-template-columns: repeat(2, minmax(320px, 1fr));
-  grid-template-rows: auto minmax(0, 1fr);
-  grid-template-areas:
-    'layout-controls layout-controls'
-    'editors preview';
-}
-
-.app-grid--preview-right .panels-stack--editors {
+.app-grid .panels-stack--editors {
   grid-template-columns: minmax(0, 1fr);
-  grid-template-rows: minmax(0, 1fr) minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
   height: 100%;
   min-height: 0;
 }
 
-.app-grid--preview-right.app-grid--component-collapsed:not(.app-grid--styles-collapsed)
-  .panels-stack--editors {
-  grid-template-rows: auto minmax(0, 1fr);
-}
-
-.app-grid--preview-right.app-grid--styles-collapsed:not(.app-grid--component-collapsed)
-  .panels-stack--editors {
-  grid-template-rows: minmax(0, 1fr) auto;
-}
-
-.app-grid--preview-right.app-grid--component-collapsed.app-grid--styles-collapsed
-  .panels-stack--editors {
-  grid-template-rows: auto auto;
-  align-content: start;
-}
-
-.app-grid--preview-right.app-grid--preview-collapsed-horizontal {
+.app-grid.app-grid--preview-collapsed-horizontal {
   grid-template-columns: minmax(320px, 1fr) 72px;
 }
 
-.app-grid--preview-left {
-  grid-template-columns: repeat(2, minmax(320px, 1fr));
-  grid-template-rows: auto minmax(0, 1fr);
-  grid-template-areas:
-    'layout-controls layout-controls'
-    'preview editors';
+.workspace-tabs-shell {
+  display: flex;
+  align-items: flex-end;
+  min-width: 0;
+  width: 100%;
 }
 
-.app-grid--preview-left .panels-stack--editors {
-  grid-template-columns: minmax(0, 1fr);
-  grid-template-rows: minmax(0, 1fr) minmax(0, 1fr);
-  height: 100%;
-  min-height: 0;
-}
-
-.app-grid--preview-left.app-grid--component-collapsed:not(.app-grid--styles-collapsed)
-  .panels-stack--editors {
-  grid-template-rows: auto minmax(0, 1fr);
-}
-
-.app-grid--preview-left.app-grid--styles-collapsed:not(.app-grid--component-collapsed)
-  .panels-stack--editors {
-  grid-template-rows: minmax(0, 1fr) auto;
-}
-
-.app-grid--preview-left.app-grid--component-collapsed.app-grid--styles-collapsed
-  .panels-stack--editors {
-  grid-template-rows: auto auto;
-  align-content: start;
-}
-
-.app-grid--preview-left.app-grid--preview-collapsed-horizontal {
-  grid-template-columns: 72px minmax(320px, 1fr);
+.workspace-tabs-strip {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  overflow-x: auto;
+  min-width: 0;
+  scrollbar-width: thin;
+  flex: 1;
 }
 
 .app-grid-layout-controls {
@@ -241,26 +169,10 @@
   position: relative;
 }
 
-.app-grid-view-controls {
-  display: inline-flex;
-  align-items: center;
-  gap: 10px;
-}
-
 .app-grid-layout-top-controls {
   display: inline-flex;
   align-items: center;
   gap: 10px;
-}
-
-.app-grid-layout-toggle-controls {
-  display: inline-flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.app-grid-view-toggle {
-  display: none;
 }
 
 .app-grid-ai-toggle {
@@ -282,9 +194,6 @@
 .app-grid-theme-controls {
   display: inline-flex;
   gap: 10px;
-  margin-left: 8px;
-  padding-left: 10px;
-  border-left: 1px solid var(--border-subtle);
 }
 
 .app-grid-diagnostics-controls {
@@ -316,36 +225,6 @@
     margin-right: 0;
     padding-right: 0;
     border-right: none;
-  }
-
-  .app-grid-view-toggle {
-    display: inline-flex;
-  }
-
-  .app-grid-view-controls {
-    position: absolute;
-    top: calc(100% + 10px);
-    right: 0;
-    display: grid;
-    grid-template-columns: max-content max-content;
-    align-items: center;
-    gap: 10px;
-    padding: 10px 12px;
-    border: 1px solid var(--border-subtle);
-    border-radius: 12px;
-    background: color-mix(in srgb, var(--surface-panel-header) 88%, transparent);
-    box-shadow: 0 14px 30px var(--shadow-elev-1);
-    backdrop-filter: blur(6px);
-    z-index: 60;
-  }
-
-  .app-grid-view-controls[hidden] {
-    display: none;
-  }
-
-  .app-grid-theme-controls {
-    margin-left: 0;
-    padding-left: 10px;
   }
 
   .app-grid-ai-controls {
@@ -417,23 +296,13 @@
   outline-offset: 2px;
 }
 
-.component-panel {
+.editor-panel {
   height: 100%;
   min-height: var(--expanded-panel-min-height);
 }
 
-.component-panel.panel--collapsed-horizontal,
-.component-panel.panel--collapsed-vertical {
-  min-height: 0;
-}
-
-.styles-panel {
-  height: 100%;
-  min-height: var(--expanded-panel-min-height);
-}
-
-.styles-panel.panel--collapsed-horizontal,
-.styles-panel.panel--collapsed-vertical {
+.editor-panel.panel--collapsed-horizontal,
+.editor-panel.panel--collapsed-vertical {
   min-height: 0;
 }
 
@@ -444,10 +313,6 @@
   min-height: var(--expanded-panel-min-height);
   max-height: 100%;
   overflow: hidden;
-}
-
-.app-grid:not(.app-grid--preview-right):not(.app-grid--preview-left) .preview-panel {
-  min-height: 0;
 }
 
 .preview-panel .panel-content {
@@ -462,23 +327,18 @@
   min-height: 0;
 }
 
-.app-grid--preview-right .preview-panel,
-.app-grid--preview-left .preview-panel {
+.app-grid .preview-panel {
   min-height: 0;
   height: 100%;
   max-height: none;
   overflow: hidden;
 }
 
-.app-grid--preview-right .preview-host,
-.app-grid--preview-left .preview-host {
+.app-grid .preview-host {
   min-height: 0;
 }
 
-.app-grid--preview-right .component-panel,
-.app-grid--preview-right .styles-panel,
-.app-grid--preview-left .component-panel,
-.app-grid--preview-left .styles-panel {
+.app-grid .editor-panel {
   height: 100%;
   min-height: 0;
   max-height: none;
@@ -493,19 +353,20 @@
     --mobile-editor-max-height: clamp(280px, 42dvh, 520px);
     --mobile-preview-max-height: clamp(320px, 52dvh, 680px);
     grid-template-columns: minmax(0, 1fr);
-    grid-template-rows: auto auto auto;
+    grid-template-rows: auto auto auto auto;
     height: auto;
     grid-template-areas:
       'layout-controls'
+      'workspace-tabs'
       'editors'
       'preview';
   }
 
-  .app-grid :is(.component-panel, .styles-panel, .preview-panel) {
+  .app-grid :is(.editor-panel, .preview-panel) {
     height: auto;
   }
 
-  .app-grid :is(.component-panel, .styles-panel) {
+  .app-grid .editor-panel {
     min-height: min(var(--expanded-panel-min-height), var(--mobile-editor-max-height));
     max-height: var(--mobile-editor-max-height);
   }
@@ -515,7 +376,7 @@
     max-height: var(--mobile-preview-max-height);
   }
 
-  .app-grid :is(.component-panel, .styles-panel) .panel-content {
+  .app-grid .editor-panel .panel-content {
     min-height: 0;
     overflow: auto;
   }
@@ -526,7 +387,7 @@
   }
 
   .app-grid
-    :is(.component-panel, .styles-panel, .preview-panel):is(
+    :is(.editor-panel, .preview-panel):is(
       .panel--collapsed-horizontal,
       .panel--collapsed-vertical
     ) {
@@ -539,14 +400,8 @@
     height: auto;
   }
 
-  .app-grid--preview-right.app-grid--preview-collapsed-horizontal,
-  .app-grid--preview-left.app-grid--preview-collapsed-horizontal {
+  .app-grid.app-grid--preview-collapsed-horizontal {
     grid-template-columns: minmax(0, 1fr);
-    grid-template-rows: auto;
-    min-height: 0;
-  }
-
-  .app-grid.app-grid--component-collapsed-horizontal.app-grid--styles-collapsed-horizontal {
     grid-template-rows: auto;
     min-height: 0;
   }

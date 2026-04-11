@@ -649,6 +649,22 @@
   grid-column: 1 / -1;
 }
 
+.github-pr-field--local-context {
+  gap: 8px;
+}
+
+.github-pr-local-context-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+}
+
+.github-pr-local-context-remove {
+  white-space: nowrap;
+  padding-inline: 12px;
+}
+
 .github-pr-field input,
 .github-pr-field select,
 .github-pr-field textarea {

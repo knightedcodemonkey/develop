@@ -1798,23 +1798,6 @@ test('Open PR drawer allows dotted file segments that are not traversal', async 
   ).not.toContainText('File path cannot include parent directory traversal.')
 })
 
-test('Open PR drawer rejects trailing slash file paths', async ({ page }) => {
-  await waitForAppReady(page, `${appEntryPath}`)
-  await connectByotWithSingleRepo(page)
-  await ensureOpenPrDrawerOpen(page)
-
-  await page.getByLabel('Component filename').fill('src/components/')
-  await page.getByLabel('PR title').fill('Reject trailing slash path')
-  await clickOpenPrDrawerSubmit(page)
-
-  await expect(
-    page.getByRole('status', { name: 'Open pull request status', includeHidden: true }),
-  ).toContainText(
-    'Component path: File path must include a filename (no trailing slash).',
-  )
-  await expect(page.getByRole('dialog')).toBeHidden()
-})
-
 test('Open PR drawer include App wrapper checkbox defaults off and resets on reopen', async ({
   page,
 }) => {

@@ -31,8 +31,8 @@
       <div class="status" id="status" role="status" aria-label="App status">Idle</div>
     </header>
 
-    <main class="app-grid">
-      <div class="app-grid-layout-controls" role="group" aria-label="App grid layout">
+    <main class="app-grid app-grid--preview-right">
+      <div class="app-grid-layout-controls" role="group" aria-label="App controls">
         <div
           class="app-grid-ai-controls"
           id="github-ai-controls"
@@ -244,16 +244,6 @@
           </div>
 
           <button
-            class="diagnostics-toggle app-grid-view-toggle"
-            id="view-controls-toggle"
-            type="button"
-            aria-expanded="false"
-            aria-controls="view-controls-drawer"
-          >
-            View
-          </button>
-
-          <button
             class="diagnostics-toggle app-grid-ai-toggle"
             id="ai-controls-toggle"
             type="button"
@@ -268,62 +258,6 @@
               ></path>
             </svg>
           </button>
-        </div>
-
-        <div
-          class="app-grid-view-controls"
-          id="view-controls-drawer"
-          role="group"
-          aria-label="Layout and theme controls"
-          hidden
-        >
-          <div class="app-grid-layout-toggle-controls" role="group" aria-label="Layout">
-            <button
-              class="layout-toggle"
-              id="layout-default"
-              type="button"
-              data-app-grid-layout="default"
-              aria-pressed="true"
-              title="Component + Styles on top, Preview below"
-              aria-label="Use stacked preview layout"
-            >
-              <svg viewBox="0 0 24 24" aria-hidden="true">
-                <rect x="3" y="3" width="8" height="7" rx="1"></rect>
-                <rect x="13" y="3" width="8" height="7" rx="1"></rect>
-                <rect x="3" y="12" width="18" height="9" rx="1"></rect>
-              </svg>
-            </button>
-            <button
-              class="layout-toggle"
-              id="layout-preview-right"
-              type="button"
-              data-app-grid-layout="preview-right"
-              aria-pressed="false"
-              title="Component + Styles on left, Preview on right"
-              aria-label="Use side preview layout"
-            >
-              <svg viewBox="0 0 24 24" aria-hidden="true">
-                <rect x="3" y="3" width="8" height="8" rx="1"></rect>
-                <rect x="3" y="13" width="8" height="8" rx="1"></rect>
-                <rect x="13" y="3" width="8" height="18" rx="1"></rect>
-              </svg>
-            </button>
-            <button
-              class="layout-toggle"
-              id="layout-preview-left"
-              type="button"
-              data-app-grid-layout="preview-left"
-              aria-pressed="false"
-              title="Preview on left, Component + Styles on right"
-              aria-label="Use left preview layout"
-            >
-              <svg viewBox="0 0 24 24" aria-hidden="true">
-                <rect x="3" y="3" width="8" height="18" rx="1"></rect>
-                <rect x="13" y="3" width="8" height="8" rx="1"></rect>
-                <rect x="13" y="13" width="8" height="8" rx="1"></rect>
-              </svg>
-            </button>
-          </div>
 
           <div class="app-grid-theme-controls" role="group" aria-label="Theme">
             <button
@@ -364,242 +298,300 @@
         </div>
       </div>
 
-      <div class="panels-stack panels-stack--editors">
-        <section
-          class="panel component-panel panel--tools-hidden"
-          id="component-panel"
-          aria-labelledby="component-header"
+      <div class="app-grid-workspace-tabs" id="app-grid-workspace-tabs">
+        <div
+          class="workspace-tabs-shell"
+          id="workspace-tabs-shell"
+          aria-label="Workspace tabs"
         >
-          <div class="panel-header panel-header--grid">
-            <h2 id="component-header" class="panel-header__title-with-status">
-              <span>Component</span>
-              <svg
-                class="panel-header__sync-icon"
-                id="component-pr-sync-icon"
-                viewBox="0 0 16 16"
-                aria-hidden="true"
-                title="Synced from active pull request context"
-                hidden
-              >
-                <path id="component-pr-sync-icon-path"></path>
-              </svg>
-            </h2>
-            <div class="controls controls--quick-actions panel-header-quick-actions">
+          <div
+            class="workspace-tabs-strip"
+            id="workspace-tabs-strip"
+            role="tablist"
+            aria-label="Workspace editor tabs"
+          ></div>
+          <div class="workspace-tab-add-wrap" id="workspace-tab-add-wrap">
+            <button
+              class="workspace-tab-add workspace-tab-add--strip"
+              id="workspace-tab-add"
+              type="button"
+              aria-label="Add tab options"
+              aria-haspopup="menu"
+              aria-expanded="false"
+              aria-controls="workspace-tab-add-menu"
+              title="Add tab options"
+            >
+              +
+            </button>
+            <div
+              class="workspace-tab-add-menu"
+              id="workspace-tab-add-menu"
+              role="menu"
+              aria-label="Add tab type"
+              hidden
+            >
               <button
-                class="panel-collapse-toggle"
-                id="collapse-component"
+                class="workspace-tab-add-menu__item"
+                id="workspace-tab-add-module"
                 type="button"
-                data-panel-collapse="component"
-                data-collapse-axis="vertical"
-                data-collapsed="false"
-                aria-expanded="true"
-                aria-controls="component-panel-content"
-                aria-label="Collapse component panel"
-                title="Collapse component panel"
+                role="menuitem"
               >
-                <svg viewBox="0 0 24 24" aria-hidden="true">
-                  <path d="m6 9 6 6 6-6"></path>
-                </svg>
-                <span class="panel-collapse-toggle__label">Collapse</span>
+                module
               </button>
               <button
-                class="icon-button editor-tools-toggle"
-                id="tools-component"
+                class="workspace-tab-add-menu__item"
+                id="workspace-tab-add-styles"
                 type="button"
-                data-editor-tools-toggle="component"
-                aria-pressed="false"
-                title="Show component tools"
-                aria-label="Show component tools"
+                role="menuitem"
               >
-                <svg viewBox="0 0 16 16" aria-hidden="true">
-                  <path
-                    d="M8 9a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3ZM1.5 9a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3Zm13 0a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3Z"
-                  ></path>
-                </svg>
-              </button>
-              <button
-                class="icon-button"
-                id="copy-component"
-                type="button"
-                title="Copy component source"
-                aria-label="Copy component source"
-              >
-                <svg viewBox="0 0 24 24" aria-hidden="true">
-                  <rect x="9" y="9" width="10" height="10" rx="2"></rect>
-                  <path
-                    d="M6 15H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v1"
-                  ></path>
-                </svg>
-              </button>
-              <button
-                class="icon-button"
-                id="clear-component"
-                type="button"
-                title="Clear component source"
-                aria-label="Clear component source"
-              >
-                <svg viewBox="0 0 24 24" aria-hidden="true">
-                  <path d="M4 7h16"></path>
-                  <path d="M10 11v6"></path>
-                  <path d="M14 11v6"></path>
-                  <path d="M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12"></path>
-                  <path d="M9 7V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v3"></path>
-                </svg>
+                styles
               </button>
             </div>
-            <div class="panel-header-main-actions">
-              <div class="controls controls--actions">
-                <label class="toggle">
-                  <input id="auto-render" type="checkbox" checked />
-                  Auto render
-                </label>
-                <button class="render-button" id="render-button" type="button">
-                  Render
-                </button>
-                <button class="render-button" id="typecheck-button" type="button">
-                  Typecheck
-                </button>
-                <button
-                  class="render-button"
-                  id="lint-component-button"
-                  type="button"
-                  aria-label="Component lint"
-                >
-                  Lint
-                </button>
-                <label>
-                  <span class="sr-only">Render mode</span>
-                  <select id="render-mode">
-                    <option value="dom" selected>DOM</option>
-                    <option value="react">React</option>
-                  </select>
-                </label>
-              </div>
-            </div>
           </div>
-          <div class="panel-content" id="component-panel-content">
-            <textarea
-              id="jsx-editor"
-              spellcheck="false"
-              aria-label="Component source editor fallback"
-              aria-multiline="true"
-            ></textarea>
-          </div>
-        </section>
+        </div>
+      </div>
 
-        <section
-          class="panel styles-panel panel--tools-hidden"
-          id="styles-panel"
-          aria-labelledby="styles-header"
-        >
-          <div class="panel-header panel-header--grid">
-            <h2 id="styles-header" class="panel-header__title-with-status">
-              <span>Styles</span>
-              <svg
-                class="panel-header__sync-icon"
-                id="styles-pr-sync-icon"
-                viewBox="0 0 16 16"
-                aria-hidden="true"
-                title="Synced from active pull request context"
-                hidden
-              >
-                <path id="styles-pr-sync-icon-path"></path>
-              </svg>
-            </h2>
-            <div class="controls controls--quick-actions panel-header-quick-actions">
-              <button
-                class="panel-collapse-toggle"
-                id="collapse-styles"
-                type="button"
-                data-panel-collapse="styles"
-                data-collapse-axis="vertical"
-                data-collapsed="false"
-                aria-expanded="true"
-                aria-controls="styles-panel-content"
-                aria-label="Collapse styles panel"
-                title="Collapse styles panel"
-              >
-                <svg viewBox="0 0 24 24" aria-hidden="true">
-                  <path d="m6 9 6 6 6-6"></path>
-                </svg>
-                <span class="panel-collapse-toggle__label">Collapse</span>
-              </button>
-              <button
-                class="icon-button editor-tools-toggle"
-                id="tools-styles"
-                type="button"
-                data-editor-tools-toggle="styles"
-                aria-pressed="false"
-                title="Show styles tools"
-                aria-label="Show styles tools"
-              >
-                <svg viewBox="0 0 16 16" aria-hidden="true">
-                  <path
-                    d="M8 9a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3ZM1.5 9a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3Zm13 0a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3Z"
-                  ></path>
-                </svg>
-              </button>
-              <button
-                class="icon-button"
-                id="copy-styles"
-                type="button"
-                title="Copy styles source"
-                aria-label="Copy styles source"
-              >
-                <svg viewBox="0 0 24 24" aria-hidden="true">
-                  <rect x="9" y="9" width="10" height="10" rx="2"></rect>
-                  <path
-                    d="M6 15H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v1"
-                  ></path>
-                </svg>
-              </button>
-              <button
-                class="icon-button"
-                id="clear-styles"
-                type="button"
-                title="Clear styles source"
-                aria-label="Clear styles source"
-              >
-                <svg viewBox="0 0 24 24" aria-hidden="true">
-                  <path d="M4 7h16"></path>
-                  <path d="M10 11v6"></path>
-                  <path d="M14 11v6"></path>
-                  <path d="M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12"></path>
-                  <path d="M9 7V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v3"></path>
-                </svg>
-              </button>
-            </div>
-            <div class="panel-header-main-actions">
-              <div class="controls controls--actions">
-                <button
-                  class="render-button"
-                  id="lint-styles-button"
-                  type="button"
-                  aria-label="Styles lint"
+      <div class="workspace-editors-stack">
+        <div class="panels-stack panels-stack--editors">
+          <section
+            class="panel editor-panel editor-panel--component panel--tools-hidden"
+            id="editor-panel-component"
+            data-editor-kind="component"
+            aria-labelledby="editor-header-component"
+          >
+            <div class="panel-header panel-header--grid">
+              <h2 id="editor-header-component" class="panel-header__title-with-status">
+                <span>Component</span>
+                <svg
+                  class="panel-header__sync-icon"
+                  id="component-pr-sync-icon"
+                  viewBox="0 0 16 16"
+                  aria-hidden="true"
+                  title="Synced from active pull request context"
+                  hidden
                 >
-                  Lint
+                  <path id="component-pr-sync-icon-path"></path>
+                </svg>
+              </h2>
+              <div class="controls controls--quick-actions panel-header-quick-actions">
+                <button
+                  class="panel-collapse-toggle"
+                  id="collapse-component"
+                  type="button"
+                  data-panel-collapse="component"
+                  data-collapse-axis="vertical"
+                  data-collapsed="false"
+                  aria-expanded="true"
+                  aria-controls="editor-panel-content-component"
+                  aria-label="Collapse editor panel"
+                  title="Collapse editor panel"
+                >
+                  <svg viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="m6 9 6 6 6-6"></path>
+                  </svg>
+                  <span class="panel-collapse-toggle__label">Collapse</span>
                 </button>
-                <label>
-                  <span class="sr-only">Style mode</span>
-                  <select id="style-mode">
-                    <option value="css" selected>Native CSS</option>
-                    <option value="module">CSS Modules</option>
-                    <option value="less">Less</option>
-                    <option value="sass">Sass</option>
-                  </select>
-                </label>
+                <button
+                  class="icon-button editor-tools-toggle"
+                  id="tools-component"
+                  type="button"
+                  data-editor-tools-toggle="component"
+                  aria-pressed="false"
+                  title="Show component tools"
+                  aria-label="Show component tools"
+                >
+                  <svg viewBox="0 0 16 16" aria-hidden="true">
+                    <path
+                      d="M8 9a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3ZM1.5 9a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3Zm13 0a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3Z"
+                    ></path>
+                  </svg>
+                </button>
+                <button
+                  class="icon-button"
+                  id="copy-component"
+                  type="button"
+                  title="Copy component source"
+                  aria-label="Copy component source"
+                >
+                  <svg viewBox="0 0 24 24" aria-hidden="true">
+                    <rect x="9" y="9" width="10" height="10" rx="2"></rect>
+                    <path
+                      d="M6 15H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v1"
+                    ></path>
+                  </svg>
+                </button>
+                <button
+                  class="icon-button"
+                  id="clear-component"
+                  type="button"
+                  title="Clear component source"
+                  aria-label="Clear component source"
+                >
+                  <svg viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M4 7h16"></path>
+                    <path d="M10 11v6"></path>
+                    <path d="M14 11v6"></path>
+                    <path d="M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12"></path>
+                    <path d="M9 7V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v3"></path>
+                  </svg>
+                </button>
+              </div>
+              <div class="panel-header-main-actions">
+                <div class="controls controls--actions">
+                  <label class="toggle">
+                    <input id="auto-render" type="checkbox" checked />
+                    Auto render
+                  </label>
+                  <button class="render-button" id="render-button" type="button">
+                    Render
+                  </button>
+                  <button class="render-button" id="typecheck-button" type="button">
+                    Typecheck
+                  </button>
+                  <button
+                    class="render-button"
+                    id="lint-component-button"
+                    type="button"
+                    aria-label="Component lint"
+                  >
+                    Lint
+                  </button>
+                  <label>
+                    <span class="sr-only">Render mode</span>
+                    <select id="render-mode">
+                      <option value="dom" selected>DOM</option>
+                      <option value="react">React</option>
+                    </select>
+                  </label>
+                </div>
               </div>
             </div>
-          </div>
-          <div class="panel-content" id="styles-panel-content">
-            <textarea
-              id="css-editor"
-              spellcheck="false"
-              aria-label="Styles source editor fallback"
-              aria-multiline="true"
-            ></textarea>
-          </div>
-        </section>
+            <div class="panel-content" id="editor-panel-content-component">
+              <textarea
+                id="jsx-editor"
+                spellcheck="false"
+                aria-label="Component source editor fallback"
+                aria-multiline="true"
+              ></textarea>
+            </div>
+          </section>
+
+          <section
+            class="panel editor-panel editor-panel--styles panel--tools-hidden"
+            id="editor-panel-styles"
+            data-editor-kind="styles"
+            aria-labelledby="editor-header-styles"
+            hidden
+          >
+            <div class="panel-header panel-header--grid">
+              <h2 id="editor-header-styles" class="panel-header__title-with-status">
+                <span>Styles</span>
+                <svg
+                  class="panel-header__sync-icon"
+                  id="styles-pr-sync-icon"
+                  viewBox="0 0 16 16"
+                  aria-hidden="true"
+                  title="Synced from active pull request context"
+                  hidden
+                >
+                  <path id="styles-pr-sync-icon-path"></path>
+                </svg>
+              </h2>
+              <div class="controls controls--quick-actions panel-header-quick-actions">
+                <button
+                  class="panel-collapse-toggle"
+                  id="collapse-styles"
+                  type="button"
+                  data-panel-collapse="styles"
+                  data-collapse-axis="vertical"
+                  data-collapsed="false"
+                  aria-expanded="true"
+                  aria-controls="editor-panel-content-styles"
+                  aria-label="Collapse editor panel"
+                  title="Collapse editor panel"
+                >
+                  <svg viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="m6 9 6 6 6-6"></path>
+                  </svg>
+                  <span class="panel-collapse-toggle__label">Collapse</span>
+                </button>
+                <button
+                  class="icon-button editor-tools-toggle"
+                  id="tools-styles"
+                  type="button"
+                  data-editor-tools-toggle="styles"
+                  aria-pressed="false"
+                  title="Show styles tools"
+                  aria-label="Show styles tools"
+                >
+                  <svg viewBox="0 0 16 16" aria-hidden="true">
+                    <path
+                      d="M8 9a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3ZM1.5 9a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3Zm13 0a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3Z"
+                    ></path>
+                  </svg>
+                </button>
+                <button
+                  class="icon-button"
+                  id="copy-styles"
+                  type="button"
+                  title="Copy styles source"
+                  aria-label="Copy styles source"
+                >
+                  <svg viewBox="0 0 24 24" aria-hidden="true">
+                    <rect x="9" y="9" width="10" height="10" rx="2"></rect>
+                    <path
+                      d="M6 15H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v1"
+                    ></path>
+                  </svg>
+                </button>
+                <button
+                  class="icon-button"
+                  id="clear-styles"
+                  type="button"
+                  title="Clear styles source"
+                  aria-label="Clear styles source"
+                >
+                  <svg viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M4 7h16"></path>
+                    <path d="M10 11v6"></path>
+                    <path d="M14 11v6"></path>
+                    <path d="M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12"></path>
+                    <path d="M9 7V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v3"></path>
+                  </svg>
+                </button>
+              </div>
+              <div class="panel-header-main-actions">
+                <div class="controls controls--actions">
+                  <button
+                    class="render-button"
+                    id="lint-styles-button"
+                    type="button"
+                    aria-label="Styles lint"
+                  >
+                    Lint
+                  </button>
+                  <label>
+                    <span class="sr-only">Style mode</span>
+                    <select id="style-mode">
+                      <option value="css" selected>Native CSS</option>
+                      <option value="module">CSS Modules</option>
+                      <option value="less">Less</option>
+                      <option value="sass">Sass</option>
+                    </select>
+                  </label>
+                </div>
+              </div>
+            </div>
+            <div class="panel-content" id="editor-panel-content-styles">
+              <textarea
+                id="css-editor"
+                spellcheck="false"
+                aria-label="Styles source editor fallback"
+                aria-multiline="true"
+              ></textarea>
+            </div>
+          </section>
+        </div>
       </div>
 
       <section
@@ -614,18 +606,6 @@
               <span class="preview-bg-label">Background</span>
               <input id="preview-bg-color" type="color" value="#12141c" />
             </label>
-            <label class="toggle">
-              <input id="shadow-toggle" type="checkbox" checked />
-              ShadowRoot
-            </label>
-            <button
-              class="hint-icon shadow-hint"
-              type="button"
-              aria-label="About preview isolation mode"
-              data-tooltip="Turning ShadowRoot off renders the preview in light DOM, so @knighted/develop styles can affect preview output."
-            >
-              i
-            </button>
             <button
               class="panel-collapse-toggle"
               id="collapse-preview"
@@ -634,7 +614,7 @@
               data-collapse-axis="vertical"
               data-collapsed="false"
               aria-expanded="true"
-              aria-controls="preview-panel-content"
+              aria-controls="preview-host"
               aria-label="Collapse preview panel"
               title="Collapse preview panel"
             >
@@ -645,14 +625,12 @@
             </button>
           </div>
         </div>
-        <div class="panel-content" id="preview-panel-content">
-          <div
-            class="preview-host"
-            id="preview-host"
-            role="region"
-            aria-label="Preview output"
-          ></div>
-        </div>
+        <div
+          class="panel-content preview-host"
+          id="preview-host"
+          role="region"
+          aria-label="Preview output"
+        ></div>
       </section>
 
       <aside
@@ -802,6 +780,29 @@
         </p>
 
         <div class="github-pr-drawer__form-grid" role="group" aria-label="Open PR form">
+          <label
+            class="github-pr-field github-pr-field--full github-pr-field--local-context"
+            for="github-pr-local-context-select"
+          >
+            <span>Local contexts</span>
+            <div class="github-pr-local-context-row">
+              <select
+                id="github-pr-local-context-select"
+                aria-label="Stored local editor contexts"
+              >
+                <option value="" selected>No saved local contexts</option>
+              </select>
+              <button
+                class="render-button github-pr-local-context-remove"
+                id="github-pr-local-context-remove"
+                type="button"
+                disabled
+              >
+                Remove
+              </button>
+            </div>
+          </label>
+
           <label
             class="github-pr-field github-pr-field--repo"
             for="github-pr-repo-select"

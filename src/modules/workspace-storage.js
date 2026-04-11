@@ -6,6 +6,13 @@ const workspaceStoreName = 'prWorkspaces'
 const workspaceByRepoIndexName = 'byRepo'
 const workspaceByLastModifiedIndexName = 'byLastModified'
 
+const toTabRole = value => {
+  const normalized = typeof value === 'string' ? value.trim().toLowerCase() : ''
+  return normalized === 'entry' ? 'entry' : 'module'
+}
+
+const normalizeRenderMode = value => (value === 'react' ? 'react' : 'dom')
+
 const normalizeTabRecord = tab => {
   if (!tab || typeof tab !== 'object') {
     return null
@@ -27,6 +34,7 @@ const normalizeTabRecord = tab => {
     name: typeof tab.name === 'string' ? tab.name : tabId,
     path: typeof tab.path === 'string' ? tab.path : '',
     language: typeof tab.language === 'string' ? tab.language : 'plaintext',
+    role: toTabRole(tab.role),
     isActive: Boolean(tab.isActive),
     scroll: Number.isFinite(tab.scroll) ? Math.max(0, tab.scroll) : 0,
     content: typeof tab.content === 'string' ? tab.content : '',
@@ -57,6 +65,7 @@ const normalizeWorkspaceRecord = record => {
         ? record.prNumber
         : null,
     prTitle: typeof record.prTitle === 'string' ? record.prTitle : '',
+    renderMode: normalizeRenderMode(record.renderMode),
     tabs: normalizedTabs,
     activeTabId: typeof record.activeTabId === 'string' ? record.activeTabId : null,
     schemaVersion:
@@ -178,6 +187,7 @@ export const createWorkspaceStorageAdapter = ({ loadRuntime } = {}) => {
     name,
     path,
     language,
+    role,
   }) => {
     if (typeof workspaceId !== 'string' || workspaceId.length === 0) {
       throw new TypeError('workspaceId must be a non-empty string.')
@@ -216,6 +226,10 @@ export const createWorkspaceStorageAdapter = ({ loadRuntime } = {}) => {
 
     if (language !== undefined) {
       nextTabRecord.language = language
+    }
+
+    if (role !== undefined) {
+      nextTabRecord.role = role
     }
 
     if (content !== undefined) {
