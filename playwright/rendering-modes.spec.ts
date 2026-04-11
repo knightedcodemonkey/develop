@@ -854,7 +854,7 @@ test('children runtime errors recover after module fix and mode switches', async
 
   await expect(page.getByRole('status', { name: 'App status' })).toHaveText('Error')
   await expect(page.locator('#preview-host pre')).toContainText(
-    '[runtime] children is not defined',
+    /\[runtime\]\s+(children is not defined|Can't find variable: children)/,
   )
 
   await setWorkspaceTabSource(page, {
