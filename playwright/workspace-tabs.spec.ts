@@ -115,3 +115,62 @@ test('renaming module tab preserves source content', async ({ page }) => {
     .first()
   await expect(editorContent).toContainText('export const Value = () => <p>Kept</p>')
 })
+
+test('active tab remains source of truth for visible editor panel', async ({ page }) => {
+  await waitForInitialRender(page)
+
+  await addWorkspaceTab(page)
+  await addWorkspaceTab(page)
+
+  const componentPanel = page.locator('#editor-panel-component')
+  const stylesPanel = page.locator('#editor-panel-styles')
+
+  await page.getByRole('tab', { name: 'Open tab app.css' }).click()
+  await expect(page.getByRole('tab', { name: 'Open tab app.css' })).toHaveAttribute(
+    'aria-selected',
+    'true',
+  )
+  await expect(stylesPanel).not.toHaveAttribute('hidden', '')
+  await expect(componentPanel).toHaveAttribute('hidden', '')
+
+  await page.getByRole('tab', { name: 'Open tab module-2.tsx' }).click()
+  await expect(page.getByRole('tab', { name: 'Open tab module-2.tsx' })).toHaveAttribute(
+    'aria-selected',
+    'true',
+  )
+  await expect(componentPanel).not.toHaveAttribute('hidden', '')
+  await expect(stylesPanel).toHaveAttribute('hidden', '')
+
+  await page.locator('#collapse-component').click()
+  await page.getByRole('tab', { name: 'Open tab app.css' }).click()
+
+  await expect(page.getByRole('tab', { name: 'Open tab app.css' })).toHaveAttribute(
+    'aria-selected',
+    'true',
+  )
+  await expect(stylesPanel).not.toHaveAttribute('hidden', '')
+  await expect(componentPanel).toHaveAttribute('hidden', '')
+})
+
+test('startup restores last active workspace tab after reload', async ({ page }) => {
+  await waitForInitialRender(page)
+
+  await addWorkspaceTab(page)
+  await addWorkspaceTab(page)
+
+  await page.getByRole('tab', { name: 'Open tab module-2.tsx' }).click()
+  await expect(page.getByRole('tab', { name: 'Open tab module-2.tsx' })).toHaveAttribute(
+    'aria-selected',
+    'true',
+  )
+
+  await page.reload()
+  await waitForInitialRender(page)
+
+  await expect(page.getByRole('tab', { name: 'Open tab module-2.tsx' })).toHaveAttribute(
+    'aria-selected',
+    'true',
+  )
+  await expect(page.locator('#editor-panel-component')).not.toHaveAttribute('hidden', '')
+  await expect(page.locator('#editor-panel-styles')).toHaveAttribute('hidden', '')
+})

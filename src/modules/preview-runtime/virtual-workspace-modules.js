@@ -87,15 +87,28 @@ const joinPath = (basePath, nextPath) => {
 
 const extensionCandidates = ['.ts', '.tsx', '.js', '.jsx', '.mjs']
 
-const toRelativeResolutionCandidates = ({ importerModuleKey, source }) => {
+const stripKnownExtension = value => {
+  const input = typeof value === 'string' ? value : ''
+  const lower = input.toLowerCase()
+
+  for (const extension of extensionCandidates) {
+    if (lower.endsWith(extension)) {
+      return input.slice(0, -extension.length)
+    }
+  }
+
+  return input
+}
+
+const toRelativeResolutionCandidateSets = ({ importerModuleKey, source }) => {
   const withoutQuery = stripQueryAndHash(source)
   const importerDir = dirname(importerModuleKey)
   const importerRelativePath = joinPath(importerDir, withoutQuery)
   const sourceRelativePath = toNormalizedPath(withoutQuery)
-  const output = [importerRelativePath]
+  const exactBaseCandidates = [importerRelativePath]
 
   if (sourceRelativePath) {
-    output.push(sourceRelativePath)
+    exactBaseCandidates.push(sourceRelativePath)
   }
 
   const rootLikeSourcePath = sourceRelativePath.startsWith('src/')
@@ -103,32 +116,125 @@ const toRelativeResolutionCandidates = ({ importerModuleKey, source }) => {
     : ''
 
   if (rootLikeSourcePath) {
-    output.push(rootLikeSourcePath)
+    exactBaseCandidates.push(rootLikeSourcePath)
   }
 
-  const basePath = output[0]
+  const exactCandidates = [...new Set(exactBaseCandidates.filter(Boolean))]
+  for (const candidate of exactBaseCandidates) {
+    if (!candidate) {
+      continue
+    }
 
-  for (const extension of extensionCandidates) {
-    output.push(`${basePath}${extension}`)
+    exactCandidates.push(`./${candidate}`)
   }
 
-  for (const extension of extensionCandidates) {
-    output.push(`${basePath}/index${extension}`)
-  }
+  const compatibilityCandidates = []
+  for (const baseCandidate of exactBaseCandidates) {
+    if (!baseCandidate) {
+      continue
+    }
 
-  if (basePath) {
-    output.push(`./${basePath}`)
-
-    for (const extension of extensionCandidates) {
-      output.push(`./${basePath}${extension}`)
+    const basePath = stripKnownExtension(baseCandidate)
+    if (!basePath) {
+      continue
     }
 
     for (const extension of extensionCandidates) {
-      output.push(`./${basePath}/index${extension}`)
+      compatibilityCandidates.push(`${basePath}${extension}`)
+    }
+
+    for (const extension of extensionCandidates) {
+      compatibilityCandidates.push(`${basePath}/index${extension}`)
+    }
+
+    compatibilityCandidates.push(`./${basePath}`)
+
+    for (const extension of extensionCandidates) {
+      compatibilityCandidates.push(`./${basePath}${extension}`)
+    }
+
+    for (const extension of extensionCandidates) {
+      compatibilityCandidates.push(`./${basePath}/index${extension}`)
     }
   }
 
-  return [...new Set(output)]
+  const uniqueExactCandidates = [...new Set(exactCandidates)]
+  const exactSet = new Set(uniqueExactCandidates)
+  const uniqueCompatibilityCandidates = [...new Set(compatibilityCandidates)].filter(
+    candidate => !exactSet.has(candidate),
+  )
+
+  return {
+    exactCandidates: uniqueExactCandidates,
+    compatibilityCandidates: uniqueCompatibilityCandidates,
+  }
+}
+
+const toResolvedTabLabel = tab => toTabModuleKey(tab) || tab?.id || 'unknown-module'
+
+const collectUniqueResolutionMatches = ({ candidates, byModuleKey }) => {
+  const byTabId = new Map()
+
+  for (const candidate of candidates) {
+    const target = byModuleKey.get(candidate)
+    if (!target || typeof target.id !== 'string' || byTabId.has(target.id)) {
+      continue
+    }
+
+    byTabId.set(target.id, target)
+  }
+
+  return [...byTabId.values()]
+}
+
+const toAmbiguousResolutionError = ({ source, matches }) => {
+  const labels = matches
+    .map(toResolvedTabLabel)
+    .sort((first, second) => first.localeCompare(second))
+    .join(', ')
+
+  return new Error(
+    `Preview entry references ambiguous workspace module: ${source}. Matches: ${labels}`,
+  )
+}
+
+const resolveRelativeWorkspaceImport = ({ importerModuleKey, source, byModuleKey }) => {
+  const { exactCandidates, compatibilityCandidates } = toRelativeResolutionCandidateSets({
+    importerModuleKey,
+    source,
+  })
+
+  const exactMatches = collectUniqueResolutionMatches({
+    candidates: exactCandidates,
+    byModuleKey,
+  })
+  if (exactMatches.length > 1) {
+    throw toAmbiguousResolutionError({
+      source,
+      matches: exactMatches,
+    })
+  }
+
+  if (exactMatches.length === 1) {
+    return exactMatches[0]
+  }
+
+  const compatibilityMatches = collectUniqueResolutionMatches({
+    candidates: compatibilityCandidates,
+    byModuleKey,
+  })
+  if (compatibilityMatches.length > 1) {
+    throw toAmbiguousResolutionError({
+      source,
+      matches: compatibilityMatches,
+    })
+  }
+
+  if (compatibilityMatches.length === 1) {
+    return compatibilityMatches[0]
+  }
+
+  return null
 }
 
 const withEntryAppExportShim = source => {
@@ -336,13 +442,11 @@ export const planWorkspaceVirtualModules = ({
           continue
         }
 
-        const candidates = toRelativeResolutionCandidates({
+        const target = resolveRelativeWorkspaceImport({
           importerModuleKey,
           source: entry.source,
+          byModuleKey,
         })
-        const target = candidates
-          .map(candidate => byModuleKey.get(candidate))
-          .find(Boolean)
 
         if (!target) {
           throw new Error(
@@ -412,13 +516,11 @@ export const planWorkspaceVirtualModules = ({
       source: moduleData.source,
       imports: moduleData.imports,
       resolveRelativeSpecifier: sourceSpecifier => {
-        const candidates = toRelativeResolutionCandidates({
+        const target = resolveRelativeWorkspaceImport({
           importerModuleKey: moduleData.moduleKey,
           source: sourceSpecifier,
+          byModuleKey,
         })
-        const target = candidates
-          .map(candidate => byModuleKey.get(candidate))
-          .find(Boolean)
 
         if (!target || typeof target.id !== 'string') {
           return null

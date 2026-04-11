@@ -13,6 +13,22 @@ import {
   waitForInitialRender,
 } from './helpers/app-test-helpers.js'
 
+const renameWorkspaceTab = async (
+  page: import('@playwright/test').Page,
+  {
+    from,
+    to,
+  }: {
+    from: string
+    to: string
+  },
+) => {
+  await page.getByRole('button', { name: `Rename tab ${from}` }).click()
+  const renameInput = page.getByLabel(`Rename ${from}`)
+  await renameInput.fill(to)
+  await renameInput.press('Enter')
+}
+
 test.beforeEach(async ({ page }) => {
   await resetWorkbenchStorage(page)
 })
@@ -623,6 +639,79 @@ test('workspace tabs resolve extensionless relative imports through virtual modu
   await expect(page.getByRole('status', { name: 'App status' })).toHaveText('Rendered')
   await expect(getPreviewFrame(page).getByRole('button')).toContainText(
     'extensionless import ok',
+  )
+})
+
+test('workspace tabs resolve .js specifiers to tsx workspace modules when exact match is missing', async ({
+  page,
+}) => {
+  await waitForInitialRender(page)
+
+  await ensurePanelToolsVisible(page, 'component')
+
+  await addWorkspaceTab(page)
+
+  await setWorkspaceTabSource(page, {
+    fileName: 'module.tsx',
+    source: "export const label = 'js specifier to tsx fallback'",
+  })
+
+  await setWorkspaceTabSource(page, {
+    fileName: 'App.tsx',
+    source: [
+      "import { label } from './module.js'",
+      'export const App = () => <button type="button">{label}</button>',
+    ].join('\n'),
+  })
+
+  await expect(page.getByRole('status', { name: 'App status' })).toHaveText('Rendered')
+  await expect(getPreviewFrame(page).getByRole('button')).toContainText(
+    'js specifier to tsx fallback',
+  )
+})
+
+test('workspace graph errors are deterministic for ambiguous extension compatibility matches', async ({
+  page,
+}) => {
+  await waitForInitialRender(page)
+
+  await ensurePanelToolsVisible(page, 'component')
+
+  await addWorkspaceTab(page)
+  await addWorkspaceTab(page)
+
+  await renameWorkspaceTab(page, {
+    from: 'module-2.tsx',
+    to: 'module.ts',
+  })
+
+  await setWorkspaceTabSource(page, {
+    fileName: 'module.tsx',
+    source: "export const label = 'from tsx'",
+  })
+
+  await setWorkspaceTabSource(page, {
+    fileName: 'module.ts',
+    source: "export const label = 'from ts'",
+  })
+
+  await setWorkspaceTabSource(page, {
+    fileName: 'App.tsx',
+    source: [
+      "import { label } from './module.js'",
+      'export const App = () => <button type="button">{label}</button>',
+    ].join('\n'),
+  })
+
+  await expect(page.getByRole('status', { name: 'App status' })).toHaveText('Error')
+  await expect(page.locator('#preview-host pre')).toContainText(
+    'Preview entry references ambiguous workspace module: ./module.js',
+  )
+  await expect(page.locator('#preview-host pre')).toContainText(
+    'src/components/module.ts',
+  )
+  await expect(page.locator('#preview-host pre')).toContainText(
+    'src/components/module.tsx',
   )
 })
 

@@ -154,6 +154,7 @@ let workspaceSaver = null
 let activeWorkspaceRecordId = ''
 let activeWorkspaceCreatedAt = null
 let isApplyingWorkspaceSnapshot = false
+let hasCompletedInitialWorkspaceBootstrap = false
 const workspaceTabsState = createWorkspaceTabsState({
   tabs: [
     {
@@ -1093,6 +1094,21 @@ const ensureWorkspaceTabsShape = tabs => {
   })
 }
 
+const resolveWorkspaceActiveTabId = ({ tabs, requestedActiveTabId }) => {
+  const nextTabs = Array.isArray(tabs) ? tabs : []
+  const requestedId = toNonEmptyWorkspaceText(requestedActiveTabId)
+
+  if (requestedId && nextTabs.some(tab => tab?.id === requestedId)) {
+    return requestedId
+  }
+
+  if (nextTabs.some(tab => tab?.id === 'component')) {
+    return 'component'
+  }
+
+  return toNonEmptyWorkspaceText(nextTabs[0]?.id)
+}
+
 const buildWorkspaceTabsSnapshot = () => {
   const activeTabId = workspaceTabsState.getActiveTabId()
   return workspaceTabsState.getTabs().map(tab => {
@@ -1265,7 +1281,10 @@ const applyWorkspaceRecord = async (workspace, { silent = false } = {}) => {
 
     workspaceTabsState.replaceTabs({
       tabs: nextTabs,
-      activeTabId: workspace.activeTabId,
+      activeTabId: resolveWorkspaceActiveTabId({
+        tabs: nextTabs,
+        requestedActiveTabId: workspace.activeTabId,
+      }),
     })
 
     const nextRenderMode = normalizeRenderMode(workspace.renderMode)
@@ -1292,7 +1311,9 @@ const applyWorkspaceRecord = async (workspace, { silent = false } = {}) => {
 
     renderWorkspaceTabs()
 
-    maybeRender()
+    if (hasCompletedInitialWorkspaceBootstrap) {
+      maybeRender()
+    }
     await refreshLocalContextOptions()
     if (!silent) {
       setStatus('Loaded local workspace context.', 'neutral')
@@ -1345,13 +1366,15 @@ const setActiveWorkspaceTab = tabId => {
     return
   }
 
+  const currentActiveTabId = workspaceTabsState.getActiveTabId()
   const targetTab = workspaceTabsState.getTab(normalizedTabId)
   if (!targetTab) {
-    const fallbackTab = getActiveWorkspaceTab()
-    if (fallbackTab) {
-      loadWorkspaceTabIntoEditor(fallbackTab)
-      renderWorkspaceTabs()
-    }
+    return
+  }
+
+  if (targetTab.id === currentActiveTabId) {
+    loadWorkspaceTabIntoEditor(targetTab)
+    renderWorkspaceTabs()
     return
   }
 
@@ -2973,10 +2996,12 @@ setTypeDiagnosticsDetails({ headline: '' })
 renderRuntime.setStyleCompiling(false)
 setCdnLoading(true)
 initializePreviewBackgroundPicker()
-void loadPreferredWorkspaceContext().catch(() => {
+const workspaceRestoreReady = loadPreferredWorkspaceContext().catch(() => {
   setStatus('Could not restore local workspace context.', 'neutral')
 })
 void initializeCodeEditors().then(async () => {
+  await workspaceRestoreReady
+
   const activeTab = getActiveWorkspaceTab()
   if (activeTab) {
     setActiveWorkspaceTab(activeTab.id)
@@ -2988,5 +3013,6 @@ void initializeCodeEditors().then(async () => {
     setCssSource(stylesTab.content)
   }
 
+  hasCompletedInitialWorkspaceBootstrap = true
   await renderPreview()
 })
