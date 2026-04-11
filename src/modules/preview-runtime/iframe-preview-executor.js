@@ -239,6 +239,7 @@ export const executeWorkspaceIframePreview = ({
         const runtimeError = toIframeRuntimeError(data)
 
         if (hasRendered) {
+          cleanup()
           if (typeof onRuntimeError === 'function') {
             onRuntimeError(runtimeError)
           }

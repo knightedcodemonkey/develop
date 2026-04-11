@@ -111,6 +111,14 @@ test('react mode typecheck loads types without malformed URL fetches', async ({
     }
   })
 
+  await setComponentEditorSource(
+    page,
+    [
+      "import React from 'react'",
+      'const App = () => <button type="button">react types loaded</button>',
+    ].join('\n'),
+  )
+
   await page.getByRole('combobox', { name: 'Render mode' }).selectOption('react')
   await page.getByRole('button', { name: 'Typecheck' }).click()
 
@@ -345,6 +353,58 @@ test('post-render runtime exceptions from iframe are reported in preview panel',
   await expect(page.getByRole('status', { name: 'App status' })).toHaveText('Error')
   await expect(page.locator('#preview-host pre')).toContainText('[runtime]')
   await expect(page.locator('#preview-host pre')).toContainText('clicked boom')
+})
+
+test('post-render runtime errors fully recover after source fix', async ({ page }) => {
+  await waitForInitialRender(page)
+  await ensurePanelToolsVisible(page, 'component')
+  await page.getByRole('combobox', { name: 'Render mode' }).selectOption('react')
+
+  await setComponentEditorSource(
+    page,
+    [
+      "import React, { useState } from 'react'",
+      'export const App = () => {',
+      '  const [count, setCount] = useState(0)',
+      '  return (',
+      '    <button type="button" onClick={() => {',
+      "      throw new Error('clicked boom')",
+      '    }}>',
+      '      click boom',
+      '    </button>',
+      '  )',
+      '}',
+    ].join('\n'),
+  )
+
+  await expect(page.getByRole('status', { name: 'App status' })).toHaveText('Rendered')
+  await getPreviewFrame(page).getByRole('button', { name: 'click boom' }).click()
+
+  await expect(page.getByRole('status', { name: 'App status' })).toHaveText('Error')
+  await expect(page.locator('#preview-host pre')).toContainText('clicked boom')
+
+  await setComponentEditorSource(
+    page,
+    [
+      "import React, { useState } from 'react'",
+      'export const App = () => {',
+      '  const [count, setCount] = useState(0)',
+      '  return (',
+      '    <button type="button" onClick={() => setCount(prev => prev + 1)}>',
+      '      safe click {count}',
+      '    </button>',
+      '  )',
+      '}',
+    ].join('\n'),
+  )
+
+  await expect(page.getByRole('status', { name: 'App status' })).toHaveText('Rendered')
+  await expect(page.locator('#preview-host pre')).toHaveCount(0)
+  await getPreviewFrame(page).getByRole('button', { name: 'safe click 0' }).click()
+  await expect(
+    getPreviewFrame(page).getByRole('button', { name: 'safe click 1' }),
+  ).toBeVisible()
+  await expect(page.locator('#preview-host pre')).toHaveCount(0)
 })
 
 test('requires render button when auto render is disabled', async ({ page }) => {
@@ -761,6 +821,64 @@ test('workspace graph errors for circular imports remain deterministic', async (
     'Preview entry contains circular workspace import:',
   )
   await expect(page.locator('#preview-host pre')).toContainText('Import chain: ./module')
+})
+
+test('children runtime errors recover after module fix and mode switches', async ({
+  page,
+}) => {
+  await waitForInitialRender(page)
+
+  await ensurePanelToolsVisible(page, 'component')
+  await addWorkspaceTab(page)
+
+  await setWorkspaceTabSource(page, {
+    fileName: 'module.tsx',
+    source: [
+      'export const ItemWrap = ({ children: string }) => {',
+      '  return <span className="item-wrap">{children}</span>',
+      '}',
+    ].join('\n'),
+  })
+
+  await setWorkspaceTabSource(page, {
+    fileName: 'App.tsx',
+    source: [
+      "import { ItemWrap } from './module.tsx'",
+      'export const App = () => (',
+      '  <div>',
+      '    <ItemWrap>hello children</ItemWrap>',
+      '  </div>',
+      ')',
+    ].join('\n'),
+  })
+
+  await expect(page.getByRole('status', { name: 'App status' })).toHaveText('Error')
+  await expect(page.locator('#preview-host pre')).toContainText(
+    '[runtime] children is not defined',
+  )
+
+  await setWorkspaceTabSource(page, {
+    fileName: 'module.tsx',
+    source: [
+      'export const ItemWrap = ({ children }: { children: string }) => {',
+      '  return <span className="item-wrap">{children}</span>',
+      '}',
+    ].join('\n'),
+  })
+
+  await expect(page.getByRole('status', { name: 'App status' })).toHaveText('Rendered')
+  await expect(page.locator('#preview-host pre')).toHaveCount(0)
+  await expect(getPreviewFrame(page).getByText('hello children')).toBeVisible()
+
+  await page.getByRole('combobox', { name: 'Render mode' }).selectOption('react')
+  await expect(page.getByRole('status', { name: 'App status' })).toHaveText('Rendered')
+  await expect(page.locator('#preview-host pre')).toHaveCount(0)
+  await expect(getPreviewFrame(page).getByText('hello children')).toBeVisible()
+
+  await page.getByRole('combobox', { name: 'Render mode' }).selectOption('dom')
+  await expect(page.getByRole('status', { name: 'App status' })).toHaveText('Rendered')
+  await expect(page.locator('#preview-host pre')).toHaveCount(0)
+  await expect(getPreviewFrame(page).getByText('hello children')).toBeVisible()
 })
 
 test('auto-render skips unrelated component tab edits outside entry dependency graph', async ({
