@@ -188,14 +188,19 @@ export const createWorkspaceTabsState = ({ tabs = [], activeTabId, onChange } = 
       return false
     }
 
+    const removedIndex = orderedIds.indexOf(id)
     tabsById.delete(id)
-    const index = orderedIds.indexOf(id)
-    if (index >= 0) {
-      orderedIds.splice(index, 1)
+    if (removedIndex >= 0) {
+      orderedIds.splice(removedIndex, 1)
     }
 
     if (activeTabId === id) {
-      activeTabId = orderedIds[0] || ''
+      if (orderedIds.length === 0) {
+        activeTabId = ''
+      } else {
+        const fallbackIndex = Math.min(Math.max(removedIndex, 0), orderedIds.length - 1)
+        activeTabId = orderedIds[fallbackIndex] || orderedIds[0] || ''
+      }
     }
 
     const resolvedActiveTabId = getActiveTabId()

@@ -962,6 +962,23 @@ const normalizeEntryTabPath = (path, { preferredFileName = '' } = {}) => {
   return `${directory}/${fileName}`
 }
 
+const normalizeModuleTabPathForRename = (path, nextName) => {
+  const currentPath = toNonEmptyWorkspaceText(path)
+  const normalizedNextName = toNonEmptyWorkspaceText(nextName)
+  const nextFileName = getPathFileName(normalizedNextName) || normalizedNextName
+
+  if (!nextFileName) {
+    return currentPath
+  }
+
+  if (!currentPath) {
+    return nextFileName
+  }
+
+  const directory = getPathDirectory(currentPath)
+  return `${directory}/${nextFileName}`
+}
+
 const setVisibleEditorPanelForKind = kind => {
   const nextVisibleKind = kind === 'styles' ? 'styles' : 'component'
 
@@ -1386,7 +1403,8 @@ const finishWorkspaceTabRename = ({ tabId, nextName, cancelled = false }) => {
     return
   }
 
-  const normalizedName = toNonEmptyWorkspaceText(nextName)
+  const normalizedNameInput = toNonEmptyWorkspaceText(nextName)
+  const normalizedName = getPathFileName(normalizedNameInput) || normalizedNameInput
   if (!normalizedName) {
     setStatus('Tab name cannot be empty.', 'error')
     renderWorkspaceTabs()
@@ -1405,11 +1423,11 @@ const finishWorkspaceTabRename = ({ tabId, nextName, cancelled = false }) => {
   const normalizedEntryPath =
     tab.role === 'entry'
       ? normalizeEntryTabPath(tab.path, { preferredFileName: normalizedName })
-      : toNonEmptyWorkspaceText(tab.path)
+      : normalizeModuleTabPathForRename(tab.path, normalizedName)
   const normalizedTabName =
     tab.role === 'entry'
       ? getPathFileName(normalizedEntryPath) || defaultComponentTabName
-      : normalizedName
+      : getPathFileName(normalizedEntryPath) || normalizedName
 
   workspaceTabsState.upsertTab({
     ...tab,
