@@ -39,9 +39,9 @@ test('renders in react mode with css modules', async ({ page }) => {
   await ensurePanelToolsVisible(page, 'component')
   await ensurePanelToolsVisible(page, 'styles')
 
-  await page.getByRole('tab', { name: 'Open tab App.tsx' }).click()
+  await page.getByRole('button', { name: 'Open tab App.tsx' }).click()
   await page.getByRole('combobox', { name: 'Render mode' }).selectOption('react')
-  await page.getByRole('tab', { name: 'Open tab app.css' }).click()
+  await page.getByRole('button', { name: 'Open tab app.css' }).click()
   await page.getByRole('combobox', { name: 'Style mode' }).selectOption('module')
   await expect(page.getByRole('status', { name: 'App status' })).toHaveText('Rendered')
   await expectPreviewHasRenderedContent(page)
@@ -416,13 +416,13 @@ test('requires render button when auto render is disabled', async ({ page }) => 
   const autoRenderToggle = page.getByLabel('Auto render')
   const renderButton = page.getByRole('button', { name: 'Render' })
 
-  await page.getByRole('tab', { name: 'Open tab App.tsx' }).click()
+  await page.getByRole('button', { name: 'Open tab App.tsx' }).click()
   await autoRenderToggle.uncheck()
   await expect(renderButton).toBeVisible()
 
-  await page.getByRole('tab', { name: 'Open tab app.css' }).click()
+  await page.getByRole('button', { name: 'Open tab app.css' }).click()
   await page.getByRole('combobox', { name: 'Style mode' }).selectOption('module')
-  await page.getByRole('tab', { name: 'Open tab App.tsx' }).click()
+  await page.getByRole('button', { name: 'Open tab App.tsx' }).click()
 
   await renderButton.click()
   await expect(page.getByRole('status', { name: 'App status' })).toHaveText('Rendered')

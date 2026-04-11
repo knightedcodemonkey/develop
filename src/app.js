@@ -226,6 +226,17 @@ const showAppToast = message => {
 const previewBackground = createPreviewBackgroundController({
   previewBgColorInput,
   getPreviewHost: () => previewHost,
+  getDefaultPreviewBackgroundColor: () => {
+    if (document.documentElement.dataset.theme === 'light') {
+      return '#ffffff'
+    }
+
+    if (componentEditorPanel instanceof HTMLElement) {
+      return getComputedStyle(componentEditorPanel).backgroundColor
+    }
+
+    return ''
+  },
 })
 
 const layoutTheme = createLayoutThemeController({
@@ -1584,6 +1595,24 @@ const setWorkspaceTabAddMenuOpen = isOpen => {
   if (workspaceTabAddMenu instanceof HTMLElement) {
     workspaceTabAddMenu.hidden = !nextOpen
   }
+
+  if (
+    nextOpen &&
+    document.activeElement === workspaceTabAddButton &&
+    workspaceTabAddModule instanceof HTMLButtonElement
+  ) {
+    workspaceTabAddModule.focus()
+  }
+
+  if (
+    !nextOpen &&
+    workspaceTabAddMenu instanceof HTMLElement &&
+    document.activeElement instanceof Node &&
+    workspaceTabAddMenu.contains(document.activeElement) &&
+    workspaceTabAddButton instanceof HTMLButtonElement
+  ) {
+    workspaceTabAddButton.focus()
+  }
 }
 
 const renderWorkspaceTabs = () => {
@@ -1606,11 +1635,10 @@ const renderWorkspaceTabs = () => {
 
     for (const tab of tabs) {
       const isActive = tab.id === activeTabId
-      const tabContainer = document.createElement('div')
+      const tabContainer = document.createElement('li')
       tabContainer.className = 'workspace-tab'
-      tabContainer.setAttribute('role', 'presentation')
+      tabContainer.dataset.active = isActive ? 'true' : 'false'
       tabContainer.dataset.tabId = tab.id
-      tabContainer.setAttribute('aria-selected', isActive ? 'true' : 'false')
       tabContainer.addEventListener('click', event => {
         const clickTarget = event.target
         if (!(clickTarget instanceof Element)) {
@@ -1684,8 +1712,11 @@ const renderWorkspaceTabs = () => {
       fileNameNode.textContent = tabDisplay.fileName || tab.name
       selectButton.append(fileNameNode)
 
-      selectButton.setAttribute('role', 'tab')
-      selectButton.setAttribute('aria-selected', isActive ? 'true' : 'false')
+      if (isActive) {
+        selectButton.setAttribute('aria-current', 'true')
+      } else {
+        selectButton.removeAttribute('aria-current')
+      }
       selectButton.setAttribute('aria-label', `Open tab ${tab.name}`)
       selectButton.addEventListener('click', event => {
         event.stopPropagation()
@@ -3035,6 +3066,9 @@ if (workspaceTabAddButton instanceof HTMLButtonElement) {
     if (event.key === 'ArrowDown' || event.key === 'Enter' || event.key === ' ') {
       event.preventDefault()
       setWorkspaceTabAddMenuOpen(true)
+      if (workspaceTabAddModule instanceof HTMLButtonElement) {
+        workspaceTabAddModule.focus()
+      }
     }
   })
 }

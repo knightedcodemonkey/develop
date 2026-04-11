@@ -29,6 +29,38 @@ test('supports theme toggles', async ({ page }) => {
   expect(previewBackgroundColor).toBe('rgb(36, 86, 168)')
 })
 
+test('light theme defaults preview background to white', async ({ page }) => {
+  await waitForInitialRender(page)
+
+  await page.getByLabel('Use light theme').click()
+
+  const previewBackgroundColor = await page.evaluate(() => {
+    const previewHost = document.getElementById('preview-host')
+    return previewHost ? getComputedStyle(previewHost).backgroundColor : ''
+  })
+
+  expect(previewBackgroundColor).toBe('rgb(255, 255, 255)')
+})
+
+test('dark theme defaults preview background to editor background', async ({ page }) => {
+  await waitForInitialRender(page)
+
+  const colors = await page.evaluate(() => {
+    const previewHost = document.getElementById('preview-host')
+    const componentPanel = document.getElementById('editor-panel-component')
+
+    return {
+      preview: previewHost ? getComputedStyle(previewHost).backgroundColor : '',
+      editor: componentPanel ? getComputedStyle(componentPanel).backgroundColor : '',
+    }
+  })
+
+  const toRgbChannels = (value: string) =>
+    (value.match(/\d+/g) ?? []).slice(0, 3).map(entry => Number.parseInt(entry, 10))
+
+  expect(toRgbChannels(colors.preview)).toEqual(toRgbChannels(colors.editor))
+})
+
 test('fixed layout keeps preview panel height within editor stack height', async ({
   page,
 }) => {
@@ -122,7 +154,7 @@ test('prevents collapsing all three panels at once', async ({ page }) => {
   const stylesPanel = page.locator('#editor-panel-styles')
 
   await getCollapseButton(page, 'component').click()
-  await page.getByRole('tab', { name: 'Open tab app.css' }).click()
+  await page.getByRole('button', { name: 'Open tab app.css' }).click()
   await getCollapseButton(page, 'styles').click()
 
   await expect(componentPanel).toHaveClass(/panel--collapsed-vertical/)
@@ -139,7 +171,7 @@ test('prevents collapsing all three panels at once', async ({ page }) => {
     'At least one panel must remain expanded.',
   )
 
-  await page.getByRole('tab', { name: 'Open tab App.tsx' }).click()
+  await page.getByRole('button', { name: 'Open tab App.tsx' }).click()
   await getCollapseButton(page, 'component').click()
   await expectCollapseButtonState(page, 'preview', {
     axis: 'horizontal',
@@ -199,7 +231,7 @@ test('gear tools toggles default inactive and switch active/inactive per panel',
   await expect(componentTools).toHaveAttribute('aria-pressed', 'false')
   await expect(componentTools).toHaveAttribute('title', 'Show component tools')
 
-  await page.getByRole('tab', { name: 'Open tab app.css' }).click()
+  await page.getByRole('button', { name: 'Open tab app.css' }).click()
   await stylesTools.click()
   await expect(stylesPanel).not.toHaveClass(/panel--tools-hidden/)
   await expect(stylesTools).toHaveAttribute('aria-pressed', 'true')
@@ -213,7 +245,7 @@ test('fixed layout keeps inactive editor panel hidden', async ({ page }) => {
   const stylesPanel = page.locator('#editor-panel-styles')
 
   const assertEntryPanelVisible = async () => {
-    await page.getByRole('tab', { name: 'Open tab App.tsx' }).click()
+    await page.getByRole('button', { name: 'Open tab App.tsx' }).click()
     await expect(componentPanel).toBeVisible()
     await expect(stylesPanel).toBeHidden()
   }

@@ -125,18 +125,18 @@ export const addWorkspaceTab = async (
   page: Page,
   { kind = 'component' }: { kind?: 'component' | 'styles' } = {},
 ) => {
-  await page.getByRole('button', { name: 'Add tab options' }).click()
+  await page.getByRole('button', { name: 'Add workspace tab' }).click()
   if (kind === 'styles') {
-    await page.getByRole('menuitem', { name: 'styles' }).click()
+    await page.getByRole('button', { name: 'Add styles tab' }).click()
     return
   }
 
-  await page.getByRole('menuitem', { name: 'module' }).click()
+  await page.getByRole('button', { name: 'Add module tab' }).click()
 }
 
 export const openWorkspaceTab = async (page: Page, fileName: string) => {
   const pattern = new RegExp(`^Open tab ${escapeRegex(fileName)}$`)
-  await page.getByRole('tab', { name: pattern }).click()
+  await page.getByRole('button', { name: pattern }).click()
 }
 
 export const setWorkspaceTabSource = async (
@@ -162,7 +162,7 @@ export const setWorkspaceTabSource = async (
 }
 
 export const setComponentEditorSource = async (page: Page, source: string) => {
-  await page.getByRole('tab', { name: 'Open tab App.tsx' }).click()
+  await page.getByRole('button', { name: 'Open tab App.tsx' }).click()
   const editorContent = page
     .locator('.editor-panel[data-editor-kind="component"] .cm-content')
     .first()
@@ -173,7 +173,7 @@ export const setComponentEditorSource = async (page: Page, source: string) => {
 }
 
 export const setStylesEditorSource = async (page: Page, source: string) => {
-  await page.getByRole('tab', { name: 'Open tab app.css' }).click()
+  await page.getByRole('button', { name: 'Open tab app.css' }).click()
   const editorContent = page
     .locator('.editor-panel[data-editor-kind="styles"] .cm-content')
     .first()
@@ -227,9 +227,9 @@ export const ensurePanelToolsVisible = async (
   panelName: 'component' | 'styles',
 ) => {
   if (panelName === 'styles') {
-    await page.getByRole('tab', { name: 'Open tab app.css' }).click()
+    await page.getByRole('button', { name: 'Open tab app.css' }).click()
   } else {
-    await page.getByRole('tab', { name: 'Open tab App.tsx' }).click()
+    await page.getByRole('button', { name: 'Open tab App.tsx' }).click()
   }
 
   const button = getToolsButton(page, panelName)

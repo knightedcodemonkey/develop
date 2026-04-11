@@ -299,42 +299,40 @@
       </div>
 
       <div class="app-grid-workspace-tabs" id="app-grid-workspace-tabs">
-        <div
+        <nav
           class="workspace-tabs-shell"
           id="workspace-tabs-shell"
           aria-label="Workspace tabs"
         >
-          <div
+          <ul
             class="workspace-tabs-strip"
             id="workspace-tabs-strip"
-            role="tablist"
             aria-label="Workspace editor tabs"
-          ></div>
+          ></ul>
           <div class="workspace-tab-add-wrap" id="workspace-tab-add-wrap">
             <button
               class="workspace-tab-add workspace-tab-add--strip"
               id="workspace-tab-add"
               type="button"
-              aria-label="Add tab options"
-              aria-haspopup="menu"
+              aria-label="Add workspace tab"
               aria-expanded="false"
               aria-controls="workspace-tab-add-menu"
-              title="Add tab options"
+              title="Add workspace tab"
             >
               +
             </button>
             <div
               class="workspace-tab-add-menu"
               id="workspace-tab-add-menu"
-              role="menu"
-              aria-label="Add tab type"
+              role="group"
+              aria-label="Add workspace tab"
               hidden
             >
               <button
                 class="workspace-tab-add-menu__item"
                 id="workspace-tab-add-module"
                 type="button"
-                role="menuitem"
+                aria-label="Add module tab"
               >
                 module
               </button>
@@ -342,13 +340,13 @@
                 class="workspace-tab-add-menu__item"
                 id="workspace-tab-add-styles"
                 type="button"
-                role="menuitem"
+                aria-label="Add styles tab"
               >
                 styles
               </button>
             </div>
           </div>
-        </div>
+        </nav>
       </div>
 
       <div class="workspace-editors-stack">
