@@ -174,3 +174,36 @@ test('startup restores last active workspace tab after reload', async ({ page })
   await expect(page.locator('#editor-panel-component')).not.toHaveAttribute('hidden', '')
   await expect(page.locator('#editor-panel-styles')).toHaveAttribute('hidden', '')
 })
+
+test('add menu can create styles tab while component tab is active', async ({ page }) => {
+  await waitForInitialRender(page)
+
+  await page.getByRole('tab', { name: 'Open tab App.tsx' }).click()
+  await addWorkspaceTab(page, { kind: 'styles' })
+
+  await expect(page.getByRole('tab', { name: 'Open tab module.css' })).toHaveAttribute(
+    'aria-selected',
+    'true',
+  )
+  await expect(page.locator('#editor-panel-styles')).not.toHaveAttribute('hidden', '')
+  await expect(page.locator('#editor-panel-component')).toHaveAttribute('hidden', '')
+  await expect(page.getByRole('status', { name: 'App status' })).toContainText(
+    'Added style tab.',
+  )
+})
+
+test('add menu stays closed until triggered and closes on outside click', async ({
+  page,
+}) => {
+  await waitForInitialRender(page)
+
+  const addButton = page.getByRole('button', { name: 'Add tab options' })
+  const addMenu = page.getByRole('menu', { name: 'Add tab type' })
+
+  await expect(addMenu).toBeHidden()
+  await addButton.click()
+  await expect(addMenu).toBeVisible()
+
+  await page.getByRole('status', { name: 'App status' }).click()
+  await expect(addMenu).toBeHidden()
+})

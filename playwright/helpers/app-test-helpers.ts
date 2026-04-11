@@ -121,8 +121,17 @@ const escapeRegex = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$
 
 export const getPreviewFrame = (page: Page) => page.frameLocator('#preview-host iframe')
 
-export const addWorkspaceTab = async (page: Page) => {
-  await page.getByRole('button', { name: 'Add tab' }).click()
+export const addWorkspaceTab = async (
+  page: Page,
+  { kind = 'component' }: { kind?: 'component' | 'styles' } = {},
+) => {
+  await page.getByRole('button', { name: 'Add tab options' }).click()
+  if (kind === 'styles') {
+    await page.getByRole('menuitem', { name: 'styles' }).click()
+    return
+  }
+
+  await page.getByRole('menuitem', { name: 'module' }).click()
 }
 
 export const openWorkspaceTab = async (page: Page, fileName: string) => {

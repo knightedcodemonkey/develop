@@ -82,7 +82,13 @@ const componentEditorHeaderLabel = document.querySelector('#editor-header-compon
 const stylesEditorHeaderLabel = document.querySelector('#editor-header-styles span')
 const aiControlsToggle = document.getElementById('ai-controls-toggle')
 const appThemeButtons = document.querySelectorAll('[data-app-theme]')
+const workspaceTabsShell = document.getElementById('workspace-tabs-shell')
 const workspaceTabsStrip = document.getElementById('workspace-tabs-strip')
+const workspaceTabAddWrap = document.getElementById('workspace-tab-add-wrap')
+const workspaceTabAddButton = document.getElementById('workspace-tab-add')
+const workspaceTabAddMenu = document.getElementById('workspace-tab-add-menu')
+const workspaceTabAddModule = document.getElementById('workspace-tab-add-module')
+const workspaceTabAddStyles = document.getElementById('workspace-tab-add-styles')
 const editorToolsButtons = document.querySelectorAll('[data-editor-tools-toggle]')
 const panelCollapseButtons = document.querySelectorAll('[data-panel-collapse]')
 const componentEditorPanel = document.getElementById('editor-panel-component')
@@ -182,6 +188,7 @@ const editorPool = createEditorPoolManager({ maxMounted: 2 })
 let workspaceTabRenameState = {
   tabId: '',
 }
+let workspaceTabAddMenuOpen = false
 let isRenderingWorkspaceTabs = false
 let hasPendingWorkspaceTabsRender = false
 const clipboardSupported = Boolean(navigator.clipboard?.writeText)
@@ -1407,6 +1414,7 @@ const syncEditorFromActiveWorkspaceTab = () => {
 }
 
 const beginWorkspaceTabRename = tabId => {
+  setWorkspaceTabAddMenuOpen(false)
   workspaceTabRenameState = {
     tabId: toNonEmptyWorkspaceText(tabId),
   }
@@ -1469,6 +1477,7 @@ const finishWorkspaceTabRename = ({ tabId, nextName, cancelled = false }) => {
 }
 
 const removeWorkspaceTab = tabId => {
+  setWorkspaceTabAddMenuOpen(false)
   const tab = workspaceTabsState.getTab(tabId)
   if (!tab) {
     return
@@ -1523,9 +1532,14 @@ const removeWorkspaceTab = tabId => {
   })
 }
 
-const addWorkspaceTab = () => {
-  const activeTab = getActiveWorkspaceTab()
-  const normalizedKind = getTabKind(activeTab) === 'styles' ? 'styles' : 'component'
+const addWorkspaceTab = kind => {
+  const normalizedKind =
+    kind === 'styles' ? 'styles' : kind === 'component' ? 'component' : ''
+  if (!normalizedKind) {
+    setStatus('Choose a tab type before adding a tab.', 'neutral')
+    return
+  }
+
   const basePath =
     normalizedKind === 'styles' ? 'src/styles/module.css' : 'src/components/module.tsx'
   const language = normalizedKind === 'styles' ? 'css' : 'javascript-jsx'
@@ -1546,12 +1560,29 @@ const addWorkspaceTab = () => {
     lastModified: Date.now(),
   })
 
+  setWorkspaceTabAddMenuOpen(false)
   setActiveWorkspaceTab(tabId)
 
   if (normalizedKind === 'styles') {
     setStatus('Added style tab.', 'neutral')
   } else {
     setStatus('Added JavaScript tab.', 'neutral')
+  }
+}
+
+const setWorkspaceTabAddMenuOpen = isOpen => {
+  const nextOpen = Boolean(isOpen)
+  if (workspaceTabAddMenuOpen === nextOpen) {
+    return
+  }
+
+  workspaceTabAddMenuOpen = nextOpen
+  if (workspaceTabAddButton instanceof HTMLButtonElement) {
+    workspaceTabAddButton.setAttribute('aria-expanded', nextOpen ? 'true' : 'false')
+  }
+
+  if (workspaceTabAddMenu instanceof HTMLElement) {
+    workspaceTabAddMenu.hidden = !nextOpen
   }
 }
 
@@ -1708,17 +1739,12 @@ const renderWorkspaceTabs = () => {
       workspaceTabsStrip.append(tabContainer)
     }
 
-    const addButton = document.createElement('button')
-    addButton.className = 'workspace-tab-add workspace-tab-add--strip'
-    addButton.id = 'workspace-tab-add'
-    addButton.type = 'button'
-    addButton.textContent = '+'
-    addButton.setAttribute('aria-label', 'Add tab')
-    addButton.title = 'Add tab'
-    addButton.addEventListener('click', () => {
-      addWorkspaceTab()
-    })
-    workspaceTabsStrip.append(addButton)
+    if (
+      workspaceTabAddWrap instanceof HTMLElement &&
+      workspaceTabsShell instanceof HTMLElement
+    ) {
+      workspaceTabsShell.append(workspaceTabAddWrap)
+    }
   } finally {
     isRenderingWorkspaceTabs = false
   }
@@ -2976,6 +3002,56 @@ window.addEventListener('beforeunload', () => {
   chatDrawerController.dispose()
   prDrawerController.dispose()
 })
+
+document.addEventListener('pointerdown', event => {
+  if (!workspaceTabAddMenuOpen) {
+    return
+  }
+
+  const target = event.target
+  if (target instanceof Element && target.closest('#workspace-tab-add-wrap')) {
+    return
+  }
+
+  setWorkspaceTabAddMenuOpen(false)
+})
+
+document.addEventListener('keydown', event => {
+  if (!workspaceTabAddMenuOpen || event.key !== 'Escape') {
+    return
+  }
+
+  event.preventDefault()
+  setWorkspaceTabAddMenuOpen(false)
+})
+
+if (workspaceTabAddButton instanceof HTMLButtonElement) {
+  workspaceTabAddButton.addEventListener('click', event => {
+    event.stopPropagation()
+    setWorkspaceTabAddMenuOpen(!workspaceTabAddMenuOpen)
+  })
+
+  workspaceTabAddButton.addEventListener('keydown', event => {
+    if (event.key === 'ArrowDown' || event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault()
+      setWorkspaceTabAddMenuOpen(true)
+    }
+  })
+}
+
+if (workspaceTabAddModule instanceof HTMLButtonElement) {
+  workspaceTabAddModule.addEventListener('click', event => {
+    event.stopPropagation()
+    addWorkspaceTab('component')
+  })
+}
+
+if (workspaceTabAddStyles instanceof HTMLButtonElement) {
+  workspaceTabAddStyles.addEventListener('click', event => {
+    event.stopPropagation()
+    addWorkspaceTab('styles')
+  })
+}
 
 applyTheme(getInitialTheme(), { persist: false })
 applyEditorToolsVisibility()

@@ -310,6 +310,44 @@
             role="tablist"
             aria-label="Workspace editor tabs"
           ></div>
+          <div class="workspace-tab-add-wrap" id="workspace-tab-add-wrap">
+            <button
+              class="workspace-tab-add workspace-tab-add--strip"
+              id="workspace-tab-add"
+              type="button"
+              aria-label="Add tab options"
+              aria-haspopup="menu"
+              aria-expanded="false"
+              aria-controls="workspace-tab-add-menu"
+              title="Add tab options"
+            >
+              +
+            </button>
+            <div
+              class="workspace-tab-add-menu"
+              id="workspace-tab-add-menu"
+              role="menu"
+              aria-label="Add tab type"
+              hidden
+            >
+              <button
+                class="workspace-tab-add-menu__item"
+                id="workspace-tab-add-module"
+                type="button"
+                role="menuitem"
+              >
+                module
+              </button>
+              <button
+                class="workspace-tab-add-menu__item"
+                id="workspace-tab-add-styles"
+                type="button"
+                role="menuitem"
+              >
+                styles
+              </button>
+            </div>
+          </div>
         </div>
       </div>
 

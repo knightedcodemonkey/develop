@@ -386,9 +386,55 @@
   border-bottom: none;
 }
 
-.workspace-tab-add--strip {
-  margin-left: auto;
+.workspace-tab-add-wrap {
+  position: relative;
+  margin-left: 8px;
   flex: none;
+  z-index: 16;
+}
+
+.workspace-tab-add--strip {
+  margin-left: 0;
+  flex: none;
+}
+
+.workspace-tab-add-menu {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 6px);
+  display: grid;
+  gap: 4px;
+  min-width: 170px;
+  padding: 6px;
+  border-radius: 10px;
+  border: 1px solid var(--border-strong);
+  background: var(--surface-panel-header);
+  box-shadow: 0 14px 28px var(--shadow-elev-1);
+  z-index: 12;
+}
+
+.workspace-tab-add-menu[hidden] {
+  display: none;
+}
+
+.workspace-tab-add-menu__item {
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--panel-text);
+  font: inherit;
+  text-align: left;
+  padding: 6px 9px;
+  cursor: pointer;
+}
+
+.workspace-tab-add-menu__item:hover {
+  background: var(--surface-control-hover);
+}
+
+.workspace-tab-add-menu__item:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 1px;
 }
 
 .workspace-tab__rename,
