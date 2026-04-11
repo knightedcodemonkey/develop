@@ -5,7 +5,7 @@ const toHexChannel = value => value.toString(16).padStart(2, '0')
 
 const normalizeColorToHex = colorValue => {
   if (typeof colorValue !== 'string' || colorValue.length === 0) {
-    return defaultLightPreviewBackgroundColor
+    return ''
   }
 
   if (/^#[\da-f]{6}$/i.test(colorValue)) {
@@ -24,12 +24,12 @@ const normalizeColorToHex = colorValue => {
 
   const channels = colorValue.match(/\d+/g)
   if (!channels || channels.length < 3) {
-    return defaultLightPreviewBackgroundColor
+    return ''
   }
 
   const [red, green, blue] = channels.slice(0, 3).map(value => Number.parseInt(value, 10))
   if ([red, green, blue].some(value => Number.isNaN(value))) {
-    return defaultLightPreviewBackgroundColor
+    return ''
   }
 
   return `#${toHexChannel(red)}${toHexChannel(green)}${toHexChannel(blue)}`
@@ -44,18 +44,20 @@ export const createPreviewBackgroundController = ({
   let previewBackgroundCustomized = false
 
   const resolveDefaultPreviewBackgroundColor = () => {
+    const themeDefaultPreviewBackgroundColor =
+      document.documentElement.dataset.theme === 'light'
+        ? defaultLightPreviewBackgroundColor
+        : defaultDarkPreviewBackgroundColor
+
     if (typeof getDefaultPreviewBackgroundColor === 'function') {
       const configuredColor = getDefaultPreviewBackgroundColor()
-      if (typeof configuredColor === 'string' && configuredColor.length > 0) {
-        return normalizeColorToHex(configuredColor)
+      const normalizedConfiguredColor = normalizeColorToHex(configuredColor)
+      if (normalizedConfiguredColor) {
+        return normalizedConfiguredColor
       }
     }
 
-    if (document.documentElement.dataset.theme === 'light') {
-      return defaultLightPreviewBackgroundColor
-    }
-
-    return defaultDarkPreviewBackgroundColor
+    return themeDefaultPreviewBackgroundColor
   }
 
   const applyPreviewBackgroundColor = color => {

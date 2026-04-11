@@ -1712,7 +1712,11 @@ const renderWorkspaceTabs = () => {
       fileNameNode.textContent = tabDisplay.fileName || tab.name
       selectButton.append(fileNameNode)
 
-      selectButton.setAttribute('aria-pressed', isActive ? 'true' : 'false')
+      if (isActive) {
+        selectButton.setAttribute('aria-current', 'true')
+      } else {
+        selectButton.removeAttribute('aria-current')
+      }
       selectButton.setAttribute('aria-label', `Open tab ${tab.name}`)
       selectButton.addEventListener('click', event => {
         event.stopPropagation()
