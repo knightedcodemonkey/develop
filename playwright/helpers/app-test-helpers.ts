@@ -139,6 +139,20 @@ export const openWorkspaceTab = async (page: Page, fileName: string) => {
   await page.getByRole('button', { name: pattern }).click()
 }
 
+export const reorderWorkspaceTabBefore = async (
+  page: Page,
+  { from, to }: { from: string; to: string },
+) => {
+  const source = page
+    .getByRole('button', { name: new RegExp(`^Open tab ${escapeRegex(from)}$`) })
+    .locator('..')
+  const target = page
+    .getByRole('button', { name: new RegExp(`^Open tab ${escapeRegex(to)}$`) })
+    .locator('..')
+
+  await source.dragTo(target)
+}
+
 export const setWorkspaceTabSource = async (
   page: Page,
   {

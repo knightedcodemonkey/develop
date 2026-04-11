@@ -213,6 +213,38 @@ export const createWorkspaceTabsState = ({ tabs = [], activeTabId, onChange } = 
     return true
   }
 
+  const moveTabBefore = (
+    sourceTabId,
+    targetTabId,
+    { emitReason = 'moveTabBefore' } = {},
+  ) => {
+    const sourceId = toNonEmptyString(sourceTabId)
+    const targetId = toNonEmptyString(targetTabId)
+
+    if (
+      !sourceId ||
+      !targetId ||
+      sourceId === targetId ||
+      !tabsById.has(sourceId) ||
+      !tabsById.has(targetId)
+    ) {
+      return false
+    }
+
+    const sourceIndex = orderedIds.indexOf(sourceId)
+    const targetIndex = orderedIds.indexOf(targetId)
+    if (sourceIndex < 0 || targetIndex < 0 || sourceIndex === targetIndex) {
+      return false
+    }
+
+    orderedIds.splice(sourceIndex, 1)
+    const nextTargetIndex = orderedIds.indexOf(targetId)
+    orderedIds.splice(nextTargetIndex, 0, sourceId)
+
+    emit(emitReason)
+    return true
+  }
+
   replaceTabs({
     nextTabs: tabs,
     nextActiveTabId: activeTabId,
@@ -231,5 +263,6 @@ export const createWorkspaceTabsState = ({ tabs = [], activeTabId, onChange } = 
     upsertTab,
     setActiveTab,
     removeTab,
+    moveTabBefore,
   }
 }

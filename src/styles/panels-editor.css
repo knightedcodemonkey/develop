@@ -253,6 +253,17 @@
   flex: 0 1 auto;
   min-width: 0;
   max-width: min(200px, 36vw);
+  cursor: grab;
+  border-top-color: var(--border-control);
+}
+
+.workspace-tab:active {
+  cursor: grabbing;
+}
+
+.workspace-tab[data-drag-over='true'] {
+  outline: 2px solid color-mix(in srgb, var(--accent) 72%, transparent);
+  outline-offset: -2px;
 }
 
 .workspace-tab[data-active='true'] {
