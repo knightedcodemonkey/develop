@@ -139,6 +139,21 @@ export const openWorkspaceTab = async (page: Page, fileName: string) => {
   await page.getByRole('button', { name: pattern }).click()
 }
 
+export const reorderWorkspaceTabBefore = async (
+  page: Page,
+  { from, to }: { from: string; to: string },
+) => {
+  const tabList = page.getByRole('list', { name: 'Workspace editor tabs' })
+  const source = tabList.getByRole('listitem', {
+    name: new RegExp(`^Workspace tab ${escapeRegex(from)}$`),
+  })
+  const target = tabList.getByRole('listitem', {
+    name: new RegExp(`^Workspace tab ${escapeRegex(to)}$`),
+  })
+
+  await source.dragTo(target)
+}
+
 export const setWorkspaceTabSource = async (
   page: Page,
   {

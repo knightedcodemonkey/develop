@@ -1,6 +1,7 @@
 import { expect, test } from '@playwright/test'
 import {
   addWorkspaceTab,
+  reorderWorkspaceTabBefore,
   setWorkspaceTabSource,
   waitForInitialRender,
 } from './helpers/app-test-helpers.js'
@@ -166,6 +167,65 @@ test('startup restores last active workspace tab after reload', async ({ page })
   ).toHaveAttribute('aria-current', 'true')
   await expect(page.locator('#editor-panel-component')).not.toHaveAttribute('hidden', '')
   await expect(page.locator('#editor-panel-styles')).toHaveAttribute('hidden', '')
+})
+
+test('workspace tab drag reorder persists across reload', async ({ page }) => {
+  await waitForInitialRender(page)
+
+  await addWorkspaceTab(page)
+  await addWorkspaceTab(page)
+
+  await reorderWorkspaceTabBefore(page, {
+    from: 'module-2.tsx',
+    to: 'App.tsx',
+  })
+
+  const orderedTabs = page
+    .getByRole('list', { name: 'Workspace editor tabs' })
+    .getByRole('listitem')
+  await expect(orderedTabs.nth(0)).toHaveAccessibleName('Workspace tab module-2.tsx')
+  await expect(orderedTabs.nth(1)).toHaveAccessibleName('Workspace tab App.tsx')
+
+  await page.reload()
+  await waitForInitialRender(page)
+
+  const restoredTabs = page
+    .getByRole('list', { name: 'Workspace editor tabs' })
+    .getByRole('listitem')
+  await expect(restoredTabs.nth(0)).toHaveAccessibleName('Workspace tab module-2.tsx')
+  await expect(restoredTabs.nth(1)).toHaveAccessibleName('Workspace tab App.tsx')
+})
+
+test('workspace tab drag onto itself keeps order unchanged', async ({ page }) => {
+  await waitForInitialRender(page)
+
+  await addWorkspaceTab(page)
+  await addWorkspaceTab(page)
+
+  const labelsBefore = await page
+    .getByRole('list', { name: 'Workspace editor tabs' })
+    .getByRole('listitem')
+    .evaluateAll(nodes =>
+      nodes
+        .map(node => node.getAttribute('aria-label'))
+        .filter((label): label is string => typeof label === 'string'),
+    )
+
+  await reorderWorkspaceTabBefore(page, {
+    from: 'App.tsx',
+    to: 'App.tsx',
+  })
+
+  const labelsAfter = await page
+    .getByRole('list', { name: 'Workspace editor tabs' })
+    .getByRole('listitem')
+    .evaluateAll(nodes =>
+      nodes
+        .map(node => node.getAttribute('aria-label'))
+        .filter((label): label is string => typeof label === 'string'),
+    )
+
+  expect(labelsAfter).toEqual(labelsBefore)
 })
 
 test('add menu can create styles tab while component tab is active', async ({ page }) => {
