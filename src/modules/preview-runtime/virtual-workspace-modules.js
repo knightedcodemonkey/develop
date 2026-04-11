@@ -20,6 +20,29 @@ const transpileOptionsByMode = {
 }
 
 const previewEntryExportName = '__knightedPreviewEntryApp'
+const maxTranspiledModuleCacheEntries = 300
+const maxModuleDataUrlCacheEntries = 600
+
+const transpiledModuleCache = new Map()
+const moduleDataUrlCache = new Map()
+
+const trimCache = (cache, maxEntries) => {
+  while (cache.size > maxEntries) {
+    const oldestKey = cache.keys().next().value
+    cache.delete(oldestKey)
+  }
+}
+
+const getCachedValue = (cache, key) => {
+  if (!cache.has(key)) {
+    return null
+  }
+
+  const value = cache.get(key)
+  cache.delete(key)
+  cache.set(key, value)
+  return value
+}
 
 const stripQueryAndHash = value => {
   if (typeof value !== 'string') {
@@ -241,13 +264,8 @@ const withEntryAppExportShim = source => {
   return `${source}\nexport const ${previewEntryExportName} = typeof App === 'function' ? App : undefined`
 }
 
-const rewriteRelativeImportSpecifiers = ({
-  source,
-  imports,
-  resolveRelativeSpecifier,
-}) => {
+const rewriteImportSpecifiers = ({ source, imports, resolveSpecifier }) => {
   const rewrites = imports
-    .filter(entry => isRelativeSpecifier(entry?.source))
     .map(entry => {
       const range = entry?.range
       if (!Array.isArray(range) || range.length !== 2) {
@@ -255,7 +273,7 @@ const rewriteRelativeImportSpecifiers = ({
       }
 
       const declaration = source.slice(range[0], range[1])
-      const resolvedSpecifier = resolveRelativeSpecifier(entry.source)
+      const resolvedSpecifier = resolveSpecifier(entry.source)
       if (!resolvedSpecifier) {
         return null
       }
@@ -289,7 +307,15 @@ const rewriteRelativeImportSpecifiers = ({
   return output
 }
 
-const toVirtualSpecifier = moduleKey => `@knighted/workspace/${moduleKey}`
+const toModuleDataUrl = code =>
+  `data:text/javascript;charset=utf-8,${encodeURIComponent(code)}`
+
+const runtimeSpecifierRewrites = runtimeSpecifiers => ({
+  react: runtimeSpecifiers.react,
+  'react-dom/client': runtimeSpecifiers.reactDomClient,
+  '@knighted/jsx/dom': runtimeSpecifiers.jsxDom,
+  '@knighted/jsx/react': runtimeSpecifiers.jsxReact,
+})
 
 const createTabLookup = tabs => {
   const byId = new Map()
@@ -352,6 +378,46 @@ const parseImports = ({
   }
 
   return analysis.imports ?? []
+}
+
+const getTranspiledModule = ({
+  source,
+  mode,
+  transformJsxSource,
+  formatTransformDiagnosticsError,
+}) => {
+  const cacheKey = `${mode}\u0000${source}`
+  const cached = getCachedValue(transpiledModuleCache, cacheKey)
+  if (cached) {
+    if (cached.error) {
+      throw new Error(cached.error)
+    }
+
+    return cached
+  }
+
+  const transpiled = transformJsxSource(source, transpileOptionsByMode[mode])
+  if (transpiled.diagnostics.length > 0) {
+    const error = formatTransformDiagnosticsError(transpiled.diagnostics)
+    transpiledModuleCache.set(cacheKey, { error })
+    trimCache(transpiledModuleCache, maxTranspiledModuleCacheEntries)
+    throw new Error(error)
+  }
+
+  const imports = parseImports({
+    source: transpiled.code,
+    transformJsxSource,
+    formatTransformDiagnosticsError,
+  })
+
+  const value = {
+    code: transpiled.code,
+    imports,
+  }
+
+  transpiledModuleCache.set(cacheKey, value)
+  trimCache(transpiledModuleCache, maxTranspiledModuleCacheEntries)
+  return value
 }
 
 export const planWorkspaceVirtualModules = ({
@@ -477,14 +543,9 @@ export const planWorkspaceVirtualModules = ({
 
     const moduleKey = toTabModuleKey(tab)
     const source = typeof tab.content === 'string' ? tab.content : ''
-    const transpiled = transformJsxSource(source, transpileOptionsByMode[resolvedMode])
-
-    if (transpiled.diagnostics.length > 0) {
-      throw new Error(formatTransformDiagnosticsError(transpiled.diagnostics))
-    }
-
-    const transpiledImports = parseImports({
-      source: transpiled.code,
+    const transpiled = getTranspiledModule({
+      source,
+      mode: resolvedMode,
       transformJsxSource,
       formatTransformDiagnosticsError,
     })
@@ -492,17 +553,12 @@ export const planWorkspaceVirtualModules = ({
     moduleDataByTabId.set(tabId, {
       moduleKey,
       source: transpiled.code,
-      imports: transpiledImports,
-      virtualSpecifier: toVirtualSpecifier(moduleKey || tab.id),
+      imports: transpiled.imports,
     })
   }
 
-  const importMapImports = {}
-  importMapImports.react = runtimeSpecifiers.react
-  importMapImports['react-dom/client'] = runtimeSpecifiers.reactDomClient
-  importMapImports['@knighted/jsx/dom'] = runtimeSpecifiers.jsxDom
-  importMapImports['@knighted/jsx/react'] = runtimeSpecifiers.jsxReact
-  const blobUrls = []
+  const runtimeRewrites = runtimeSpecifierRewrites(runtimeSpecifiers)
+  const moduleUrlByTabId = new Map()
 
   for (const tabId of dependencyOrder) {
     const tab = byId.get(tabId)
@@ -512,22 +568,29 @@ export const planWorkspaceVirtualModules = ({
       continue
     }
 
-    const rewrittenCode = rewriteRelativeImportSpecifiers({
+    const rewrittenCode = rewriteImportSpecifiers({
       source: moduleData.source,
       imports: moduleData.imports,
-      resolveRelativeSpecifier: sourceSpecifier => {
-        const target = resolveRelativeWorkspaceImport({
-          importerModuleKey: moduleData.moduleKey,
-          source: sourceSpecifier,
-          byModuleKey,
-        })
+      resolveSpecifier: sourceSpecifier => {
+        if (isRelativeSpecifier(sourceSpecifier)) {
+          const target = resolveRelativeWorkspaceImport({
+            importerModuleKey: moduleData.moduleKey,
+            source: sourceSpecifier,
+            byModuleKey,
+          })
 
-        if (!target || typeof target.id !== 'string') {
-          return null
+          if (!target || typeof target.id !== 'string') {
+            return null
+          }
+
+          return moduleUrlByTabId.get(target.id) ?? null
         }
 
-        const targetData = moduleDataByTabId.get(target.id)
-        return targetData?.virtualSpecifier ?? null
+        if (Object.hasOwn(runtimeRewrites, sourceSpecifier)) {
+          return runtimeRewrites[sourceSpecifier]
+        }
+
+        return null
       },
     })
 
@@ -538,31 +601,43 @@ export const planWorkspaceVirtualModules = ({
     const executableCode =
       tabId === entryTab.id ? withEntryAppExportShim(rewrittenCode) : rewrittenCode
     const sourceUrl = `//# sourceURL=knighted-workspace/${moduleData.moduleKey || tab.id}.mjs`
-    const moduleCode = `${prelude}\n${executableCode}\n${sourceUrl}`
-    const moduleBlob = new Blob([moduleCode], { type: 'text/javascript' })
-    const moduleUrl = URL.createObjectURL(moduleBlob)
+    const moduleCacheKey = [
+      resolvedMode,
+      tabId === entryTab.id ? 'entry' : 'module',
+      moduleData.moduleKey || tab.id,
+      prelude,
+      executableCode,
+    ].join('\u0000')
+    const cachedModuleUrl = getCachedValue(moduleDataUrlCache, moduleCacheKey)
+    const moduleUrl =
+      typeof cachedModuleUrl === 'string'
+        ? cachedModuleUrl
+        : toModuleDataUrl(`${prelude}\n${executableCode}\n${sourceUrl}`)
 
-    importMapImports[moduleData.virtualSpecifier] = moduleUrl
-    blobUrls.push(moduleUrl)
+    if (!cachedModuleUrl) {
+      moduleDataUrlCache.set(moduleCacheKey, moduleUrl)
+      trimCache(moduleDataUrlCache, maxModuleDataUrlCacheEntries)
+    }
+
+    moduleUrlByTabId.set(tabId, moduleUrl)
   }
 
-  const entryData = moduleDataByTabId.get(entryTab.id)
-  if (!entryData) {
+  const entryModuleUrl = moduleUrlByTabId.get(entryTab.id)
+  if (typeof entryModuleUrl !== 'string' || entryModuleUrl.length === 0) {
     return null
   }
+
+  const entryModuleKey = toTabModuleKey(entryTab) || entryTab.id
 
   return {
     entryTabId: entryTab.id,
     includedTabIds: [...dependencyOrder],
-    entrySpecifier: entryData.virtualSpecifier,
+    entrySpecifier: entryModuleUrl,
+    entryDisplaySpecifier: `@knighted/workspace/${entryModuleKey}`,
     entryExportName: previewEntryExportName,
     importMap: {
-      imports: importMapImports,
+      imports: {},
     },
-    dispose: () => {
-      for (const blobUrl of blobUrls) {
-        URL.revokeObjectURL(blobUrl)
-      }
-    },
+    dispose: () => {},
   }
 }

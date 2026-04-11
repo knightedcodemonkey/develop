@@ -39,6 +39,7 @@ export const createPreviewBackgroundController = ({
   previewBgColorInput,
   getPreviewHost,
   getDefaultPreviewBackgroundColor,
+  onBackgroundColorChange,
 }) => {
   let previewBackgroundColor = null
   let previewBackgroundCustomized = false
@@ -66,16 +67,12 @@ export const createPreviewBackgroundController = ({
       return
     }
 
-    const iframe = previewHost.querySelector('iframe')
-    const iframeDocument = iframe?.contentDocument ?? null
-
     if (typeof color === 'string' && color.length > 0) {
       previewHost.style.backgroundColor = color
       previewHost.style.setProperty('--preview-iframe-background-color', color)
 
-      if (iframeDocument) {
-        iframeDocument.documentElement.style.backgroundColor = color
-        iframeDocument.body.style.backgroundColor = color
+      if (typeof onBackgroundColorChange === 'function') {
+        onBackgroundColorChange(color)
       }
       return
     }
@@ -83,9 +80,8 @@ export const createPreviewBackgroundController = ({
     previewHost.style.removeProperty('background-color')
     previewHost.style.removeProperty('--preview-iframe-background-color')
 
-    if (iframeDocument) {
-      iframeDocument.documentElement.style.removeProperty('background-color')
-      iframeDocument.body.style.removeProperty('background-color')
+    if (typeof onBackgroundColorChange === 'function') {
+      onBackgroundColorChange('')
     }
   }
 

@@ -4,7 +4,7 @@ import {
   hasFunctionLikeDeclarationNamed,
 } from './jsx-top-level-declarations.js'
 import { canRenderPreview, resolvePreviewEntryTab } from './preview-entry-resolver.js'
-import { executeWorkspaceIframePreview } from './preview-runtime/iframe-preview-executor.js'
+import { createWorkspaceIframePreviewBridge } from './preview-runtime/iframe-preview-executor.js'
 import { planWorkspaceVirtualModules } from './preview-runtime/virtual-workspace-modules.js'
 import { createPreviewWorkspaceGraphCache } from './preview-workspace-graph.js'
 import { ensureJsxTransformSource } from './jsx-transform-runtime.js'
@@ -27,8 +27,13 @@ export const createRenderRuntimeController = ({
   setRenderedStatus,
   onFirstRenderComplete,
   setCdnLoading,
+  onPreviewTelemetry,
 }) => {
+  const autoRenderDebounceMs = 140
+  const autoRenderTypingBurstDebounceMs = 420
+  const autoRenderBurstThresholdMs = 900
   let scheduled = null
+  let lastScheduleRequestedAt = 0
   let renderInFlight = false
   let rerenderRequested = false
   let reactRoot = null
@@ -41,7 +46,7 @@ export const createRenderRuntimeController = ({
     value: null,
   }
   let disposeWorkspaceVirtualModules = null
-  let disposeIframeRuntimeBridge = null
+  let iframeRuntimeBridge = null
   let lastRenderedEntryTabId = ''
   let lastRenderedDependencyTabIds = new Set()
   let topLevelTransformMetadataCache = {
@@ -496,12 +501,29 @@ export const createRenderRuntimeController = ({
   }
 
   const disposeIframeBridge = () => {
-    if (typeof disposeIframeRuntimeBridge !== 'function') {
+    if (!iframeRuntimeBridge || typeof iframeRuntimeBridge.dispose !== 'function') {
       return
     }
 
-    disposeIframeRuntimeBridge()
-    disposeIframeRuntimeBridge = null
+    iframeRuntimeBridge.dispose()
+    iframeRuntimeBridge = null
+  }
+
+  const emitPreviewTelemetry = (name, details = {}) => {
+    const payload = {
+      name,
+      at: performance.now(),
+      ...details,
+    }
+
+    if (typeof onPreviewTelemetry === 'function') {
+      onPreviewTelemetry(payload)
+    }
+
+    const telemetrySink = globalThis.__KNIGHTED_PREVIEW_TELEMETRY__
+    if (Array.isArray(telemetrySink)) {
+      telemetrySink.push(payload)
+    }
   }
 
   const renderPreviewError = error => {
@@ -623,26 +645,32 @@ export const createRenderRuntimeController = ({
     )
 
     disposeWorkspaceModules()
-    disposeIframeBridge()
     disposeWorkspaceVirtualModules = virtualModulePlan.dispose
 
     try {
-      const execution = await executeWorkspaceIframePreview({
-        target: getRenderTarget(),
+      const renderTarget = getRenderTarget()
+      if (!iframeRuntimeBridge || iframeRuntimeBridge.target !== renderTarget) {
+        disposeIframeBridge()
+        iframeRuntimeBridge = createWorkspaceIframePreviewBridge({
+          target: renderTarget,
+          onRuntimeError: error => {
+            renderPreviewError(error)
+          },
+          onTelemetryEvent: event => emitPreviewTelemetry(event.name, event),
+        })
+      }
+
+      await iframeRuntimeBridge.render({
         mode,
         entrySpecifier: virtualModulePlan.entrySpecifier,
+        entryDisplaySpecifier: virtualModulePlan.entryDisplaySpecifier,
         entryExportName: virtualModulePlan.entryExportName,
         importMap: virtualModulePlan.importMap,
         cssText,
         hostPadding,
         backgroundColor: getPreviewBackgroundColor(),
         runtimeSpecifiers,
-        onRuntimeError: error => {
-          renderPreviewError(error)
-        },
       })
-
-      disposeIframeRuntimeBridge = execution.dispose
     } catch (error) {
       disposeWorkspaceModules()
       disposeIframeBridge()
@@ -701,6 +729,9 @@ export const createRenderRuntimeController = ({
 
     const runRenderPass = async () => {
       scheduled = null
+      emitPreviewTelemetry('render-start', {
+        mode: renderMode.value,
+      })
       setStatus(
         hasCompletedInitialRender ? 'Rendering…' : 'Loading CDN assets…',
         'pending',
@@ -712,9 +743,16 @@ export const createRenderRuntimeController = ({
         } else {
           await renderDom()
         }
+        emitPreviewTelemetry('render-complete', {
+          mode: renderMode.value,
+        })
         setStatus('Rendered', 'neutral')
         setRenderedStatus()
       } catch (error) {
+        emitPreviewTelemetry('render-failed', {
+          mode: renderMode.value,
+          message: error instanceof Error ? error.message : String(error),
+        })
         renderPreviewError(error)
       } finally {
         if (!hasCompletedInitialRender) {
@@ -745,13 +783,23 @@ export const createRenderRuntimeController = ({
       return
     }
 
+    const now = Date.now()
+    const timeSinceLastSchedule = now - lastScheduleRequestedAt
+    lastScheduleRequestedAt = now
+
+    const isLikelyTypingBurst =
+      timeSinceLastSchedule > 0 && timeSinceLastSchedule < autoRenderBurstThresholdMs
+    const debounceMs = isLikelyTypingBurst
+      ? autoRenderTypingBurstDebounceMs
+      : autoRenderDebounceMs
+
     if (scheduled) {
       clearTimeout(scheduled)
     }
 
     scheduled = setTimeout(() => {
       void renderPreview()
-    }, 200)
+    }, debounceMs)
   }
 
   const shouldAutoRenderForTabChange = tabId => {
@@ -795,5 +843,13 @@ export const createRenderRuntimeController = ({
     scheduleRender,
     shouldAutoRenderForTabChange,
     setStyleCompiling,
+    updatePreviewBackgroundColor: color => {
+      if (
+        iframeRuntimeBridge &&
+        typeof iframeRuntimeBridge.updateBackgroundColor === 'function'
+      ) {
+        iframeRuntimeBridge.updateBackgroundColor(color)
+      }
+    },
   }
 }

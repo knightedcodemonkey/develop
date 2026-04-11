@@ -226,6 +226,14 @@ const showAppToast = message => {
 const previewBackground = createPreviewBackgroundController({
   previewBgColorInput,
   getPreviewHost: () => previewHost,
+  onBackgroundColorChange: color => {
+    if (
+      renderRuntime &&
+      typeof renderRuntime.updatePreviewBackgroundColor === 'function'
+    ) {
+      renderRuntime.updatePreviewBackgroundColor(color)
+    }
+  },
   getDefaultPreviewBackgroundColor: () => {
     if (document.documentElement.dataset.theme === 'light') {
       return '#ffffff'
