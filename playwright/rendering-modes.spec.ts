@@ -326,6 +326,38 @@ test('editing-transient missing reference runtime errors are suppressed', async 
   await expect(page.getByRole('status', { name: 'App status' })).not.toHaveText('Error')
 })
 
+test('preview iframe sandbox isolates parent origin access', async ({ page }) => {
+  await waitForInitialRender(page)
+
+  const iframe = page.locator('#preview-host iframe')
+  const sandbox = await iframe.getAttribute('sandbox')
+
+  expect(typeof sandbox).toBe('string')
+  expect(sandbox?.includes('allow-same-origin')).toBeFalsy()
+
+  await setComponentEditorSource(
+    page,
+    [
+      'const canReadParentStorage = (() => {',
+      '  try {',
+      '    return Boolean(window.parent.localStorage)',
+      '  } catch {',
+      '    return false',
+      '  }',
+      '})()',
+      '',
+      'export const App = () => (',
+      "  <button type='button'>",
+      "    {canReadParentStorage ? 'parent-readable' : 'parent-blocked'}",
+      '  </button>',
+      ')',
+    ].join('\n'),
+  )
+
+  await expect(page.getByRole('status', { name: 'App status' })).toHaveText('Rendered')
+  await expect(getPreviewFrame(page).getByRole('button')).toContainText('parent-blocked')
+})
+
 test('post-render runtime exceptions from iframe are reported in preview panel', async ({
   page,
 }) => {

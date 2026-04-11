@@ -27,6 +27,7 @@ export const createRenderRuntimeController = ({
   setRenderedStatus,
   onFirstRenderComplete,
   setCdnLoading,
+  onPreviewTelemetry,
 }) => {
   let scheduled = null
   let renderInFlight = false
@@ -41,7 +42,7 @@ export const createRenderRuntimeController = ({
     value: null,
   }
   let disposeWorkspaceVirtualModules = null
-  let disposeIframeRuntimeBridge = null
+  let iframeRuntimeBridge = null
   let lastRenderedEntryTabId = ''
   let lastRenderedDependencyTabIds = new Set()
   let topLevelTransformMetadataCache = {
@@ -496,12 +497,29 @@ export const createRenderRuntimeController = ({
   }
 
   const disposeIframeBridge = () => {
-    if (typeof disposeIframeRuntimeBridge !== 'function') {
+    if (!iframeRuntimeBridge || typeof iframeRuntimeBridge.dispose !== 'function') {
       return
     }
 
-    disposeIframeRuntimeBridge()
-    disposeIframeRuntimeBridge = null
+    iframeRuntimeBridge.dispose()
+    iframeRuntimeBridge = null
+  }
+
+  const emitPreviewTelemetry = (name, details = {}) => {
+    const payload = {
+      name,
+      at: performance.now(),
+      ...details,
+    }
+
+    if (typeof onPreviewTelemetry === 'function') {
+      onPreviewTelemetry(payload)
+    }
+
+    const telemetrySink = globalThis.__KNIGHTED_PREVIEW_TELEMETRY__
+    if (Array.isArray(telemetrySink)) {
+      telemetrySink.push(payload)
+    }
   }
 
   const renderPreviewError = error => {
@@ -640,9 +658,10 @@ export const createRenderRuntimeController = ({
         onRuntimeError: error => {
           renderPreviewError(error)
         },
+        onTelemetryEvent: event => emitPreviewTelemetry(event.name, event),
       })
 
-      disposeIframeRuntimeBridge = execution.dispose
+      iframeRuntimeBridge = execution
     } catch (error) {
       disposeWorkspaceModules()
       disposeIframeBridge()
@@ -701,6 +720,9 @@ export const createRenderRuntimeController = ({
 
     const runRenderPass = async () => {
       scheduled = null
+      emitPreviewTelemetry('render-start', {
+        mode: renderMode.value,
+      })
       setStatus(
         hasCompletedInitialRender ? 'Rendering…' : 'Loading CDN assets…',
         'pending',
@@ -712,9 +734,16 @@ export const createRenderRuntimeController = ({
         } else {
           await renderDom()
         }
+        emitPreviewTelemetry('render-complete', {
+          mode: renderMode.value,
+        })
         setStatus('Rendered', 'neutral')
         setRenderedStatus()
       } catch (error) {
+        emitPreviewTelemetry('render-failed', {
+          mode: renderMode.value,
+          message: error instanceof Error ? error.message : String(error),
+        })
         renderPreviewError(error)
       } finally {
         if (!hasCompletedInitialRender) {
@@ -795,5 +824,13 @@ export const createRenderRuntimeController = ({
     scheduleRender,
     shouldAutoRenderForTabChange,
     setStyleCompiling,
+    updatePreviewBackgroundColor: color => {
+      if (
+        iframeRuntimeBridge &&
+        typeof iframeRuntimeBridge.updateBackgroundColor === 'function'
+      ) {
+        iframeRuntimeBridge.updateBackgroundColor(color)
+      }
+    },
   }
 }

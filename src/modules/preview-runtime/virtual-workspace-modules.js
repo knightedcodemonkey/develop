@@ -291,6 +291,9 @@ const rewriteRelativeImportSpecifiers = ({
 
 const toVirtualSpecifier = moduleKey => `@knighted/workspace/${moduleKey}`
 
+const toModuleDataUrl = code =>
+  `data:text/javascript;charset=utf-8,${encodeURIComponent(code)}`
+
 const createTabLookup = tabs => {
   const byId = new Map()
   const byModuleKey = new Map()
@@ -502,7 +505,6 @@ export const planWorkspaceVirtualModules = ({
   importMapImports['react-dom/client'] = runtimeSpecifiers.reactDomClient
   importMapImports['@knighted/jsx/dom'] = runtimeSpecifiers.jsxDom
   importMapImports['@knighted/jsx/react'] = runtimeSpecifiers.jsxReact
-  const blobUrls = []
 
   for (const tabId of dependencyOrder) {
     const tab = byId.get(tabId)
@@ -539,11 +541,9 @@ export const planWorkspaceVirtualModules = ({
       tabId === entryTab.id ? withEntryAppExportShim(rewrittenCode) : rewrittenCode
     const sourceUrl = `//# sourceURL=knighted-workspace/${moduleData.moduleKey || tab.id}.mjs`
     const moduleCode = `${prelude}\n${executableCode}\n${sourceUrl}`
-    const moduleBlob = new Blob([moduleCode], { type: 'text/javascript' })
-    const moduleUrl = URL.createObjectURL(moduleBlob)
+    const moduleUrl = toModuleDataUrl(moduleCode)
 
     importMapImports[moduleData.virtualSpecifier] = moduleUrl
-    blobUrls.push(moduleUrl)
   }
 
   const entryData = moduleDataByTabId.get(entryTab.id)
@@ -559,10 +559,6 @@ export const planWorkspaceVirtualModules = ({
     importMap: {
       imports: importMapImports,
     },
-    dispose: () => {
-      for (const blobUrl of blobUrls) {
-        URL.revokeObjectURL(blobUrl)
-      }
-    },
+    dispose: () => {},
   }
 }
