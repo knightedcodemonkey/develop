@@ -55,7 +55,7 @@ const createIframeShellDocument = ({ channelId, parentOrigin, importMap }) => {
       const __knightedState = {
         entrySpecifier: '',
         reactRoot: null,
-        renderedNode: null,
+        renderedNodes: [],
       }
 
       const __knightedRuntimeErrorFingerprints = new Set()
@@ -201,9 +201,13 @@ const createIframeShellDocument = ({ channelId, parentOrigin, importMap }) => {
           __knightedState.reactRoot = null
         }
 
-        if (__knightedState.renderedNode instanceof Node) {
-          __knightedState.renderedNode.remove()
-          __knightedState.renderedNode = null
+        if (Array.isArray(__knightedState.renderedNodes)) {
+          for (const node of __knightedState.renderedNodes) {
+            if (node instanceof Node && node.parentNode) {
+              node.parentNode.removeChild(node)
+            }
+          }
+          __knightedState.renderedNodes = []
         }
 
         document.querySelectorAll('knighted-preview-root').forEach(node => node.remove())
@@ -231,7 +235,7 @@ const createIframeShellDocument = ({ channelId, parentOrigin, importMap }) => {
             document.body.append(host)
             const root = createRoot(host)
             __knightedState.reactRoot = root
-            __knightedState.renderedNode = host
+            __knightedState.renderedNodes = [host]
             root.render(output)
           } else {
             const { jsx } = await import(runtimeSpecifiers.jsxDom)
@@ -241,8 +245,11 @@ const createIframeShellDocument = ({ channelId, parentOrigin, importMap }) => {
               throw new Error('Expected a function or const named App.')
             }
 
+            const domNodes =
+              output instanceof DocumentFragment ? Array.from(output.childNodes) : [output]
+
             document.body.append(output)
-            __knightedState.renderedNode = output
+            __knightedState.renderedNodes = domNodes
           }
 
           __knightedEmit(__knightedMessageTypes.rendered)
