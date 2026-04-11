@@ -54,6 +54,8 @@ const createIframeShellDocument = ({ channelId, parentOrigin, importMap }) => {
 
       const __knightedState = {
         entrySpecifier: '',
+        reactRoot: null,
+        renderedNode: null,
       }
 
       const __knightedRuntimeErrorFingerprints = new Set()
@@ -191,14 +193,20 @@ const createIframeShellDocument = ({ channelId, parentOrigin, importMap }) => {
 
         __knightedApplyVisualConfig(config)
 
-        let runtimeRoot = document.getElementById('knighted-preview-runtime-root')
-        if (!(runtimeRoot instanceof HTMLElement)) {
-          runtimeRoot = document.createElement('div')
-          runtimeRoot.id = 'knighted-preview-runtime-root'
-          document.body.append(runtimeRoot)
+        if (
+          __knightedState.reactRoot &&
+          typeof __knightedState.reactRoot.unmount === 'function'
+        ) {
+          __knightedState.reactRoot.unmount()
+          __knightedState.reactRoot = null
         }
 
-        runtimeRoot.replaceChildren()
+        if (__knightedState.renderedNode instanceof Node) {
+          __knightedState.renderedNode.remove()
+          __knightedState.renderedNode = null
+        }
+
+        document.querySelectorAll('knighted-preview-root').forEach(node => node.remove())
 
         try {
           const entryModule = await import(entrySpecifier)
@@ -220,8 +228,10 @@ const createIframeShellDocument = ({ channelId, parentOrigin, importMap }) => {
             }
 
             const host = document.createElement('knighted-preview-root')
-            runtimeRoot.append(host)
+            document.body.append(host)
             const root = createRoot(host)
+            __knightedState.reactRoot = root
+            __knightedState.renderedNode = host
             root.render(output)
           } else {
             const { jsx } = await import(runtimeSpecifiers.jsxDom)
@@ -231,7 +241,8 @@ const createIframeShellDocument = ({ channelId, parentOrigin, importMap }) => {
               throw new Error('Expected a function or const named App.')
             }
 
-            runtimeRoot.append(output)
+            document.body.append(output)
+            __knightedState.renderedNode = output
           }
 
           __knightedEmit(__knightedMessageTypes.rendered)
@@ -336,11 +347,47 @@ export const createWorkspaceIframePreviewBridge = ({
   let active = true
   let ready = false
   let resolveReady = () => {}
+  const readyWaiters = new Set()
   const readyPromise = new Promise(resolve => {
     resolveReady = resolve
   })
 
   let pendingRender = null
+
+  const waitForReady = timeoutMs => {
+    if (ready) {
+      return Promise.resolve()
+    }
+
+    if (!active) {
+      return Promise.reject(new Error('Preview iframe bridge is not active.'))
+    }
+
+    return new Promise((resolve, reject) => {
+      const timer = setTimeout(() => {
+        readyWaiters.delete(onDisposed)
+        reject(new Error('Workspace preview iframe did not become ready before timeout.'))
+      }, timeoutMs)
+
+      const onReady = () => {
+        clearTimeout(timer)
+        readyWaiters.delete(onDisposed)
+        resolve()
+      }
+
+      const onDisposed = error => {
+        clearTimeout(timer)
+        reject(
+          error instanceof Error
+            ? error
+            : new Error('Preview iframe bridge was disposed before readiness.'),
+        )
+      }
+
+      readyPromise.then(onReady)
+      readyWaiters.add(onDisposed)
+    })
+  }
 
   const cleanupPendingRender = (error = null) => {
     if (!pendingRender) {
@@ -378,6 +425,10 @@ export const createWorkspaceIframePreviewBridge = ({
 
   const onMessage = event => {
     if (!active) {
+      return
+    }
+
+    if (!iframe.contentWindow || event.source !== iframe.contentWindow) {
       return
     }
 
@@ -430,6 +481,15 @@ export const createWorkspaceIframePreviewBridge = ({
 
     active = false
     window.removeEventListener('message', onMessage)
+    if (readyWaiters.size > 0) {
+      const disposeError = new Error(
+        'Preview iframe bridge was disposed before readiness.',
+      )
+      for (const notifyDisposed of readyWaiters) {
+        notifyDisposed(disposeError)
+      }
+      readyWaiters.clear()
+    }
     if (pendingRender) {
       cleanupPendingRender(
         new Error('Preview iframe bridge disposed before render completed.'),
@@ -457,7 +517,7 @@ export const createWorkspaceIframePreviewBridge = ({
       throw new Error('Preview iframe render already in flight.')
     }
 
-    await readyPromise
+    await waitForReady(timeoutMs)
 
     return new Promise((resolve, reject) => {
       const timer = setTimeout(() => {
