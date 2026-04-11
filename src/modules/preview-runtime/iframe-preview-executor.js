@@ -42,6 +42,7 @@ const createBootstrapScript = ({
   entryExportName,
   runtimeSpecifiers,
   channelId,
+  parentOrigin,
 }) => {
   const isReactMode = mode === 'react'
   const reactImports = isReactMode
@@ -82,8 +83,12 @@ ${reactImports}
 ${domImports}
 const __knightedChannelId = ${JSON.stringify(channelId)}
 const __knightedEntrySpecifier = ${JSON.stringify(entrySpecifier)}
+const __knightedParentOrigin = ${JSON.stringify(parentOrigin)}
 const __knightedEmit = payload => {
-  parent.postMessage({ __knightedPreview: true, channelId: __knightedChannelId, ...payload }, '*')
+  parent.postMessage(
+    { __knightedPreview: true, channelId: __knightedChannelId, ...payload },
+    __knightedParentOrigin,
+  )
 }
 
 const __knightedRuntimeErrorFingerprints = new Set()
@@ -218,6 +223,10 @@ export const executeWorkspaceIframePreview = ({
         return
       }
 
+      if (!iframe.contentWindow || event.source !== iframe.contentWindow) {
+        return
+      }
+
       const data = event?.data
       if (!data || data.__knightedPreview !== true || data.channelId !== channelId) {
         return
@@ -274,6 +283,7 @@ export const executeWorkspaceIframePreview = ({
       entryExportName,
       runtimeSpecifiers,
       channelId,
+      parentOrigin: globalThis.location.origin,
     })
 
     const doc = iframe.contentDocument
