@@ -1651,12 +1651,13 @@ const renderWorkspaceTabs = () => {
 
     for (const tab of tabs) {
       const isActive = tab.id === activeTabId
+      const isRenaming = workspaceTabRenameState.tabId === tab.id
       const tabContainer = document.createElement('li')
       tabContainer.className = 'workspace-tab'
       tabContainer.dataset.active = isActive ? 'true' : 'false'
       tabContainer.dataset.tabId = tab.id
       tabContainer.setAttribute('aria-label', `Workspace tab ${tab.name}`)
-      tabContainer.draggable = true
+      tabContainer.draggable = !isRenaming
       tabContainer.dataset.dragOver =
         dragOverWorkspaceTabId && dragOverWorkspaceTabId === tab.id ? 'true' : 'false'
       tabContainer.addEventListener('click', event => {
@@ -1678,70 +1679,72 @@ const renderWorkspaceTabs = () => {
 
         setActiveWorkspaceTab(tab.id)
       })
-      tabContainer.addEventListener('dragstart', event => {
-        draggedWorkspaceTabId = tab.id
-        dragOverWorkspaceTabId = ''
-        suppressWorkspaceTabClick = true
-        if (event.dataTransfer) {
-          event.dataTransfer.effectAllowed = 'move'
-          event.dataTransfer.setData('text/plain', tab.id)
-        }
-      })
-      tabContainer.addEventListener('dragend', () => {
-        clearWorkspaceTabDragState()
-        queueMicrotask(() => {
-          suppressWorkspaceTabClick = false
-        })
-        renderWorkspaceTabs()
-      })
-      tabContainer.addEventListener('dragover', event => {
-        if (!draggedWorkspaceTabId || draggedWorkspaceTabId === tab.id) {
-          return
-        }
-
-        event.preventDefault()
-        if (event.dataTransfer) {
-          event.dataTransfer.dropEffect = 'move'
-        }
-
-        if (dragOverWorkspaceTabId !== tab.id) {
-          dragOverWorkspaceTabId = tab.id
-          tabContainer.dataset.dragOver = 'true'
-        }
-      })
-      tabContainer.addEventListener('dragleave', event => {
-        const relatedTarget = event.relatedTarget
-        if (relatedTarget instanceof Node && tabContainer.contains(relatedTarget)) {
-          return
-        }
-
-        if (dragOverWorkspaceTabId === tab.id) {
+      if (!isRenaming) {
+        tabContainer.addEventListener('dragstart', event => {
+          draggedWorkspaceTabId = tab.id
           dragOverWorkspaceTabId = ''
-          tabContainer.dataset.dragOver = 'false'
-        }
-      })
-      tabContainer.addEventListener('drop', event => {
-        if (!draggedWorkspaceTabId || draggedWorkspaceTabId === tab.id) {
+          suppressWorkspaceTabClick = true
+          if (event.dataTransfer) {
+            event.dataTransfer.effectAllowed = 'move'
+            event.dataTransfer.setData('text/plain', tab.id)
+          }
+        })
+        tabContainer.addEventListener('dragend', () => {
+          clearWorkspaceTabDragState()
+          queueMicrotask(() => {
+            suppressWorkspaceTabClick = false
+          })
+          renderWorkspaceTabs()
+        })
+        tabContainer.addEventListener('dragover', event => {
+          if (!draggedWorkspaceTabId || draggedWorkspaceTabId === tab.id) {
+            return
+          }
+
+          event.preventDefault()
+          if (event.dataTransfer) {
+            event.dataTransfer.dropEffect = 'move'
+          }
+
+          if (dragOverWorkspaceTabId !== tab.id) {
+            dragOverWorkspaceTabId = tab.id
+            tabContainer.dataset.dragOver = 'true'
+          }
+        })
+        tabContainer.addEventListener('dragleave', event => {
+          const relatedTarget = event.relatedTarget
+          if (relatedTarget instanceof Node && tabContainer.contains(relatedTarget)) {
+            return
+          }
+
+          if (dragOverWorkspaceTabId === tab.id) {
+            dragOverWorkspaceTabId = ''
+            tabContainer.dataset.dragOver = 'false'
+          }
+        })
+        tabContainer.addEventListener('drop', event => {
+          event.preventDefault()
+
+          if (!draggedWorkspaceTabId || draggedWorkspaceTabId === tab.id) {
+            clearWorkspaceTabDragState()
+            renderWorkspaceTabs()
+            return
+          }
+
+          persistActiveTabEditorContent()
+
+          const moved = workspaceTabsState.moveTabBefore(draggedWorkspaceTabId, tab.id)
           clearWorkspaceTabDragState()
           renderWorkspaceTabs()
-          return
-        }
 
-        event.preventDefault()
-        persistActiveTabEditorContent()
+          if (!moved) {
+            return
+          }
 
-        const moved = workspaceTabsState.moveTabBefore(draggedWorkspaceTabId, tab.id)
-        clearWorkspaceTabDragState()
-        renderWorkspaceTabs()
+          queueWorkspaceSave()
+        })
+      }
 
-        if (!moved) {
-          return
-        }
-
-        queueWorkspaceSave()
-      })
-
-      const isRenaming = workspaceTabRenameState.tabId === tab.id
       if (isRenaming) {
         const renameInput = document.createElement('input')
         renameInput.className = 'workspace-tab__name-input'
