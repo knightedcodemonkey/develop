@@ -1,6 +1,5 @@
 import {
   createPreviewChannelId,
-  createPreviewInitPayload,
   isPreviewProtocolMessage,
   previewProtocolMessageTypes,
   previewProtocolVersion,
@@ -47,14 +46,13 @@ const createIframeShellDocument = ({ channelId, parentOrigin, importMap }) => {
 
       const __knightedMessageTypes = {
         ready: 'ready',
-        init: 'init',
+        render: 'render',
         configPatch: 'config-patch',
         rendered: 'rendered',
         runtimeError: 'runtime-error',
       }
 
       const __knightedState = {
-        initialized: false,
         entrySpecifier: '',
       }
 
@@ -176,13 +174,31 @@ const createIframeShellDocument = ({ channelId, parentOrigin, importMap }) => {
       }
 
       const __knightedRender = async config => {
-        const { mode, entrySpecifier, entryExportName, runtimeSpecifiers } = config
+        const {
+          mode,
+          entrySpecifier,
+          entryDisplaySpecifier,
+          entryExportName,
+          runtimeSpecifiers,
+        } = config
 
         __knightedState.entrySpecifier =
-          typeof entrySpecifier === 'string' ? entrySpecifier : ''
+          typeof entryDisplaySpecifier === 'string' && entryDisplaySpecifier.length > 0
+            ? entryDisplaySpecifier
+            : typeof entrySpecifier === 'string'
+              ? entrySpecifier
+              : ''
 
         __knightedApplyVisualConfig(config)
-        document.querySelectorAll('knighted-preview-root').forEach(node => node.remove())
+
+        let runtimeRoot = document.getElementById('knighted-preview-runtime-root')
+        if (!(runtimeRoot instanceof HTMLElement)) {
+          runtimeRoot = document.createElement('div')
+          runtimeRoot.id = 'knighted-preview-runtime-root'
+          document.body.append(runtimeRoot)
+        }
+
+        runtimeRoot.replaceChildren()
 
         try {
           const entryModule = await import(entrySpecifier)
@@ -204,7 +220,7 @@ const createIframeShellDocument = ({ channelId, parentOrigin, importMap }) => {
             }
 
             const host = document.createElement('knighted-preview-root')
-            document.body.append(host)
+            runtimeRoot.append(host)
             const root = createRoot(host)
             root.render(output)
           } else {
@@ -215,7 +231,7 @@ const createIframeShellDocument = ({ channelId, parentOrigin, importMap }) => {
               throw new Error('Expected a function or const named App.')
             }
 
-            document.body.append(output)
+            runtimeRoot.append(output)
           }
 
           __knightedEmit(__knightedMessageTypes.rendered)
@@ -249,16 +265,16 @@ const createIframeShellDocument = ({ channelId, parentOrigin, importMap }) => {
         }
 
         const data = event.data
+
         if (data.type === __knightedMessageTypes.configPatch) {
           __knightedApplyVisualConfig(data)
           return
         }
 
-        if (data.type !== __knightedMessageTypes.init || __knightedState.initialized) {
+        if (data.type !== __knightedMessageTypes.render) {
           return
         }
 
-        __knightedState.initialized = true
         void __knightedRender(data)
       })
 
@@ -297,17 +313,9 @@ const toIframeRuntimeError = data => {
   return error
 }
 
-export const executeWorkspaceIframePreview = ({
+export const createWorkspaceIframePreviewBridge = ({
   target,
-  mode,
-  entrySpecifier,
-  entryExportName,
-  importMap,
-  cssText,
-  hostPadding = '',
-  backgroundColor = '',
-  runtimeSpecifiers,
-  timeoutMs = 12000,
+  parentOrigin = globalThis.location.origin,
   onRuntimeError,
   onTelemetryEvent,
 }) => {
@@ -325,125 +333,193 @@ export const executeWorkspaceIframePreview = ({
     }
   }
 
-  return new Promise((resolve, reject) => {
-    let active = true
-    let hasRendered = false
-    let hasInitialized = false
+  let active = true
+  let ready = false
+  let resolveReady = () => {}
+  const readyPromise = new Promise(resolve => {
+    resolveReady = resolve
+  })
 
-    const sendInitPayload = () => {
-      if (!active || hasInitialized || !iframe.contentWindow) {
+  let pendingRender = null
+
+  const cleanupPendingRender = (error = null) => {
+    if (!pendingRender) {
+      return
+    }
+
+    const { timer, resolve, reject } = pendingRender
+    clearTimeout(timer)
+    pendingRender = null
+
+    if (error) {
+      reject(error)
+      return
+    }
+
+    resolve()
+  }
+
+  const postMessageToIframe = ({ type, payload = {} }) => {
+    if (!active || !iframe.contentWindow) {
+      return false
+    }
+
+    iframe.contentWindow.postMessage(
+      toPreviewProtocolMessage({
+        channelId,
+        type,
+        payload,
+      }),
+      '*',
+    )
+
+    return true
+  }
+
+  const onMessage = event => {
+    if (!active) {
+      return
+    }
+
+    const data = event?.data
+    if (!isPreviewProtocolMessage({ data, channelId })) {
+      return
+    }
+
+    if (data.type === previewProtocolMessageTypes.ready) {
+      ready = true
+      emitTelemetry('iframe-ready')
+      resolveReady()
+      return
+    }
+
+    if (data.type === previewProtocolMessageTypes.rendered) {
+      emitTelemetry('rendered')
+      cleanupPendingRender()
+      return
+    }
+
+    if (data.type === previewProtocolMessageTypes.runtimeError) {
+      emitTelemetry('runtime-error', {
+        origin: typeof data?.origin === 'string' ? data.origin : '',
+      })
+
+      const runtimeError = toIframeRuntimeError(data)
+      if (pendingRender) {
+        cleanupPendingRender(runtimeError)
         return
       }
 
-      hasInitialized = true
-      const payload = createPreviewInitPayload({
+      if (typeof onRuntimeError === 'function') {
+        onRuntimeError(runtimeError)
+      }
+    }
+  }
+
+  window.addEventListener('message', onMessage)
+  iframe.srcdoc = createIframeShellDocument({
+    channelId,
+    parentOrigin,
+    importMap: {},
+  })
+
+  const dispose = () => {
+    if (!active) {
+      return
+    }
+
+    active = false
+    window.removeEventListener('message', onMessage)
+    if (pendingRender) {
+      cleanupPendingRender(
+        new Error('Preview iframe bridge disposed before render completed.'),
+      )
+    }
+  }
+
+  const render = async ({
+    mode,
+    entrySpecifier,
+    entryDisplaySpecifier,
+    entryExportName,
+    importMap,
+    cssText,
+    hostPadding = '',
+    backgroundColor = '',
+    runtimeSpecifiers,
+    timeoutMs = 12000,
+  }) => {
+    if (!active) {
+      throw new Error('Preview iframe bridge is not active.')
+    }
+
+    if (pendingRender) {
+      throw new Error('Preview iframe render already in flight.')
+    }
+
+    await readyPromise
+
+    return new Promise((resolve, reject) => {
+      const timer = setTimeout(() => {
+        pendingRender = null
+        emitTelemetry('timeout')
+        reject(new Error('Workspace preview execution timed out.'))
+      }, timeoutMs)
+
+      pendingRender = {
+        resolve: () => {
+          resolve({
+            iframe,
+            dispose,
+            render,
+            updateBackgroundColor,
+          })
+        },
+        reject,
+        timer,
+      }
+
+      const payload = {
         mode,
         entrySpecifier,
+        entryDisplaySpecifier,
         entryExportName,
         runtimeSpecifiers,
         cssText,
         hostPadding,
         backgroundColor,
         importMap,
-        parentOrigin: globalThis.location.origin,
+        parentOrigin,
+      }
+
+      const sent = postMessageToIframe({
+        type: previewProtocolMessageTypes.render,
+        payload,
       })
 
-      iframe.contentWindow.postMessage(
-        toPreviewProtocolMessage({
-          channelId,
-          type: previewProtocolMessageTypes.init,
-          payload,
-        }),
-        '*',
-      )
-    }
-
-    const onMessage = event => {
-      if (!active) {
-        return
+      if (!sent) {
+        clearTimeout(timer)
+        pendingRender = null
+        reject(new Error('Unable to initialize preview iframe document.'))
       }
-
-      const data = event?.data
-      if (!isPreviewProtocolMessage({ data, channelId })) {
-        return
-      }
-
-      if (data.type === previewProtocolMessageTypes.ready) {
-        emitTelemetry('iframe-ready')
-        sendInitPayload()
-        return
-      }
-
-      if (data.type === previewProtocolMessageTypes.rendered) {
-        if (!hasRendered) {
-          hasRendered = true
-          clearTimeout(timer)
-          emitTelemetry('rendered')
-          resolve({
-            iframe,
-            dispose: cleanup,
-            updateBackgroundColor: nextColor => {
-              if (!active || !iframe.contentWindow) {
-                return
-              }
-
-              iframe.contentWindow.postMessage(
-                toPreviewProtocolMessage({
-                  channelId,
-                  type: previewProtocolMessageTypes.configPatch,
-                  payload: {
-                    backgroundColor: typeof nextColor === 'string' ? nextColor : '',
-                  },
-                }),
-                '*',
-              )
-            },
-          })
-        }
-
-        return
-      }
-
-      if (data.type === previewProtocolMessageTypes.runtimeError) {
-        const runtimeError = toIframeRuntimeError(data)
-        emitTelemetry('runtime-error', {
-          origin: typeof data?.origin === 'string' ? data.origin : '',
-        })
-
-        if (hasRendered) {
-          cleanup()
-          if (typeof onRuntimeError === 'function') {
-            onRuntimeError(runtimeError)
-          }
-          return
-        }
-
-        cleanup()
-        reject(runtimeError)
-      }
-    }
-
-    const cleanup = () => {
-      if (!active) {
-        return
-      }
-
-      active = false
-      window.removeEventListener('message', onMessage)
-      clearTimeout(timer)
-    }
-
-    const timer = setTimeout(() => {
-      cleanup()
-      emitTelemetry('timeout')
-      reject(new Error('Workspace preview execution timed out.'))
-    }, timeoutMs)
-
-    window.addEventListener('message', onMessage)
-    iframe.srcdoc = createIframeShellDocument({
-      channelId,
-      parentOrigin: globalThis.location.origin,
-      importMap,
     })
-  })
+  }
+
+  const updateBackgroundColor = nextColor => {
+    postMessageToIframe({
+      type: previewProtocolMessageTypes.configPatch,
+      payload: {
+        backgroundColor: typeof nextColor === 'string' ? nextColor : '',
+      },
+    })
+  }
+
+  return {
+    target,
+    iframe,
+    dispose,
+    render,
+    updateBackgroundColor,
+    isReady: () => ready,
+  }
 }

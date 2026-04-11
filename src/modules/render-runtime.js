@@ -4,7 +4,7 @@ import {
   hasFunctionLikeDeclarationNamed,
 } from './jsx-top-level-declarations.js'
 import { canRenderPreview, resolvePreviewEntryTab } from './preview-entry-resolver.js'
-import { executeWorkspaceIframePreview } from './preview-runtime/iframe-preview-executor.js'
+import { createWorkspaceIframePreviewBridge } from './preview-runtime/iframe-preview-executor.js'
 import { planWorkspaceVirtualModules } from './preview-runtime/virtual-workspace-modules.js'
 import { createPreviewWorkspaceGraphCache } from './preview-workspace-graph.js'
 import { ensureJsxTransformSource } from './jsx-transform-runtime.js'
@@ -29,7 +29,11 @@ export const createRenderRuntimeController = ({
   setCdnLoading,
   onPreviewTelemetry,
 }) => {
+  const autoRenderDebounceMs = 140
+  const autoRenderTypingBurstDebounceMs = 420
+  const autoRenderBurstThresholdMs = 900
   let scheduled = null
+  let lastScheduleRequestedAt = 0
   let renderInFlight = false
   let rerenderRequested = false
   let reactRoot = null
@@ -641,27 +645,32 @@ export const createRenderRuntimeController = ({
     )
 
     disposeWorkspaceModules()
-    disposeIframeBridge()
     disposeWorkspaceVirtualModules = virtualModulePlan.dispose
 
     try {
-      const execution = await executeWorkspaceIframePreview({
-        target: getRenderTarget(),
+      const renderTarget = getRenderTarget()
+      if (!iframeRuntimeBridge || iframeRuntimeBridge.target !== renderTarget) {
+        disposeIframeBridge()
+        iframeRuntimeBridge = createWorkspaceIframePreviewBridge({
+          target: renderTarget,
+          onRuntimeError: error => {
+            renderPreviewError(error)
+          },
+          onTelemetryEvent: event => emitPreviewTelemetry(event.name, event),
+        })
+      }
+
+      await iframeRuntimeBridge.render({
         mode,
         entrySpecifier: virtualModulePlan.entrySpecifier,
+        entryDisplaySpecifier: virtualModulePlan.entryDisplaySpecifier,
         entryExportName: virtualModulePlan.entryExportName,
         importMap: virtualModulePlan.importMap,
         cssText,
         hostPadding,
         backgroundColor: getPreviewBackgroundColor(),
         runtimeSpecifiers,
-        onRuntimeError: error => {
-          renderPreviewError(error)
-        },
-        onTelemetryEvent: event => emitPreviewTelemetry(event.name, event),
       })
-
-      iframeRuntimeBridge = execution
     } catch (error) {
       disposeWorkspaceModules()
       disposeIframeBridge()
@@ -774,13 +783,23 @@ export const createRenderRuntimeController = ({
       return
     }
 
+    const now = Date.now()
+    const timeSinceLastSchedule = now - lastScheduleRequestedAt
+    lastScheduleRequestedAt = now
+
+    const isLikelyTypingBurst =
+      timeSinceLastSchedule > 0 && timeSinceLastSchedule < autoRenderBurstThresholdMs
+    const debounceMs = isLikelyTypingBurst
+      ? autoRenderTypingBurstDebounceMs
+      : autoRenderDebounceMs
+
     if (scheduled) {
       clearTimeout(scheduled)
     }
 
     scheduled = setTimeout(() => {
       void renderPreview()
-    }, 200)
+    }, debounceMs)
   }
 
   const shouldAutoRenderForTabChange = tabId => {

@@ -2,7 +2,7 @@ export const previewProtocolVersion = 1
 
 export const previewProtocolMessageTypes = {
   ready: 'ready',
-  init: 'init',
+  render: 'render',
   configPatch: 'config-patch',
   rendered: 'rendered',
   runtimeError: 'runtime-error',
@@ -44,25 +44,3 @@ export const isPreviewProtocolMessage = ({ data, channelId = '' }) => {
 
   return true
 }
-
-export const createPreviewInitPayload = ({
-  mode,
-  entrySpecifier,
-  entryExportName,
-  runtimeSpecifiers,
-  cssText,
-  hostPadding,
-  backgroundColor,
-  importMap,
-  parentOrigin,
-}) => ({
-  mode,
-  entrySpecifier,
-  entryExportName,
-  runtimeSpecifiers,
-  cssText,
-  hostPadding,
-  backgroundColor,
-  importMap,
-  parentOrigin,
-})
