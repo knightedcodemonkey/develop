@@ -297,7 +297,11 @@ export const createLintDiagnosticsController = ({
     }
   }
 
-  const lintComponent = async ({ signal, userInitiated = false } = {}) => {
+  const lintComponent = async ({
+    signal,
+    userInitiated = false,
+    source = undefined,
+  } = {}) => {
     componentLintRunId += 1
     const runId = componentLintRunId
 
@@ -310,7 +314,7 @@ export const createLintDiagnosticsController = ({
 
     try {
       const diagnostics = await runLintDiagnostics({
-        source: getComponentSource(),
+        source: typeof source === 'string' ? source : getComponentSource(),
         path: lintPathByScope.component,
         signal,
       })
@@ -366,7 +370,11 @@ export const createLintDiagnosticsController = ({
     }
   }
 
-  const lintStyles = async ({ signal, userInitiated = false } = {}) => {
+  const lintStyles = async ({
+    signal,
+    userInitiated = false,
+    source = undefined,
+  } = {}) => {
     stylesLintRunId += 1
     const runId = stylesLintRunId
 
@@ -391,7 +399,7 @@ export const createLintDiagnosticsController = ({
             : lintPathByScope.styles
 
       const diagnostics = await runLintDiagnostics({
-        source: getStylesSource(),
+        source: typeof source === 'string' ? source : getStylesSource(),
         path,
         signal,
       })

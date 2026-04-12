@@ -859,7 +859,10 @@ export const createTypeDiagnosticsController = ({
       .filter(diagnostic => !shouldIgnoreTypeDiagnostic(diagnostic))
   }
 
-  const runTypeDiagnostics = async (runId, { userInitiated = false } = {}) => {
+  const runTypeDiagnostics = async (
+    runId,
+    { userInitiated = false, sourceOverride = undefined } = {},
+  ) => {
     incrementTypeDiagnosticsRuns()
     setTypeDiagnosticsPending(false)
     setTypecheckButtonLoading(true)
@@ -876,7 +879,9 @@ export const createTypeDiagnosticsController = ({
         return
       }
 
-      const diagnostics = await collectTypeDiagnostics(compiler, getJsxSource())
+      const sourceForRun =
+        typeof sourceOverride === 'string' ? sourceOverride : getJsxSource()
+      const diagnostics = await collectTypeDiagnostics(compiler, sourceForRun)
       const errorCategory = compiler.DiagnosticCategory?.Error
       const errors = diagnostics.filter(
         diagnostic => diagnostic.category === errorCategory,
@@ -938,9 +943,12 @@ export const createTypeDiagnosticsController = ({
     }
   }
 
-  const triggerTypeDiagnostics = ({ userInitiated = false } = {}) => {
+  const triggerTypeDiagnostics = ({ userInitiated = false, source = undefined } = {}) => {
     typeCheckRunId += 1
-    void runTypeDiagnostics(typeCheckRunId, { userInitiated })
+    void runTypeDiagnostics(typeCheckRunId, {
+      userInitiated,
+      sourceOverride: source,
+    })
   }
 
   const scheduleTypeRecheck = () => {

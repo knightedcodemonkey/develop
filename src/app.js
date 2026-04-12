@@ -2450,7 +2450,7 @@ const syncLintPendingState = () => {
   setLintDiagnosticsPending(componentLintPending || stylesLintPending)
 }
 
-const runComponentLint = async ({ userInitiated = false } = {}) => {
+const runComponentLint = ({ userInitiated = false, source = undefined } = {}) => {
   activeComponentLintAbortController?.abort()
   const controller = new AbortController()
   activeComponentLintAbortController = controller
@@ -2460,24 +2460,28 @@ const runComponentLint = async ({ userInitiated = false } = {}) => {
 
   setLintButtonLoading({ button: lintComponentButton, isLoading: true })
 
-  try {
-    const result = await lintDiagnostics.lintComponent({
+  return lintDiagnostics
+    .lintComponent({
       signal: controller.signal,
       userInitiated,
+      source,
     })
-    if (result) {
-      lastComponentLintIssueCount = result.issueCount
-    }
-  } finally {
-    decrementLintDiagnosticsRuns()
-    if (activeComponentLintAbortController === controller) {
-      activeComponentLintAbortController = null
-      setLintButtonLoading({ button: lintComponentButton, isLoading: false })
-    }
-  }
+    .then(result => {
+      if (result) {
+        lastComponentLintIssueCount = result.issueCount
+      }
+      return result
+    })
+    .finally(() => {
+      decrementLintDiagnosticsRuns()
+      if (activeComponentLintAbortController === controller) {
+        activeComponentLintAbortController = null
+        setLintButtonLoading({ button: lintComponentButton, isLoading: false })
+      }
+    })
 }
 
-const runStylesLint = async ({ userInitiated = false } = {}) => {
+const runStylesLint = ({ userInitiated = false, source = undefined } = {}) => {
   activeStylesLintAbortController?.abort()
   const controller = new AbortController()
   activeStylesLintAbortController = controller
@@ -2487,21 +2491,25 @@ const runStylesLint = async ({ userInitiated = false } = {}) => {
 
   setLintButtonLoading({ button: lintStylesButton, isLoading: true })
 
-  try {
-    const result = await lintDiagnostics.lintStyles({
+  return lintDiagnostics
+    .lintStyles({
       signal: controller.signal,
       userInitiated,
+      source,
     })
-    if (result) {
-      lastStylesLintIssueCount = result.issueCount
-    }
-  } finally {
-    decrementLintDiagnosticsRuns()
-    if (activeStylesLintAbortController === controller) {
-      activeStylesLintAbortController = null
-      setLintButtonLoading({ button: lintStylesButton, isLoading: false })
-    }
-  }
+    .then(result => {
+      if (result) {
+        lastStylesLintIssueCount = result.issueCount
+      }
+      return result
+    })
+    .finally(() => {
+      decrementLintDiagnosticsRuns()
+      if (activeStylesLintAbortController === controller) {
+        activeStylesLintAbortController = null
+        setLintButtonLoading({ button: lintStylesButton, isLoading: false })
+      }
+    })
 }
 
 const markTypeDiagnosticsStale = () => {
@@ -2888,17 +2896,26 @@ if (diagnosticsClearAll) {
 }
 if (typecheckButton) {
   typecheckButton.addEventListener('click', () => {
-    typeDiagnostics.triggerTypeDiagnostics({ userInitiated: true })
+    typeDiagnostics.triggerTypeDiagnostics({
+      userInitiated: true,
+      source: getJsxSource(),
+    })
   })
 }
 if (lintComponentButton) {
   lintComponentButton.addEventListener('click', () => {
-    void runComponentLint({ userInitiated: true })
+    void runComponentLint({
+      userInitiated: true,
+      source: getJsxSource(),
+    })
   })
 }
 if (lintStylesButton) {
   lintStylesButton.addEventListener('click', () => {
-    void runStylesLint({ userInitiated: true })
+    void runStylesLint({
+      userInitiated: true,
+      source: getCssSource(),
+    })
   })
 }
 renderButton.addEventListener('click', renderPreview)
