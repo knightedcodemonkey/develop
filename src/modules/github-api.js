@@ -1020,18 +1020,62 @@ export const upsertRepositoryFile = async ({
   }
 }
 
-const normalizeFileUpdateInput = file => {
-  if (!file || typeof file !== 'object') {
-    return null
+const normalizeFileUpdatePath = value =>
+  (typeof value === 'string' ? value.trim() : '').replace(/\\/g, '/').replace(/\/+/g, '/')
+
+const validateRepositoryRelativeFilePath = value => {
+  const path = normalizeFileUpdatePath(value)
+
+  if (!path) {
+    return { ok: false, reason: 'File path is required.' }
   }
 
-  const path = typeof file.path === 'string' ? file.path.trim() : ''
-  if (!path) {
-    return null
+  if (path.startsWith('/')) {
+    return {
+      ok: false,
+      reason: 'File path must be repository-relative (no leading slash).',
+    }
+  }
+
+  if (path.endsWith('/')) {
+    return { ok: false, reason: 'File path must include a filename (no trailing slash).' }
+  }
+
+  const segments = path.split('/').filter(Boolean)
+  if (segments.some(segment => segment === '..')) {
+    return { ok: false, reason: 'File path cannot include parent directory traversal.' }
+  }
+
+  if (!/^[A-Za-z0-9._\-/]+$/.test(path)) {
+    return {
+      ok: false,
+      reason:
+        'File path contains unsupported characters. Use letters, numbers, ., _, -, and / only.',
+    }
+  }
+
+  if (segments.length === 0 || segments.some(segment => segment === '.' || !segment)) {
+    return { ok: false, reason: 'File path is invalid.' }
+  }
+
+  return { ok: true, value: path }
+}
+
+const normalizeFileUpdateInput = (file, index) => {
+  if (!file || typeof file !== 'object') {
+    throw new Error(`File update at index ${index} must be an object.`)
+  }
+
+  const validation = validateRepositoryRelativeFilePath(file.path)
+  if (!validation.ok) {
+    const rawPath = typeof file.path === 'string' ? file.path : ''
+    throw new Error(
+      `Invalid file update path at index ${index}: ${rawPath || '(missing path)'} (${validation.reason})`,
+    )
   }
 
   return {
-    path,
+    path: validation.value,
     content: typeof file.content === 'string' ? file.content : '',
   }
 }
@@ -1042,11 +1086,8 @@ const toUniqueFileUpdatesByPath = files => {
   }
 
   const updatesByPath = new Map()
-  for (const file of files) {
-    const normalized = normalizeFileUpdateInput(file)
-    if (!normalized) {
-      continue
-    }
+  for (const [index, file] of files.entries()) {
+    const normalized = normalizeFileUpdateInput(file, index)
 
     updatesByPath.set(normalized.path, normalized)
   }

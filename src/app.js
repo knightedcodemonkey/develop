@@ -856,6 +856,13 @@ const hasTabSyncBaseline = tab =>
     toWorkspaceSyncSha(tab?.lastSyncedRemoteSha),
   )
 
+const hasTabCommittedSyncState = tab =>
+  Boolean(
+    toWorkspaceSyncTimestamp(tab?.syncedAt) ||
+    toWorkspaceSyncSha(tab?.lastSyncedRemoteSha) ||
+    toWorkspaceSyncedContent(tab?.syncedContent),
+  )
+
 const getDirtyStateForTabChange = (tab, nextContent) => {
   if (!hasTabSyncBaseline(tab)) {
     return Boolean(tab?.isDirty)
@@ -1327,6 +1334,11 @@ const getWorkspacePrFileCommits = () => {
   const dedupedByPath = new Map()
 
   for (const tab of snapshotTabs) {
+    const shouldCommitTab = Boolean(tab?.isDirty) || !hasTabCommittedSyncState(tab)
+    if (!shouldCommitTab) {
+      continue
+    }
+
     const path =
       getTabTargetPrFilePath(tab) || normalizeWorkspacePathValue(tab?.path) || ''
     if (!path) {
