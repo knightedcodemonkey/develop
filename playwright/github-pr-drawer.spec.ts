@@ -14,13 +14,6 @@ import {
   waitForAppReady,
 } from './helpers/app-test-helpers.js'
 
-const defaultCommitMessage = 'chore: sync editor updates from @knighted/develop'
-
-const decodeGitHubFileBodyContent = (body: Record<string, unknown>) => {
-  const encoded = typeof body.content === 'string' ? body.content : ''
-  return Buffer.from(encoded, 'base64').toString('utf8')
-}
-
 const getOpenPrDrawer = (page: Page) =>
   page.getByRole('complementary', { name: /Open Pull Request|Push Commit/ })
 
@@ -154,25 +147,15 @@ const getLocalContextOptionLabels = async (page: Page) => {
     .evaluateAll(nodes => nodes.map(node => node.textContent?.trim() || ''))
 }
 
-const forceGitDatabaseTreeFailure = async (page: Page, repository = 'develop') => {
-  await page.route(
-    `https://api.github.com/repos/knightedcodemonkey/${repository}/git/trees`,
-    async route => {
-      await route.fulfill({
-        status: 500,
-        contentType: 'application/json',
-        body: JSON.stringify({ message: 'Tree API unavailable' }),
-      })
-    },
-  )
-}
-
 test('Open PR drawer confirms and submits component/styles filepaths', async ({
   page,
 }) => {
   const customCommitMessage = 'chore: sync develop editor outputs'
   let createdRefBody: CreateRefRequestBody | null = null
-  const upsertRequests: Array<{ path: string; body: Record<string, unknown> }> = []
+  const treeRequests: Array<Record<string, unknown>> = []
+  const commitRequests: Array<Record<string, unknown>> = []
+  const updateRefRequests: Array<Record<string, unknown>> = []
+  const contentsPutRequests: string[] = []
   let pullRequestBody: PullRequestCreateBody | null = null
 
   await page.route('https://api.github.com/user/repos**', async route => {
@@ -196,8 +179,6 @@ test('Open PR drawer confirms and submits component/styles filepaths', async ({
     'knightedcodemonkey/develop': ['main', 'release'],
   })
 
-  await forceGitDatabaseTreeFailure(page)
-
   await page.route(
     'https://api.github.com/repos/knightedcodemonkey/develop/git/ref/**',
     async route => {
@@ -208,6 +189,59 @@ test('Open PR drawer confirms and submits component/styles filepaths', async ({
           ref: 'refs/heads/main',
           object: { type: 'commit', sha: 'abc123mainsha' },
         }),
+      })
+    },
+  )
+
+  await page.route(
+    'https://api.github.com/repos/knightedcodemonkey/develop/git/commits/abc123mainsha',
+    async route => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          sha: 'abc123mainsha',
+          tree: { sha: 'base-tree-sha' },
+        }),
+      })
+    },
+  )
+
+  await page.route(
+    'https://api.github.com/repos/knightedcodemonkey/develop/git/trees',
+    async route => {
+      treeRequests.push(route.request().postDataJSON() as Record<string, unknown>)
+      await route.fulfill({
+        status: 201,
+        contentType: 'application/json',
+        body: JSON.stringify({ sha: 'new-tree-sha' }),
+      })
+    },
+  )
+
+  await page.route(
+    'https://api.github.com/repos/knightedcodemonkey/develop/git/commits',
+    async route => {
+      commitRequests.push(route.request().postDataJSON() as Record<string, unknown>)
+      await route.fulfill({
+        status: 201,
+        contentType: 'application/json',
+        body: JSON.stringify({ sha: 'new-commit-sha' }),
+      })
+    },
+  )
+
+  await page.route(
+    'https://api.github.com/repos/knightedcodemonkey/develop/git/refs/**',
+    async route => {
+      if (route.request().method() === 'PATCH') {
+        updateRefRequests.push(route.request().postDataJSON() as Record<string, unknown>)
+      }
+
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ ref: 'refs/heads/Develop/Open-Pr-Test' }),
       })
     },
   )
@@ -227,26 +261,14 @@ test('Open PR drawer confirms and submits component/styles filepaths', async ({
   await page.route(
     'https://api.github.com/repos/knightedcodemonkey/develop/contents/**',
     async route => {
-      const request = route.request()
-      const method = request.method()
-      const url = request.url()
-      const path = new URL(url).pathname.split('/contents/')[1] ?? ''
-
-      if (method === 'GET') {
-        await route.fulfill({
-          status: 404,
-          contentType: 'application/json',
-          body: JSON.stringify({ message: 'Not Found' }),
-        })
-        return
+      if (route.request().method() === 'PUT') {
+        contentsPutRequests.push(route.request().url())
       }
 
-      const body = request.postDataJSON() as Record<string, unknown>
-      upsertRequests.push({ path: decodeURIComponent(path), body })
       await route.fulfill({
-        status: 201,
+        status: 404,
         contentType: 'application/json',
-        body: JSON.stringify({ commit: { sha: 'commit-sha' } }),
+        body: JSON.stringify({ message: 'Not Found' }),
       })
     },
   )
@@ -290,12 +312,13 @@ test('Open PR drawer confirms and submits component/styles filepaths', async ({
 
   expect(createdRefPayload?.ref).toBe('refs/heads/Develop/Open-Pr-Test')
   expect(createdRefPayload?.sha).toBe('abc123mainsha')
-
-  expect(upsertRequests).toHaveLength(2)
-  expect(upsertRequests[0]?.path).toBe('src/components/App.tsx')
-  expect(upsertRequests[1]?.path).toBe('src/styles/app.css')
-  expect(upsertRequests[0]?.body.message).toBe(customCommitMessage)
-  expect(upsertRequests[1]?.body.message).toBe(customCommitMessage)
+  expect(treeRequests).toHaveLength(1)
+  expect((treeRequests[0]?.tree as Array<Record<string, unknown>>)?.length).toBe(2)
+  expect(commitRequests).toHaveLength(1)
+  expect(commitRequests[0]?.message).toBe(customCommitMessage)
+  expect(updateRefRequests).toHaveLength(1)
+  expect(updateRefRequests[0]?.sha).toBe('new-commit-sha')
+  expect(contentsPutRequests).toHaveLength(0)
   expect(pullRequestPayload?.head).toBe('Develop/Open-Pr-Test')
   expect(pullRequestPayload?.base).toBe('main')
 
@@ -503,11 +526,11 @@ test('Open PR drawer uses Git Database API atomic commit path by default', async
   expect(contentsPutRequests).toHaveLength(0)
 })
 
-test('Open PR drawer falls back to Contents API when Git Database commit fails', async ({
+test('Open PR drawer surfaces an error when Git Database commit fails', async ({
   page,
 }) => {
   const treeRequests: Array<Record<string, unknown>> = []
-  const contentsPutRequests: Array<{ path: string; body: Record<string, unknown> }> = []
+  let pullRequestRequestCount = 0
 
   await page.route('https://api.github.com/user/repos**', async route => {
     await route.fulfill({
@@ -581,27 +604,10 @@ test('Open PR drawer falls back to Contents API when Git Database commit fails',
   await page.route(
     'https://api.github.com/repos/knightedcodemonkey/develop/contents/**',
     async route => {
-      const request = route.request()
-      const method = request.method()
-      const path = decodeURIComponent(
-        new URL(request.url()).pathname.split('/contents/')[1] ?? '',
-      )
-
-      if (method === 'GET') {
-        await route.fulfill({
-          status: 404,
-          contentType: 'application/json',
-          body: JSON.stringify({ message: 'Not Found' }),
-        })
-        return
-      }
-
-      const body = request.postDataJSON() as Record<string, unknown>
-      contentsPutRequests.push({ path, body })
       await route.fulfill({
-        status: 201,
+        status: 404,
         contentType: 'application/json',
-        body: JSON.stringify({ commit: { sha: 'fallback-commit-sha' } }),
+        body: JSON.stringify({ message: 'Not Found' }),
       })
     },
   )
@@ -609,6 +615,7 @@ test('Open PR drawer falls back to Contents API when Git Database commit fails',
   await page.route(
     'https://api.github.com/repos/knightedcodemonkey/develop/pulls',
     async route => {
+      pullRequestRequestCount += 1
       await route.fulfill({
         status: 201,
         contentType: 'application/json',
@@ -631,14 +638,10 @@ test('Open PR drawer falls back to Contents API when Git Database commit fails',
 
   await expect(
     page.getByRole('status', { name: 'Open pull request status', includeHidden: true }),
-  ).toContainText(
-    'Pull request opened: https://github.com/knightedcodemonkey/develop/pull/53',
-  )
+  ).toContainText('Open PR failed:')
 
   expect(treeRequests).toHaveLength(1)
-  expect(contentsPutRequests).toHaveLength(2)
-  expect(contentsPutRequests[0]?.path).toBe('src/components/App.tsx')
-  expect(contentsPutRequests[1]?.path).toBe('src/styles/app.css')
+  expect(pullRequestRequestCount).toBe(0)
 })
 
 test('Open PR drawer starts with empty title/description and short default head', async ({
@@ -1580,7 +1583,7 @@ test('Active PR context recovers when saved head branch is missing but PR metada
 test('Active PR context uses Push commit flow without creating a new pull request', async ({
   page,
 }) => {
-  const upsertRequests: Array<{ path: string; body: Record<string, unknown> }> = []
+  const contentsPutRequests: string[] = []
   let createRefRequestCount = 0
   let pullRequestRequestCount = 0
 
@@ -1667,31 +1670,28 @@ test('Active PR context uses Push commit flow without creating a new pull reques
   await page.route(
     'https://api.github.com/repos/knightedcodemonkey/develop/contents/**',
     async route => {
-      const request = route.request()
-      const method = request.method()
-      const url = request.url()
-      const path = new URL(url).pathname.split('/contents/')[1] ?? ''
-
-      if (method === 'GET') {
-        await route.fulfill({
-          status: 404,
-          contentType: 'application/json',
-          body: JSON.stringify({ message: 'Not Found' }),
-        })
-        return
+      if (route.request().method() === 'PUT') {
+        contentsPutRequests.push(route.request().url())
       }
 
-      const body = request.postDataJSON() as Record<string, unknown>
-      upsertRequests.push({ path: decodeURIComponent(path), body })
       await route.fulfill({
-        status: 201,
+        status: 404,
         contentType: 'application/json',
-        body: JSON.stringify({ commit: { sha: 'commit-sha' } }),
+        body: JSON.stringify({ message: 'Not Found' }),
       })
     },
   )
 
-  await forceGitDatabaseTreeFailure(page)
+  await page.route(
+    'https://api.github.com/repos/knightedcodemonkey/develop/git/trees',
+    async route => {
+      await route.fulfill({
+        status: 500,
+        contentType: 'application/json',
+        body: JSON.stringify({ message: 'Tree API unavailable' }),
+      })
+    },
+  )
 
   await waitForAppReady(page, `${appEntryPath}`)
 
@@ -1765,15 +1765,11 @@ test('Active PR context uses Push commit flow without creating a new pull reques
 
   await expect(
     page.getByRole('status', { name: 'Open pull request status', includeHidden: true }),
-  ).toContainText('Commit pushed to develop/open-pr-test (develop/pr/2).')
+  ).toContainText('Push commit failed:')
 
   expect(createRefRequestCount).toBe(0)
   expect(pullRequestRequestCount).toBe(0)
-  expect(upsertRequests).toHaveLength(2)
-  expect(upsertRequests[0]?.path).toBe('src/components/App.tsx')
-  expect(upsertRequests[1]?.path).toBe('src/styles/app.css')
-  expect(upsertRequests[0]?.body.message).toBe(pushCommitMessage)
-  expect(upsertRequests[1]?.body.message).toBe(pushCommitMessage)
+  expect(contentsPutRequests).toHaveLength(0)
 })
 
 test('Active PR context push commit uses Git Database API atomic path by default', async ({
@@ -1986,7 +1982,7 @@ test('Active PR context push commit uses Git Database API atomic path by default
 test('Reloaded active PR context from URL metadata keeps Push mode and status reference', async ({
   page,
 }) => {
-  const upsertRequests: Array<{ path: string; body: Record<string, unknown> }> = []
+  const contentsPutRequests: string[] = []
   let createRefRequestCount = 0
   let pullRequestRequestCount = 0
 
@@ -2073,30 +2069,28 @@ test('Reloaded active PR context from URL metadata keeps Push mode and status re
   await page.route(
     'https://api.github.com/repos/knightedcodemonkey/develop/contents/**',
     async route => {
-      const request = route.request()
-      const method = request.method()
-      const path = new URL(request.url()).pathname.split('/contents/')[1] ?? ''
-
-      if (method === 'GET') {
-        await route.fulfill({
-          status: 404,
-          contentType: 'application/json',
-          body: JSON.stringify({ message: 'Not Found' }),
-        })
-        return
+      if (route.request().method() === 'PUT') {
+        contentsPutRequests.push(route.request().url())
       }
 
-      const body = request.postDataJSON() as Record<string, unknown>
-      upsertRequests.push({ path: decodeURIComponent(path), body })
       await route.fulfill({
-        status: 201,
+        status: 404,
         contentType: 'application/json',
-        body: JSON.stringify({ commit: { sha: 'commit-sha' } }),
+        body: JSON.stringify({ message: 'Not Found' }),
       })
     },
   )
 
-  await forceGitDatabaseTreeFailure(page)
+  await page.route(
+    'https://api.github.com/repos/knightedcodemonkey/develop/git/trees',
+    async route => {
+      await route.fulfill({
+        status: 500,
+        contentType: 'application/json',
+        body: JSON.stringify({ message: 'Tree API unavailable' }),
+      })
+    },
+  )
 
   await waitForAppReady(page, `${appEntryPath}`)
 
@@ -2139,15 +2133,11 @@ test('Reloaded active PR context from URL metadata keeps Push mode and status re
 
   await expect(
     page.getByRole('status', { name: 'Open pull request status', includeHidden: true }),
-  ).toContainText('Commit pushed to develop/open-pr-test (develop/pr/2).')
+  ).toContainText('Push commit failed:')
 
   expect(createRefRequestCount).toBe(0)
   expect(pullRequestRequestCount).toBe(0)
-  expect(upsertRequests).toHaveLength(2)
-  expect(upsertRequests[0]?.path).toBe('src/components/App.tsx')
-  expect(upsertRequests[1]?.path).toBe('src/styles/app.css')
-  expect(upsertRequests[0]?.body.message).toBe(defaultCommitMessage)
-  expect(upsertRequests[1]?.body.message).toBe(defaultCommitMessage)
+  expect(contentsPutRequests).toHaveLength(0)
 })
 
 test('Reloaded active PR context syncs editor content from GitHub branch and restores style mode', async ({
@@ -2405,7 +2395,7 @@ test('Open PR drawer include App wrapper checkbox defaults off and resets on reo
 test('Open PR drawer strips App wrapper from committed component source by default', async ({
   page,
 }) => {
-  const upsertRequests: Array<{ path: string; body: Record<string, unknown> }> = []
+  const treeRequests: Array<Record<string, unknown>> = []
 
   await page.route('https://api.github.com/user/repos**', async route => {
     await route.fulfill({
@@ -2428,8 +2418,6 @@ test('Open PR drawer strips App wrapper from committed component source by defau
     'knightedcodemonkey/develop': ['main', 'release'],
   })
 
-  await forceGitDatabaseTreeFailure(page)
-
   await page.route(
     'https://api.github.com/repos/knightedcodemonkey/develop/git/ref/**',
     async route => {
@@ -2440,6 +2428,54 @@ test('Open PR drawer strips App wrapper from committed component source by defau
           ref: 'refs/heads/main',
           object: { type: 'commit', sha: 'abc123mainsha' },
         }),
+      })
+    },
+  )
+
+  await page.route(
+    'https://api.github.com/repos/knightedcodemonkey/develop/git/commits/abc123mainsha',
+    async route => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          sha: 'abc123mainsha',
+          tree: { sha: 'base-tree-sha' },
+        }),
+      })
+    },
+  )
+
+  await page.route(
+    'https://api.github.com/repos/knightedcodemonkey/develop/git/trees',
+    async route => {
+      treeRequests.push(route.request().postDataJSON() as Record<string, unknown>)
+      await route.fulfill({
+        status: 201,
+        contentType: 'application/json',
+        body: JSON.stringify({ sha: 'new-tree-sha' }),
+      })
+    },
+  )
+
+  await page.route(
+    'https://api.github.com/repos/knightedcodemonkey/develop/git/commits',
+    async route => {
+      await route.fulfill({
+        status: 201,
+        contentType: 'application/json',
+        body: JSON.stringify({ sha: 'new-commit-sha' }),
+      })
+    },
+  )
+
+  await page.route(
+    'https://api.github.com/repos/knightedcodemonkey/develop/git/refs/**',
+    async route => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ ref: 'refs/heads/develop/open-pr-app-wrapper' }),
       })
     },
   )
@@ -2458,26 +2494,10 @@ test('Open PR drawer strips App wrapper from committed component source by defau
   await page.route(
     'https://api.github.com/repos/knightedcodemonkey/develop/contents/**',
     async route => {
-      const request = route.request()
-      const method = request.method()
-      const path =
-        new URL(request.url()).pathname.split('/contents/')[1] ?? 'unknown-file-path'
-
-      if (method === 'GET') {
-        await route.fulfill({
-          status: 404,
-          contentType: 'application/json',
-          body: JSON.stringify({ message: 'Not Found' }),
-        })
-        return
-      }
-
-      const body = request.postDataJSON() as Record<string, unknown>
-      upsertRequests.push({ path: decodeURIComponent(path), body })
       await route.fulfill({
-        status: 201,
+        status: 404,
         contentType: 'application/json',
-        body: JSON.stringify({ commit: { sha: 'commit-sha' } }),
+        body: JSON.stringify({ message: 'Not Found' }),
       })
     },
   )
@@ -2517,13 +2537,10 @@ test('Open PR drawer strips App wrapper from committed component source by defau
     'Pull request opened: https://github.com/knightedcodemonkey/develop/pull/101',
   )
 
-  const componentUpserts = upsertRequests.filter(request =>
-    request.path.endsWith('/App.tsx'),
-  )
-
-  expect(componentUpserts).toHaveLength(1)
-
-  const strippedComponentSource = decodeGitHubFileBodyContent(componentUpserts[0].body)
+  const treePayload = treeRequests[0]?.tree as Array<Record<string, unknown>>
+  const componentBlob = treePayload?.find(file => file.path === 'src/components/App.tsx')
+  expect(componentBlob?.content).toEqual(expect.any(String))
+  const strippedComponentSource = String(componentBlob?.content)
 
   expect(strippedComponentSource).toContain('const CounterButton = () =>')
   expect(strippedComponentSource).not.toContain('const App = () =>')
@@ -2532,7 +2549,7 @@ test('Open PR drawer strips App wrapper from committed component source by defau
 test('Open PR drawer includes App wrapper in committed source when toggled on', async ({
   page,
 }) => {
-  const upsertRequests: Array<{ path: string; body: Record<string, unknown> }> = []
+  const treeRequests: Array<Record<string, unknown>> = []
 
   await page.route('https://api.github.com/user/repos**', async route => {
     await route.fulfill({
@@ -2555,8 +2572,6 @@ test('Open PR drawer includes App wrapper in committed source when toggled on', 
     'knightedcodemonkey/develop': ['main', 'release'],
   })
 
-  await forceGitDatabaseTreeFailure(page)
-
   await page.route(
     'https://api.github.com/repos/knightedcodemonkey/develop/git/ref/**',
     async route => {
@@ -2567,6 +2582,54 @@ test('Open PR drawer includes App wrapper in committed source when toggled on', 
           ref: 'refs/heads/main',
           object: { type: 'commit', sha: 'abc123mainsha' },
         }),
+      })
+    },
+  )
+
+  await page.route(
+    'https://api.github.com/repos/knightedcodemonkey/develop/git/commits/abc123mainsha',
+    async route => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          sha: 'abc123mainsha',
+          tree: { sha: 'base-tree-sha' },
+        }),
+      })
+    },
+  )
+
+  await page.route(
+    'https://api.github.com/repos/knightedcodemonkey/develop/git/trees',
+    async route => {
+      treeRequests.push(route.request().postDataJSON() as Record<string, unknown>)
+      await route.fulfill({
+        status: 201,
+        contentType: 'application/json',
+        body: JSON.stringify({ sha: 'new-tree-sha' }),
+      })
+    },
+  )
+
+  await page.route(
+    'https://api.github.com/repos/knightedcodemonkey/develop/git/commits',
+    async route => {
+      await route.fulfill({
+        status: 201,
+        contentType: 'application/json',
+        body: JSON.stringify({ sha: 'new-commit-sha' }),
+      })
+    },
+  )
+
+  await page.route(
+    'https://api.github.com/repos/knightedcodemonkey/develop/git/refs/**',
+    async route => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ ref: 'refs/heads/develop/open-pr-app-wrapper' }),
       })
     },
   )
@@ -2585,26 +2648,10 @@ test('Open PR drawer includes App wrapper in committed source when toggled on', 
   await page.route(
     'https://api.github.com/repos/knightedcodemonkey/develop/contents/**',
     async route => {
-      const request = route.request()
-      const method = request.method()
-      const path =
-        new URL(request.url()).pathname.split('/contents/')[1] ?? 'unknown-file-path'
-
-      if (method === 'GET') {
-        await route.fulfill({
-          status: 404,
-          contentType: 'application/json',
-          body: JSON.stringify({ message: 'Not Found' }),
-        })
-        return
-      }
-
-      const body = request.postDataJSON() as Record<string, unknown>
-      upsertRequests.push({ path: decodeURIComponent(path), body })
       await route.fulfill({
-        status: 201,
+        status: 404,
         contentType: 'application/json',
-        body: JSON.stringify({ commit: { sha: 'commit-sha' } }),
+        body: JSON.stringify({ message: 'Not Found' }),
       })
     },
   )
@@ -2650,13 +2697,10 @@ test('Open PR drawer includes App wrapper in committed source when toggled on', 
     'Pull request opened: https://github.com/knightedcodemonkey/develop/pull/101',
   )
 
-  const componentUpserts = upsertRequests.filter(request =>
-    request.path.endsWith('/App.tsx'),
-  )
-
-  expect(componentUpserts).toHaveLength(1)
-
-  const fullComponentSource = decodeGitHubFileBodyContent(componentUpserts[0].body)
+  const treePayload = treeRequests[0]?.tree as Array<Record<string, unknown>>
+  const componentBlob = treePayload?.find(file => file.path === 'src/components/App.tsx')
+  expect(componentBlob?.content).toEqual(expect.any(String))
+  const fullComponentSource = String(componentBlob?.content)
   expect(fullComponentSource).toContain('const CounterButton = () =>')
   expect(fullComponentSource).toContain('const App = () =>')
 })

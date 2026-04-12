@@ -128,8 +128,16 @@ export const createWorkspacesDrawer = ({
       return entries
     }
 
-    const nextEntries = await onRefreshRequested()
-    entries = Array.isArray(nextEntries) ? nextEntries : []
+    try {
+      const nextEntries = await onRefreshRequested()
+      entries = Array.isArray(nextEntries) ? nextEntries : []
+    } catch {
+      entries = []
+      selectedId = ''
+      setStatus('Could not refresh stored local contexts.', 'error')
+      renderOptions()
+      return entries
+    }
 
     if (!preserveSelection) {
       selectedId = ''
@@ -144,7 +152,8 @@ export const createWorkspacesDrawer = ({
   }
 
   const setOpen = async nextOpen => {
-    open = nextOpen === true
+    const nextState = nextOpen === true
+    open = nextState
 
     if (
       !(toggleButton instanceof HTMLButtonElement) ||
@@ -164,7 +173,15 @@ export const createWorkspacesDrawer = ({
       return
     }
 
-    await refresh()
+    try {
+      await refresh()
+    } catch {
+      open = false
+      toggleButton.setAttribute('aria-expanded', 'false')
+      drawer.toggleAttribute('hidden', true)
+      setStatus('Could not open local workspaces drawer.', 'error')
+      return
+    }
 
     if (searchInput instanceof HTMLInputElement && !searchInput.disabled) {
       searchInput.focus()
@@ -198,7 +215,14 @@ export const createWorkspacesDrawer = ({
       return
     }
 
-    const opened = await onOpenSelected(id)
+    let opened = false
+    try {
+      opened = await onOpenSelected(id)
+    } catch {
+      setStatus('Could not load selected local context.', 'error')
+      return
+    }
+
     if (!opened) {
       return
     }
@@ -213,7 +237,14 @@ export const createWorkspacesDrawer = ({
       return
     }
 
-    const removed = await onRemoveSelected(id)
+    let removed = false
+    try {
+      removed = await onRemoveSelected(id)
+    } catch {
+      setStatus('Could not remove selected local context.', 'error')
+      return
+    }
+
     if (!removed) {
       return
     }

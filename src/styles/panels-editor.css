@@ -391,7 +391,7 @@
 }
 
 .workspace-tab__meta--dirty {
-  color: rgb(var(--warning-rgb));
+  color: var(--warning);
   font-weight: 600;
   opacity: 1;
 }

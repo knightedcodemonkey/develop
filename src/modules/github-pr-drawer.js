@@ -215,14 +215,31 @@ const validateFilePath = value => {
 
 const normalizeFileCommits = fileCommits => {
   if (!Array.isArray(fileCommits)) {
-    return []
+    return {
+      fileCommits: [],
+      invalidPaths: [],
+    }
   }
 
   const dedupedByPath = new Map()
+  const invalidPathsByKey = new Map()
 
   for (const item of fileCommits) {
     const pathValidation = validateFilePath(item?.path)
     if (!pathValidation.ok) {
+      const rawPath = toSafeText(item?.path)
+      const tabLabel = toSafeText(item?.tabLabel)
+      const displayPath = rawPath || '(missing path)'
+      const key = `${displayPath}|${pathValidation.reason}`
+
+      if (!invalidPathsByKey.has(key)) {
+        invalidPathsByKey.set(key, {
+          path: displayPath,
+          tabLabel,
+          reason: pathValidation.reason,
+        })
+      }
+
       continue
     }
 
@@ -234,7 +251,10 @@ const normalizeFileCommits = fileCommits => {
     })
   }
 
-  return [...dedupedByPath.values()]
+  return {
+    fileCommits: [...dedupedByPath.values()],
+    invalidPaths: [...invalidPathsByKey.values()],
+  }
 }
 
 const sanitizeBranchPart = value => {
@@ -1286,9 +1306,28 @@ export const createGitHubPrDrawer = ({
         ? includeAppWrapperToggle.checked
         : false
 
-    const normalizedFileCommits = normalizeFileCommits(
+    const { fileCommits: normalizedFileCommits, invalidPaths } = normalizeFileCommits(
       typeof getFileCommits === 'function' ? getFileCommits() : [],
     )
+
+    if (invalidPaths.length > 0) {
+      const maxInvalidPathsInMessage = 3
+      const invalidPathDetails = invalidPaths
+        .slice(0, maxInvalidPathsInMessage)
+        .map(entry => {
+          const sourceLabel = entry.tabLabel ? `${entry.tabLabel}: ` : ''
+          return `${sourceLabel}${entry.path} (${entry.reason})`
+        })
+        .join('; ')
+      const remainingCount = invalidPaths.length - maxInvalidPathsInMessage
+      const remainingSummary = remainingCount > 0 ? ` (+${remainingCount} more)` : ''
+
+      setStatus(
+        `Commit blocked: invalid workspace file path${invalidPaths.length === 1 ? '' : 's'}. ${invalidPathDetails}${remainingSummary}`,
+        'error',
+      )
+      return
+    }
 
     if (normalizedFileCommits.length === 0) {
       setStatus('No workspace files are available to commit.', 'error')

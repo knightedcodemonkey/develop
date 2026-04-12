@@ -1207,47 +1207,6 @@ const commitFilesToExistingBranchWithGitDatabaseApi = async ({
   }))
 }
 
-const commitFilesToExistingBranchWithContentsApi = async ({
-  token,
-  owner,
-  repo,
-  branch,
-  files,
-  commitMessage,
-  signal,
-}) => {
-  const uniqueFiles = toUniqueFileUpdatesByPath(files)
-  if (uniqueFiles.length === 0) {
-    return []
-  }
-
-  await getBranchReferenceSha({
-    token,
-    owner,
-    repo,
-    branch,
-    signal,
-  })
-
-  const fileUpdates = []
-  for (const file of uniqueFiles) {
-    // eslint-disable-next-line no-await-in-loop
-    const nextUpdate = await upsertRepositoryFile({
-      token,
-      owner,
-      repo,
-      branch,
-      path: file.path,
-      content: file.content,
-      message: commitMessage,
-      signal,
-    })
-    fileUpdates.push(nextUpdate)
-  }
-
-  return fileUpdates
-}
-
 export const createRepositoryPullRequest = async ({
   token,
   owner,
@@ -1569,25 +1528,13 @@ export const commitEditorContentToExistingBranch = async ({
           },
         ]
 
-  try {
-    return await commitFilesToExistingBranchWithGitDatabaseApi({
-      token,
-      owner,
-      repo,
-      branch,
-      files,
-      commitMessage,
-      signal,
-    })
-  } catch {
-    return commitFilesToExistingBranchWithContentsApi({
-      token,
-      owner,
-      repo,
-      branch,
-      files,
-      commitMessage,
-      signal,
-    })
-  }
+  return commitFilesToExistingBranchWithGitDatabaseApi({
+    token,
+    owner,
+    repo,
+    branch,
+    files,
+    commitMessage,
+    signal,
+  })
 }
