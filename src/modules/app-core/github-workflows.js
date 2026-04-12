@@ -204,8 +204,7 @@ const initializeGitHubWorkflows = ({
         prContextUi.markActivePrEditorContentSynced()
 
         syncFromActiveContext({
-          componentPath: args?.syncTargets?.componentFilePath,
-          stylesPath: args?.syncTargets?.stylesFilePath,
+          tabTargets: args?.syncTargets?.tabTargets,
         })
       }
 

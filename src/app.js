@@ -755,8 +755,8 @@ const githubWorkflows = createGitHubWorkflowsSetup({
       void workspacesDrawerController?.setOpen(false)
     },
     getActivePrEditorSyncKey: () => githubAiContextState.activePrEditorSyncKey,
-    syncFromActiveContext: ({ componentPath, stylesPath }) => {
-      reconcileWorkspaceTabsWithEditorSync({ componentPath, stylesPath })
+    syncFromActiveContext: ({ tabTargets }) => {
+      reconcileWorkspaceTabsWithEditorSync({ tabTargets })
     },
     formatActivePrReference,
     githubPrContextClose,

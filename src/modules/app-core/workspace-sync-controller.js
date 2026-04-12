@@ -134,26 +134,38 @@ const createWorkspaceSyncController = ({
   }
 
   const getEditorSyncTargets = () => {
-    const componentTab = getWorkspaceTabByKind('component')
-    const stylesTab = getWorkspaceTabByKind('styles')
+    const tabTargets = []
 
-    return {
-      componentFilePath:
-        getTabTargetPrFilePath(componentTab) ||
-        normalizeWorkspacePathValue(componentTab?.path) ||
-        '',
-      stylesFilePath:
-        getTabTargetPrFilePath(stylesTab) ||
-        normalizeWorkspacePathValue(stylesTab?.path) ||
-        '',
+    for (const kind of ['component', 'styles']) {
+      const tab = getWorkspaceTabByKind(kind)
+      const path =
+        getTabTargetPrFilePath(tab) || normalizeWorkspacePathValue(tab?.path) || ''
+
+      if (!path) {
+        continue
+      }
+
+      tabTargets.push({ kind, path })
     }
+
+    return { tabTargets }
   }
 
-  const reconcileWorkspaceTabsWithEditorSync = ({ componentPath, stylesPath } = {}) => {
-    const normalizedComponentPath = normalizeWorkspacePathValue(componentPath)
-    const normalizedStylesPath = normalizeWorkspacePathValue(stylesPath)
+  const reconcileWorkspaceTabsWithEditorSync = ({ tabTargets } = {}) => {
+    const targetsByKind = new Map()
+    const normalizedTargets = Array.isArray(tabTargets) ? tabTargets : []
 
-    if (!normalizedComponentPath && !normalizedStylesPath) {
+    for (const target of normalizedTargets) {
+      const kind = toNonEmptyWorkspaceText(target?.kind)
+      const normalizedPath = normalizeWorkspacePathValue(target?.path)
+      if (!kind || !normalizedPath) {
+        continue
+      }
+
+      targetsByKind.set(kind, normalizedPath)
+    }
+
+    if (targetsByKind.size === 0) {
       return 0
     }
 
@@ -165,8 +177,7 @@ const createWorkspaceSyncController = ({
 
     const nextTabs = workspaceTabsState.getTabs().map(tab => {
       const tabKind = getTabKind(tab)
-      const expectedPath =
-        tabKind === 'styles' ? normalizedStylesPath : normalizedComponentPath
+      const expectedPath = targetsByKind.get(tabKind)
       if (!expectedPath) {
         return tab
       }
@@ -184,6 +195,7 @@ const createWorkspaceSyncController = ({
       updatedTabCount += 1
       return {
         ...tab,
+        targetPrFilePath: matchedPath,
         content: syncedContent,
         syncedContent,
         isDirty: false,

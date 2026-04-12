@@ -24,6 +24,14 @@ const supportedStyleModes = new Set(['css', 'module', 'less', 'sass'])
 
 const toSafeText = value => (typeof value === 'string' ? value.trim() : '')
 
+const toPullRequestNumber = value => {
+  if (typeof value === 'number' && Number.isFinite(value) && value > 0) {
+    return value
+  }
+
+  return null
+}
+
 const normalizeRenderMode = value => {
   const mode = toSafeText(value).toLowerCase()
   return supportedRenderModes.has(mode) ? mode : 'dom'
@@ -99,6 +107,26 @@ const saveRepositoryPrConfig = ({ repositoryFullName, config }) => {
     pruneRepositoryPrConfigs(repositoryFullName)
   } catch {
     /* noop */
+  }
+}
+
+const sanitizeRepositoryPrConfig = config => {
+  const source = config && typeof config === 'object' ? config : {}
+  const pullRequestUrl = toSafeText(source.pullRequestUrl)
+  const fallbackPullRequestNumber = parsePullRequestNumberFromUrl(pullRequestUrl)
+  const pullRequestNumber =
+    toPullRequestNumber(source.pullRequestNumber) ?? fallbackPullRequestNumber
+
+  return {
+    baseBranch: toSafeText(source.baseBranch),
+    headBranch: sanitizeBranchPart(source.headBranch),
+    prTitle: toSafeText(source.prTitle),
+    prBody: typeof source.prBody === 'string' ? source.prBody.trim() : '',
+    renderMode: normalizeRenderMode(source.renderMode),
+    styleMode: normalizeStyleMode(source.styleMode),
+    isActivePr: source.isActivePr === true,
+    pullRequestNumber,
+    pullRequestUrl,
   }
 }
 
@@ -703,8 +731,15 @@ export const createGitHubPrDrawer = ({
 
     const syncTargets =
       typeof getEditorSyncTargets === 'function' ? getEditorSyncTargets() : null
-    const componentSyncPath = toSafeText(syncTargets?.componentFilePath)
-    const stylesSyncPath = toSafeText(syncTargets?.stylesFilePath)
+    const tabSyncTargets = Array.isArray(syncTargets?.tabTargets)
+      ? syncTargets.tabTargets
+      : []
+    const componentSyncPath = toSafeText(
+      tabSyncTargets.find(target => toSafeText(target?.kind) === 'component')?.path,
+    )
+    const stylesSyncPath = toSafeText(
+      tabSyncTargets.find(target => toSafeText(target?.kind) === 'styles')?.path,
+    )
 
     if (!componentSyncPath || !stylesSyncPath) {
       lastActiveContentSyncKey = ''
@@ -734,8 +769,10 @@ export const createGitHubPrDrawer = ({
         repository,
         activeContext,
         syncTargets: {
-          componentFilePath: componentSyncPath,
-          stylesFilePath: stylesSyncPath,
+          tabTargets: [
+            { kind: 'component', path: componentSyncPath },
+            { kind: 'styles', path: stylesSyncPath },
+          ],
         },
         signal: abortController.signal,
       })
@@ -837,6 +874,7 @@ export const createGitHubPrDrawer = ({
         }
 
         if (resolvedPullRequest?.isOpen) {
+          const normalizedSavedConfig = sanitizeRepositoryPrConfig(savedConfig)
           const nextHeadBranch =
             sanitizeBranchPart(resolvedPullRequest.headRef) || headBranch
           const nextBaseBranch =
@@ -845,10 +883,8 @@ export const createGitHubPrDrawer = ({
           saveRepositoryPrConfig({
             repositoryFullName,
             config: {
-              ...savedConfig,
+              ...normalizedSavedConfig,
               isActivePr: true,
-              renderMode: normalizeRenderMode(savedConfig.renderMode),
-              styleMode: normalizeStyleMode(savedConfig.styleMode),
               headBranch: nextHeadBranch,
               baseBranch: nextBaseBranch,
               pullRequestNumber: resolvedPullRequest.number,
@@ -867,7 +903,7 @@ export const createGitHubPrDrawer = ({
         saveRepositoryPrConfig({
           repositoryFullName,
           config: {
-            ...savedConfig,
+            ...sanitizeRepositoryPrConfig(savedConfig),
             isActivePr: false,
           },
         })
@@ -1147,13 +1183,14 @@ export const createGitHubPrDrawer = ({
     const currentRenderMode = normalizeRenderMode(getRenderMode?.())
     const currentStyleMode = normalizeStyleMode(getStyleMode?.())
     const existingConfig = readRepositoryPrConfig(repositoryFullName)
+    const normalizedExistingConfig = sanitizeRepositoryPrConfig(existingConfig)
     const isActivePr = existingConfig?.isActivePr === true
 
     if (isActivePr) {
       saveRepositoryPrConfig({
         repositoryFullName,
         config: {
-          ...existingConfig,
+          ...normalizedExistingConfig,
           renderMode: currentRenderMode,
           styleMode: currentStyleMode,
           isActivePr: true,
@@ -1558,6 +1595,7 @@ export const createGitHubPrDrawer = ({
       }
 
       const savedConfig = readRepositoryPrConfig(repositoryFullName)
+      const normalizedSavedConfig = sanitizeRepositoryPrConfig(savedConfig)
       const previousActiveContext =
         savedConfig?.isActivePr === true
           ? {
@@ -1574,7 +1612,7 @@ export const createGitHubPrDrawer = ({
         saveRepositoryPrConfig({
           repositoryFullName,
           config: {
-            ...savedConfig,
+            ...normalizedSavedConfig,
             isActivePr: false,
           },
         })
