@@ -70,6 +70,9 @@ const githubPrIncludeAppWrapper = document.getElementById('github-pr-include-app
 const githubPrLocalContextSelect = document.getElementById(
   'github-pr-local-context-select',
 )
+const githubPrLocalContextSearch = document.getElementById(
+  'github-pr-local-context-search',
+)
 const githubPrLocalContextRemove = document.getElementById(
   'github-pr-local-context-remove',
 )
@@ -159,6 +162,8 @@ const workspaceStorage = createWorkspaceStorageAdapter()
 let workspaceSaver = null
 let activeWorkspaceRecordId = ''
 let activeWorkspaceCreatedAt = null
+let localContextSearchQuery = ''
+let cachedLocalContexts = []
 let isApplyingWorkspaceSnapshot = false
 let hasCompletedInitialWorkspaceBootstrap = false
 const workspaceTabsState = createWorkspaceTabsState({
@@ -819,6 +824,27 @@ let loadedStylesTabId = 'styles'
 const toNonEmptyWorkspaceText = value =>
   typeof value === 'string' && value.trim().length > 0 ? value.trim() : ''
 
+const toWorkspaceSyncTimestamp = value =>
+  Number.isFinite(value) && value > 0 ? Math.max(0, Number(value)) : null
+
+const toWorkspaceSyncSha = value =>
+  typeof value === 'string' && value.trim().length > 0 ? value.trim() : null
+
+const normalizeWorkspacePathValue = value =>
+  toNonEmptyWorkspaceText(value).replace(/\\/g, '/').replace(/\/+/g, '/')
+
+const getTabTargetPrFilePath = tab => normalizeWorkspacePathValue(tab?.targetPrFilePath)
+
+const hasTabSyncBaseline = tab =>
+  Boolean(
+    getTabTargetPrFilePath(tab) ||
+    toWorkspaceSyncTimestamp(tab?.syncedAt) ||
+    toWorkspaceSyncSha(tab?.lastSyncedRemoteSha),
+  )
+
+const getDirtyStateForTabChange = tab =>
+  hasTabSyncBaseline(tab) ? true : Boolean(tab?.isDirty)
+
 const isStyleTabLanguage = language =>
   styleTabLanguages.has(toNonEmptyWorkspaceText(language))
 
@@ -900,6 +926,7 @@ const persistActiveTabEditorContent = () => {
     {
       ...activeTab,
       content: nextContent,
+      isDirty: getDirtyStateForTabChange(activeTab),
       lastModified: Date.now(),
       isActive: true,
     },
@@ -1087,6 +1114,11 @@ const ensureWorkspaceTabsShape = tabs => {
         language: 'javascript-jsx',
         path: normalizedEntryPath,
         name: getPathFileName(normalizedEntryPath) || defaultComponentTabName,
+        targetPrFilePath:
+          getTabTargetPrFilePath(tab) || normalizeWorkspacePathValue(normalizedEntryPath),
+        isDirty: Boolean(tab?.isDirty),
+        syncedAt: toWorkspaceSyncTimestamp(tab?.syncedAt),
+        lastSyncedRemoteSha: toWorkspaceSyncSha(tab?.lastSyncedRemoteSha),
       }
     }
 
@@ -1104,6 +1136,12 @@ const ensureWorkspaceTabsShape = tabs => {
           normalizedStylesNameInput.toLowerCase() === 'styles'
             ? getPathFileName(normalizedStylesPath) || defaultStylesTabName
             : normalizedStylesNameInput,
+        targetPrFilePath:
+          getTabTargetPrFilePath(tab) ||
+          normalizeWorkspacePathValue(normalizedStylesPath),
+        isDirty: Boolean(tab?.isDirty),
+        syncedAt: toWorkspaceSyncTimestamp(tab?.syncedAt),
+        lastSyncedRemoteSha: toWorkspaceSyncSha(tab?.lastSyncedRemoteSha),
       }
     }
 
@@ -1114,6 +1152,10 @@ const ensureWorkspaceTabsShape = tabs => {
       language: isStyleTabLanguage(tab?.language) ? tab.language : 'javascript-jsx',
       path: nextPath,
       name: toNonEmptyWorkspaceText(tab?.name) || getPathFileName(nextPath) || tab?.id,
+      targetPrFilePath: getTabTargetPrFilePath(tab) || null,
+      isDirty: Boolean(tab?.isDirty),
+      syncedAt: toWorkspaceSyncTimestamp(tab?.syncedAt),
+      lastSyncedRemoteSha: toWorkspaceSyncSha(tab?.lastSyncedRemoteSha),
     }
   })
 }
@@ -1158,14 +1200,78 @@ const buildWorkspaceTabsSnapshot = () => {
           ? tab.content
           : ''
 
+    const targetPrFilePath =
+      isComponentTab || isStylesTab
+        ? normalizeWorkspacePathValue(currentPath) || null
+        : getTabTargetPrFilePath(tab) || null
+
     return {
       ...tab,
       path: currentPath,
       content: currentContent,
+      targetPrFilePath,
       isActive: activeTabId === tab.id,
       lastModified: Date.now(),
     }
   })
+}
+
+const reconcileWorkspaceTabsWithPushUpdates = fileUpdates => {
+  const updates = Array.isArray(fileUpdates) ? fileUpdates : []
+  if (updates.length === 0) {
+    return 0
+  }
+
+  const updatesByPath = new Map()
+  for (const update of updates) {
+    const normalizedPath = normalizeWorkspacePathValue(update?.path)
+    if (!normalizedPath) {
+      continue
+    }
+
+    updatesByPath.set(normalizedPath, toWorkspaceSyncSha(update?.commitSha))
+  }
+
+  if (updatesByPath.size === 0) {
+    return 0
+  }
+
+  const now = Date.now()
+  let updatedTabCount = 0
+  const activeTabId = workspaceTabsState.getActiveTabId()
+  const nextTabs = workspaceTabsState.getTabs().map(tab => {
+    const candidatePaths = [
+      getTabTargetPrFilePath(tab),
+      normalizeWorkspacePathValue(tab.path),
+    ].filter(Boolean)
+
+    const matchedPath = candidatePaths.find(path => updatesByPath.has(path))
+    if (!matchedPath) {
+      return tab
+    }
+
+    updatedTabCount += 1
+    const commitSha = updatesByPath.get(matchedPath)
+
+    return {
+      ...tab,
+      targetPrFilePath: matchedPath,
+      isDirty: false,
+      syncedAt: now,
+      lastSyncedRemoteSha: commitSha || toWorkspaceSyncSha(tab.lastSyncedRemoteSha),
+      lastModified: now,
+    }
+  })
+
+  if (updatedTabCount > 0) {
+    workspaceTabsState.replaceTabs({
+      tabs: nextTabs,
+      activeTabId,
+    })
+    queueWorkspaceSave()
+  }
+
+  return updatedTabCount
 }
 
 const buildWorkspaceRecordSnapshot = ({ recordId } = {}) => {
@@ -1204,6 +1310,83 @@ const updateLocalContextActions = () => {
   githubPrLocalContextRemove.disabled = !hasSelection
 }
 
+const normalizeLocalContextSearchQuery = value =>
+  typeof value === 'string' ? value.trim().toLowerCase() : ''
+
+const localContextMatchesQuery = (workspace, query) => {
+  if (!query) {
+    return true
+  }
+
+  const haystack = [
+    workspace?.id,
+    workspace?.repo,
+    workspace?.head,
+    workspace?.base,
+    workspace?.prTitle,
+    formatWorkspaceOptionLabel(workspace),
+  ]
+    .filter(value => typeof value === 'string' && value.length > 0)
+    .join(' ')
+    .toLowerCase()
+
+  return haystack.includes(query)
+}
+
+const renderLocalContextOptions = ({ options, query }) => {
+  if (!(githubPrLocalContextSelect instanceof HTMLSelectElement)) {
+    return []
+  }
+
+  const normalizedQuery = normalizeLocalContextSearchQuery(query)
+  const filtered = options.filter(workspace =>
+    localContextMatchesQuery(workspace, normalizedQuery),
+  )
+
+  githubPrLocalContextSelect.replaceChildren()
+
+  const placeholder = document.createElement('option')
+  placeholder.value = ''
+  placeholder.textContent =
+    options.length === 0
+      ? 'No saved local contexts'
+      : filtered.length > 0
+        ? 'Select a stored local context'
+        : 'No matching local contexts'
+  placeholder.disabled = filtered.length > 0
+  placeholder.selected = !filtered.some(
+    workspace => workspace.id === activeWorkspaceRecordId,
+  )
+  githubPrLocalContextSelect.append(placeholder)
+
+  for (const workspace of filtered) {
+    const option = document.createElement('option')
+    option.value = workspace.id
+    option.textContent = formatWorkspaceOptionLabel(workspace)
+    option.selected = workspace.id === activeWorkspaceRecordId
+    githubPrLocalContextSelect.append(option)
+  }
+
+  if (
+    activeWorkspaceRecordId &&
+    !options.some(workspace => workspace.id === activeWorkspaceRecordId)
+  ) {
+    activeWorkspaceRecordId = ''
+    activeWorkspaceCreatedAt = null
+    githubPrLocalContextSelect.value = ''
+  }
+
+  if (
+    githubPrLocalContextSearch instanceof HTMLInputElement ||
+    githubPrLocalContextSearch instanceof HTMLTextAreaElement
+  ) {
+    githubPrLocalContextSearch.disabled = options.length === 0
+  }
+
+  updateLocalContextActions()
+  return filtered
+}
+
 const formatWorkspaceOptionLabel = workspace => {
   const contextLabel = 'Local'
   const hasTitle = typeof workspace.prTitle === 'string' && workspace.prTitle.trim()
@@ -1230,33 +1413,11 @@ const refreshLocalContextOptions = async () => {
     repo: selectedRepository || '',
   })
 
-  githubPrLocalContextSelect.replaceChildren()
-
-  const placeholder = document.createElement('option')
-  placeholder.value = ''
-  placeholder.textContent =
-    options.length > 0 ? 'Select a stored local context' : 'No saved local contexts'
-  placeholder.selected = activeWorkspaceRecordId.length === 0
-  githubPrLocalContextSelect.append(placeholder)
-
-  for (const workspace of options) {
-    const option = document.createElement('option')
-    option.value = workspace.id
-    option.textContent = formatWorkspaceOptionLabel(workspace)
-    option.selected = workspace.id === activeWorkspaceRecordId
-    githubPrLocalContextSelect.append(option)
-  }
-
-  if (
-    activeWorkspaceRecordId &&
-    !options.some(workspace => workspace.id === activeWorkspaceRecordId)
-  ) {
-    activeWorkspaceRecordId = ''
-    activeWorkspaceCreatedAt = null
-    githubPrLocalContextSelect.value = ''
-  }
-
-  updateLocalContextActions()
+  cachedLocalContexts = options
+  renderLocalContextOptions({
+    options,
+    query: localContextSearchQuery,
+  })
   return options
 }
 
@@ -1470,6 +1631,7 @@ const finishWorkspaceTabRename = ({ tabId, nextName, cancelled = false }) => {
     ...tab,
     name: normalizedTabName,
     path: normalizedEntryPath,
+    isDirty: getDirtyStateForTabChange(tab),
     lastModified: Date.now(),
   })
 
@@ -1813,6 +1975,13 @@ const renderWorkspaceTabs = () => {
         tabContainer.append(metaBadge)
       }
 
+      if (tab.isDirty) {
+        const dirtyBadge = document.createElement('span')
+        dirtyBadge.className = 'workspace-tab__meta workspace-tab__meta--dirty'
+        dirtyBadge.textContent = 'Dirty'
+        tabContainer.append(dirtyBadge)
+      }
+
       const renameButton = document.createElement('button')
       renameButton.className = 'workspace-tab__rename'
       renameButton.type = 'button'
@@ -1930,18 +2099,26 @@ const syncTabPathsFromInputs = () => {
     githubPrComponentPath.value = componentPath
   }
 
+  const existingComponentTab = workspaceTabsState.getTab('component')
+
   workspaceTabsState.upsertTab({
+    ...(existingComponentTab ?? {}),
     id: 'component',
     path: componentPath,
     name: getPathFileName(componentPath) || defaultComponentTabName,
     language: 'javascript-jsx',
     role: 'entry',
     isActive: workspaceTabsState.getActiveTabId() === 'component',
+    targetPrFilePath: normalizeWorkspacePathValue(componentPath) || null,
+    isDirty: getDirtyStateForTabChange(existingComponentTab),
+    syncedAt: toWorkspaceSyncTimestamp(existingComponentTab?.syncedAt),
+    lastSyncedRemoteSha: toWorkspaceSyncSha(existingComponentTab?.lastSyncedRemoteSha),
   })
 
   const defaultStylesTab = workspaceTabsState.getTab('styles')
   if (defaultStylesTab) {
     workspaceTabsState.upsertTab({
+      ...defaultStylesTab,
       id: 'styles',
       path: stylesPath,
       name: getPathFileName(stylesPath) || defaultStylesTabName,
@@ -1950,6 +2127,10 @@ const syncTabPathsFromInputs = () => {
         : 'css',
       role: 'module',
       isActive: workspaceTabsState.getActiveTabId() === 'styles',
+      targetPrFilePath: normalizeWorkspacePathValue(stylesPath) || null,
+      isDirty: getDirtyStateForTabChange(defaultStylesTab),
+      syncedAt: toWorkspaceSyncTimestamp(defaultStylesTab?.syncedAt),
+      lastSyncedRemoteSha: toWorkspaceSyncSha(defaultStylesTab?.lastSyncedRemoteSha),
     })
   }
 
@@ -2054,7 +2235,7 @@ prDrawerController = createGitHubPrDrawer({
   confirmBeforeSubmit: options => {
     confirmAction(options)
   },
-  onPullRequestOpened: ({ url }) => {
+  onPullRequestOpened: ({ url, fileUpdates }) => {
     const activeContextSyncKey = getActivePrContextSyncKey(
       githubAiContextState.activePrContext,
     )
@@ -2069,9 +2250,11 @@ prDrawerController = createGitHubPrDrawer({
     const message = url
       ? `Pull request opened: ${url}`
       : 'Pull request opened successfully.'
+    reconcileWorkspaceTabsWithPushUpdates(fileUpdates)
     showAppToast(message)
   },
   onPullRequestCommitPushed: ({ branch, fileUpdates }) => {
+    reconcileWorkspaceTabsWithPushUpdates(fileUpdates)
     const fileCount = Array.isArray(fileUpdates) ? fileUpdates.length : 0
     const message =
       fileCount > 0
@@ -2232,15 +2415,21 @@ const initializeCodeEditors = async () => {
           }
           const activeTab = getActiveWorkspaceTab()
           if (activeTab && getTabKind(activeTab) === 'component') {
+            const nextDirtyState = getDirtyStateForTabChange(activeTab)
             workspaceTabsState.upsertTab(
               {
                 ...activeTab,
                 content: getJsxSource(),
+                isDirty: nextDirtyState,
                 lastModified: Date.now(),
                 isActive: true,
               },
               { emitReason: 'componentEditorChange' },
             )
+
+            if (nextDirtyState !== Boolean(activeTab.isDirty)) {
+              renderWorkspaceTabs()
+            }
           }
           queueWorkspaceSave()
           maybeRenderFromComponentEditorChange()
@@ -2262,15 +2451,21 @@ const initializeCodeEditors = async () => {
           }
           const activeTab = getActiveWorkspaceTab()
           if (activeTab && getTabKind(activeTab) === 'styles') {
+            const nextDirtyState = getDirtyStateForTabChange(activeTab)
             workspaceTabsState.upsertTab(
               {
                 ...activeTab,
                 content: getCssSource(),
+                isDirty: nextDirtyState,
                 lastModified: Date.now(),
                 isActive: true,
               },
               { emitReason: 'stylesEditorChange' },
             )
+
+            if (nextDirtyState !== Boolean(activeTab.isDirty)) {
+              renderWorkspaceTabs()
+            }
           }
           queueWorkspaceSave()
           maybeRender()
@@ -2998,6 +3193,16 @@ if (githubPrLocalContextSelect instanceof HTMLSelectElement) {
       .catch(() => {
         setStatus('Could not load selected local context.', 'error')
       })
+  })
+}
+
+if (githubPrLocalContextSearch instanceof HTMLInputElement) {
+  githubPrLocalContextSearch.addEventListener('input', () => {
+    localContextSearchQuery = githubPrLocalContextSearch.value
+    renderLocalContextOptions({
+      options: cachedLocalContexts,
+      query: localContextSearchQuery,
+    })
   })
 }
 

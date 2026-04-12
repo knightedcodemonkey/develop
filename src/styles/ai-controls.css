@@ -623,6 +623,10 @@
   gap: 8px;
 }
 
+.github-pr-field--local-context input[type='search'] {
+  width: 100%;
+}
+
 .github-pr-local-context-row {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;

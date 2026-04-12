@@ -10,6 +10,15 @@ const toTabRole = value => {
   return 'module'
 }
 
+const toSyncTimestamp = value =>
+  Number.isFinite(value) && value > 0 ? Math.max(0, Number(value)) : null
+
+const toSyncSha = value =>
+  typeof value === 'string' && value.trim().length > 0 ? value.trim() : null
+
+const toTargetPrFilePath = value =>
+  typeof value === 'string' && value.trim().length > 0 ? value.trim() : null
+
 const normalizeTab = (tab, fallbackId = '') => {
   if (!tab || typeof tab !== 'object') {
     return null
@@ -34,6 +43,10 @@ const normalizeTab = (tab, fallbackId = '') => {
     isActive: Boolean(tab.isActive),
     scroll: Number.isFinite(tab.scroll) ? Math.max(0, tab.scroll) : 0,
     content: typeof tab.content === 'string' ? tab.content : '',
+    targetPrFilePath: toTargetPrFilePath(tab.targetPrFilePath),
+    isDirty: Boolean(tab.isDirty),
+    syncedAt: toSyncTimestamp(tab.syncedAt),
+    lastSyncedRemoteSha: toSyncSha(tab.lastSyncedRemoteSha),
     lastModified: Number.isFinite(tab.lastModified) ? tab.lastModified : Date.now(),
   }
 }
@@ -139,6 +152,10 @@ export const createWorkspaceTabsState = ({ tabs = [], activeTabId, onChange } = 
       path: normalized.path,
       language: normalized.language,
       role: normalized.role,
+      targetPrFilePath: normalized.targetPrFilePath,
+      isDirty: normalized.isDirty,
+      syncedAt: normalized.syncedAt,
+      lastSyncedRemoteSha: normalized.lastSyncedRemoteSha,
       lastModified: normalized.lastModified,
     })
 

@@ -390,6 +390,12 @@
   flex: none;
 }
 
+.workspace-tab__meta--dirty {
+  color: rgb(var(--warning-rgb));
+  font-weight: 600;
+  opacity: 1;
+}
+
 .workspace-tab-add {
   justify-content: center;
   min-width: 34px;

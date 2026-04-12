@@ -1432,6 +1432,7 @@ export const createGitHubPrDrawer = ({
             url,
             pullRequestNumber: result.pullRequest.number,
             branch: targetHeadBranch,
+            fileUpdates: Array.isArray(result.fileUpdates) ? result.fileUpdates : [],
           })
           setOpen(false)
         })
