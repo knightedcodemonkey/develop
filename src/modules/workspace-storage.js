@@ -13,6 +13,17 @@ const toTabRole = value => {
 
 const normalizeRenderMode = value => (value === 'react' ? 'react' : 'dom')
 
+const toSyncTimestamp = value =>
+  Number.isFinite(value) && value > 0 ? Math.max(0, Number(value)) : null
+
+const toSyncSha = value =>
+  typeof value === 'string' && value.trim().length > 0 ? value.trim() : null
+
+const toTargetPrFilePath = value =>
+  typeof value === 'string' && value.trim().length > 0 ? value.trim() : null
+
+const toSyncedContent = value => (typeof value === 'string' ? value : null)
+
 const normalizeTabRecord = tab => {
   if (!tab || typeof tab !== 'object') {
     return null
@@ -38,6 +49,11 @@ const normalizeTabRecord = tab => {
     isActive: Boolean(tab.isActive),
     scroll: Number.isFinite(tab.scroll) ? Math.max(0, tab.scroll) : 0,
     content: typeof tab.content === 'string' ? tab.content : '',
+    targetPrFilePath: toTargetPrFilePath(tab.targetPrFilePath),
+    isDirty: Boolean(tab.isDirty),
+    syncedAt: toSyncTimestamp(tab.syncedAt),
+    lastSyncedRemoteSha: toSyncSha(tab.lastSyncedRemoteSha),
+    syncedContent: toSyncedContent(tab.syncedContent),
     lastModified: Number.isFinite(tab.lastModified) ? tab.lastModified : Date.now(),
   }
 }
@@ -188,6 +204,11 @@ export const createWorkspaceStorageAdapter = ({ loadRuntime } = {}) => {
     path,
     language,
     role,
+    targetPrFilePath,
+    isDirty,
+    syncedAt,
+    lastSyncedRemoteSha,
+    syncedContent,
   }) => {
     if (typeof workspaceId !== 'string' || workspaceId.length === 0) {
       throw new TypeError('workspaceId must be a non-empty string.')
@@ -230,6 +251,26 @@ export const createWorkspaceStorageAdapter = ({ loadRuntime } = {}) => {
 
     if (role !== undefined) {
       nextTabRecord.role = role
+    }
+
+    if (targetPrFilePath !== undefined) {
+      nextTabRecord.targetPrFilePath = targetPrFilePath
+    }
+
+    if (isDirty !== undefined) {
+      nextTabRecord.isDirty = isDirty
+    }
+
+    if (syncedAt !== undefined) {
+      nextTabRecord.syncedAt = syncedAt
+    }
+
+    if (lastSyncedRemoteSha !== undefined) {
+      nextTabRecord.lastSyncedRemoteSha = lastSyncedRemoteSha
+    }
+
+    if (syncedContent !== undefined) {
+      nextTabRecord.syncedContent = syncedContent
     }
 
     if (content !== undefined) {

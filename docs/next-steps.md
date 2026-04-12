@@ -25,3 +25,19 @@ Focused follow-up work for `@knighted/develop`.
    - If beneficial, introduce a configurable/hybrid strategy (for example, optimistic default with metadata fallback) without regressing current reliability.
    - Suggested implementation prompt:
      - "Evaluate and optionally optimize @knighted/develop GitHub file upsert behavior. Compare metadata-first preflight GET+PUT against optimistic PUT with retry-on-missing-sha for existing files. Keep current reliability guarantees and avoid reintroducing noisy false-positive failures. If implementing a hybrid/configurable strategy, keep defaults conservative, update docs, and validate with npm run lint plus targeted Playwright PR drawer flows."
+
+5. **Remove pre-multitab component/styles compatibility paths**
+   - Delete code paths that preserve or translate legacy single-component/single-styles storage and sync behavior from before the multitab update.
+   - Remove backward-compatibility shims, fallback field reads, and migration glue tied to old `componentFilePath`/`stylesFilePath`-style assumptions when equivalent tab-derived data exists.
+   - Favor one canonical tab-first data contract across local storage, IndexedDB workspace records, PR sync metadata, and commit target derivation.
+   - Accept breaking changes for old locally stored app state to simplify maintenance and reduce branching logic.
+   - Suggested implementation prompt:
+     - "Remove backwards-compatibility code in @knighted/develop that supports pre-multitab component/styles storage/sync behavior. Standardize on the current tab-derived schema only, delete legacy field fallbacks and migration helpers, and update tests/docs to match the simplified contract. Validate with npm run lint and targeted Playwright suites for workspace tabs + PR drawer flows."
+
+6. **Promise handling conventions (consistency of intent)**
+   - Define a project default: use `async`/`await` with `try`/`catch` for most async control flow.
+   - Keep Promise chains where they better express intent (for example, fire-and-forget paths with explicit `.catch()` to avoid unhandled rejections, or concise pass-through composition).
+   - Document this as an intent-first rule so mixed syntax is acceptable only when deliberate and easy to reason about.
+   - Add a lightweight lint/review rule to flag mixed async styles in the same flow unless there is a clear justification.
+   - Suggested implementation prompt:
+     - "Define and apply async handling conventions in @knighted/develop with consistency of intent: default to async/await + try/catch, allow Promise chains for explicit fire-and-forget and concise composition, and require explicit .catch on unawaited promises. Update docs and enforce via lint/review guidance without broad no-op refactors. Validate with npm run lint and targeted Playwright runs."

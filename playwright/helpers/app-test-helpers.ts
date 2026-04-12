@@ -39,8 +39,40 @@ export type PullRequestCreateBody = {
 
 export type BranchesByRepo = Record<string, string[]>
 
+const isRetryableGotoError = (error: unknown) => {
+  if (!(error instanceof Error)) {
+    return false
+  }
+
+  return /WebKit encountered an internal error|Test timeout/i.test(error.message)
+}
+
+const navigateToApp = async (page: Page, path: string) => {
+  const wait = (durationMs: number) =>
+    new Promise<void>(resolve => {
+      setTimeout(resolve, durationMs)
+    })
+
+  let attempt = 0
+
+  while (attempt < 3) {
+    attempt += 1
+
+    try {
+      await page.goto(path, { waitUntil: 'domcontentloaded' })
+      return
+    } catch (error) {
+      if (attempt >= 3 || !isRetryableGotoError(error)) {
+        throw error
+      }
+
+      await wait(attempt * 200)
+    }
+  }
+}
+
 export const waitForAppReady = async (page: Page, path = appEntryPath) => {
-  await page.goto(path)
+  await navigateToApp(page, path)
   await expect(page.getByRole('heading', { name: '@knighted/develop' })).toBeVisible()
   await expect
     .poll(async () => {

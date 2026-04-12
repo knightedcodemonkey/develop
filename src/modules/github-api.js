@@ -1020,6 +1020,234 @@ export const upsertRepositoryFile = async ({
   }
 }
 
+const normalizeFileUpdatePath = value =>
+  (typeof value === 'string' ? value.trim() : '').replace(/\\/g, '/').replace(/\/+/g, '/')
+
+const validateRepositoryRelativeFilePath = value => {
+  const path = normalizeFileUpdatePath(value)
+
+  if (!path) {
+    return { ok: false, reason: 'File path is required.' }
+  }
+
+  if (path.startsWith('/')) {
+    return {
+      ok: false,
+      reason: 'File path must be repository-relative (no leading slash).',
+    }
+  }
+
+  if (path.endsWith('/')) {
+    return { ok: false, reason: 'File path must include a filename (no trailing slash).' }
+  }
+
+  const segments = path.split('/').filter(Boolean)
+  if (segments.some(segment => segment === '..')) {
+    return { ok: false, reason: 'File path cannot include parent directory traversal.' }
+  }
+
+  if (!/^[A-Za-z0-9._\-/]+$/.test(path)) {
+    return {
+      ok: false,
+      reason:
+        'File path contains unsupported characters. Use letters, numbers, ., _, -, and / only.',
+    }
+  }
+
+  if (segments.length === 0 || segments.some(segment => segment === '.' || !segment)) {
+    return { ok: false, reason: 'File path is invalid.' }
+  }
+
+  return { ok: true, value: path }
+}
+
+const normalizeFileUpdateInput = (file, index) => {
+  if (!file || typeof file !== 'object') {
+    throw new Error(`File update at index ${index} must be an object.`)
+  }
+
+  const validation = validateRepositoryRelativeFilePath(file.path)
+  if (!validation.ok) {
+    const rawPath = typeof file.path === 'string' ? file.path : ''
+    throw new Error(
+      `Invalid file update path at index ${index}: ${rawPath || '(missing path)'} (${validation.reason})`,
+    )
+  }
+
+  return {
+    path: validation.value,
+    content: typeof file.content === 'string' ? file.content : '',
+  }
+}
+
+const toUniqueFileUpdatesByPath = files => {
+  if (!Array.isArray(files) || files.length === 0) {
+    return []
+  }
+
+  const updatesByPath = new Map()
+  for (const [index, file] of files.entries()) {
+    const normalized = normalizeFileUpdateInput(file, index)
+
+    updatesByPath.set(normalized.path, normalized)
+  }
+
+  return [...updatesByPath.values()]
+}
+
+const getCommitTreeSha = async ({ token, owner, repo, commitSha, signal }) => {
+  const response = await requestGitHubJson({
+    token,
+    url: `${githubApiBaseUrl}/repos/${owner}/${repo}/git/commits/${commitSha}`,
+    signal,
+  })
+
+  const treeSha = response?.tree?.sha
+  if (typeof treeSha !== 'string' || !treeSha) {
+    throw new Error(`Could not resolve tree SHA for commit ${commitSha}.`)
+  }
+
+  return treeSha
+}
+
+const createRepositoryTree = async ({
+  token,
+  owner,
+  repo,
+  baseTreeSha,
+  files,
+  signal,
+}) => {
+  const tree = files.map(file => ({
+    path: file.path,
+    mode: '100644',
+    type: 'blob',
+    content: file.content,
+  }))
+
+  const response = await requestGitHubJson({
+    token,
+    url: `${githubApiBaseUrl}/repos/${owner}/${repo}/git/trees`,
+    method: 'POST',
+    body: {
+      base_tree: baseTreeSha,
+      tree,
+    },
+    signal,
+  })
+
+  const treeSha = response?.sha
+  if (typeof treeSha !== 'string' || !treeSha) {
+    throw new Error('Could not create repository tree for commit.')
+  }
+
+  return treeSha
+}
+
+const createRepositoryCommit = async ({
+  token,
+  owner,
+  repo,
+  message,
+  treeSha,
+  parentCommitSha,
+  signal,
+}) => {
+  const response = await requestGitHubJson({
+    token,
+    url: `${githubApiBaseUrl}/repos/${owner}/${repo}/git/commits`,
+    method: 'POST',
+    body: {
+      message,
+      tree: treeSha,
+      parents: [parentCommitSha],
+    },
+    signal,
+  })
+
+  const commitSha = response?.sha
+  if (typeof commitSha !== 'string' || !commitSha) {
+    throw new Error('Could not create repository commit.')
+  }
+
+  return commitSha
+}
+
+const updateBranchReference = async ({ token, owner, repo, branch, sha, signal }) => {
+  const ref = encodeURIComponent(`heads/${branch}`)
+  await requestGitHubJson({
+    token,
+    url: `${githubApiBaseUrl}/repos/${owner}/${repo}/git/refs/${ref}`,
+    method: 'PATCH',
+    body: {
+      sha,
+      force: false,
+    },
+    signal,
+  })
+}
+
+const commitFilesToExistingBranchWithGitDatabaseApi = async ({
+  token,
+  owner,
+  repo,
+  branch,
+  files,
+  commitMessage,
+  signal,
+}) => {
+  const uniqueFiles = toUniqueFileUpdatesByPath(files)
+  if (uniqueFiles.length === 0) {
+    return []
+  }
+
+  const headCommitSha = await getBranchReferenceSha({
+    token,
+    owner,
+    repo,
+    branch,
+    signal,
+  })
+  const baseTreeSha = await getCommitTreeSha({
+    token,
+    owner,
+    repo,
+    commitSha: headCommitSha,
+    signal,
+  })
+  const treeSha = await createRepositoryTree({
+    token,
+    owner,
+    repo,
+    baseTreeSha,
+    files: uniqueFiles,
+    signal,
+  })
+  const commitSha = await createRepositoryCommit({
+    token,
+    owner,
+    repo,
+    message: commitMessage,
+    treeSha,
+    parentCommitSha: headCommitSha,
+    signal,
+  })
+  await updateBranchReference({
+    token,
+    owner,
+    repo,
+    branch,
+    sha: commitSha,
+    signal,
+  })
+
+  return uniqueFiles.map(file => ({
+    path: file.path,
+    commitSha,
+    created: null,
+  }))
+}
+
 export const createRepositoryPullRequest = async ({
   token,
   owner,
@@ -1241,6 +1469,7 @@ export const createEditorContentPullRequest = async ({
   headBranch,
   prTitle,
   prBody,
+  fileUpdates,
   componentFilePath,
   componentSource,
   stylesFilePath,
@@ -1272,10 +1501,11 @@ export const createEditorContentPullRequest = async ({
     signal,
   })
 
-  const fileUpdates = await commitEditorContentToExistingBranch({
+  const committedFileUpdates = await commitEditorContentToExistingBranch({
     token,
     repository,
     branch: nextBranch,
+    fileUpdates,
     componentFilePath,
     componentSource,
     stylesFilePath,
@@ -1298,7 +1528,7 @@ export const createEditorContentPullRequest = async ({
   return {
     pullRequest,
     branch: nextBranch,
-    fileUpdates,
+    fileUpdates: committedFileUpdates,
   }
 }
 
@@ -1306,6 +1536,7 @@ export const commitEditorContentToExistingBranch = async ({
   token,
   repository,
   branch,
+  fileUpdates,
   componentFilePath,
   componentSource,
   stylesFilePath,
@@ -1324,43 +1555,27 @@ export const commitEditorContentToExistingBranch = async ({
     throw new Error('An existing head branch is required.')
   }
 
-  await getBranchReferenceSha({
+  const files =
+    Array.isArray(fileUpdates) && fileUpdates.length > 0
+      ? fileUpdates
+      : [
+          {
+            path: componentFilePath,
+            content: componentSource,
+          },
+          {
+            path: stylesFilePath,
+            content: stylesSource,
+          },
+        ]
+
+  return commitFilesToExistingBranchWithGitDatabaseApi({
     token,
     owner,
     repo,
     branch,
+    files,
+    commitMessage,
     signal,
   })
-
-  const fileUpdates = []
-
-  fileUpdates.push(
-    await upsertRepositoryFile({
-      token,
-      owner,
-      repo,
-      branch,
-      path: componentFilePath,
-      content: componentSource,
-      message: commitMessage,
-      signal,
-    }),
-  )
-
-  if (stylesFilePath !== componentFilePath) {
-    fileUpdates.push(
-      await upsertRepositoryFile({
-        token,
-        owner,
-        repo,
-        branch,
-        path: stylesFilePath,
-        content: stylesSource,
-        message: commitMessage,
-        signal,
-      }),
-    )
-  }
-
-  return fileUpdates
 }

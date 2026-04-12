@@ -345,6 +345,28 @@
   --github-pr-icon-color: var(--github-pr-icon-color-disabled);
 }
 
+.diagnostics-toggle.workspaces-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: 2px;
+  color: color-mix(in srgb, var(--panel-text) 84%, var(--text-subtle));
+}
+
+.diagnostics-toggle.workspaces-toggle:hover:not(:disabled) {
+  color: color-mix(in srgb, var(--accent) 82%, var(--panel-text));
+}
+
+.workspaces-toggle__icon {
+  width: 16px;
+  height: 16px;
+  fill: currentColor;
+}
+
+.workspaces-toggle__icon path {
+  fill: currentColor;
+}
+
 .github-pr-context-close {
   display: inline-flex;
   align-items: center;
@@ -526,6 +548,82 @@
   display: none !important;
 }
 
+.workspaces-drawer {
+  position: fixed;
+  top: 82px;
+  left: auto;
+  right: 24px;
+  width: min(460px, calc(100vw - 24px));
+  max-height: min(76vh, 760px);
+  padding: 14px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--surface-panel) 92%, transparent);
+  box-shadow: 0 20px 40px var(--shadow-elev-1);
+  backdrop-filter: blur(8px);
+  overflow: hidden;
+  display: grid;
+  grid-template-rows: auto auto minmax(180px, 1fr);
+  gap: 10px;
+  z-index: 96;
+}
+
+.workspaces-drawer.workspaces-drawer--right {
+  right: 24px;
+  left: auto;
+}
+
+.workspaces-drawer.workspaces-drawer--left {
+  left: 24px;
+  right: auto;
+}
+
+.workspaces-drawer[hidden] {
+  display: none !important;
+}
+
+.workspaces-drawer__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.workspaces-drawer__header h2 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.workspaces-drawer__status {
+  margin: 0;
+  font-size: 0.82rem;
+  line-height: 1.4;
+  color: color-mix(in srgb, var(--panel-text) 90%, var(--text-subtle));
+  border: 1px solid color-mix(in srgb, var(--border-subtle) 70%, var(--accent));
+  border-left: 3px solid color-mix(in srgb, var(--accent) 72%, var(--panel-text));
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--surface-panel-header) 86%, transparent);
+  padding: 9px 10px;
+}
+
+.workspaces-drawer__status[data-level='error'] {
+  color: color-mix(in srgb, rgb(var(--danger-rgb)) 85%, var(--panel-text));
+}
+
+.workspaces-drawer__body {
+  display: grid;
+  gap: 10px;
+  overflow: auto;
+  align-content: start;
+  padding: 2px;
+}
+
+.workspaces-drawer__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
 .github-pr-drawer__header {
   display: flex;
   align-items: center;
@@ -621,6 +719,10 @@
 
 .github-pr-field--local-context {
   gap: 8px;
+}
+
+.github-pr-field--local-context input[type='search'] {
+  width: 100%;
 }
 
 .github-pr-local-context-row {

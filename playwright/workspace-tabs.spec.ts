@@ -35,6 +35,79 @@ const renameWorkspaceTab = async (
   await renameInput.press('Enter')
 }
 
+const seedSyncedComponentTab = async (page: import('@playwright/test').Page) => {
+  await page.evaluate(async () => {
+    const request = indexedDB.open('knighted-develop-workspaces')
+
+    const db = await new Promise<IDBDatabase>((resolve, reject) => {
+      request.onsuccess = () => resolve(request.result)
+      request.onerror = () => reject(request.error)
+      request.onblocked = () => reject(new Error('Could not open IndexedDB.'))
+    })
+
+    try {
+      const tx = db.transaction('prWorkspaces', 'readwrite')
+      const store = tx.objectStore('prWorkspaces')
+      const getAllRequest = store.getAll()
+
+      const records = await new Promise<Array<Record<string, unknown>>>(
+        (resolve, reject) => {
+          getAllRequest.onsuccess = () => {
+            const value = Array.isArray(getAllRequest.result) ? getAllRequest.result : []
+            resolve(value as Array<Record<string, unknown>>)
+          }
+          getAllRequest.onerror = () => reject(getAllRequest.error)
+        },
+      )
+
+      const now = Date.now()
+      for (const record of records) {
+        const tabs = Array.isArray(record.tabs) ? record.tabs : []
+        const nextTabs = tabs.map(tab => {
+          if (!tab || typeof tab !== 'object') {
+            return tab
+          }
+
+          if ((tab as { id?: unknown }).id !== 'component') {
+            return tab
+          }
+
+          const pathValue =
+            typeof (tab as { path?: unknown }).path === 'string'
+              ? ((tab as { path: string }).path ?? '')
+              : ''
+
+          return {
+            ...(tab as Record<string, unknown>),
+            targetPrFilePath: pathValue,
+            syncedAt: now,
+            isDirty: false,
+          }
+        })
+
+        const putRequest = store.put({
+          ...record,
+          tabs: nextTabs,
+          lastModified: now,
+        })
+
+        await new Promise<void>((resolve, reject) => {
+          putRequest.onsuccess = () => resolve()
+          putRequest.onerror = () => reject(putRequest.error)
+        })
+      }
+
+      await new Promise<void>((resolve, reject) => {
+        tx.oncomplete = () => resolve()
+        tx.onerror = () => reject(tx.error)
+        tx.onabort = () => reject(tx.error)
+      })
+    } finally {
+      db.close()
+    }
+  })
+}
+
 test('removing active tab selects deterministic adjacent tab', async ({ page }) => {
   await waitForInitialRender(page)
 
@@ -191,6 +264,25 @@ test('startup restores last active workspace tab after reload', async ({ page })
   ).toHaveAttribute('aria-current', 'true')
   await expect(page.locator('#editor-panel-component')).not.toHaveAttribute('hidden', '')
   await expect(page.locator('#editor-panel-styles')).toHaveAttribute('hidden', '')
+})
+
+test('editing a synced tab marks it dirty', async ({ page }) => {
+  await waitForInitialRender(page)
+
+  await seedSyncedComponentTab(page)
+  await page.reload()
+  await waitForInitialRender(page)
+
+  await setWorkspaceTabSource(page, {
+    fileName: 'App.tsx',
+    source: 'export default function App() { return <div>Dirty</div> }',
+    kind: 'component',
+  })
+
+  const componentTab = page
+    .getByRole('listitem', { name: 'Workspace tab App.tsx' })
+    .first()
+  await expect(componentTab).toContainText('Dirty')
 })
 
 test('removed default styles tab stays removed after reload', async ({ page }) => {
