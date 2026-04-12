@@ -49,6 +49,23 @@ const domJsxTypes =
   '  interface IntrinsicElements { [elemName: string]: Record<string, unknown> }\n' +
   '}\n'
 
+const styleImportTypes =
+  "declare module '*.css' {\n" +
+  '  const cssText: string\n' +
+  '  export default cssText\n' +
+  '}\n' +
+  "declare module '*.less' {\n" +
+  '  const lessText: string\n' +
+  '  export default lessText\n' +
+  '}\n' +
+  "declare module '*.sass' {\n" +
+  '  const sassText: string\n' +
+  '  export default sassText\n' +
+  '}\n' +
+  "declare module '*.scss' {\n" +
+  '  const scssText: string\n' +
+  '  export default scssText\n' +
+  '}\n'
 const normalizeVirtualFileName = fileName =>
   typeof fileName === 'string' && fileName.startsWith('/') ? fileName.slice(1) : fileName
 
@@ -234,6 +251,8 @@ export const createTypeDiagnosticsController = ({
   getTypeScriptLibUrls,
   getTypePackageFileUrls,
   getJsxSource,
+  getTypecheckSourcePath = () => '',
+  getWorkspaceTabs = () => [],
   getRenderMode = () => 'dom',
   defaultTypeScriptLibFileName = 'lib.esnext.full.d.ts',
   setTypecheckButtonLoading,
@@ -248,6 +267,116 @@ export const createTypeDiagnosticsController = ({
   getActiveTypeDiagnosticsRuns,
   onIssuesDetected = () => {},
 }) => {
+  const styleTabLanguages = new Set(['css', 'less', 'sass', 'module'])
+
+  const isStyleWorkspaceTab = tab => {
+    if (!tab || typeof tab !== 'object') {
+      return false
+    }
+
+    const language =
+      typeof tab.language === 'string' ? tab.language.trim().toLowerCase() : ''
+    if (styleTabLanguages.has(language)) {
+      return true
+    }
+
+    const path = typeof tab.path === 'string' ? tab.path.trim().toLowerCase() : ''
+    return /\.(css|less|sass|scss)$/.test(path)
+  }
+
+  const toWorkspaceComponentTabs = () => {
+    const tabs = typeof getWorkspaceTabs === 'function' ? getWorkspaceTabs() : []
+    if (!Array.isArray(tabs)) {
+      return []
+    }
+
+    return tabs
+      .filter(tab => tab && typeof tab === 'object' && !isStyleWorkspaceTab(tab))
+      .map(tab => ({
+        ...tab,
+        path:
+          typeof tab.path === 'string' && tab.path.trim().length > 0
+            ? normalizeRelativePath(tab.path)
+            : typeof tab.name === 'string' && tab.name.trim().length > 0
+              ? normalizeRelativePath(tab.name)
+              : '',
+        content: typeof tab.content === 'string' ? tab.content : '',
+      }))
+      .filter(tab => tab.path.length > 0)
+  }
+
+  const resolveWorkspaceEntryForTypecheck = tabs => {
+    if (!Array.isArray(tabs) || tabs.length === 0) {
+      return null
+    }
+
+    return (
+      tabs.find(tab => tab?.role === 'entry' && typeof tab.path === 'string') ??
+      tabs.find(tab => tab?.id === 'component' && typeof tab.path === 'string') ??
+      tabs[0] ??
+      null
+    )
+  }
+
+  const toJsCompatibilityCandidates = (specifier, containingFile) => {
+    if (typeof specifier !== 'string' || !specifier.startsWith('.')) {
+      return []
+    }
+
+    const containingDirectory = dirname(containingFile)
+    const resolvedSpecifier = joinPath(containingDirectory, specifier)
+    const withoutJsExtension = resolvedSpecifier.replace(/\.(mjs|cjs|jsx|js)$/i, '')
+
+    if (withoutJsExtension === resolvedSpecifier) {
+      return []
+    }
+
+    const candidates = [
+      `${withoutJsExtension}.ts`,
+      `${withoutJsExtension}.tsx`,
+      `${withoutJsExtension}.mts`,
+      `${withoutJsExtension}.cts`,
+      `${withoutJsExtension}/index.ts`,
+      `${withoutJsExtension}/index.tsx`,
+      `${withoutJsExtension}/index.mts`,
+      `${withoutJsExtension}/index.cts`,
+    ]
+
+    return [...new Set(candidates)]
+  }
+
+  const toTypeScriptExtension = (compiler, fileName) => {
+    if (fileName.endsWith('.tsx')) {
+      return compiler.Extension?.Tsx ?? '.tsx'
+    }
+
+    if (fileName.endsWith('.ts')) {
+      return compiler.Extension?.Ts ?? '.ts'
+    }
+
+    if (fileName.endsWith('.mts')) {
+      return compiler.Extension?.Mts ?? '.mts'
+    }
+
+    if (fileName.endsWith('.cts')) {
+      return compiler.Extension?.Cts ?? '.cts'
+    }
+
+    if (fileName.endsWith('.d.ts')) {
+      return compiler.Extension?.Dts ?? '.d.ts'
+    }
+
+    if (fileName.endsWith('.jsx')) {
+      return compiler.Extension?.Jsx ?? '.jsx'
+    }
+
+    if (fileName.endsWith('.js')) {
+      return compiler.Extension?.Js ?? '.js'
+    }
+
+    return compiler.Extension?.Ts ?? '.ts'
+  }
+
   let typeCheckRunId = 0
   let typeScriptCompiler = null
   let typeScriptCompilerProvider = null
@@ -689,9 +818,21 @@ export const createTypeDiagnosticsController = ({
     )
   }
 
-  const collectTypeDiagnostics = async (compiler, sourceText) => {
-    const sourceFileName = 'component.tsx'
+  const collectTypeDiagnostics = async (
+    compiler,
+    { sourceText, sourcePathOverride = '' },
+  ) => {
+    const workspaceComponentTabs = toWorkspaceComponentTabs()
+    const resolvedEntryTab = resolveWorkspaceEntryForTypecheck(workspaceComponentTabs)
+    const normalizedSourcePathOverride =
+      typeof sourcePathOverride === 'string'
+        ? normalizeRelativePath(sourcePathOverride)
+        : ''
+    const sourceFileName =
+      normalizedSourcePathOverride || resolvedEntryTab?.path || 'component.tsx'
+    const typecheckSourceFileName = sourceFileName.replace(/\.(jsx?|mjs|cjs)$/i, '.tsx')
     const jsxTypesFileName = 'knighted-jsx-runtime.d.ts'
+    const styleImportTypesFileName = 'knighted-style-imports.d.ts'
     const renderMode = getRenderMode()
     const isReactMode = renderMode === 'react'
     const libFiles = await ensureTypeScriptLibFiles()
@@ -701,7 +842,16 @@ export const createTypeDiagnosticsController = ({
       reactTypes = await ensureReactTypeFiles(compiler)
     }
 
-    const files = new Map([[sourceFileName, sourceText], ...libFiles.entries()])
+    const files = new Map(libFiles.entries())
+
+    if (workspaceComponentTabs.length > 0) {
+      for (const tab of workspaceComponentTabs) {
+        files.set(tab.path, tab.content)
+      }
+    }
+
+    files.set(typecheckSourceFileName, sourceText)
+    files.set(styleImportTypesFileName, styleImportTypes)
 
     if (!isReactMode) {
       files.set(jsxTypesFileName, domJsxTypes)
@@ -723,6 +873,8 @@ export const createTypeDiagnosticsController = ({
         compiler.ModuleResolutionKind?.NodeJs,
       types: [],
       strict: true,
+      allowJs: true,
+      checkJs: false,
       noEmit: true,
       skipLibCheck: true,
     }
@@ -776,6 +928,22 @@ export const createTypeDiagnosticsController = ({
           return resolved.resolvedModule
         }
 
+        const jsCompatibilityCandidates = toJsCompatibilityCandidates(
+          moduleName,
+          containingFile,
+        )
+        const matchedWorkspaceModule = jsCompatibilityCandidates.find(candidate =>
+          files.has(candidate),
+        )
+
+        if (matchedWorkspaceModule) {
+          return {
+            resolvedFileName: matchedWorkspaceModule,
+            extension: toTypeScriptExtension(compiler, matchedWorkspaceModule),
+            isExternalLibraryImport: false,
+          }
+        }
+
         if (!reactTypes) {
           return undefined
         }
@@ -813,9 +981,13 @@ export const createTypeDiagnosticsController = ({
 
         const scriptKind = normalizedFileName.endsWith('.tsx')
           ? compiler.ScriptKind?.TSX
-          : normalizedFileName.endsWith('.d.ts')
-            ? compiler.ScriptKind?.TS
-            : compiler.ScriptKind?.TS
+          : normalizedFileName.endsWith('.jsx')
+            ? compiler.ScriptKind?.JSX
+            : normalizedFileName.endsWith('.js')
+              ? compiler.ScriptKind?.JS
+              : normalizedFileName.endsWith('.d.ts')
+                ? compiler.ScriptKind?.TS
+                : compiler.ScriptKind?.TS
 
         return compiler.createSourceFile(
           normalizedFileName,
@@ -834,7 +1006,7 @@ export const createTypeDiagnosticsController = ({
       resolveModuleNames,
     }
 
-    const rootNames = [sourceFileName]
+    const rootNames = [typecheckSourceFileName, styleImportTypesFileName]
     if (!isReactMode) {
       rootNames.push(jsxTypesFileName)
     }
@@ -859,7 +1031,14 @@ export const createTypeDiagnosticsController = ({
       .filter(diagnostic => !shouldIgnoreTypeDiagnostic(diagnostic))
   }
 
-  const runTypeDiagnostics = async (runId, { userInitiated = false } = {}) => {
+  const runTypeDiagnostics = async (
+    runId,
+    {
+      userInitiated = false,
+      sourceOverride = undefined,
+      sourcePathOverride = undefined,
+    } = {},
+  ) => {
     incrementTypeDiagnosticsRuns()
     setTypeDiagnosticsPending(false)
     setTypecheckButtonLoading(true)
@@ -876,7 +1055,16 @@ export const createTypeDiagnosticsController = ({
         return
       }
 
-      const diagnostics = await collectTypeDiagnostics(compiler, getJsxSource())
+      const sourceForRun =
+        typeof sourceOverride === 'string' ? sourceOverride : getJsxSource()
+      const sourcePathForRun =
+        typeof sourcePathOverride === 'string' && sourcePathOverride.length > 0
+          ? sourcePathOverride
+          : getTypecheckSourcePath()
+      const diagnostics = await collectTypeDiagnostics(compiler, {
+        sourceText: sourceForRun,
+        sourcePathOverride: sourcePathForRun,
+      })
       const errorCategory = compiler.DiagnosticCategory?.Error
       const errors = diagnostics.filter(
         diagnostic => diagnostic.category === errorCategory,
@@ -938,9 +1126,17 @@ export const createTypeDiagnosticsController = ({
     }
   }
 
-  const triggerTypeDiagnostics = ({ userInitiated = false } = {}) => {
+  const triggerTypeDiagnostics = ({
+    userInitiated = false,
+    source = undefined,
+    sourcePath = undefined,
+  } = {}) => {
     typeCheckRunId += 1
-    void runTypeDiagnostics(typeCheckRunId, { userInitiated })
+    void runTypeDiagnostics(typeCheckRunId, {
+      userInitiated,
+      sourceOverride: source,
+      sourcePathOverride: sourcePath,
+    })
   }
 
   const scheduleTypeRecheck = () => {

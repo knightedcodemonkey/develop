@@ -1,8 +1,10 @@
 import { expect, test } from '@playwright/test'
 import {
   addWorkspaceTab,
+  ensurePanelToolsVisible,
   reorderWorkspaceTabBefore,
   setWorkspaceTabSource,
+  waitForAppReady,
   waitForInitialRender,
 } from './helpers/app-test-helpers.js'
 
@@ -148,6 +150,28 @@ test('active tab remains source of truth for visible editor panel', async ({ pag
   await expect(componentPanel).toHaveAttribute('hidden', '')
 })
 
+test('render mode can only be changed from entry tab', async ({ page }) => {
+  await waitForInitialRender(page)
+
+  await addWorkspaceTab(page)
+  await ensurePanelToolsVisible(page, 'component')
+
+  const renderMode = page.getByRole('combobox', { name: 'Render mode' })
+
+  await page.getByRole('button', { name: 'Open tab App.tsx' }).click()
+  await expect(renderMode).toBeEnabled()
+  await renderMode.selectOption('react')
+  await expect(renderMode).toHaveValue('react')
+
+  await page.getByRole('button', { name: 'Open tab module.tsx' }).click()
+  await expect(renderMode).toBeDisabled()
+  await expect(renderMode).toHaveValue('react')
+
+  await page.getByRole('button', { name: 'Open tab App.tsx' }).click()
+  await expect(renderMode).toBeEnabled()
+  await expect(renderMode).toHaveValue('react')
+})
+
 test('startup restores last active workspace tab after reload', async ({ page }) => {
   await waitForInitialRender(page)
 
@@ -167,6 +191,21 @@ test('startup restores last active workspace tab after reload', async ({ page })
   ).toHaveAttribute('aria-current', 'true')
   await expect(page.locator('#editor-panel-component')).not.toHaveAttribute('hidden', '')
   await expect(page.locator('#editor-panel-styles')).toHaveAttribute('hidden', '')
+})
+
+test('removed default styles tab stays removed after reload', async ({ page }) => {
+  await waitForInitialRender(page)
+
+  await expect(page.getByRole('button', { name: 'Open tab app.css' })).toHaveCount(1)
+  await page.getByRole('button', { name: 'Remove tab app.css' }).click()
+  await confirmRemoveDialog(page)
+
+  await expect(page.getByRole('button', { name: 'Open tab app.css' })).toHaveCount(0)
+
+  await page.reload()
+  await waitForAppReady(page)
+
+  await expect(page.getByRole('button', { name: 'Open tab app.css' })).toHaveCount(0)
 })
 
 test('workspace tab drag reorder persists across reload', async ({ page }) => {

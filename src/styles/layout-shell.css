@@ -155,6 +155,7 @@
   align-items: flex-end;
   gap: 8px;
   overflow-x: auto;
+  overflow-y: hidden;
   min-width: 0;
   scrollbar-width: thin;
   flex: 1;

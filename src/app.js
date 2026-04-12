@@ -841,6 +841,14 @@ const getWorkspaceTabByKind = kind => {
 const getActiveWorkspaceTab = () =>
   workspaceTabsState.getTab(workspaceTabsState.getActiveTabId())
 
+const getLoadedComponentWorkspaceTab = () =>
+  workspaceTabsState.getTab(loadedComponentTabId) ?? getWorkspaceTabByKind('component')
+
+const getTypecheckSourcePath = () => {
+  const loadedComponentTab = getLoadedComponentWorkspaceTab()
+  return toNonEmptyWorkspaceText(loadedComponentTab?.path) || defaultComponentTabPath
+}
+
 const toStyleModeForTabLanguage = language => {
   const normalized = toNonEmptyWorkspaceText(language)
   if (normalized === 'less') {
@@ -1054,7 +1062,6 @@ const makeUniqueTabPath = ({ basePath, suffix = '' }) => {
 const ensureWorkspaceTabsShape = tabs => {
   const inputTabs = Array.isArray(tabs) ? tabs : []
   const hasComponent = inputTabs.some(tab => tab?.id === 'component')
-  const hasStyles = inputTabs.some(tab => tab?.id === 'styles')
   const nextTabs = [...inputTabs]
 
   if (!hasComponent) {
@@ -1066,18 +1073,6 @@ const ensureWorkspaceTabsShape = tabs => {
       role: 'entry',
       content: defaultJsx,
       isActive: true,
-    })
-  }
-
-  if (!hasStyles) {
-    nextTabs.push({
-      id: 'styles',
-      name: defaultStylesTabName,
-      path: defaultStylesTabPath,
-      language: 'css',
-      role: 'module',
-      content: defaultCss,
-      isActive: false,
     })
   }
 
@@ -1171,22 +1166,6 @@ const buildWorkspaceTabsSnapshot = () => {
       lastModified: Date.now(),
     }
   })
-}
-
-const getPreviewStylesSource = () => {
-  const loadedStylesTab = workspaceTabsState.getTab(loadedStylesTabId)
-
-  if (!loadedStylesTab || getTabKind(loadedStylesTab) !== 'styles') {
-    return getCssSource()
-  }
-
-  if (workspaceTabsState.getActiveTabId() === loadedStylesTab.id) {
-    return getCssSource()
-  }
-
-  return typeof loadedStylesTab.content === 'string'
-    ? loadedStylesTab.content
-    : getCssSource()
 }
 
 const buildWorkspaceRecordSnapshot = ({ recordId } = {}) => {
@@ -1327,6 +1306,8 @@ const applyWorkspaceRecord = async (workspace, { silent = false } = {}) => {
 
     if (typeof stylesTab?.path === 'string' && githubPrStylesPath) {
       githubPrStylesPath.value = stylesTab.path
+    } else if (githubPrStylesPath instanceof HTMLInputElement) {
+      githubPrStylesPath.value = ''
     }
 
     const activeTab = getActiveWorkspaceTab()
@@ -1339,6 +1320,7 @@ const applyWorkspaceRecord = async (workspace, { silent = false } = {}) => {
     }
 
     renderWorkspaceTabs()
+    updateRenderModeEditability()
 
     if (hasCompletedInitialWorkspaceBootstrap) {
       maybeRender()
@@ -1404,6 +1386,7 @@ const setActiveWorkspaceTab = tabId => {
   if (targetTab.id === currentActiveTabId) {
     loadWorkspaceTabIntoEditor(targetTab)
     renderWorkspaceTabs()
+    updateRenderModeEditability()
     return
   }
 
@@ -1416,6 +1399,7 @@ const setActiveWorkspaceTab = tabId => {
   }
 
   renderWorkspaceTabs()
+  updateRenderModeEditability()
 
   if (!changed) {
     return
@@ -1493,9 +1477,14 @@ const finishWorkspaceTabRename = ({ tabId, nextName, cancelled = false }) => {
     githubPrComponentPath.value = normalizedEntryPath
   }
 
+  if (tab.id === 'styles' && githubPrStylesPath instanceof HTMLInputElement) {
+    githubPrStylesPath.value = normalizedEntryPath
+  }
+
   syncHeaderLabels()
   renderWorkspaceTabs()
   queueWorkspaceSave()
+  maybeRender()
 }
 
 const removeWorkspaceTab = tabId => {
@@ -1949,14 +1938,20 @@ const syncTabPathsFromInputs = () => {
     role: 'entry',
     isActive: workspaceTabsState.getActiveTabId() === 'component',
   })
-  workspaceTabsState.upsertTab({
-    id: 'styles',
-    path: stylesPath,
-    name: getPathFileName(stylesPath) || defaultStylesTabName,
-    language: 'css',
-    role: 'module',
-    isActive: workspaceTabsState.getActiveTabId() === 'styles',
-  })
+
+  const defaultStylesTab = workspaceTabsState.getTab('styles')
+  if (defaultStylesTab) {
+    workspaceTabsState.upsertTab({
+      id: 'styles',
+      path: stylesPath,
+      name: getPathFileName(stylesPath) || defaultStylesTabName,
+      language: isStyleTabLanguage(defaultStylesTab.language)
+        ? defaultStylesTab.language
+        : 'css',
+      role: 'module',
+      isActive: workspaceTabsState.getActiveTabId() === 'styles',
+    })
+  }
 
   syncHeaderLabels()
   renderWorkspaceTabs()
@@ -2193,6 +2188,16 @@ const getStyleEditorLanguage = mode => {
 
 const normalizeRenderMode = mode => (mode === 'react' ? 'react' : 'dom')
 
+const updateRenderModeEditability = () => {
+  if (!(renderMode instanceof HTMLSelectElement)) {
+    return
+  }
+
+  const activeTab = getActiveWorkspaceTab()
+  const isEntryTab = activeTab?.role === 'entry'
+  renderMode.disabled = !isEntryTab
+}
+
 const normalizeStyleMode = mode => {
   if (mode === 'module') return 'module'
   if (mode === 'less') return 'less'
@@ -2384,6 +2389,8 @@ const typeDiagnostics = createTypeDiagnosticsController({
   getTypeScriptLibUrls,
   getTypePackageFileUrls,
   getJsxSource: () => getJsxSource(),
+  getTypecheckSourcePath,
+  getWorkspaceTabs: () => buildWorkspaceTabsSnapshot(),
   getRenderMode: () => renderMode.value,
   setTypecheckButtonLoading,
   setTypeDiagnosticsDetails,
@@ -2448,7 +2455,7 @@ const syncLintPendingState = () => {
   setLintDiagnosticsPending(componentLintPending || stylesLintPending)
 }
 
-const runComponentLint = async ({ userInitiated = false } = {}) => {
+const runComponentLint = ({ userInitiated = false, source = undefined } = {}) => {
   activeComponentLintAbortController?.abort()
   const controller = new AbortController()
   activeComponentLintAbortController = controller
@@ -2458,24 +2465,28 @@ const runComponentLint = async ({ userInitiated = false } = {}) => {
 
   setLintButtonLoading({ button: lintComponentButton, isLoading: true })
 
-  try {
-    const result = await lintDiagnostics.lintComponent({
+  return lintDiagnostics
+    .lintComponent({
       signal: controller.signal,
       userInitiated,
+      source,
     })
-    if (result) {
-      lastComponentLintIssueCount = result.issueCount
-    }
-  } finally {
-    decrementLintDiagnosticsRuns()
-    if (activeComponentLintAbortController === controller) {
-      activeComponentLintAbortController = null
-      setLintButtonLoading({ button: lintComponentButton, isLoading: false })
-    }
-  }
+    .then(result => {
+      if (result) {
+        lastComponentLintIssueCount = result.issueCount
+      }
+      return result
+    })
+    .finally(() => {
+      decrementLintDiagnosticsRuns()
+      if (activeComponentLintAbortController === controller) {
+        activeComponentLintAbortController = null
+        setLintButtonLoading({ button: lintComponentButton, isLoading: false })
+      }
+    })
 }
 
-const runStylesLint = async ({ userInitiated = false } = {}) => {
+const runStylesLint = ({ userInitiated = false, source = undefined } = {}) => {
   activeStylesLintAbortController?.abort()
   const controller = new AbortController()
   activeStylesLintAbortController = controller
@@ -2485,21 +2496,25 @@ const runStylesLint = async ({ userInitiated = false } = {}) => {
 
   setLintButtonLoading({ button: lintStylesButton, isLoading: true })
 
-  try {
-    const result = await lintDiagnostics.lintStyles({
+  return lintDiagnostics
+    .lintStyles({
       signal: controller.signal,
       userInitiated,
+      source,
     })
-    if (result) {
-      lastStylesLintIssueCount = result.issueCount
-    }
-  } finally {
-    decrementLintDiagnosticsRuns()
-    if (activeStylesLintAbortController === controller) {
-      activeStylesLintAbortController = null
-      setLintButtonLoading({ button: lintStylesButton, isLoading: false })
-    }
-  }
+    .then(result => {
+      if (result) {
+        lastStylesLintIssueCount = result.issueCount
+      }
+      return result
+    })
+    .finally(() => {
+      decrementLintDiagnosticsRuns()
+      if (activeStylesLintAbortController === controller) {
+        activeStylesLintAbortController = null
+        setLintButtonLoading({ button: lintStylesButton, isLoading: false })
+      }
+    })
 }
 
 const markTypeDiagnosticsStale = () => {
@@ -2627,9 +2642,7 @@ renderRuntime = createRenderRuntimeController({
   cdnImports,
   importFromCdnWithFallback,
   renderMode,
-  styleMode,
   isAutoRenderEnabled: () => autoRenderToggle.checked,
-  getCssSource: () => getPreviewStylesSource(),
   getJsxSource: () => getJsxSource(),
   getWorkspaceTabs: () => buildWorkspaceTabsSnapshot(),
   getPreviewHost: () => previewHost,
@@ -2808,6 +2821,31 @@ function applyStyleMode({ mode }) {
     }
   }
 
+  const activeTab = getActiveWorkspaceTab()
+  if (activeTab && getTabKind(activeTab) === 'styles') {
+    const nextLanguage =
+      nextMode === 'less'
+        ? 'less'
+        : nextMode === 'sass'
+          ? 'sass'
+          : nextMode === 'module'
+            ? 'module'
+            : 'css'
+
+    if (activeTab.language !== nextLanguage) {
+      workspaceTabsState.upsertTab(
+        {
+          ...activeTab,
+          language: nextLanguage,
+          lastModified: Date.now(),
+          isActive: true,
+        },
+        { emitReason: 'styleModeChange' },
+      )
+      queueWorkspaceSave()
+    }
+  }
+
   maybeRender()
 }
 
@@ -2863,17 +2901,27 @@ if (diagnosticsClearAll) {
 }
 if (typecheckButton) {
   typecheckButton.addEventListener('click', () => {
-    typeDiagnostics.triggerTypeDiagnostics({ userInitiated: true })
+    typeDiagnostics.triggerTypeDiagnostics({
+      userInitiated: true,
+      source: getJsxSource(),
+      sourcePath: getTypecheckSourcePath(),
+    })
   })
 }
 if (lintComponentButton) {
   lintComponentButton.addEventListener('click', () => {
-    void runComponentLint({ userInitiated: true })
+    void runComponentLint({
+      userInitiated: true,
+      source: getJsxSource(),
+    })
   })
 }
 if (lintStylesButton) {
   lintStylesButton.addEventListener('click', () => {
-    void runStylesLint({ userInitiated: true })
+    void runStylesLint({
+      userInitiated: true,
+      source: getCssSource(),
+    })
   })
 }
 renderButton.addEventListener('click', renderPreview)
@@ -3182,6 +3230,7 @@ applyEditorToolsVisibility()
 applyPanelCollapseState()
 syncHeaderLabels()
 renderWorkspaceTabs()
+updateRenderModeEditability()
 setCompactAiControlsOpen(false)
 setGitHubTokenInfoOpen(false)
 syncAiChatTokenVisibility(githubAiContextState.token)

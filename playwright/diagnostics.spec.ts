@@ -1,9 +1,11 @@
 import { expect, test } from '@playwright/test'
 import {
+  addWorkspaceTab,
   ensurePanelToolsVisible,
   ensureDiagnosticsDrawerOpen,
   getActiveComponentEditorLineNumber,
   getActiveStylesEditorLineNumber,
+  setWorkspaceTabSource,
   runComponentLint,
   runStylesLint,
   runTypecheck,
@@ -147,6 +149,99 @@ test('dom mode typecheck resolves @knighted/jsx type-only imports', async ({ pag
   expect(diagnosticsText).not.toContain("Cannot find module '@knighted/jsx'")
 })
 
+test('typecheck resolves .js import to workspace tsx module tab', async ({ page }) => {
+  await waitForInitialRender(page)
+
+  await ensurePanelToolsVisible(page, 'component')
+  await addWorkspaceTab(page)
+
+  await setWorkspaceTabSource(page, {
+    fileName: 'module.tsx',
+    kind: 'component',
+    source: [
+      'type ThingProps = { label: string }',
+      'export const Thing = ({ label }: ThingProps) => <p>{label}</p>',
+    ].join('\n'),
+  })
+
+  await setComponentEditorSource(
+    page,
+    [
+      "import { Thing } from './module.js'",
+      'const App = () => <Thing label="ok" />',
+      '',
+    ].join('\n'),
+  )
+
+  await runTypecheck(page)
+  await ensureDiagnosticsDrawerOpen(page)
+  await expect(page.locator('#diagnostics-component')).toContainText(
+    'No TypeScript errors found.',
+  )
+
+  const diagnosticsText = await page.locator('#diagnostics-component').innerText()
+  expect(diagnosticsText).not.toContain("Cannot find module './module.js'")
+})
+
+test('typecheck resolves parent-relative .js import to workspace tsx module tab', async ({
+  page,
+}) => {
+  await waitForInitialRender(page)
+
+  await ensurePanelToolsVisible(page, 'component')
+  await addWorkspaceTab(page)
+
+  await setWorkspaceTabSource(page, {
+    fileName: 'module.tsx',
+    kind: 'component',
+    source: [
+      'type ThingProps = { label: string }',
+      'export const Thing = ({ label }: ThingProps) => <p>{label}</p>',
+    ].join('\n'),
+  })
+
+  await setComponentEditorSource(
+    page,
+    [
+      "import { Thing } from '../components/module.js'",
+      'const App = () => <Thing label="ok" />',
+      '',
+    ].join('\n'),
+  )
+
+  await runTypecheck(page)
+  await ensureDiagnosticsDrawerOpen(page)
+  await expect(page.locator('#diagnostics-component')).toContainText(
+    'No TypeScript errors found.',
+  )
+
+  const diagnosticsText = await page.locator('#diagnostics-component').innerText()
+  expect(diagnosticsText).not.toContain("Cannot find module '../components/module.js'")
+})
+
+test('typecheck does not report TS2307 for stylesheet side-effect imports', async ({
+  page,
+}) => {
+  await waitForInitialRender(page)
+
+  await ensurePanelToolsVisible(page, 'component')
+  await setComponentEditorSource(
+    page,
+    ["import '../styles/app.css'", '', 'const App = () => <p>style import</p>', ''].join(
+      '\n',
+    ),
+  )
+
+  await runTypecheck(page)
+  await ensureDiagnosticsDrawerOpen(page)
+  await expect(page.locator('#diagnostics-component')).toContainText(
+    'No TypeScript errors found.',
+  )
+
+  const diagnosticsText = await page.locator('#diagnostics-component').innerText()
+  expect(diagnosticsText).not.toContain("Cannot find module '../styles/app.css'")
+})
+
 test('component diagnostics rows navigate editor to reported line', async ({ page }) => {
   await waitForInitialRender(page)
 
@@ -253,6 +348,23 @@ test('styles diagnostics rows navigate editor to reported line', async ({ page }
   await targetDiagnostic.click()
   await expect(targetDiagnostic).toHaveClass(/diagnostic-line-button--active/)
   await expect.poll(() => getActiveStylesEditorLineNumber(page)).toBe('3')
+})
+
+test('sass compiler warnings surface in styles diagnostics', async ({ page }) => {
+  await waitForInitialRender(page)
+
+  await ensurePanelToolsVisible(page, 'styles')
+  await page.getByRole('combobox', { name: 'Style mode' }).selectOption('sass')
+  await setStylesEditorSource(
+    page,
+    ['.card {', '  color: darken(#ff0000, 10%);', '}'].join('\n'),
+  )
+
+  await expect(page.getByRole('status', { name: 'App status' })).toHaveText('Rendered')
+  await ensureDiagnosticsDrawerOpen(page)
+  await expect(page.locator('#diagnostics-styles')).toContainText(
+    'Style compilation warnings.',
+  )
 })
 
 test('clear component diagnostics resets rendered lint-issue status pill', async ({
