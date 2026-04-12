@@ -814,6 +814,45 @@ const toWorkspaceRecordId = ({ repositoryFullName, headBranch }) => {
   return `workspace_${headSegment}`
 }
 
+const resolveWorkspaceRecordIdentity = ({
+  repositoryFullName,
+  headBranch,
+  activeRecordId,
+} = {}) => {
+  const canonicalId = toWorkspaceRecordId({ repositoryFullName, headBranch })
+  const currentId = toNonEmptyWorkspaceText(activeRecordId)
+
+  if (!currentId) {
+    return {
+      id: canonicalId,
+      supersededId: '',
+    }
+  }
+
+  if (currentId === canonicalId) {
+    return {
+      id: currentId,
+      supersededId: '',
+    }
+  }
+
+  const hasRepository = Boolean(toWorkspaceIdentitySegment(repositoryFullName))
+  const shouldPromoteLocalIdToRepository =
+    hasRepository && currentId.startsWith('workspace_')
+
+  if (shouldPromoteLocalIdToRepository) {
+    return {
+      id: canonicalId,
+      supersededId: currentId,
+    }
+  }
+
+  return {
+    id: currentId,
+    supersededId: '',
+  }
+}
+
 const getWorkspaceContextSnapshot = () => {
   return {
     repositoryFullName: getCurrentSelectedRepository(),
@@ -1428,16 +1467,21 @@ const reconcileWorkspaceTabsWithEditorSync = ({ componentPath, stylesPath } = {}
 
 const buildWorkspaceRecordSnapshot = ({ recordId } = {}) => {
   const context = getWorkspaceContextSnapshot()
-  const id =
-    recordId ||
-    activeWorkspaceRecordId ||
-    toWorkspaceRecordId({
-      repositoryFullName: context.repositoryFullName,
-      headBranch: context.headBranch,
-    })
+  const identity =
+    typeof recordId === 'string' && recordId.length > 0
+      ? {
+          id: recordId,
+          supersededId: '',
+        }
+      : resolveWorkspaceRecordIdentity({
+          repositoryFullName: context.repositoryFullName,
+          headBranch: context.headBranch,
+          activeRecordId: activeWorkspaceRecordId,
+        })
 
   return {
-    id,
+    id: identity.id,
+    supersededId: identity.supersededId,
     repo: context.repositoryFullName || '',
     base: context.baseBranch || '',
     head: context.headBranch || '',
@@ -1532,6 +1576,45 @@ const applyWorkspaceRecord = async (workspace, { silent = false } = {}) => {
 workspaceSaver = createDebouncedWorkspaceSaver({
   save: async payload => {
     const saved = await workspaceStorage.upsertWorkspace(payload)
+
+    const normalizedSavedRepo = toNonEmptyWorkspaceText(saved.repo)
+    const normalizedSavedHead = toNonEmptyWorkspaceText(saved.head)
+
+    if (normalizedSavedHead) {
+      const siblingRecords = normalizedSavedRepo
+        ? await workspaceStorage.listWorkspaces({ repo: normalizedSavedRepo })
+        : await workspaceStorage.listWorkspaces()
+
+      const duplicateRecordIds = siblingRecords
+        .filter(record => {
+          if (!record || typeof record !== 'object') {
+            return false
+          }
+
+          if (toNonEmptyWorkspaceText(record.id) === toNonEmptyWorkspaceText(saved.id)) {
+            return false
+          }
+
+          return (
+            toNonEmptyWorkspaceText(record.repo) === normalizedSavedRepo &&
+            toNonEmptyWorkspaceText(record.head) === normalizedSavedHead
+          )
+        })
+        .map(record => toNonEmptyWorkspaceText(record.id))
+        .filter(Boolean)
+
+      await Promise.all(
+        duplicateRecordIds.map(duplicateId =>
+          workspaceStorage.removeWorkspace(duplicateId),
+        ),
+      )
+    }
+
+    const supersededId = toNonEmptyWorkspaceText(payload?.supersededId)
+    if (supersededId && supersededId !== toNonEmptyWorkspaceText(saved.id)) {
+      await workspaceStorage.removeWorkspace(supersededId)
+    }
+
     activeWorkspaceRecordId = saved.id
     activeWorkspaceCreatedAt = saved.createdAt ?? activeWorkspaceCreatedAt
     await refreshLocalContextOptions()
