@@ -52,7 +52,11 @@ test('clear component diagnostics removes type errors and restores rendered stat
     ),
   )
 
-  await page.getByRole('button', { name: 'Typecheck' }).click()
+  await expect(
+    page.locator('.editor-panel[data-editor-kind="component"] .cm-content').first(),
+  ).toContainText("const count: number = 'oops'")
+
+  await runTypecheck(page)
   const diagnosticsToggle = page.getByRole('button', { name: /^Diagnostics/ })
   await expect(diagnosticsToggle).toHaveClass(/diagnostics-toggle--error/)
   await expect(page.getByText(/Rendered \(Type errors: [1-9]\d*\)/)).toBeVisible()
