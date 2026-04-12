@@ -4,11 +4,11 @@ import {
   hasFunctionLikeDeclarationNamed,
 } from './jsx-top-level-declarations.js'
 import { canRenderPreview, resolvePreviewEntryTab } from './preview-entry-resolver.js'
-import { createWorkspaceIframePreviewBridge } from './preview-runtime/iframe-preview-executor.js'
-import { planWorkspaceVirtualModules } from './preview-runtime/virtual-workspace-modules.js'
+import { createWorkspaceIframePreviewBridge } from '../preview-runtime/iframe-preview-executor.js'
+import { planWorkspaceVirtualModules } from '../preview-runtime/virtual-workspace-modules.js'
 import { createPreviewWorkspaceGraphCache } from './preview-workspace-graph.js'
 import { ensureJsxTransformSource } from './jsx-transform-runtime.js'
-import { getCdnImportUrl } from './cdn.js'
+import { getCdnImportUrl } from '../cdn.js'
 
 export const createRenderRuntimeController = ({
   cdnImports,

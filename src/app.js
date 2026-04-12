@@ -4,31 +4,87 @@ import {
   getTypeScriptLibUrls,
   importFromCdnWithFallback,
 } from './modules/cdn.js'
-import { createCodeMirrorEditor } from './modules/editor-codemirror.js'
-import { defaultCss, defaultJsx } from './modules/defaults.js'
-import { createDiagnosticsUiController } from './modules/diagnostics-ui.js'
-import { createGitHubChatDrawer } from './modules/github-chat-drawer/drawer.js'
-import { createGitHubByotControls } from './modules/github-byot-controls.js'
+import { createCodeMirrorEditor } from './modules/editor/editor-codemirror.js'
+import { createCompactAiControlsUiController } from './modules/app-core/compact-ai-controls-ui.js'
+import { bindAppEventsAndStart } from './modules/app-core/app-bindings-startup.js'
+import {
+  createEditorBootstrapOptions,
+  createRuntimeCoreOptions,
+} from './modules/app-core/app-composition-options.js'
+import { createDiagnosticsFlowController } from './modules/app-core/diagnostics-flow-controller.js'
+import { createEditorBootstrapController } from './modules/app-core/editor-bootstrap-controller.js'
+import {
+  getInitialRenderMode as getInitialRenderModeValue,
+  getStyleEditorLanguage,
+  normalizeRenderMode,
+  normalizeStyleMode,
+  persistRenderMode as persistRenderModeValue,
+  setCssSourceValue,
+  setJsxSourceValue,
+  updateRenderModeEditability as updateRenderModeEditabilityValue,
+} from './modules/app-core/runtime-editor-utils.js'
+import { createRuntimeCoreSetup } from './modules/app-core/runtime-core-setup.js'
+import {
+  createWorkspaceContextSnapshotGetter,
+  toStyleModeForTabLanguage,
+} from './modules/app-core/workspace-local-helpers.js'
+import { createWorkspaceEditorHelpers } from './modules/app-core/workspace-editor-helpers.js'
+import { createLayoutDiagnosticsSetup } from './modules/app-core/layout-diagnostics-setup.js'
+import { createWorkspaceControllersSetup } from './modules/app-core/workspace-controllers-setup.js'
+import { createGitHubWorkflowsSetup } from './modules/app-core/github-workflows-setup.js'
+import { defaultCss, defaultJsx } from './modules/app-core/defaults.js'
+import { createGitHubPrContextUiController } from './modules/app-core/github-pr-context-ui.js'
+import { createGitHubTokenInfoUiController } from './modules/app-core/github-token-info-ui.js'
+import { createWorkspaceSyncController } from './modules/app-core/workspace-sync-controller.js'
+import { createWorkspaceTabAddMenuUiController } from './modules/app-core/workspace-tab-add-menu-ui.js'
+import { createDiagnosticsUiController } from './modules/diagnostics/diagnostics-ui.js'
+import { createGitHubChatDrawer } from './modules/github/chat-drawer/drawer.js'
+import { createGitHubByotControls } from './modules/github/github-byot-controls.js'
 import {
   formatActivePrReference,
   getActivePrContextSyncKey,
-} from './modules/github-pr-context.js'
-import { createGitHubPrEditorSyncController } from './modules/github-pr-editor-sync.js'
-import { createGitHubPrDrawer } from './modules/github-pr-drawer.js'
-import { createLayoutThemeController } from './modules/layout-theme.js'
-import { createLintDiagnosticsController } from './modules/lint-diagnostics.js'
-import { createPreviewBackgroundController } from './modules/preview-background.js'
-import { createRenderRuntimeController } from './modules/render-runtime.js'
-import { createTypeDiagnosticsController } from './modules/type-diagnostics.js'
-import { collectTopLevelDeclarations } from './modules/jsx-top-level-declarations.js'
-import { ensureJsxTransformSource } from './modules/jsx-transform-runtime.js'
-import { createEditorPoolManager } from './modules/editor-pool-manager.js'
-import { createWorkspaceTabsState } from './modules/workspace-tabs-state.js'
-import { createWorkspacesDrawer } from './modules/workspaces-drawer/drawer.js'
+} from './modules/github/github-pr-context.js'
+import { createGitHubPrEditorSyncController } from './modules/github/github-pr-editor-sync.js'
+import { createGitHubPrDrawer } from './modules/github/github-pr-drawer.js'
+import { createLayoutThemeController } from './modules/ui/layout-theme.js'
+import { createLintDiagnosticsController } from './modules/diagnostics/lint-diagnostics.js'
+import { createPreviewBackgroundController } from './modules/preview/preview-background.js'
+import { createRenderRuntimeController } from './modules/preview/render-runtime.js'
+import { createTypeDiagnosticsController } from './modules/diagnostics/type-diagnostics.js'
+import { collectTopLevelDeclarations } from './modules/preview/jsx-top-level-declarations.js'
+import { ensureJsxTransformSource } from './modules/preview/jsx-transform-runtime.js'
+import { createEditorPoolManager } from './modules/editor/editor-pool-manager.js'
+import { createWorkspaceTabsState } from './modules/workspace/workspace-tabs-state.js'
+import { createWorkspacesDrawer } from './modules/workspace/workspaces-drawer/drawer.js'
 import {
   createDebouncedWorkspaceSaver,
   createWorkspaceStorageAdapter,
-} from './modules/workspace-storage.js'
+} from './modules/workspace/workspace-storage.js'
+import {
+  createWorkspaceTabId as createWorkspaceTabIdFactory,
+  makeUniqueTabPath as makeUniqueTabPathFactory,
+} from './modules/workspace/workspace-tab-factory.js'
+import { createEnsureWorkspaceTabsShape } from './modules/workspace/workspace-tab-shape.js'
+import {
+  getDirtyStateForTabChange,
+  getPathFileName,
+  getTabKind,
+  getTabTargetPrFilePath,
+  getWorkspaceTabDisplay,
+  hasTabCommittedSyncState,
+  isStyleTabLanguage,
+  normalizeEntryTabPath,
+  normalizeModuleTabPathForRename,
+  normalizeWorkspacePathValue,
+  resolveSyncedBaselineContent,
+  resolveWorkspaceActiveTabId,
+  resolveWorkspaceRecordIdentity,
+  toNonEmptyWorkspaceText,
+  toWorkspaceRecordId,
+  toWorkspaceSyncSha,
+  toWorkspaceSyncedContent,
+  toWorkspaceSyncTimestamp,
+} from './modules/workspace/workspace-tab-helpers.js'
 
 const statusNode = document.getElementById('status')
 const appGrid = document.querySelector('.app-grid')
@@ -116,7 +172,6 @@ const diagnosticsClearStyles = document.getElementById('diagnostics-clear-styles
 const diagnosticsClearAll = document.getElementById('diagnostics-clear-all')
 const diagnosticsComponent = document.getElementById('diagnostics-component')
 const diagnosticsStyles = document.getElementById('diagnostics-styles')
-const cdnLoading = document.getElementById('cdn-loading')
 const appToast = document.getElementById('app-toast')
 const previewBgColorInput = document.getElementById('preview-bg-color')
 const clearConfirmDialog = document.getElementById('clear-confirm-dialog')
@@ -128,7 +183,6 @@ const defaultComponentTabPath = 'src/components/App.tsx'
 const defaultStylesTabPath = 'src/styles/app.css'
 const defaultComponentTabName = 'App.tsx'
 const defaultStylesTabName = 'app.css'
-const defaultEntryTabDirectory = 'src/components'
 const allowedEntryTabFileNames = new Set(['app.tsx', 'app.js'])
 const renderModeStorageKey = 'knighted-develop:render-mode'
 const editorKinds = ['component', 'styles']
@@ -158,7 +212,6 @@ let pendingClearAction = null
 let suppressEditorChangeSideEffects = false
 let appToastDismissTimer = null
 const workspaceStorage = createWorkspaceStorageAdapter()
-let workspaceSaver = null
 let activeWorkspaceRecordId = ''
 let activeWorkspaceCreatedAt = null
 let workspacesDrawerController = null
@@ -191,7 +244,6 @@ const editorPool = createEditorPoolManager({ maxMounted: 2 })
 let workspaceTabRenameState = {
   tabId: '',
 }
-let workspaceTabAddMenuOpen = false
 let isRenderingWorkspaceTabs = false
 let hasPendingWorkspaceTabsRender = false
 let draggedWorkspaceTabId = ''
@@ -261,319 +313,47 @@ const layoutTheme = createLayoutThemeController({
 
 const { applyTheme, getInitialTheme } = layoutTheme
 
-const compactViewportMediaQuery = window.matchMedia('(max-width: 900px)')
-let compactAiControlsOpen = false
-let githubTokenInfoOpen = false
+const githubTokenInfoUi = createGitHubTokenInfoUiController({
+  tokenInfoButton: githubTokenInfo,
+  tokenInfoPanel: githubTokenInfoPanel,
+})
+const compactAiControlsUi = createCompactAiControlsUiController({
+  toggleButton: aiControlsToggle,
+  controlsRoot: githubAiControls,
+  closeTokenInfo: () => githubTokenInfoUi.close(),
+})
+const workspaceTabAddMenuUi = createWorkspaceTabAddMenuUiController({
+  addButton: workspaceTabAddButton,
+  addMenu: workspaceTabAddMenu,
+  addModuleButton: workspaceTabAddModule,
+})
 
-const setGitHubTokenInfoOpen = isOpen => {
-  if (!(githubTokenInfo instanceof HTMLButtonElement) || !githubTokenInfoPanel) {
-    return
-  }
-
-  githubTokenInfoOpen = Boolean(isOpen)
-  githubTokenInfo.setAttribute('aria-expanded', githubTokenInfoOpen ? 'true' : 'false')
-
-  if (githubTokenInfoOpen) {
-    githubTokenInfoPanel.removeAttribute('hidden')
-    return
-  }
-
-  githubTokenInfoPanel.setAttribute('hidden', '')
-}
-
-const setCompactAiControlsOpen = isOpen => {
-  if (!(aiControlsToggle instanceof HTMLButtonElement) || !githubAiControls) {
-    return
-  }
-
-  aiControlsToggle.removeAttribute('hidden')
-
-  if (!isCompactViewport()) {
-    compactAiControlsOpen = false
-    setGitHubTokenInfoOpen(false)
-    aiControlsToggle.setAttribute('aria-expanded', 'false')
-    githubAiControls.removeAttribute('data-compact-open')
-    githubAiControls.removeAttribute('hidden')
-    return
-  }
-
-  compactAiControlsOpen = Boolean(isOpen)
-  aiControlsToggle.setAttribute('aria-expanded', compactAiControlsOpen ? 'true' : 'false')
-  githubAiControls.dataset.compactOpen = compactAiControlsOpen ? 'true' : 'false'
-
-  if (!compactAiControlsOpen) {
-    setGitHubTokenInfoOpen(false)
-  }
-}
-
-const isCompactViewport = () => compactViewportMediaQuery.matches
-
-const getPanelCollapseAxis = panelName => {
-  if (isCompactViewport()) {
-    return 'vertical'
-  }
-
-  if (panelName === 'preview') {
-    return 'horizontal'
-  }
-
-  if (panelName === 'component' || panelName === 'styles') {
-    return 'vertical'
-  }
-
-  return 'vertical'
-}
-
-const getPanelCollapseDirection = panelName => {
-  const axis = getPanelCollapseAxis(panelName)
-  if (axis !== 'horizontal') {
-    return 'none'
-  }
-
-  if (panelName === 'preview') {
-    return 'right'
-  }
-
-  if (panelName === 'component') {
-    return 'left'
-  }
-
-  if (panelName === 'styles') {
-    return 'right'
-  }
-
-  return 'right'
-}
-
-const panelCollapseState = {
-  component: false,
-  styles: false,
-  preview: false,
-}
-
-const panelToolsState = {
-  component: false,
-  styles: false,
-}
-
-const applyEditorToolsVisibility = () => {
-  for (const editorKind of editorKinds) {
-    editorPanelsByKind[editorKind]?.classList.toggle(
-      'panel--tools-hidden',
-      !panelToolsState[editorKind],
-    )
-  }
-
-  for (const button of editorToolsButtons) {
-    const panelName = button.dataset.editorToolsToggle
-    if (!panelName || !Object.hasOwn(panelToolsState, panelName)) {
-      continue
-    }
-
-    const isVisible = panelToolsState[panelName]
-    button.setAttribute('aria-pressed', isVisible ? 'true' : 'false')
-    button.setAttribute('aria-label', `${isVisible ? 'Hide' : 'Show'} ${panelName} tools`)
-    button.setAttribute('title', `${isVisible ? 'Hide' : 'Show'} ${panelName} tools`)
-  }
-}
-
-const normalizePanelCollapseState = () => {
-  const collapsedPanels = Object.entries(panelCollapseState)
-    .filter(([, isCollapsed]) => isCollapsed)
-    .map(([panelName]) => panelName)
-
-  if (collapsedPanels.length === Object.keys(panelCollapseState).length) {
-    panelCollapseState.preview = false
-  }
-}
-
-const syncPanelCollapseButtons = () => {
-  const collapsedCount = Object.values(panelCollapseState).filter(Boolean).length
-
-  for (const button of panelCollapseButtons) {
-    const panelName = button.dataset.panelCollapse
-    if (!panelName || !Object.hasOwn(panelCollapseState, panelName)) {
-      continue
-    }
-
-    const axis = getPanelCollapseAxis(panelName)
-    const direction = getPanelCollapseDirection(panelName)
-    const isCollapsed = panelCollapseState[panelName] === true
-    const panelTitle = `${panelName.charAt(0).toUpperCase()}${panelName.slice(1)}`
-    const canCollapse = isCollapsed || collapsedCount < 2
-
-    button.dataset.collapseAxis = axis
-    button.dataset.collapseDirection = direction
-    button.dataset.collapsed = isCollapsed ? 'true' : 'false'
-    button.setAttribute('aria-expanded', isCollapsed ? 'false' : 'true')
-    button.disabled = !canCollapse
-    button.setAttribute('aria-disabled', canCollapse ? 'false' : 'true')
-    button.setAttribute(
-      'aria-label',
-      `${isCollapsed ? 'Expand' : 'Collapse'} ${panelTitle.toLowerCase()} panel`,
-    )
-    button.setAttribute(
-      'title',
-      canCollapse
-        ? `${isCollapsed ? 'Expand' : 'Collapse'} ${panelTitle.toLowerCase()} panel`
-        : 'At least one panel must remain expanded.',
-    )
-  }
-}
-
-const applyPanelCollapseState = () => {
-  normalizePanelCollapseState()
-
-  const previewAxis = getPanelCollapseAxis('preview')
-  const componentAxis = getPanelCollapseAxis('component')
-  const stylesAxis = getPanelCollapseAxis('styles')
-
-  if (componentEditorPanel) {
-    const isCollapsed = panelCollapseState.component
-    componentEditorPanel.classList.toggle(
-      'panel--collapsed-vertical',
-      isCollapsed && componentAxis === 'vertical',
-    )
-    componentEditorPanel.classList.toggle(
-      'panel--collapsed-horizontal',
-      isCollapsed && componentAxis === 'horizontal',
-    )
-  }
-
-  if (stylesEditorPanel) {
-    const isCollapsed = panelCollapseState.styles
-    stylesEditorPanel.classList.toggle(
-      'panel--collapsed-vertical',
-      isCollapsed && stylesAxis === 'vertical',
-    )
-    stylesEditorPanel.classList.toggle(
-      'panel--collapsed-horizontal',
-      isCollapsed && stylesAxis === 'horizontal',
-    )
-  }
-
-  if (previewPanel) {
-    const isCollapsed = panelCollapseState.preview
-    previewPanel.classList.toggle(
-      'panel--collapsed-vertical',
-      isCollapsed && previewAxis === 'vertical',
-    )
-    previewPanel.classList.toggle(
-      'panel--collapsed-horizontal',
-      isCollapsed && previewAxis === 'horizontal',
-    )
-  }
-
-  appGrid.classList.toggle(
-    'app-grid--preview-collapsed-horizontal',
-    panelCollapseState.preview && previewAxis === 'horizontal',
-  )
-  appGrid.classList.toggle('app-grid--preview-collapsed', panelCollapseState.preview)
-  appGrid.classList.toggle('app-grid--component-collapsed', panelCollapseState.component)
-  appGrid.classList.toggle('app-grid--styles-collapsed', panelCollapseState.styles)
-  appGrid.classList.toggle(
-    'app-grid--component-collapsed-horizontal',
-    panelCollapseState.component && componentAxis === 'horizontal',
-  )
-  appGrid.classList.toggle(
-    'app-grid--styles-collapsed-horizontal',
-    panelCollapseState.styles && stylesAxis === 'horizontal',
-  )
-
-  syncPanelCollapseButtons()
-}
-
-const togglePanelCollapse = panelName => {
-  if (!Object.hasOwn(panelCollapseState, panelName)) {
-    return
-  }
-
-  panelCollapseState[panelName] = !panelCollapseState[panelName]
-  applyPanelCollapseState()
-}
-
-const toTextareaOffset = (source, line, column = 1) => {
-  if (typeof source !== 'string' || source.length === 0) {
-    return 0
-  }
-
-  const targetLine = Number.isFinite(line) ? Math.max(1, Number(line)) : 1
-  const targetColumn = Number.isFinite(column) ? Math.max(1, Number(column)) : 1
-
-  let currentLine = 1
-  let lineStartOffset = 0
-
-  for (let index = 0; index < source.length; index += 1) {
-    if (currentLine === targetLine) {
-      lineStartOffset = index
-      break
-    }
-
-    if (source[index] === '\n') {
-      currentLine += 1
-      lineStartOffset = index + 1
-    }
-  }
-
-  const nextNewlineOffset = source.indexOf('\n', lineStartOffset)
-  const lineEndOffset = nextNewlineOffset === -1 ? source.length : nextNewlineOffset
-  return Math.min(lineStartOffset + targetColumn - 1, lineEndOffset)
-}
-
-const navigateToComponentDiagnostic = ({ line, column }) => {
-  if (jsxCodeEditor && typeof jsxCodeEditor.revealPosition === 'function') {
-    jsxCodeEditor.revealPosition({ line, column })
-    return
-  }
-
-  if (!(jsxEditor instanceof HTMLTextAreaElement)) {
-    return
-  }
-
-  const source = jsxEditor.value
-  const offset = toTextareaOffset(source, line, column)
-  jsxEditor.focus()
-  jsxEditor.setSelectionRange(offset, offset)
-}
-
-const navigateToStylesDiagnostic = ({ line, column }) => {
-  if (cssCodeEditor && typeof cssCodeEditor.revealPosition === 'function') {
-    cssCodeEditor.revealPosition({ line, column })
-    return
-  }
-
-  if (!(cssEditor instanceof HTMLTextAreaElement)) {
-    return
-  }
-
-  const source = cssEditor.value
-  const offset = toTextareaOffset(source, line, column)
-  cssEditor.focus()
-  cssEditor.setSelectionRange(offset, offset)
-}
-
-const diagnosticsUi = createDiagnosticsUiController({
+const {
+  panelToolsState,
+  applyEditorToolsVisibility,
+  applyPanelCollapseState,
+  togglePanelCollapse,
+  diagnosticsUi,
+} = createLayoutDiagnosticsSetup({
+  compactAiControlsUi,
+  appGrid,
+  previewPanel,
+  componentEditorPanel,
+  stylesEditorPanel,
+  panelCollapseButtons,
+  editorKinds,
+  editorPanelsByKind,
+  editorToolsButtons,
+  createDiagnosticsUiController,
   diagnosticsToggle,
   diagnosticsDrawer,
   diagnosticsComponent,
   diagnosticsStyles,
   statusNode,
-  onNavigateDiagnostic: diagnostic => {
-    if (diagnostic?.scope === 'component') {
-      navigateToComponentDiagnostic({
-        line: diagnostic.line,
-        column: diagnostic.column,
-      })
-      return
-    }
-
-    if (diagnostic?.scope === 'styles') {
-      navigateToStylesDiagnostic({
-        line: diagnostic.line,
-        column: diagnostic.column,
-      })
-    }
-  },
+  getJsxCodeEditor: () => jsxCodeEditor,
+  getCssCodeEditor: () => cssCodeEditor,
+  jsxEditor,
+  cssEditor,
 })
 
 const {
@@ -585,15 +365,12 @@ const {
   getDiagnosticsDrawerOpen,
   incrementLintDiagnosticsRuns,
   incrementTypeDiagnosticsRuns,
-  renderDiagnosticsScope,
   setDiagnosticsDrawerOpen,
   setLintDiagnosticsPending,
   setTypeDiagnosticsPending,
   setStatus,
   setStyleDiagnosticsDetails,
   setTypeDiagnosticsDetails,
-  updateDiagnosticsToggleLabel,
-  updateUiIssueIndicators,
 } = diagnosticsUi
 
 const githubAiContextState = {
@@ -623,126 +400,31 @@ let prDrawerController = {
   dispose: () => {},
 }
 
-const setGitHubPrToggleVisual = mode => {
-  if (
-    !(githubPrToggle instanceof HTMLButtonElement) ||
-    !(githubPrToggleLabel instanceof HTMLElement) ||
-    !(githubPrToggleIcon instanceof SVGElement) ||
-    !(githubPrToggleIconPath instanceof SVGPathElement)
-  ) {
-    return
-  }
-
-  const isPushCommitMode = mode === 'push-commit'
-  const label = isPushCommitMode ? 'Push' : 'Open PR'
-  const title = isPushCommitMode
-    ? 'Push commit to active pull request branch'
-    : 'Open pull request'
-  const icon = isPushCommitMode ? githubPrPushCommitIcon : githubPrOpenIcon
-
-  githubPrToggleLabel.textContent = label
-  githubPrToggle.title = title
-  githubPrToggle.setAttribute('aria-label', title)
-  githubPrToggleIcon.setAttribute('viewBox', icon.viewBox)
-  githubPrToggleIconPath.setAttribute('d', icon.path)
-}
-
-const syncEditorPrContextIndicators = shouldShow => {
-  const iconNodes = [componentPrSyncIcon, stylesPrSyncIcon]
-  const iconPathNodes = [componentPrSyncIconPath, stylesPrSyncIconPath]
-
-  for (const iconPath of iconPathNodes) {
-    if (iconPath instanceof SVGPathElement) {
-      iconPath.setAttribute('d', githubPrOpenIcon.path)
-    }
-  }
-
-  for (const icon of iconNodes) {
-    if (!(icon instanceof SVGElement)) {
-      continue
-    }
-
-    icon.setAttribute('viewBox', githubPrOpenIcon.viewBox)
-    icon.dataset.visible = shouldShow ? 'true' : 'false'
-    icon.toggleAttribute('hidden', !shouldShow)
-  }
-}
-
-const syncActivePrContextUi = activeContext => {
-  githubAiContextState.activePrContext = activeContext ?? null
-  const nextSyncKey = getActivePrContextSyncKey(activeContext)
-
-  if (!nextSyncKey) {
-    githubAiContextState.activePrEditorSyncKey = ''
-    githubAiContextState.hasSyncedActivePrEditorContent = false
-  } else if (githubAiContextState.activePrEditorSyncKey !== nextSyncKey) {
-    githubAiContextState.activePrEditorSyncKey = nextSyncKey
-    githubAiContextState.hasSyncedActivePrEditorContent = false
-  }
-
-  const hasActiveContext = Boolean(activeContext?.prTitle)
-  const shouldShowEditorSyncIndicators =
-    hasActiveContext && githubAiContextState.hasSyncedActivePrEditorContent
-
-  setGitHubPrToggleVisual(hasActiveContext ? 'push-commit' : 'open-pr')
-  syncEditorPrContextIndicators(shouldShowEditorSyncIndicators)
-
-  if (!hasActiveContext) {
-    githubPrContextClose?.setAttribute('hidden', '')
-    githubPrContextDisconnect?.setAttribute('hidden', '')
-    return
-  }
-
-  githubPrContextClose?.removeAttribute('hidden')
-  githubPrContextDisconnect?.removeAttribute('hidden')
-}
-
-const syncAiChatTokenVisibility = token => {
-  const hasToken = typeof token === 'string' && token.trim().length > 0
-
-  if (hasToken) {
-    if (workspacesToggle instanceof HTMLButtonElement) {
-      workspacesToggle.disabled = false
-    }
-
-    aiChatToggle?.removeAttribute('hidden')
-
-    githubPrToggle?.removeAttribute('hidden')
-    if (!githubAiContextState.activePrContext) {
-      workspacesToggle?.removeAttribute('hidden')
-    }
-
-    if (githubAiContextState.activePrContext) {
-      githubPrContextClose?.removeAttribute('hidden')
-      githubPrContextDisconnect?.removeAttribute('hidden')
-      workspacesToggle?.setAttribute('hidden', '')
-    } else {
-      githubPrContextClose?.setAttribute('hidden', '')
-      githubPrContextDisconnect?.setAttribute('hidden', '')
-    }
-    return
-  }
-
-  aiChatToggle?.setAttribute('hidden', '')
-  aiChatToggle?.setAttribute('aria-expanded', 'false')
-  if (workspacesToggle instanceof HTMLButtonElement) {
-    workspacesToggle.disabled = true
-  }
-  githubAiContextState.activePrContext = null
-  githubAiContextState.activePrEditorSyncKey = ''
-  githubAiContextState.hasSyncedActivePrEditorContent = false
-  syncEditorPrContextIndicators(false)
-  setGitHubPrToggleVisual('open-pr')
-  githubPrToggle?.setAttribute('hidden', '')
-  githubPrToggle?.setAttribute('aria-expanded', 'false')
-  workspacesToggle?.setAttribute('hidden', '')
-  workspacesToggle?.setAttribute('aria-expanded', 'false')
-  githubPrContextClose?.setAttribute('hidden', '')
-  githubPrContextDisconnect?.setAttribute('hidden', '')
-  chatDrawerController.setOpen(false)
-  prDrawerController.setOpen(false)
-  void workspacesDrawerController?.setOpen(false)
-}
+const prContextUi = createGitHubPrContextUiController({
+  contextState: githubAiContextState,
+  getActivePrContextSyncKey,
+  githubPrToggle,
+  githubPrToggleLabel,
+  githubPrToggleIcon,
+  githubPrToggleIconPath,
+  componentPrSyncIcon,
+  componentPrSyncIconPath,
+  stylesPrSyncIcon,
+  stylesPrSyncIconPath,
+  githubPrContextClose,
+  githubPrContextDisconnect,
+  aiChatToggle,
+  workspacesToggle,
+  githubPrOpenIcon,
+  githubPrPushCommitIcon,
+  closeChatDrawer: () => {
+    chatDrawerController.setOpen(false)
+  },
+  closePrDrawer: () => {
+    prDrawerController.setOpen(false)
+  },
+  closeWorkspacesDrawer: () => workspacesDrawerController?.setOpen(false),
+})
 
 const byotControls = createGitHubByotControls({
   controlsRoot: githubAiControls,
@@ -777,7 +459,7 @@ const byotControls = createGitHubByotControls({
   },
   onTokenChange: token => {
     githubAiContextState.token = token
-    syncAiChatTokenVisibility(token)
+    prContextUi.syncAiChatTokenVisibility(token)
     chatDrawerController.setToken(token)
     prDrawerController.setToken(token)
   },
@@ -793,168 +475,69 @@ const getCurrentGitHubToken = () => githubAiContextState.token ?? byotControls.g
 const getCurrentSelectedRepository = () =>
   githubAiContextState.selectedRepository ?? byotControls.getSelectedRepository()
 
-const toWorkspaceIdentitySegment = value => {
-  const normalized = typeof value === 'string' ? value.trim().toLowerCase() : ''
+const getWorkspaceContextSnapshot = createWorkspaceContextSnapshotGetter({
+  getCurrentSelectedRepository,
+  githubPrBaseBranch,
+  githubPrHeadBranch,
+  githubPrTitle,
+})
 
-  if (!normalized) {
-    return ''
-  }
-
-  return normalized.replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '')
-}
-
-const toWorkspaceRecordId = ({ repositoryFullName, headBranch }) => {
-  const repoSegment = toWorkspaceIdentitySegment(repositoryFullName)
-  const headSegment = toWorkspaceIdentitySegment(headBranch) || 'draft'
-
-  if (repoSegment) {
-    return `repo_${repoSegment}_${headSegment}`
-  }
-
-  return `workspace_${headSegment}`
-}
-
-const resolveWorkspaceRecordIdentity = ({
-  repositoryFullName,
-  headBranch,
-  activeRecordId,
-} = {}) => {
-  const canonicalId = toWorkspaceRecordId({ repositoryFullName, headBranch })
-  const currentId = toNonEmptyWorkspaceText(activeRecordId)
-
-  if (!currentId) {
-    return {
-      id: canonicalId,
-      supersededId: '',
-    }
-  }
-
-  if (currentId === canonicalId) {
-    return {
-      id: currentId,
-      supersededId: '',
-    }
-  }
-
-  const hasRepository = Boolean(toWorkspaceIdentitySegment(repositoryFullName))
-  const shouldPromoteLocalIdToRepository =
-    hasRepository && currentId.startsWith('workspace_')
-
-  if (shouldPromoteLocalIdToRepository) {
-    return {
-      id: canonicalId,
-      supersededId: currentId,
-    }
-  }
-
-  return {
-    id: currentId,
-    supersededId: '',
-  }
-}
-
-const getWorkspaceContextSnapshot = () => {
-  return {
-    repositoryFullName: getCurrentSelectedRepository(),
-    baseBranch:
-      typeof githubPrBaseBranch?.value === 'string'
-        ? githubPrBaseBranch.value.trim()
-        : '',
-    headBranch:
-      typeof githubPrHeadBranch?.value === 'string'
-        ? githubPrHeadBranch.value.trim()
-        : '',
-    prTitle: typeof githubPrTitle?.value === 'string' ? githubPrTitle.value.trim() : '',
-  }
-}
-
-const styleTabLanguages = new Set(['css', 'less', 'sass', 'module'])
 let loadedComponentTabId = 'component'
 let loadedStylesTabId = 'styles'
 
-const toNonEmptyWorkspaceText = value =>
-  typeof value === 'string' && value.trim().length > 0 ? value.trim() : ''
-
-const toWorkspaceSyncTimestamp = value =>
-  Number.isFinite(value) && value > 0 ? Math.max(0, Number(value)) : null
-
-const toWorkspaceSyncSha = value =>
-  typeof value === 'string' && value.trim().length > 0 ? value.trim() : null
-
-const toWorkspaceSyncedContent = value => (typeof value === 'string' ? value : null)
-
-const normalizeWorkspacePathValue = value =>
-  toNonEmptyWorkspaceText(value).replace(/\\/g, '/').replace(/\/+/g, '/')
-
-const getTabTargetPrFilePath = tab => normalizeWorkspacePathValue(tab?.targetPrFilePath)
-
-const hasTabSyncBaseline = tab =>
-  Boolean(
-    getTabTargetPrFilePath(tab) ||
-    toWorkspaceSyncTimestamp(tab?.syncedAt) ||
-    toWorkspaceSyncSha(tab?.lastSyncedRemoteSha),
-  )
-
-const hasTabCommittedSyncState = tab =>
-  Boolean(
-    toWorkspaceSyncTimestamp(tab?.syncedAt) ||
-    toWorkspaceSyncSha(tab?.lastSyncedRemoteSha) ||
-    toWorkspaceSyncedContent(tab?.syncedContent),
-  )
-
-const getDirtyStateForTabChange = (tab, nextContent) => {
-  if (!hasTabSyncBaseline(tab)) {
-    return Boolean(tab?.isDirty)
-  }
-
-  const normalizedNextContent = typeof nextContent === 'string' ? nextContent : ''
-  const syncedContent = toWorkspaceSyncedContent(tab?.syncedContent)
-
-  if (syncedContent === null) {
-    if (normalizedNextContent === (typeof tab?.content === 'string' ? tab.content : '')) {
-      return Boolean(tab?.isDirty)
-    }
-
-    return true
-  }
-
-  return normalizedNextContent !== syncedContent
-}
-
-const resolveSyncedBaselineContent = ({ tab, content }) => {
-  const explicitSyncedContent = toWorkspaceSyncedContent(tab?.syncedContent)
-  if (explicitSyncedContent !== null) {
-    return explicitSyncedContent
-  }
-
-  if (hasTabSyncBaseline(tab) && !tab?.isDirty) {
-    return content
-  }
-
-  return null
-}
-
-const isStyleTabLanguage = language =>
-  styleTabLanguages.has(toNonEmptyWorkspaceText(language))
-
-const getTabKind = tab => (isStyleTabLanguage(tab?.language) ? 'styles' : 'component')
-
-const getWorkspaceTabByKind = kind => {
-  const tabs = workspaceTabsState.getTabs()
-  const normalizedKind = kind === 'styles' ? 'styles' : 'component'
-  return (
-    tabs.find(
-      tab =>
-        getTabKind(tab) === normalizedKind &&
-        tab.id === workspaceTabsState.getActiveTabId(),
-    ) ??
-    tabs.find(tab => getTabKind(tab) === normalizedKind) ??
-    null
-  )
-}
-
 const getActiveWorkspaceTab = () =>
   workspaceTabsState.getTab(workspaceTabsState.getActiveTabId())
+
+const {
+  getWorkspaceTabByKind,
+  syncHeaderLabels,
+  persistActiveTabEditorContent,
+  loadWorkspaceTabIntoEditor,
+} = createWorkspaceEditorHelpers({
+  workspaceTabsState,
+  getTabKind,
+  editorKinds,
+  editorPanelsByKind,
+  editorHeaderLabelByKind,
+  defaultTabNameByKind,
+  toNonEmptyWorkspaceText,
+  getLoadedStylesTabId: () => loadedStylesTabId,
+  getLoadedComponentTabId: () => loadedComponentTabId,
+  setLoadedStylesTabId: value => (loadedStylesTabId = value),
+  setLoadedComponentTabId: value => (loadedComponentTabId = value),
+  getCssSource: () => getCssSource(),
+  getJsxSource: () => getJsxSource(),
+  getDirtyStateForTabChange,
+  setCssSource,
+  setJsxSource,
+  styleMode,
+  toStyleModeForTabLanguage,
+  getStyleEditorLanguage,
+  getCssCodeEditor: () => cssCodeEditor,
+  setSuppressEditorChangeSideEffects: value => (suppressEditorChangeSideEffects = value),
+  editorPool,
+})
+
+const workspaceSyncController = createWorkspaceSyncController({
+  workspaceTabsState,
+  getTabKind,
+  getTabTargetPrFilePath,
+  normalizeWorkspacePathValue,
+  toWorkspaceSyncedContent,
+  toWorkspaceSyncSha,
+  toNonEmptyWorkspaceText,
+  hasTabCommittedSyncState,
+  getJsxSource: () => getJsxSource(),
+  getCssSource: () => getCssSource(),
+  getWorkspaceTabByKind,
+  queueWorkspaceSave: () => queueWorkspaceSave(),
+  resolveWorkspaceRecordIdentity,
+  getWorkspaceContextSnapshot,
+  getActiveWorkspaceRecordId: () => activeWorkspaceRecordId,
+  getActiveWorkspaceCreatedAt: () => activeWorkspaceCreatedAt,
+  getRenderModeValue: () => renderMode.value,
+  normalizeRenderMode: mode => normalizeRenderMode(mode),
+})
 
 const getLoadedComponentWorkspaceTab = () =>
   workspaceTabsState.getTab(loadedComponentTabId) ?? getWorkspaceTabByKind('component')
@@ -964,2598 +547,537 @@ const getTypecheckSourcePath = () => {
   return toNonEmptyWorkspaceText(loadedComponentTab?.path) || defaultComponentTabPath
 }
 
-const toStyleModeForTabLanguage = language => {
-  const normalized = toNonEmptyWorkspaceText(language)
-  if (normalized === 'less') {
-    return 'less'
-  }
+const createWorkspaceTabId = prefix => createWorkspaceTabIdFactory(prefix)
 
-  if (normalized === 'sass') {
-    return 'sass'
-  }
+const makeUniqueTabPath = ({ basePath, suffix = '' }) =>
+  makeUniqueTabPathFactory({
+    basePath,
+    suffix,
+    tabs: workspaceTabsState.getTabs(),
+    toNonEmptyWorkspaceText,
+  })
 
-  if (normalized === 'module') {
-    return 'module'
-  }
+const ensureWorkspaceTabsShape = createEnsureWorkspaceTabsShape({
+  defaultComponentTabName,
+  defaultComponentTabPath,
+  defaultStylesTabName,
+  defaultStylesTabPath,
+  defaultJsx,
+  normalizeEntryTabPath,
+  getPathFileName,
+  getTabTargetPrFilePath,
+  normalizeWorkspacePathValue,
+  toWorkspaceSyncTimestamp,
+  toWorkspaceSyncSha,
+  resolveSyncedBaselineContent,
+  toNonEmptyWorkspaceText,
+  isStyleTabLanguage,
+})
 
-  return 'css'
-}
+const buildWorkspaceTabsSnapshot = () =>
+  workspaceSyncController.buildWorkspaceTabsSnapshot()
 
-const syncHeaderLabels = () => {
-  for (const editorKind of editorKinds) {
-    const tab =
-      editorKind === 'styles'
-        ? (workspaceTabsState.getTab(loadedStylesTabId) ??
-          getWorkspaceTabByKind('styles'))
-        : (workspaceTabsState.getTab(loadedComponentTabId) ??
-          getWorkspaceTabByKind('component'))
-    const headerLabel = editorHeaderLabelByKind[editorKind]
+const reconcileWorkspaceTabsWithPushUpdates = fileUpdates =>
+  workspaceSyncController.reconcileWorkspaceTabsWithPushUpdates(fileUpdates)
 
-    if (headerLabel) {
-      headerLabel.textContent =
-        toNonEmptyWorkspaceText(tab?.name) || defaultTabNameByKind[editorKind]
-    }
-  }
-}
+const getWorkspacePrFileCommits = () =>
+  workspaceSyncController.getWorkspacePrFileCommits()
 
-const persistActiveTabEditorContent = () => {
-  const activeTab = getActiveWorkspaceTab()
+const getEditorSyncTargets = () => workspaceSyncController.getEditorSyncTargets()
 
-  if (!activeTab) {
-    return
-  }
+const reconcileWorkspaceTabsWithEditorSync = ({ componentPath, stylesPath } = {}) =>
+  workspaceSyncController.reconcileWorkspaceTabsWithEditorSync({
+    componentPath,
+    stylesPath,
+  })
 
-  const nextContent = getTabKind(activeTab) === 'styles' ? getCssSource() : getJsxSource()
+const buildWorkspaceRecordSnapshot = ({ recordId } = {}) =>
+  workspaceSyncController.buildWorkspaceRecordSnapshot({ recordId })
 
-  if (nextContent === activeTab.content) {
-    return
-  }
+const {
+  workspaceSaveController,
+  listLocalContextRecords,
+  refreshLocalContextOptions,
+  applyWorkspaceRecord,
+  queueWorkspaceSave,
+  flushWorkspaceSave,
+  setActiveWorkspaceTab,
+  addWorkspaceTab,
+  renderWorkspaceTabs,
+  loadPreferredWorkspaceContext,
+  bindWorkspaceMetadataPersistence,
+} = createWorkspaceControllersSetup({
+  createDebouncedWorkspaceSaver,
+  workspaceStorage,
+  getWorkspacesDrawerController: () => workspacesDrawerController,
+  toNonEmptyWorkspaceText,
+  buildWorkspaceRecordSnapshot,
+  setStatus,
+  getIsApplyingWorkspaceSnapshot: () => isApplyingWorkspaceSnapshot,
+  getActiveWorkspaceCreatedAt: () => activeWorkspaceCreatedAt,
+  setActiveWorkspaceRecordId: value => (activeWorkspaceRecordId = value),
+  setActiveWorkspaceCreatedAt: value => (activeWorkspaceCreatedAt = value),
+  getCurrentSelectedRepository,
+  getActiveWorkspaceRecordId: () => activeWorkspaceRecordId,
+  setIsApplyingWorkspaceSnapshot: value => (isApplyingWorkspaceSnapshot = value),
+  ensureWorkspaceTabsShape,
+  githubPrBaseBranch,
+  githubPrHeadBranch,
+  githubPrTitle,
+  workspaceTabsState,
+  resolveWorkspaceActiveTabId,
+  normalizeRenderMode: mode => normalizeRenderMode(mode),
+  getRenderModeValue: () => renderMode.value,
+  setRenderModeValue: value => {
+    renderMode.value = value
+  },
+  persistRenderMode: mode => persistRenderMode(mode),
+  getActiveWorkspaceTab,
+  loadWorkspaceTabIntoEditor,
+  updateRenderModeEditability: () => updateRenderModeEditability(),
+  getHasCompletedInitialWorkspaceBootstrap: () => hasCompletedInitialWorkspaceBootstrap,
+  maybeRender: () => maybeRender(),
+  toWorkspaceRecordId,
+  workspaceTabsStrip,
+  getWorkspaceTabRenameState: () => workspaceTabRenameState,
+  getDraggedWorkspaceTabId: () => draggedWorkspaceTabId,
+  setDraggedWorkspaceTabId: value => (draggedWorkspaceTabId = value),
+  getDragOverWorkspaceTabId: () => dragOverWorkspaceTabId,
+  setDragOverWorkspaceTabId: value => (dragOverWorkspaceTabId = value),
+  getSuppressWorkspaceTabClick: () => suppressWorkspaceTabClick,
+  setSuppressWorkspaceTabClick: value => (suppressWorkspaceTabClick = value),
+  getIsRenderingWorkspaceTabs: () => isRenderingWorkspaceTabs,
+  setIsRenderingWorkspaceTabs: value => (isRenderingWorkspaceTabs = value),
+  getHasPendingWorkspaceTabsRender: () => hasPendingWorkspaceTabsRender,
+  setHasPendingWorkspaceTabsRender: value => (hasPendingWorkspaceTabsRender = value),
+  persistActiveTabEditorContent,
+  getWorkspaceTabDisplay,
+  workspaceTabsShell,
+  workspaceTabAddWrap,
+  setWorkspaceTabRenameState: value => (workspaceTabRenameState = value),
+  allowedEntryTabFileNames,
+  getPathFileName,
+  normalizeEntryTabPath,
+  normalizeModuleTabPathForRename,
+  defaultComponentTabName,
+  getDirtyStateForTabChange,
+  syncHeaderLabels,
+  setWorkspaceTabAddMenuOpen: isOpen => {
+    workspaceTabAddMenuUi.setOpen(isOpen)
+  },
+  confirmAction: options => confirmAction(options),
+  getTabKind,
+  getLoadedComponentTabId: () => loadedComponentTabId,
+  setLoadedComponentTabId: value => (loadedComponentTabId = value),
+  getLoadedStylesTabId: () => loadedStylesTabId,
+  setLoadedStylesTabId: value => (loadedStylesTabId = value),
+  getWorkspaceTabByKind,
+  makeUniqueTabPath,
+  createWorkspaceTabId,
+})
 
-  workspaceTabsState.upsertTab(
-    {
-      ...activeTab,
-      content: nextContent,
-      isDirty: getDirtyStateForTabChange(activeTab, nextContent),
-      lastModified: Date.now(),
-      isActive: true,
+const githubWorkflows = createGitHubWorkflowsSetup({
+  factories: {
+    createGitHubPrEditorSyncController,
+    createGitHubChatDrawer,
+    createGitHubPrDrawer,
+    createWorkspacesDrawer,
+  },
+  platform: {
+    ensureJsxTransformSource,
+    collectTopLevelDeclarations,
+    cdnImports,
+    importFromCdnWithFallback,
+  },
+  state: {
+    githubAiContextState,
+  },
+  byot: {
+    byotControls,
+    getCurrentGitHubToken,
+    getCurrentSelectedRepository,
+    setCurrentSelectedRepository: fullName =>
+      byotControls.setSelectedRepository(fullName),
+  },
+  ui: {
+    aiChatToggle,
+    aiChatDrawer,
+    aiChatClose,
+    aiChatPrompt,
+    aiChatModel,
+    aiChatIncludeEditors,
+    aiChatSend,
+    aiChatClear,
+    aiChatStatus,
+    aiChatRepository,
+    aiChatMessages,
+    githubPrToggle,
+    githubPrDrawer,
+    githubPrClose,
+    githubPrRepoSelect,
+    githubPrBaseBranch,
+    githubPrHeadBranch,
+    githubPrTitle,
+    githubPrBody,
+    githubPrCommitMessage,
+    githubPrIncludeAppWrapper,
+    githubPrSubmit,
+    openPrTitle,
+    githubPrStatus,
+    workspacesToggle,
+    workspacesDrawer,
+    workspacesClose,
+    workspacesStatus,
+    workspacesSearch,
+    workspacesSelect,
+    workspacesOpen,
+    workspacesRemove,
+  },
+  workspace: {
+    workspaceStorage,
+    getActiveWorkspaceRecordId: () => activeWorkspaceRecordId,
+    setActiveWorkspaceRecordId: value => (activeWorkspaceRecordId = value),
+    setActiveWorkspaceCreatedAt: value => (activeWorkspaceCreatedAt = value),
+    listLocalContextRecords,
+    refreshLocalContextOptions,
+    applyWorkspaceRecord,
+    getWorkspacePrFileCommits,
+    getEditorSyncTargets,
+    reconcileWorkspaceTabsWithPushUpdates,
+  },
+  runtime: {
+    getRenderMode: () => renderMode.value,
+    getStyleMode: () => styleMode.value,
+    getActivePrContextSyncKey,
+    prContextUi,
+    getTokenForVisibility: () => githubAiContextState.token,
+    closeWorkspacesDrawer: () => {
+      void workspacesDrawerController?.setOpen(false)
     },
-    { emitReason: 'tabContentSync' },
-  )
-}
-
-const loadWorkspaceTabIntoEditor = tab => {
-  if (!tab || typeof tab !== 'object') {
-    return
-  }
-
-  const nextContent = typeof tab.content === 'string' ? tab.content : ''
-
-  if (getTabKind(tab) === 'styles') {
-    loadedStylesTabId = tab.id
-    setCssSource(nextContent)
-    const nextStyleMode = toStyleModeForTabLanguage(tab.language)
-    if (styleMode.value !== nextStyleMode) {
-      styleMode.value = nextStyleMode
-    }
-    if (cssCodeEditor) {
+    getActivePrEditorSyncKey: () => githubAiContextState.activePrEditorSyncKey,
+    syncFromActiveContext: ({ componentPath, stylesPath }) => {
+      reconcileWorkspaceTabsWithEditorSync({ componentPath, stylesPath })
+    },
+    formatActivePrReference,
+    githubPrContextClose,
+    githubPrContextDisconnect,
+  },
+  actions: {
+    applyRenderMode,
+    applyStyleMode,
+    confirmAction: options => confirmAction(options),
+    setStatus,
+    showAppToast,
+    setComponentSource: value => {
       suppressEditorChangeSideEffects = true
       try {
-        cssCodeEditor.setLanguage(getStyleEditorLanguage(nextStyleMode))
+        setJsxSource(value)
       } finally {
         suppressEditorChangeSideEffects = false
       }
-    }
-    setVisibleEditorPanelForKind('styles')
-    editorPool.activate('styles')
-  } else {
-    loadedComponentTabId = tab.id
-    setJsxSource(nextContent)
-    setVisibleEditorPanelForKind('component')
-    editorPool.activate('component')
-  }
-
-  syncHeaderLabels()
-}
-
-const createWorkspaceTabId = prefix => {
-  const seed = Math.random().toString(36).slice(2, 8)
-  return `${prefix}-${Date.now().toString(36)}-${seed}`
-}
-
-const splitWorkspacePath = value => {
-  const normalized = toNonEmptyWorkspaceText(value)
-  if (!normalized) {
-    return []
-  }
-
-  return normalized.split(/[\\/]+/).filter(Boolean)
-}
-
-const getPathFileName = path => {
-  const segments = splitWorkspacePath(path)
-  return segments.length > 0 ? segments[segments.length - 1] : ''
-}
-
-const getPathDirectory = path => {
-  const segments = splitWorkspacePath(path)
-  if (segments.length <= 1) {
-    return defaultEntryTabDirectory
-  }
-
-  return segments.slice(0, -1).join('/')
-}
-
-const normalizeEntryTabName = value => {
-  const normalized = toNonEmptyWorkspaceText(value)
-  if (allowedEntryTabFileNames.has(normalized.toLowerCase())) {
-    return normalized
-  }
-
-  return defaultComponentTabName
-}
-
-const getWorkspaceTabDisplay = tab => {
-  const fullPath =
-    toNonEmptyWorkspaceText(tab?.path) || toNonEmptyWorkspaceText(tab?.name)
-  const explicitName = toNonEmptyWorkspaceText(tab?.name)
-  const explicitFileName = getPathFileName(explicitName)
-  return {
-    fileName: explicitFileName || explicitName || getPathFileName(fullPath),
-    fullPath,
-  }
-}
-
-const normalizeEntryTabPath = (path, { preferredFileName = '' } = {}) => {
-  const normalizedPath = toNonEmptyWorkspaceText(path)
-  const directory = getPathDirectory(normalizedPath || defaultComponentTabPath)
-  const requestedFileName =
-    toNonEmptyWorkspaceText(preferredFileName) ||
-    getPathFileName(normalizedPath || defaultComponentTabPath)
-  const fileName = normalizeEntryTabName(requestedFileName)
-
-  return `${directory}/${fileName}`
-}
-
-const normalizeModuleTabPathForRename = (path, nextName) => {
-  const currentPath = toNonEmptyWorkspaceText(path)
-  const normalizedNextName = toNonEmptyWorkspaceText(nextName)
-  const nextFileName = getPathFileName(normalizedNextName) || normalizedNextName
-
-  if (!nextFileName) {
-    return currentPath
-  }
-
-  if (!currentPath) {
-    return nextFileName
-  }
-
-  const directory = getPathDirectory(currentPath)
-  return `${directory}/${nextFileName}`
-}
-
-const setVisibleEditorPanelForKind = kind => {
-  const nextVisibleKind = kind === 'styles' ? 'styles' : 'component'
-
-  for (const editorKind of editorKinds) {
-    const panel = editorPanelsByKind[editorKind]
-    if (!panel) {
-      continue
-    }
-
-    if (editorKind === nextVisibleKind) {
-      panel.removeAttribute('hidden')
-      continue
-    }
-
-    panel.setAttribute('hidden', '')
-  }
-}
-
-const makeUniqueTabPath = ({ basePath, suffix = '' }) => {
-  const existingPaths = new Set(
-    workspaceTabsState
-      .getTabs()
-      .map(tab => toNonEmptyWorkspaceText(tab.path))
-      .filter(Boolean),
-  )
-
-  if (!existingPaths.has(basePath)) {
-    return basePath
-  }
-
-  let attempt = 2
-  while (attempt < 500) {
-    const candidate = basePath.replace(/(\.[^./]+)$/u, `${suffix || ''}-${attempt}$1`)
-    if (!existingPaths.has(candidate)) {
-      return candidate
-    }
-    attempt += 1
-  }
-
-  return `${basePath}-${Date.now().toString(36)}`
-}
-
-const ensureWorkspaceTabsShape = tabs => {
-  const inputTabs = Array.isArray(tabs) ? tabs : []
-  const hasComponent = inputTabs.some(tab => tab?.id === 'component')
-  const nextTabs = [...inputTabs]
-
-  if (!hasComponent) {
-    nextTabs.unshift({
-      id: 'component',
-      name: defaultComponentTabName,
-      path: defaultComponentTabPath,
-      language: 'javascript-jsx',
-      role: 'entry',
-      content: defaultJsx,
-      isActive: true,
-    })
-  }
-
-  return nextTabs.map(tab => {
-    if (tab?.id === 'component') {
-      const normalizedEntryPath = normalizeEntryTabPath(tab.path, {
-        preferredFileName: tab.name,
-      })
-      return {
-        ...tab,
-        role: 'entry',
-        language: 'javascript-jsx',
-        content: typeof tab?.content === 'string' ? tab.content : '',
-        path: normalizedEntryPath,
-        name: getPathFileName(normalizedEntryPath) || defaultComponentTabName,
-        targetPrFilePath:
-          getTabTargetPrFilePath(tab) || normalizeWorkspacePathValue(normalizedEntryPath),
-        isDirty: Boolean(tab?.isDirty),
-        syncedAt: toWorkspaceSyncTimestamp(tab?.syncedAt),
-        lastSyncedRemoteSha: toWorkspaceSyncSha(tab?.lastSyncedRemoteSha),
-        syncedContent: resolveSyncedBaselineContent({
-          tab,
-          content: typeof tab?.content === 'string' ? tab.content : '',
-        }),
-      }
-    }
-
-    if (tab?.id === 'styles') {
-      const normalizedStylesPath =
-        toNonEmptyWorkspaceText(tab.path) || defaultStylesTabPath
-      const normalizedStylesNameInput = toNonEmptyWorkspaceText(tab.name)
-      return {
-        ...tab,
-        language: isStyleTabLanguage(tab.language) ? tab.language : 'css',
-        role: 'module',
-        content: typeof tab?.content === 'string' ? tab.content : '',
-        path: normalizedStylesPath,
-        name:
-          !normalizedStylesNameInput ||
-          normalizedStylesNameInput.toLowerCase() === 'styles'
-            ? getPathFileName(normalizedStylesPath) || defaultStylesTabName
-            : normalizedStylesNameInput,
-        targetPrFilePath:
-          getTabTargetPrFilePath(tab) ||
-          normalizeWorkspacePathValue(normalizedStylesPath),
-        isDirty: Boolean(tab?.isDirty),
-        syncedAt: toWorkspaceSyncTimestamp(tab?.syncedAt),
-        lastSyncedRemoteSha: toWorkspaceSyncSha(tab?.lastSyncedRemoteSha),
-        syncedContent: resolveSyncedBaselineContent({
-          tab,
-          content: typeof tab?.content === 'string' ? tab.content : '',
-        }),
-      }
-    }
-
-    const nextPath = toNonEmptyWorkspaceText(tab?.path)
-    const nextContent = typeof tab?.content === 'string' ? tab.content : ''
-    return {
-      ...tab,
-      role: 'module',
-      language: isStyleTabLanguage(tab?.language) ? tab.language : 'javascript-jsx',
-      path: nextPath,
-      content: nextContent,
-      name: toNonEmptyWorkspaceText(tab?.name) || getPathFileName(nextPath) || tab?.id,
-      targetPrFilePath: getTabTargetPrFilePath(tab) || null,
-      isDirty: Boolean(tab?.isDirty),
-      syncedAt: toWorkspaceSyncTimestamp(tab?.syncedAt),
-      lastSyncedRemoteSha: toWorkspaceSyncSha(tab?.lastSyncedRemoteSha),
-      syncedContent: resolveSyncedBaselineContent({
-        tab,
-        content: nextContent,
-      }),
-    }
-  })
-}
-
-const resolveWorkspaceActiveTabId = ({ tabs, requestedActiveTabId }) => {
-  const nextTabs = Array.isArray(tabs) ? tabs : []
-  const requestedId = toNonEmptyWorkspaceText(requestedActiveTabId)
-
-  if (requestedId && nextTabs.some(tab => tab?.id === requestedId)) {
-    return requestedId
-  }
-
-  if (nextTabs.some(tab => tab?.id === 'component')) {
-    return 'component'
-  }
-
-  return toNonEmptyWorkspaceText(nextTabs[0]?.id)
-}
-
-const buildWorkspaceTabsSnapshot = () => {
-  const activeTabId = workspaceTabsState.getActiveTabId()
-  return workspaceTabsState.getTabs().map(tab => {
-    const currentPath = toNonEmptyWorkspaceText(tab.path)
-
-    const currentContent =
-      tab.id === activeTabId
-        ? getTabKind(tab) === 'styles'
-          ? getCssSource()
-          : getJsxSource()
-        : typeof tab.content === 'string'
-          ? tab.content
-          : ''
-
-    const targetPrFilePath =
-      getTabTargetPrFilePath(tab) || normalizeWorkspacePathValue(currentPath) || null
-
-    return {
-      ...tab,
-      path: currentPath,
-      content: currentContent,
-      syncedContent: toWorkspaceSyncedContent(tab?.syncedContent),
-      targetPrFilePath,
-      isActive: activeTabId === tab.id,
-      lastModified: Date.now(),
-    }
-  })
-}
-
-const reconcileWorkspaceTabsWithPushUpdates = fileUpdates => {
-  const updates = Array.isArray(fileUpdates) ? fileUpdates : []
-  if (updates.length === 0) {
-    return 0
-  }
-
-  const updatesByPath = new Map()
-  for (const update of updates) {
-    const normalizedPath = normalizeWorkspacePathValue(update?.path)
-    if (!normalizedPath) {
-      continue
-    }
-
-    updatesByPath.set(normalizedPath, toWorkspaceSyncSha(update?.commitSha))
-  }
-
-  if (updatesByPath.size === 0) {
-    return 0
-  }
-
-  const now = Date.now()
-  let updatedTabCount = 0
-  const activeTabId = workspaceTabsState.getActiveTabId()
-  const nextTabs = workspaceTabsState.getTabs().map(tab => {
-    const candidatePaths = [
-      getTabTargetPrFilePath(tab),
-      normalizeWorkspacePathValue(tab.path),
-    ].filter(Boolean)
-
-    const matchedPath = candidatePaths.find(path => updatesByPath.has(path))
-    if (!matchedPath) {
-      return tab
-    }
-
-    updatedTabCount += 1
-    const commitSha = updatesByPath.get(matchedPath)
-
-    return {
-      ...tab,
-      targetPrFilePath: matchedPath,
-      syncedContent: typeof tab?.content === 'string' ? tab.content : '',
-      isDirty: false,
-      syncedAt: now,
-      lastSyncedRemoteSha: commitSha || toWorkspaceSyncSha(tab.lastSyncedRemoteSha),
-      lastModified: now,
-    }
-  })
-
-  if (updatedTabCount > 0) {
-    workspaceTabsState.replaceTabs({
-      tabs: nextTabs,
-      activeTabId,
-    })
-    queueWorkspaceSave()
-  }
-
-  return updatedTabCount
-}
-
-const getWorkspacePrFileCommits = () => {
-  const snapshotTabs = buildWorkspaceTabsSnapshot()
-  const dedupedByPath = new Map()
-
-  for (const tab of snapshotTabs) {
-    const shouldCommitTab = Boolean(tab?.isDirty) || !hasTabCommittedSyncState(tab)
-    if (!shouldCommitTab) {
-      continue
-    }
-
-    const path =
-      getTabTargetPrFilePath(tab) || normalizeWorkspacePathValue(tab?.path) || ''
-    if (!path) {
-      continue
-    }
-
-    dedupedByPath.set(path, {
-      path,
-      content: typeof tab?.content === 'string' ? tab.content : '',
-      tabLabel: toNonEmptyWorkspaceText(tab?.name) || toNonEmptyWorkspaceText(tab?.id),
-      isEntry: tab?.role === 'entry',
-    })
-  }
-
-  return [...dedupedByPath.values()]
-}
-
-const getEditorSyncTargets = () => {
-  const componentTab = getWorkspaceTabByKind('component')
-  const stylesTab = getWorkspaceTabByKind('styles')
-
-  return {
-    componentFilePath:
-      getTabTargetPrFilePath(componentTab) ||
-      normalizeWorkspacePathValue(componentTab?.path) ||
-      '',
-    stylesFilePath:
-      getTabTargetPrFilePath(stylesTab) ||
-      normalizeWorkspacePathValue(stylesTab?.path) ||
-      '',
-  }
-}
-
-const reconcileWorkspaceTabsWithEditorSync = ({ componentPath, stylesPath } = {}) => {
-  const normalizedComponentPath = normalizeWorkspacePathValue(componentPath)
-  const normalizedStylesPath = normalizeWorkspacePathValue(stylesPath)
-
-  if (!normalizedComponentPath && !normalizedStylesPath) {
-    return 0
-  }
-
-  const now = Date.now()
-  let updatedTabCount = 0
-  const activeTabId = workspaceTabsState.getActiveTabId()
-  const componentSource = getJsxSource()
-  const stylesSource = getCssSource()
-
-  const nextTabs = workspaceTabsState.getTabs().map(tab => {
-    const tabKind = getTabKind(tab)
-    const expectedPath =
-      tabKind === 'styles' ? normalizedStylesPath : normalizedComponentPath
-    if (!expectedPath) {
-      return tab
-    }
-
-    const candidatePaths = [
-      getTabTargetPrFilePath(tab),
-      normalizeWorkspacePathValue(tab.path),
-    ].filter(Boolean)
-    const matchedPath = candidatePaths.find(path => path === expectedPath)
-    if (!matchedPath) {
-      return tab
-    }
-
-    const syncedContent = tabKind === 'styles' ? stylesSource : componentSource
-    updatedTabCount += 1
-    return {
-      ...tab,
-      content: syncedContent,
-      syncedContent,
-      isDirty: false,
-      syncedAt: now,
-      lastModified: now,
-    }
-  })
-
-  if (updatedTabCount > 0) {
-    workspaceTabsState.replaceTabs({
-      tabs: nextTabs,
-      activeTabId,
-    })
-    queueWorkspaceSave()
-  }
-
-  return updatedTabCount
-}
-
-const buildWorkspaceRecordSnapshot = ({ recordId } = {}) => {
-  const context = getWorkspaceContextSnapshot()
-  const identity =
-    typeof recordId === 'string' && recordId.length > 0
-      ? {
-          id: recordId,
-          supersededId: '',
-        }
-      : resolveWorkspaceRecordIdentity({
-          repositoryFullName: context.repositoryFullName,
-          headBranch: context.headBranch,
-          activeRecordId: activeWorkspaceRecordId,
-        })
-
-  return {
-    id: identity.id,
-    supersededId: identity.supersededId,
-    repo: context.repositoryFullName || '',
-    base: context.baseBranch || '',
-    head: context.headBranch || '',
-    prNumber: null,
-    prTitle: context.prTitle || '',
-    renderMode: normalizeRenderMode(renderMode.value),
-    tabs: buildWorkspaceTabsSnapshot(),
-    activeTabId: workspaceTabsState.getActiveTabId(),
-    createdAt: activeWorkspaceCreatedAt ?? Date.now(),
-    lastModified: Date.now(),
-  }
-}
-
-const listLocalContextRecords = async () => {
-  const selectedRepository = getCurrentSelectedRepository()
-  return workspaceStorage.listWorkspaces({
-    repo: selectedRepository || '',
-  })
-}
-
-const refreshLocalContextOptions = async () => {
-  const options = await listLocalContextRecords()
-
-  if (workspacesDrawerController) {
-    workspacesDrawerController.setSelectedId(activeWorkspaceRecordId)
-    await workspacesDrawerController.refresh()
-  }
-
-  return options
-}
-
-const applyWorkspaceRecord = async (workspace, { silent = false } = {}) => {
-  if (!workspace || typeof workspace !== 'object') {
-    return false
-  }
-
-  isApplyingWorkspaceSnapshot = true
-
-  try {
-    activeWorkspaceRecordId = workspace.id
-    activeWorkspaceCreatedAt = workspace.createdAt ?? null
-
-    const nextTabs = ensureWorkspaceTabsShape(workspace.tabs)
-    if (typeof workspace.base === 'string' && githubPrBaseBranch) {
-      githubPrBaseBranch.value = workspace.base
-    }
-
-    if (typeof workspace.head === 'string' && githubPrHeadBranch) {
-      githubPrHeadBranch.value = workspace.head
-    }
-
-    if (typeof workspace.prTitle === 'string' && githubPrTitle) {
-      githubPrTitle.value = workspace.prTitle
-    }
-
-    workspaceTabsState.replaceTabs({
-      tabs: nextTabs,
-      activeTabId: resolveWorkspaceActiveTabId({
-        tabs: nextTabs,
-        requestedActiveTabId: workspace.activeTabId,
-      }),
-    })
-
-    const nextRenderMode = normalizeRenderMode(workspace.renderMode)
-    if (renderMode.value !== nextRenderMode) {
-      renderMode.value = nextRenderMode
-    }
-    persistRenderMode(nextRenderMode)
-
-    const activeTab = getActiveWorkspaceTab()
-    if (activeTab) {
-      loadWorkspaceTabIntoEditor(activeTab)
-    }
-
-    renderWorkspaceTabs()
-    updateRenderModeEditability()
-
-    if (hasCompletedInitialWorkspaceBootstrap) {
-      maybeRender()
-    }
-    await refreshLocalContextOptions()
-    if (!silent) {
-      setStatus('Loaded local workspace context.', 'neutral')
-    }
-
-    return true
-  } finally {
-    isApplyingWorkspaceSnapshot = false
-  }
-}
-
-workspaceSaver = createDebouncedWorkspaceSaver({
-  save: async payload => {
-    const saved = await workspaceStorage.upsertWorkspace(payload)
-
-    const normalizedSavedRepo = toNonEmptyWorkspaceText(saved.repo)
-    const normalizedSavedHead = toNonEmptyWorkspaceText(saved.head)
-
-    if (normalizedSavedHead) {
-      const siblingRecords = normalizedSavedRepo
-        ? await workspaceStorage.listWorkspaces({ repo: normalizedSavedRepo })
-        : await workspaceStorage.listWorkspaces()
-
-      const duplicateRecordIds = siblingRecords
-        .filter(record => {
-          if (!record || typeof record !== 'object') {
-            return false
-          }
-
-          if (toNonEmptyWorkspaceText(record.id) === toNonEmptyWorkspaceText(saved.id)) {
-            return false
-          }
-
-          return (
-            toNonEmptyWorkspaceText(record.repo) === normalizedSavedRepo &&
-            toNonEmptyWorkspaceText(record.head) === normalizedSavedHead
-          )
-        })
-        .map(record => toNonEmptyWorkspaceText(record.id))
-        .filter(Boolean)
-
-      await Promise.all(
-        duplicateRecordIds.map(duplicateId =>
-          workspaceStorage.removeWorkspace(duplicateId),
-        ),
-      )
-    }
-
-    const supersededId = toNonEmptyWorkspaceText(payload?.supersededId)
-    if (supersededId && supersededId !== toNonEmptyWorkspaceText(saved.id)) {
-      await workspaceStorage.removeWorkspace(supersededId)
-    }
-
-    activeWorkspaceRecordId = saved.id
-    activeWorkspaceCreatedAt = saved.createdAt ?? activeWorkspaceCreatedAt
-    await refreshLocalContextOptions()
-    return saved
-  },
-  onError: error => {
-    const message =
-      error instanceof Error ? error.message : 'Could not save local workspace context.'
-    setStatus(`Local save failed: ${message}`, 'error')
-  },
-})
-
-const queueWorkspaceSave = () => {
-  if (isApplyingWorkspaceSnapshot || !workspaceSaver) {
-    return
-  }
-
-  const snapshot = buildWorkspaceRecordSnapshot()
-  activeWorkspaceRecordId = snapshot.id
-  workspaceSaver.queue(snapshot)
-}
-
-const flushWorkspaceSave = async () => {
-  if (isApplyingWorkspaceSnapshot || !workspaceSaver) {
-    return
-  }
-
-  const snapshot = buildWorkspaceRecordSnapshot()
-  activeWorkspaceRecordId = snapshot.id
-  await workspaceSaver.flushNow(snapshot)
-}
-
-const setActiveWorkspaceTab = tabId => {
-  const normalizedTabId = toNonEmptyWorkspaceText(tabId)
-  if (!normalizedTabId) {
-    return
-  }
-
-  const currentActiveTabId = workspaceTabsState.getActiveTabId()
-  const targetTab = workspaceTabsState.getTab(normalizedTabId)
-  if (!targetTab) {
-    return
-  }
-
-  if (targetTab.id === currentActiveTabId) {
-    loadWorkspaceTabIntoEditor(targetTab)
-    renderWorkspaceTabs()
-    updateRenderModeEditability()
-    return
-  }
-
-  persistActiveTabEditorContent()
-
-  const changed = workspaceTabsState.setActiveTab(targetTab.id)
-  const activeTab = getActiveWorkspaceTab()
-  if (activeTab) {
-    loadWorkspaceTabIntoEditor(activeTab)
-  }
-
-  renderWorkspaceTabs()
-  updateRenderModeEditability()
-
-  if (!changed) {
-    return
-  }
-
-  void flushWorkspaceSave().catch(() => {
-    /* Save failures are already surfaced through saver onError. */
-  })
-}
-
-const syncEditorFromActiveWorkspaceTab = () => {
-  const activeTab = getActiveWorkspaceTab()
-  if (!activeTab) {
-    return
-  }
-
-  loadWorkspaceTabIntoEditor(activeTab)
-}
-
-const beginWorkspaceTabRename = tabId => {
-  setWorkspaceTabAddMenuOpen(false)
-  workspaceTabRenameState = {
-    tabId: toNonEmptyWorkspaceText(tabId),
-  }
-  renderWorkspaceTabs()
-}
-
-const finishWorkspaceTabRename = ({ tabId, nextName, cancelled = false }) => {
-  const normalizedTabId = toNonEmptyWorkspaceText(tabId)
-  const tab = workspaceTabsState.getTab(normalizedTabId)
-
-  workspaceTabRenameState = {
-    tabId: '',
-  }
-
-  if (!tab || cancelled) {
-    renderWorkspaceTabs()
-    return
-  }
-
-  const normalizedNameInput = toNonEmptyWorkspaceText(nextName)
-  const normalizedName = getPathFileName(normalizedNameInput) || normalizedNameInput
-  if (!normalizedName) {
-    setStatus('Tab name cannot be empty.', 'error')
-    renderWorkspaceTabs()
-    return
-  }
-
-  if (
-    tab.role === 'entry' &&
-    !allowedEntryTabFileNames.has(normalizedName.toLowerCase())
-  ) {
-    setStatus('Entry tab name must be App.tsx or App.js.', 'error')
-    renderWorkspaceTabs()
-    return
-  }
-
-  const normalizedEntryPath =
-    tab.role === 'entry'
-      ? normalizeEntryTabPath(tab.path, { preferredFileName: normalizedName })
-      : normalizeModuleTabPathForRename(tab.path, normalizedName)
-  const normalizedTabName =
-    tab.role === 'entry'
-      ? getPathFileName(normalizedEntryPath) || defaultComponentTabName
-      : getPathFileName(normalizedEntryPath) || normalizedName
-
-  workspaceTabsState.upsertTab({
-    ...tab,
-    name: normalizedTabName,
-    path: normalizedEntryPath,
-    isDirty: getDirtyStateForTabChange(
-      tab,
-      typeof tab?.content === 'string' ? tab.content : '',
-    ),
-    lastModified: Date.now(),
-  })
-
-  syncHeaderLabels()
-  renderWorkspaceTabs()
-  queueWorkspaceSave()
-  maybeRender()
-}
-
-const removeWorkspaceTab = tabId => {
-  setWorkspaceTabAddMenuOpen(false)
-  const tab = workspaceTabsState.getTab(tabId)
-  if (!tab) {
-    return
-  }
-
-  if (tab.role === 'entry') {
-    setStatus('The entry tab cannot be removed.', 'neutral')
-    return
-  }
-
-  confirmAction({
-    title: `Remove tab ${tab.name}?`,
-    copy: 'This removes the tab and its local source content from this workspace context.',
-    confirmButtonText: 'Remove tab',
-    onConfirm: () => {
-      const removedKind = getTabKind(tab)
-      persistActiveTabEditorContent()
-      const removed = workspaceTabsState.removeTab(tab.id)
-      if (!removed) {
-        return
-      }
-
-      if (loadedComponentTabId === tab.id) {
-        loadedComponentTabId =
-          workspaceTabsState.getTabs().find(entry => getTabKind(entry) === 'component')
-            ?.id || 'component'
-      }
-
-      if (loadedStylesTabId === tab.id) {
-        loadedStylesTabId =
-          workspaceTabsState.getTabs().find(entry => getTabKind(entry) === 'styles')
-            ?.id || 'styles'
-      }
-
-      const activeTab = getActiveWorkspaceTab()
-      if (activeTab) {
-        loadWorkspaceTabIntoEditor(activeTab)
-      } else {
-        const fallbackTab =
-          getWorkspaceTabByKind(removedKind === 'styles' ? 'component' : 'styles') ||
-          workspaceTabsState.getTabs()[0] ||
-          null
-        if (fallbackTab) {
-          setActiveWorkspaceTab(fallbackTab.id)
-        }
-      }
-
-      renderWorkspaceTabs()
-      queueWorkspaceSave()
-      maybeRender()
     },
-  })
-}
-
-const addWorkspaceTab = kind => {
-  const normalizedKind =
-    kind === 'styles' ? 'styles' : kind === 'component' ? 'component' : ''
-  if (!normalizedKind) {
-    setStatus('Choose a tab type before adding a tab.', 'neutral')
-    return
-  }
-
-  const basePath =
-    normalizedKind === 'styles' ? 'src/styles/module.css' : 'src/components/module.tsx'
-  const language = normalizedKind === 'styles' ? 'css' : 'javascript-jsx'
-  const path = makeUniqueTabPath({ basePath })
-  const tabId = createWorkspaceTabId(normalizedKind === 'styles' ? 'style' : 'module')
-  const name = getPathFileName(path) || `${normalizedKind}-tab`
-
-  persistActiveTabEditorContent()
-
-  workspaceTabsState.upsertTab({
-    id: tabId,
-    name,
-    path,
-    language,
-    role: 'module',
-    isActive: false,
-    content: '',
-    lastModified: Date.now(),
-  })
-
-  setWorkspaceTabAddMenuOpen(false)
-  setActiveWorkspaceTab(tabId)
-
-  if (normalizedKind === 'styles') {
-    setStatus('Added style tab.', 'neutral')
-  } else {
-    setStatus('Added JavaScript tab.', 'neutral')
-  }
-}
-
-const setWorkspaceTabAddMenuOpen = isOpen => {
-  const nextOpen = Boolean(isOpen)
-  if (workspaceTabAddMenuOpen === nextOpen) {
-    return
-  }
-
-  workspaceTabAddMenuOpen = nextOpen
-  if (workspaceTabAddButton instanceof HTMLButtonElement) {
-    workspaceTabAddButton.setAttribute('aria-expanded', nextOpen ? 'true' : 'false')
-  }
-
-  if (workspaceTabAddMenu instanceof HTMLElement) {
-    workspaceTabAddMenu.hidden = !nextOpen
-  }
-
-  if (
-    nextOpen &&
-    document.activeElement === workspaceTabAddButton &&
-    workspaceTabAddModule instanceof HTMLButtonElement
-  ) {
-    workspaceTabAddModule.focus()
-  }
-
-  if (
-    !nextOpen &&
-    workspaceTabAddMenu instanceof HTMLElement &&
-    document.activeElement instanceof Node &&
-    workspaceTabAddMenu.contains(document.activeElement) &&
-    workspaceTabAddButton instanceof HTMLButtonElement
-  ) {
-    workspaceTabAddButton.focus()
-  }
-}
-
-const clearWorkspaceTabDragState = () => {
-  draggedWorkspaceTabId = ''
-  dragOverWorkspaceTabId = ''
-}
-
-const renderWorkspaceTabs = () => {
-  if (!(workspaceTabsStrip instanceof HTMLElement)) {
-    return
-  }
-
-  if (isRenderingWorkspaceTabs) {
-    hasPendingWorkspaceTabsRender = true
-    return
-  }
-
-  isRenderingWorkspaceTabs = true
-
-  try {
-    const tabs = workspaceTabsState.getTabs()
-    const activeTabId = workspaceTabsState.getActiveTabId()
-
-    workspaceTabsStrip.replaceChildren()
-
-    for (const tab of tabs) {
-      const isActive = tab.id === activeTabId
-      const isRenaming = workspaceTabRenameState.tabId === tab.id
-      const tabContainer = document.createElement('li')
-      tabContainer.className = 'workspace-tab'
-      tabContainer.dataset.active = isActive ? 'true' : 'false'
-      tabContainer.dataset.tabId = tab.id
-      tabContainer.setAttribute('aria-label', `Workspace tab ${tab.name}`)
-      tabContainer.draggable = !isRenaming
-      tabContainer.dataset.dragOver =
-        dragOverWorkspaceTabId && dragOverWorkspaceTabId === tab.id ? 'true' : 'false'
-      tabContainer.addEventListener('click', event => {
-        if (suppressWorkspaceTabClick) {
-          suppressWorkspaceTabClick = false
-          return
-        }
-
-        const clickTarget = event.target
-        if (!(clickTarget instanceof Element)) {
-          return
-        }
-
-        if (
-          clickTarget.closest('.workspace-tab__rename, .workspace-tab__remove, input')
-        ) {
-          return
-        }
-
-        setActiveWorkspaceTab(tab.id)
-      })
-      if (!isRenaming) {
-        tabContainer.addEventListener('dragstart', event => {
-          draggedWorkspaceTabId = tab.id
-          dragOverWorkspaceTabId = ''
-          suppressWorkspaceTabClick = true
-          if (event.dataTransfer) {
-            event.dataTransfer.effectAllowed = 'move'
-            event.dataTransfer.setData('text/plain', tab.id)
-          }
-        })
-        tabContainer.addEventListener('dragend', () => {
-          clearWorkspaceTabDragState()
-          queueMicrotask(() => {
-            suppressWorkspaceTabClick = false
-          })
-          renderWorkspaceTabs()
-        })
-        tabContainer.addEventListener('dragover', event => {
-          if (!draggedWorkspaceTabId || draggedWorkspaceTabId === tab.id) {
-            return
-          }
-
-          event.preventDefault()
-          if (event.dataTransfer) {
-            event.dataTransfer.dropEffect = 'move'
-          }
-
-          if (dragOverWorkspaceTabId !== tab.id) {
-            dragOverWorkspaceTabId = tab.id
-            tabContainer.dataset.dragOver = 'true'
-          }
-        })
-        tabContainer.addEventListener('dragleave', event => {
-          const relatedTarget = event.relatedTarget
-          if (relatedTarget instanceof Node && tabContainer.contains(relatedTarget)) {
-            return
-          }
-
-          if (dragOverWorkspaceTabId === tab.id) {
-            dragOverWorkspaceTabId = ''
-            tabContainer.dataset.dragOver = 'false'
-          }
-        })
-        tabContainer.addEventListener('drop', event => {
-          event.preventDefault()
-
-          if (!draggedWorkspaceTabId || draggedWorkspaceTabId === tab.id) {
-            clearWorkspaceTabDragState()
-            renderWorkspaceTabs()
-            return
-          }
-
-          persistActiveTabEditorContent()
-
-          const moved = workspaceTabsState.moveTabBefore(draggedWorkspaceTabId, tab.id)
-          clearWorkspaceTabDragState()
-          renderWorkspaceTabs()
-
-          if (!moved) {
-            return
-          }
-
-          queueWorkspaceSave()
-        })
+    setStylesSource: value => {
+      suppressEditorChangeSideEffects = true
+      try {
+        setCssSource(value)
+      } finally {
+        suppressEditorChangeSideEffects = false
       }
-
-      if (isRenaming) {
-        const renameInput = document.createElement('input')
-        renameInput.className = 'workspace-tab__name-input'
-        renameInput.value = tab.name
-        renameInput.setAttribute('aria-label', `Rename ${tab.name}`)
-
-        let renameResolved = false
-        const resolveRename = ({ cancelled = false } = {}) => {
-          if (renameResolved) {
-            return
-          }
-
-          renameResolved = true
-          finishWorkspaceTabRename({
-            tabId: tab.id,
-            nextName: renameInput.value,
-            cancelled,
-          })
-        }
-
-        renameInput.addEventListener('keydown', event => {
-          if (event.key === 'Enter') {
-            event.preventDefault()
-            resolveRename()
-          }
-
-          if (event.key === 'Escape') {
-            event.preventDefault()
-            resolveRename({ cancelled: true })
-          }
-        })
-        renameInput.addEventListener('blur', () => {
-          resolveRename()
-        })
-        tabContainer.append(renameInput)
-        workspaceTabsStrip.append(tabContainer)
-
-        queueMicrotask(() => {
-          renameInput.focus()
-          renameInput.select()
-        })
-        continue
-      }
-
-      const selectButton = document.createElement('button')
-      selectButton.className = 'workspace-tab__select'
-      selectButton.type = 'button'
-      const tabDisplay = getWorkspaceTabDisplay(tab)
-      if (tabDisplay.fullPath) {
-        selectButton.title = tabDisplay.fullPath
-      }
-
-      const fileNameNode = document.createElement('span')
-      fileNameNode.className = 'workspace-tab__path-file'
-      fileNameNode.textContent = tabDisplay.fileName || tab.name
-      selectButton.append(fileNameNode)
-
-      if (isActive) {
-        selectButton.setAttribute('aria-current', 'true')
-      } else {
-        selectButton.removeAttribute('aria-current')
-      }
-      selectButton.setAttribute('aria-label', `Open tab ${tab.name}`)
-      selectButton.addEventListener('click', event => {
-        event.stopPropagation()
-        setActiveWorkspaceTab(tab.id)
-      })
-      selectButton.addEventListener('dblclick', () => {
-        beginWorkspaceTabRename(tab.id)
-      })
-      tabContainer.append(selectButton)
-
-      if (tab.role === 'entry') {
-        const metaBadge = document.createElement('span')
-        metaBadge.className = 'workspace-tab__meta'
-        metaBadge.textContent = 'Entry'
-        tabContainer.append(metaBadge)
-      }
-
-      if (tab.isDirty) {
-        const dirtyBadge = document.createElement('span')
-        dirtyBadge.className = 'workspace-tab__meta workspace-tab__meta--dirty'
-        dirtyBadge.textContent = 'Dirty'
-        tabContainer.append(dirtyBadge)
-      }
-
-      const renameButton = document.createElement('button')
-      renameButton.className = 'workspace-tab__rename'
-      renameButton.type = 'button'
-      renameButton.setAttribute('aria-label', `Rename tab ${tab.name}`)
-      renameButton.title = `Rename ${tab.name}`
-      const renameIcon = document.createElementNS('http://www.w3.org/2000/svg', 'svg')
-      renameIcon.setAttribute('viewBox', '0 0 24 24')
-      renameIcon.setAttribute('aria-hidden', 'true')
-      const renamePath = document.createElementNS('http://www.w3.org/2000/svg', 'path')
-      renamePath.setAttribute(
-        'd',
-        'M12 20h9M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5Z',
-      )
-      renameIcon.append(renamePath)
-      renameButton.append(renameIcon)
-      renameButton.addEventListener('click', () => {
-        beginWorkspaceTabRename(tab.id)
-      })
-      tabContainer.append(renameButton)
-
-      if (tab.role !== 'entry') {
-        const removeButton = document.createElement('button')
-        removeButton.className = 'workspace-tab__remove'
-        removeButton.type = 'button'
-        removeButton.textContent = '×'
-        removeButton.setAttribute('aria-label', `Remove tab ${tab.name}`)
-        removeButton.title = `Remove ${tab.name}`
-        removeButton.addEventListener('click', () => {
-          removeWorkspaceTab(tab.id)
-        })
-        tabContainer.append(removeButton)
-      }
-
-      workspaceTabsStrip.append(tabContainer)
-    }
-
-    if (
-      workspaceTabAddWrap instanceof HTMLElement &&
-      workspaceTabsShell instanceof HTMLElement
-    ) {
-      workspaceTabsShell.append(workspaceTabAddWrap)
-    }
-  } finally {
-    isRenderingWorkspaceTabs = false
-  }
-
-  if (hasPendingWorkspaceTabsRender) {
-    hasPendingWorkspaceTabsRender = false
-    renderWorkspaceTabs()
-    return
-  }
-
-  syncEditorFromActiveWorkspaceTab()
-}
-
-const loadPreferredWorkspaceContext = async () => {
-  const options = await refreshLocalContextOptions()
-
-  if (!Array.isArray(options) || options.length === 0) {
-    return
-  }
-
-  const preferredId =
-    activeWorkspaceRecordId ||
-    toWorkspaceRecordId({
-      repositoryFullName: getCurrentSelectedRepository(),
-      headBranch:
-        typeof githubPrHeadBranch?.value === 'string'
-          ? githubPrHeadBranch.value.trim()
-          : '',
-    })
-
-  const preferred = options.find(workspace => workspace.id === preferredId)
-  const next = preferred ?? options[0]
-
-  if (!next) {
-    return
-  }
-
-  await applyWorkspaceRecord(next, { silent: true })
-}
-
-const bindWorkspaceMetadataPersistence = element => {
-  if (!(element instanceof HTMLInputElement || element instanceof HTMLSelectElement)) {
-    return
-  }
-
-  const queue = () => {
-    queueWorkspaceSave()
-  }
-
-  const flush = () => {
-    void flushWorkspaceSave().catch(() => {
-      /* Save failures are already surfaced through saver onError. */
-    })
-  }
-
-  element.addEventListener('input', queue)
-  element.addEventListener('change', queue)
-  element.addEventListener('blur', flush)
-}
-
-const getCurrentWritableRepositories = () =>
-  githubAiContextState.writableRepositories.length > 0
-    ? [...githubAiContextState.writableRepositories]
-    : byotControls.getWritableRepositories()
-
-const setCurrentSelectedRepository = fullName =>
-  byotControls.setSelectedRepository(fullName)
-
-const getTopLevelDeclarations = async source => {
-  if (typeof source !== 'string' || !source.trim()) {
-    return []
-  }
-
-  const transformJsxSource = await ensureJsxTransformSource({
-    cdnImports,
-    importFromCdnWithFallback,
-  })
-  return collectTopLevelDeclarations({ source, transformJsxSource })
-}
-
-const prEditorSyncController = createGitHubPrEditorSyncController({
-  setComponentSource: value => {
-    suppressEditorChangeSideEffects = true
-    try {
-      setJsxSource(value)
-    } finally {
-      suppressEditorChangeSideEffects = false
-    }
-  },
-  setStylesSource: value => {
-    suppressEditorChangeSideEffects = true
-    try {
-      setCssSource(value)
-    } finally {
-      suppressEditorChangeSideEffects = false
-    }
-  },
-  scheduleRender: () => {
-    if (
-      autoRenderToggle?.checked &&
-      typeof renderRuntime?.scheduleRender === 'function'
-    ) {
-      renderRuntime.scheduleRender()
-    }
-  },
-})
-
-chatDrawerController = createGitHubChatDrawer({
-  toggleButton: aiChatToggle,
-  drawer: aiChatDrawer,
-  closeButton: aiChatClose,
-  promptInput: aiChatPrompt,
-  modelSelect: aiChatModel,
-  includeEditorsContextToggle: aiChatIncludeEditors,
-  sendButton: aiChatSend,
-  clearButton: aiChatClear,
-  statusNode: aiChatStatus,
-  repositoryNode: aiChatRepository,
-  messagesNode: aiChatMessages,
-  getToken: getCurrentGitHubToken,
-  getSelectedRepository: getCurrentSelectedRepository,
-  getComponentSource: () => getJsxSource(),
-  setComponentSource: value => setJsxSource(value),
-  getStylesSource: () => getCssSource(),
-  setStylesSource: value => setCssSource(value),
-  scheduleRender: () => {
-    if (
-      autoRenderToggle?.checked &&
-      typeof renderRuntime?.scheduleRender === 'function'
-    ) {
-      renderRuntime.scheduleRender()
-    }
-  },
-  getRenderMode: () => renderMode.value,
-  getStyleMode: () => styleMode.value,
-  getDrawerSide: () => {
-    return 'right'
-  },
-})
-
-prDrawerController = createGitHubPrDrawer({
-  toggleButton: githubPrToggle,
-  drawer: githubPrDrawer,
-  closeButton: githubPrClose,
-  repositorySelect: githubPrRepoSelect,
-  baseBranchInput: githubPrBaseBranch,
-  headBranchInput: githubPrHeadBranch,
-  prTitleInput: githubPrTitle,
-  prBodyInput: githubPrBody,
-  commitMessageInput: githubPrCommitMessage,
-  includeAppWrapperToggle: githubPrIncludeAppWrapper,
-  submitButton: githubPrSubmit,
-  titleNode: openPrTitle,
-  statusNode: githubPrStatus,
-  getToken: getCurrentGitHubToken,
-  getSelectedRepository: getCurrentSelectedRepository,
-  getWritableRepositories: getCurrentWritableRepositories,
-  setSelectedRepository: setCurrentSelectedRepository,
-  getFileCommits: getWorkspacePrFileCommits,
-  getEditorSyncTargets,
-  getTopLevelDeclarations,
-  getRenderMode: () => renderMode.value,
-  getStyleMode: () => styleMode.value,
-  getDrawerSide: () => {
-    return 'right'
-  },
-  confirmBeforeSubmit: options => {
-    confirmAction(options)
-  },
-  onPullRequestOpened: ({ url, fileUpdates }) => {
-    const activeContextSyncKey = getActivePrContextSyncKey(
-      githubAiContextState.activePrContext,
-    )
-    if (
-      activeContextSyncKey &&
-      activeContextSyncKey === githubAiContextState.activePrEditorSyncKey
-    ) {
-      githubAiContextState.hasSyncedActivePrEditorContent = true
-      syncEditorPrContextIndicators(true)
-    }
-
-    const message = url
-      ? `Pull request opened: ${url}`
-      : 'Pull request opened successfully.'
-    reconcileWorkspaceTabsWithPushUpdates(fileUpdates)
-    showAppToast(message)
-  },
-  onPullRequestCommitPushed: ({ branch, fileUpdates }) => {
-    reconcileWorkspaceTabsWithPushUpdates(fileUpdates)
-    const fileCount = Array.isArray(fileUpdates) ? fileUpdates.length : 0
-    const message =
-      fileCount > 0
-        ? `Pushed commit to ${branch} (${fileCount} file${fileCount === 1 ? '' : 's'}).`
-        : `Pushed commit to ${branch}.`
-    showAppToast(message)
-  },
-  onActivePrContextChange: activeContext => {
-    syncActivePrContextUi(activeContext)
-    syncAiChatTokenVisibility(githubAiContextState.token)
-    if (workspacesToggle instanceof HTMLButtonElement) {
-      workspacesToggle.hidden = Boolean(activeContext)
-    }
-
-    if (activeContext) {
-      void workspacesDrawerController?.setOpen(false)
-    }
-  },
-  onSyncActivePrEditorContent: async args => {
-    const result = await prEditorSyncController.syncFromActiveContext(args)
-    const syncedContextKey = getActivePrContextSyncKey(args?.activeContext)
-
-    if (
-      !syncedContextKey ||
-      syncedContextKey !== githubAiContextState.activePrEditorSyncKey
-    ) {
-      return result
-    }
-
-    if (result?.synced === true) {
-      githubAiContextState.hasSyncedActivePrEditorContent = true
-      syncEditorPrContextIndicators(true)
-
-      reconcileWorkspaceTabsWithEditorSync({
-        componentPath: args?.activeContext?.componentFilePath,
-        stylesPath: args?.activeContext?.stylesFilePath,
-      })
-    }
-
-    return result
-  },
-  onRestoreRenderMode: mode => {
-    applyRenderMode({ mode, fromActivePrContext: true })
-  },
-  onRestoreStyleMode: mode => {
-    applyStyleMode({ mode })
-  },
-})
-
-workspacesDrawerController = createWorkspacesDrawer({
-  toggleButton: workspacesToggle,
-  drawer: workspacesDrawer,
-  closeButton: workspacesClose,
-  statusNode: workspacesStatus,
-  searchInput: workspacesSearch,
-  selectInput: workspacesSelect,
-  openButton: workspacesOpen,
-  removeButton: workspacesRemove,
-  getDrawerSide: () => {
-    return 'right'
-  },
-  onRefreshRequested: listLocalContextRecords,
-  onOpenSelected: async workspaceId => {
-    try {
-      const record = await workspaceStorage.getWorkspaceById(workspaceId)
-      if (!record) {
-        await refreshLocalContextOptions()
-        workspacesDrawerController?.setStatus(
-          'Stored local context no longer exists.',
-          'error',
-        )
-        return false
-      }
-
-      return applyWorkspaceRecord(record, { silent: false })
-    } catch {
-      workspacesDrawerController?.setStatus(
-        'Could not load selected local context.',
-        'error',
-      )
-      return false
-    }
-  },
-  onRemoveSelected: async workspaceId => {
-    confirmAction({
-      title: 'Remove stored local context?',
-      copy: 'This removes only local workspace metadata and editor content from this browser.',
-      confirmButtonText: 'Remove',
-      onConfirm: () => {
-        void workspaceStorage
-          .removeWorkspace(workspaceId)
-          .then(async () => {
-            if (activeWorkspaceRecordId === workspaceId) {
-              activeWorkspaceRecordId = ''
-              activeWorkspaceCreatedAt = null
-            }
-
-            await refreshLocalContextOptions()
-            workspacesDrawerController?.setStatus(
-              'Removed stored local context.',
-              'neutral',
-            )
-          })
-          .catch(() => {
-            workspacesDrawerController?.setStatus(
-              'Could not remove stored local context.',
-              'error',
-            )
-          })
-      },
-    })
-
-    return false
-  },
-})
-
-prDrawerController.setToken(githubAiContextState.token)
-prDrawerController.setSelectedRepository(githubAiContextState.selectedRepository)
-prDrawerController.syncRepositories()
-syncActivePrContextUi(prDrawerController.getActivePrContext())
-
-githubPrContextClose?.addEventListener('click', () => {
-  if (!githubAiContextState.activePrContext) {
-    return
-  }
-
-  const activePrReference = formatActivePrReference(githubAiContextState.activePrContext)
-  const referenceLine = activePrReference ? `PR: ${activePrReference}\n` : ''
-
-  confirmAction({
-    title: 'Close pull request on GitHub?',
-    copy: `${referenceLine}PR title: ${githubAiContextState.activePrContext.prTitle}\nHead branch: ${githubAiContextState.activePrContext.headBranch}\n\nThis will close the pull request on GitHub and clear the active pull request context for the selected repository.`,
-    confirmButtonText: 'Close PR on GitHub',
-    onConfirm: () => {
-      void prDrawerController
-        .closeActivePullRequestOnGitHub()
-        .then(result => {
-          const reference = result?.reference
-          setStatus(
-            reference
-              ? `Closed pull request on GitHub and cleared active context (${reference}).`
-              : 'Closed pull request on GitHub and cleared active context.',
-            'neutral',
-          )
-          showAppToast(
-            reference
-              ? `Closed pull request on GitHub and cleared active context (${reference}).`
-              : 'Closed pull request on GitHub and cleared active context.',
-          )
-        })
-        .catch(error => {
-          const message =
-            error instanceof Error
-              ? error.message
-              : 'Could not close pull request context on GitHub.'
-          setStatus(`Close context failed: ${message}`, 'error')
-          showAppToast(`Close context failed: ${message}`)
-        })
     },
-  })
-})
-
-githubPrContextDisconnect?.addEventListener('click', () => {
-  if (!githubAiContextState.activePrContext) {
-    return
-  }
-
-  const activePrReference = formatActivePrReference(githubAiContextState.activePrContext)
-  const referenceLine = activePrReference ? `PR: ${activePrReference}\n` : ''
-
-  confirmAction({
-    title: 'Disconnect PR context?',
-    copy: `${referenceLine}This will disconnect the active pull request context in this app only.\nYour pull request will stay open on GitHub.\nYour GitHub token and selected repository will stay connected.`,
-    confirmButtonText: 'Disconnect',
-    onConfirm: () => {
-      const result = prDrawerController.disconnectActivePrContext()
-      const reference = result?.reference
-      setStatus(
-        reference
-          ? `Disconnected PR context (${reference}). Pull request remains open on GitHub.`
-          : 'Disconnected PR context. Pull request remains open on GitHub.',
-        'neutral',
-      )
-    },
-  })
-})
-
-const getStyleEditorLanguage = mode => {
-  if (mode === 'less') return 'less'
-  if (mode === 'sass') return 'sass'
-  return 'css'
-}
-
-const normalizeRenderMode = mode => (mode === 'react' ? 'react' : 'dom')
-
-const persistRenderMode = mode => {
-  const normalizedMode = normalizeRenderMode(mode)
-
-  try {
-    localStorage.setItem(renderModeStorageKey, normalizedMode)
-  } catch {
-    /* Ignore storage write errors in restricted browsing modes. */
-  }
-}
-
-const getInitialRenderMode = () => {
-  try {
-    const value = localStorage.getItem(renderModeStorageKey)
-    return normalizeRenderMode(value)
-  } catch {
-    /* Ignore storage read errors in restricted browsing modes. */
-  }
-
-  return 'dom'
-}
-
-const updateRenderModeEditability = () => {
-  if (!(renderMode instanceof HTMLSelectElement)) {
-    return
-  }
-
-  const activeTab = getActiveWorkspaceTab()
-  const isEntryTab = activeTab?.role === 'entry'
-  renderMode.disabled = !isEntryTab
-}
-
-const normalizeStyleMode = mode => {
-  if (mode === 'module') return 'module'
-  if (mode === 'less') return 'less'
-  if (mode === 'sass') return 'sass'
-  return 'css'
-}
-
-const createEditorHost = textarea => {
-  const host = document.createElement('div')
-  host.className = 'editor-host'
-  textarea.before(host)
-  return host
-}
-
-const initializeCodeEditors = async () => {
-  const jsxHost = createEditorHost(jsxEditor)
-  const cssHost = createEditorHost(cssEditor)
-
-  try {
-    const [nextJsxEditor, nextCssEditor] = await Promise.all([
-      createCodeMirrorEditor({
-        parent: jsxHost,
-        value: getJsxSource(),
-        language: 'javascript-jsx',
-        contentAttributes: {
-          'aria-label': 'Component source editor',
-          'aria-multiline': 'true',
-        },
-        onChange: () => {
-          if (suppressEditorChangeSideEffects) {
-            return
-          }
-          const activeTab = getActiveWorkspaceTab()
-          if (activeTab && getTabKind(activeTab) === 'component') {
-            const nextContent = getJsxSource()
-            const nextDirtyState = getDirtyStateForTabChange(activeTab, nextContent)
-            workspaceTabsState.upsertTab(
-              {
-                ...activeTab,
-                content: nextContent,
-                syncedContent: toWorkspaceSyncedContent(activeTab?.syncedContent),
-                isDirty: nextDirtyState,
-                lastModified: Date.now(),
-                isActive: true,
-              },
-              { emitReason: 'componentEditorChange' },
-            )
-
-            if (nextDirtyState !== Boolean(activeTab.isDirty)) {
-              renderWorkspaceTabs()
-            }
-          }
-          queueWorkspaceSave()
-          maybeRenderFromComponentEditorChange()
-          markTypeDiagnosticsStale()
-          markComponentLintDiagnosticsStale()
-        },
-      }),
-      createCodeMirrorEditor({
-        parent: cssHost,
-        value: getCssSource(),
-        language: getStyleEditorLanguage(styleMode.value),
-        contentAttributes: {
-          'aria-label': 'Styles source editor',
-          'aria-multiline': 'true',
-        },
-        onChange: () => {
-          if (suppressEditorChangeSideEffects) {
-            return
-          }
-          const activeTab = getActiveWorkspaceTab()
-          if (activeTab && getTabKind(activeTab) === 'styles') {
-            const nextContent = getCssSource()
-            const nextDirtyState = getDirtyStateForTabChange(activeTab, nextContent)
-            workspaceTabsState.upsertTab(
-              {
-                ...activeTab,
-                content: nextContent,
-                syncedContent: toWorkspaceSyncedContent(activeTab?.syncedContent),
-                isDirty: nextDirtyState,
-                lastModified: Date.now(),
-                isActive: true,
-              },
-              { emitReason: 'stylesEditorChange' },
-            )
-
-            if (nextDirtyState !== Boolean(activeTab.isDirty)) {
-              renderWorkspaceTabs()
-            }
-          }
-          queueWorkspaceSave()
-          maybeRender()
-          markStylesLintDiagnosticsStale()
-        },
-      }),
-    ])
-
-    jsxHost.addEventListener('focusout', event => {
+    getComponentSource: () => getJsxSource(),
+    getStylesSource: () => getCssSource(),
+    scheduleRender: () => {
       if (
-        !(event.relatedTarget instanceof Node) ||
-        !jsxHost.contains(event.relatedTarget)
+        autoRenderToggle?.checked &&
+        typeof renderRuntime?.scheduleRender === 'function'
       ) {
-        void flushWorkspaceSave().catch(() => {
-          /* Save failures are already surfaced through saver onError. */
-        })
+        renderRuntime.scheduleRender()
       }
-    })
+    },
+  },
+})
 
-    cssHost.addEventListener('focusout', event => {
-      if (
-        !(event.relatedTarget instanceof Node) ||
-        !cssHost.contains(event.relatedTarget)
-      ) {
-        void flushWorkspaceSave().catch(() => {
-          /* Save failures are already surfaced through saver onError. */
-        })
-      }
-    })
+chatDrawerController = githubWorkflows.chatDrawerController
+prDrawerController = githubWorkflows.prDrawerController
+workspacesDrawerController = githubWorkflows.workspacesDrawerController
 
-    jsxCodeEditor = nextJsxEditor
-    cssCodeEditor = nextCssEditor
-    getJsxSource = () => jsxCodeEditor.getValue()
-    getCssSource = () => cssCodeEditor.getValue()
+const persistRenderMode = mode => persistRenderModeValue(mode, { renderModeStorageKey })
 
-    editorPool.register('component', {
-      isMounted: () =>
-        componentEditorPanel instanceof HTMLElement &&
-        !componentEditorPanel.hasAttribute('hidden'),
-      mount: () => {
-        componentEditorPanel?.removeAttribute('hidden')
-      },
-      unmount: () => {
-        componentEditorPanel?.setAttribute('hidden', '')
-      },
-    })
-    editorPool.register('styles', {
-      isMounted: () =>
-        stylesEditorPanel instanceof HTMLElement &&
-        !stylesEditorPanel.hasAttribute('hidden'),
-      mount: () => {
-        stylesEditorPanel?.removeAttribute('hidden')
-      },
-      unmount: () => {
-        stylesEditorPanel?.setAttribute('hidden', '')
-      },
-    })
+const getInitialRenderMode = () => getInitialRenderModeValue({ renderModeStorageKey })
 
-    const activeWorkspaceTab = getActiveWorkspaceTab()
-    if (activeWorkspaceTab) {
-      loadWorkspaceTabIntoEditor(activeWorkspaceTab)
-    }
+const updateRenderModeEditability = () =>
+  updateRenderModeEditabilityValue({ renderMode, getActiveWorkspaceTab })
 
-    jsxEditor.classList.add('source-textarea--hidden')
-    cssEditor.classList.add('source-textarea--hidden')
-  } catch (error) {
-    jsxHost.remove()
-    cssHost.remove()
-    const message = error instanceof Error ? error.message : String(error)
-    setStatus(`Editor fallback: ${message}`, 'neutral')
-  }
-}
+const editorBootstrapOptions = createEditorBootstrapOptions({
+  createCodeMirrorEditor,
+  jsxEditor,
+  cssEditor,
+  getJsxSource: () => getJsxSource(),
+  getCssSource: () => getCssSource(),
+  getStyleEditorLanguage,
+  styleMode,
+  getSuppressEditorChangeSideEffects: () => suppressEditorChangeSideEffects,
+  getActiveWorkspaceTab,
+  getTabKind,
+  getDirtyStateForTabChange,
+  workspaceTabsState,
+  toWorkspaceSyncedContent,
+  renderWorkspaceTabs,
+  queueWorkspaceSave,
+  maybeRenderFromComponentEditorChange: () => maybeRenderFromComponentEditorChange(),
+  markTypeDiagnosticsStale: () => markTypeDiagnosticsStale(),
+  markComponentLintDiagnosticsStale: () => markComponentLintDiagnosticsStale(),
+  maybeRender: () => maybeRender(),
+  markStylesLintDiagnosticsStale: () => markStylesLintDiagnosticsStale(),
+  flushWorkspaceSave,
+  setJsxCodeEditor: value => (jsxCodeEditor = value),
+  setCssCodeEditor: value => (cssCodeEditor = value),
+  setGetJsxSource: value => (getJsxSource = value),
+  setGetCssSource: value => (getCssSource = value),
+  editorPool,
+  componentEditorPanel,
+  stylesEditorPanel,
+  loadWorkspaceTabIntoEditor,
+  setStatus,
+})
+const editorBootstrapController = createEditorBootstrapController(editorBootstrapOptions)
 
-const setTypecheckButtonLoading = isLoading => {
-  if (!typecheckButton) {
-    return
-  }
+const initializeCodeEditors = async () =>
+  editorBootstrapController.initializeCodeEditors()
 
-  typecheckButton.classList.toggle('render-button--loading', isLoading)
-  typecheckButton.setAttribute('aria-busy', isLoading ? 'true' : 'false')
-  typecheckButton.disabled = isLoading
-}
-
-const setLintButtonLoading = ({ button, isLoading }) => {
-  if (!(button instanceof HTMLButtonElement)) {
-    return
-  }
-
-  button.classList.toggle('render-button--loading', isLoading)
-  button.setAttribute('aria-busy', isLoading ? 'true' : 'false')
-  button.disabled = isLoading
-}
-
-const setCdnLoading = isLoading => {
-  if (!cdnLoading) return
-  cdnLoading.hidden = !isLoading
-}
-
-const setRenderedStatus = () => {
-  if (typeDiagnostics.getLastTypeErrorCount() > 0) {
-    setStatus(
-      `Rendered (Type errors: ${typeDiagnostics.getLastTypeErrorCount()})`,
-      'error',
-    )
-    return
-  }
-
-  if (statusNode.textContent.startsWith('Rendered (Type errors:')) {
-    setStatus('Rendered', 'neutral')
-  }
-}
-
-const typeDiagnostics = createTypeDiagnosticsController({
+const runtimeCoreOptions = createRuntimeCoreOptions({
+  createDiagnosticsFlowController,
+  createRenderRuntimeController,
+  createTypeDiagnosticsController,
+  createLintDiagnosticsController,
   cdnImports,
   importFromCdnWithFallback,
   getTypeScriptLibUrls,
   getTypePackageFileUrls,
   getJsxSource: () => getJsxSource(),
+  getCssSource: () => getCssSource(),
   getTypecheckSourcePath,
-  getWorkspaceTabs: () => buildWorkspaceTabsSnapshot(),
-  getRenderMode: () => renderMode.value,
-  setTypecheckButtonLoading,
+  buildWorkspaceTabsSnapshot,
+  renderMode,
+  styleMode,
   setTypeDiagnosticsDetails,
   setTypeDiagnosticsPending,
+  setStyleDiagnosticsDetails,
+  setLintDiagnosticsPending,
   setStatus,
-  setRenderedStatus,
-  isRenderedStatus: () =>
-    statusNode.textContent === 'Rendered' ||
-    statusNode.textContent.startsWith('Rendered (Type errors:'),
-  isRenderedTypeErrorStatus: () =>
-    statusNode.textContent.startsWith('Rendered (Type errors:'),
+  statusNode,
   incrementTypeDiagnosticsRuns,
   decrementTypeDiagnosticsRuns,
   getActiveTypeDiagnosticsRuns,
-  onIssuesDetected: ({ issueCount }) => {
-    if (issueCount > 0) {
-      setDiagnosticsDrawerOpen(true)
-    }
-  },
-})
-
-const lintDiagnostics = createLintDiagnosticsController({
-  cdnImports,
-  importFromCdnWithFallback,
-  getComponentSource: () => getJsxSource(),
-  getStylesSource: () => getCssSource(),
-  getStyleMode: () => styleMode.value,
-  setComponentDiagnostics: setTypeDiagnosticsDetails,
-  setStyleDiagnostics: setStyleDiagnosticsDetails,
-  setStatus,
-  onIssuesDetected: ({ issueCount }) => {
-    if (issueCount > 0) {
-      setDiagnosticsDrawerOpen(true)
-    }
-  },
-})
-
-let activeComponentLintAbortController = null
-let activeStylesLintAbortController = null
-let lastComponentLintIssueCount = 0
-let lastStylesLintIssueCount = 0
-let scheduledComponentLintRecheck = null
-let scheduledStylesLintRecheck = null
-let componentLintPending = false
-let stylesLintPending = false
-
-const clearComponentLintRecheckTimer = () => {
-  if (scheduledComponentLintRecheck) {
-    clearTimeout(scheduledComponentLintRecheck)
-    scheduledComponentLintRecheck = null
-  }
-}
-
-const clearStylesLintRecheckTimer = () => {
-  if (scheduledStylesLintRecheck) {
-    clearTimeout(scheduledStylesLintRecheck)
-    scheduledStylesLintRecheck = null
-  }
-}
-
-const syncLintPendingState = () => {
-  setLintDiagnosticsPending(componentLintPending || stylesLintPending)
-}
-
-const runComponentLint = ({ userInitiated = false, source = undefined } = {}) => {
-  activeComponentLintAbortController?.abort()
-  const controller = new AbortController()
-  activeComponentLintAbortController = controller
-  componentLintPending = false
-  syncLintPendingState()
-  incrementLintDiagnosticsRuns()
-
-  setLintButtonLoading({ button: lintComponentButton, isLoading: true })
-
-  return lintDiagnostics
-    .lintComponent({
-      signal: controller.signal,
-      userInitiated,
-      source,
-    })
-    .then(result => {
-      if (result) {
-        lastComponentLintIssueCount = result.issueCount
-      }
-      return result
-    })
-    .finally(() => {
-      decrementLintDiagnosticsRuns()
-      if (activeComponentLintAbortController === controller) {
-        activeComponentLintAbortController = null
-        setLintButtonLoading({ button: lintComponentButton, isLoading: false })
-      }
-    })
-}
-
-const runStylesLint = ({ userInitiated = false, source = undefined } = {}) => {
-  activeStylesLintAbortController?.abort()
-  const controller = new AbortController()
-  activeStylesLintAbortController = controller
-  stylesLintPending = false
-  syncLintPendingState()
-  incrementLintDiagnosticsRuns()
-
-  setLintButtonLoading({ button: lintStylesButton, isLoading: true })
-
-  return lintDiagnostics
-    .lintStyles({
-      signal: controller.signal,
-      userInitiated,
-      source,
-    })
-    .then(result => {
-      if (result) {
-        lastStylesLintIssueCount = result.issueCount
-      }
-      return result
-    })
-    .finally(() => {
-      decrementLintDiagnosticsRuns()
-      if (activeStylesLintAbortController === controller) {
-        activeStylesLintAbortController = null
-        setLintButtonLoading({ button: lintStylesButton, isLoading: false })
-      }
-    })
-}
-
-const markTypeDiagnosticsStale = () => {
-  typeDiagnostics.markTypeDiagnosticsStale()
-}
-
-const markComponentLintDiagnosticsStale = () => {
-  clearComponentLintRecheckTimer()
-
-  if (lastComponentLintIssueCount > 0) {
-    componentLintPending = true
-    syncLintPendingState()
-    setTypeDiagnosticsDetails({
-      headline: 'Source changed. Re-checking lint issues…',
-      level: 'muted',
-    })
-
-    scheduledComponentLintRecheck = setTimeout(() => {
-      scheduledComponentLintRecheck = null
-      void runComponentLint()
-    }, 450)
-    return
-  }
-
-  componentLintPending = false
-  syncLintPendingState()
-  setTypeDiagnosticsDetails({
-    headline: 'Source changed. Click Lint to run diagnostics.',
-    level: 'muted',
-  })
-
-  if (statusNode.textContent.startsWith('Rendered (Lint issues:')) {
-    setStatus('Rendered', 'neutral')
-  }
-}
-
-const markStylesLintDiagnosticsStale = () => {
-  clearStylesLintRecheckTimer()
-
-  if (lastStylesLintIssueCount > 0) {
-    stylesLintPending = true
-    syncLintPendingState()
-    setStyleDiagnosticsDetails({
-      headline: 'Source changed. Re-checking lint issues…',
-      level: 'muted',
-    })
-
-    scheduledStylesLintRecheck = setTimeout(() => {
-      scheduledStylesLintRecheck = null
-      void runStylesLint()
-    }, 450)
-    return
-  }
-
-  stylesLintPending = false
-  syncLintPendingState()
-  setStyleDiagnosticsDetails({
-    headline: 'Source changed. Click Lint to run diagnostics.',
-    level: 'muted',
-  })
-
-  if (statusNode.textContent.startsWith('Rendered (Lint issues:')) {
-    setStatus('Rendered', 'neutral')
-  }
-}
-
-const clearComponentLintDiagnosticsState = () => {
-  lastComponentLintIssueCount = 0
-  componentLintPending = false
-  clearComponentLintRecheckTimer()
-  syncLintPendingState()
-}
-
-const clearStylesLintDiagnosticsState = () => {
-  lastStylesLintIssueCount = 0
-  stylesLintPending = false
-  clearStylesLintRecheckTimer()
-  syncLintPendingState()
-}
-
-const resetDiagnosticsFlow = () => {
-  activeComponentLintAbortController?.abort()
-  activeStylesLintAbortController?.abort()
-  activeComponentLintAbortController = null
-  activeStylesLintAbortController = null
-
-  lintDiagnostics.cancelAll()
-  typeDiagnostics.cancelTypeDiagnostics()
-  clearComponentLintDiagnosticsState()
-  clearStylesLintDiagnosticsState()
-  clearAllDiagnostics()
-
-  setLintButtonLoading({ button: lintComponentButton, isLoading: false })
-  setLintButtonLoading({ button: lintStylesButton, isLoading: false })
-  setStatus('Rendered', 'neutral')
-}
-
-const renderPreview = async () => {
-  await renderRuntime.renderPreview()
-}
-
-const maybeRender = () => {
-  if (autoRenderToggle.checked) {
-    renderRuntime.scheduleRender()
-  }
-}
-
-const maybeRenderFromComponentEditorChange = () => {
-  if (!autoRenderToggle.checked) {
-    return
-  }
-
-  const activeTab = getActiveWorkspaceTab()
-  if (activeTab && getTabKind(activeTab) === 'component') {
-    const shouldRender = renderRuntime.shouldAutoRenderForTabChange(activeTab.id)
-    if (!shouldRender) {
-      return
-    }
-  }
-
-  renderRuntime.scheduleRender()
-}
-
-renderRuntime = createRenderRuntimeController({
-  cdnImports,
-  importFromCdnWithFallback,
-  renderMode,
-  isAutoRenderEnabled: () => autoRenderToggle.checked,
-  getJsxSource: () => getJsxSource(),
-  getWorkspaceTabs: () => buildWorkspaceTabsSnapshot(),
+  incrementLintDiagnosticsRuns,
+  decrementLintDiagnosticsRuns,
+  setDiagnosticsDrawerOpen,
+  clearAllDiagnostics,
+  lintComponentButton,
+  lintStylesButton,
+  autoRenderToggle,
+  getActiveWorkspaceTab,
+  getTabKind,
+  getRenderRuntime: () => renderRuntime,
   getPreviewHost: () => previewHost,
-  getPreviewBackgroundColor: () => previewBackground.getPreviewBackgroundColor(),
-  clearStyleDiagnostics: () => clearDiagnosticsScope('styles'),
-  setStyleDiagnosticsDetails,
-  setStatus,
-  setRenderedStatus,
-  onFirstRenderComplete: () => {},
-  setCdnLoading,
+  previewBackground,
+  clearDiagnosticsScope,
+  clearConfirmDialog,
+  clearConfirmTitle,
+  clearConfirmCopy,
+  clearConfirmButton,
+  setPendingClearAction: value => (pendingClearAction = value),
+  normalizeRenderMode,
+  normalizeStyleMode,
+  persistRenderMode,
+  resetDiagnosticsFlow: () => diagnosticsFlowController.resetDiagnosticsFlow(),
+  maybeRender: () => diagnosticsFlowController.maybeRender(),
+  flushWorkspaceSave,
+  getCssCodeEditor: () => cssCodeEditor,
+  setSuppressEditorChangeSideEffects: value => (suppressEditorChangeSideEffects = value),
+  getStyleEditorLanguage,
+  workspaceTabsState,
+  queueWorkspaceSave,
 })
+const runtimeCore = createRuntimeCoreSetup(runtimeCoreOptions)
+
+const diagnosticsFlowController = runtimeCore.diagnosticsFlowController
+renderRuntime = runtimeCore.renderRuntime
+const setCdnLoading = runtimeCore.setCdnLoading
+const typeDiagnostics = diagnosticsFlowController.typeDiagnostics
+const runComponentLint = options => diagnosticsFlowController.runComponentLint(options)
+const runStylesLint = options => diagnosticsFlowController.runStylesLint(options)
+const markTypeDiagnosticsStale = () =>
+  diagnosticsFlowController.markTypeDiagnosticsStale()
+const markComponentLintDiagnosticsStale = () =>
+  diagnosticsFlowController.markComponentLintDiagnosticsStale()
+const markStylesLintDiagnosticsStale = () =>
+  diagnosticsFlowController.markStylesLintDiagnosticsStale()
+const clearComponentLintDiagnosticsState = () =>
+  diagnosticsFlowController.clearComponentLintDiagnosticsState()
+const clearStylesLintDiagnosticsState = () =>
+  diagnosticsFlowController.clearStylesLintDiagnosticsState()
+const renderPreview = async () => diagnosticsFlowController.renderPreview()
+const maybeRender = () => diagnosticsFlowController.maybeRender()
+const maybeRenderFromComponentEditorChange = () =>
+  diagnosticsFlowController.maybeRenderFromComponentEditorChange()
 
 function setJsxSource(value) {
-  if (jsxCodeEditor) {
-    suppressEditorChangeSideEffects = true
-    try {
-      jsxCodeEditor.setValue(value)
-    } finally {
-      suppressEditorChangeSideEffects = false
-    }
-  }
-  jsxEditor.value = value
+  setJsxSourceValue({
+    value,
+    jsxCodeEditor,
+    setSuppressEditorChangeSideEffects: nextValue =>
+      (suppressEditorChangeSideEffects = nextValue),
+    jsxEditor,
+  })
 }
 
 function setCssSource(value) {
-  if (cssCodeEditor) {
-    suppressEditorChangeSideEffects = true
-    try {
-      cssCodeEditor.setValue(value)
-    } finally {
-      suppressEditorChangeSideEffects = false
-    }
-  }
-  cssEditor.value = value
-}
-
-const clearComponentSource = () => {
-  setJsxSource('')
-  clearDiagnosticsScope('component')
-  typeDiagnostics.clearTypeDiagnosticsState()
-  clearComponentLintDiagnosticsState()
-  setStatus('Component cleared', 'neutral')
-  renderRuntime.clearPreview()
-  queueWorkspaceSave()
-}
-
-const clearStylesSource = () => {
-  setCssSource('')
-  clearDiagnosticsScope('styles')
-  clearStylesLintDiagnosticsState()
-  setStatus('Styles cleared', 'neutral')
-  maybeRender()
-  queueWorkspaceSave()
-}
-
-const confirmAction = ({ title, copy, confirmButtonText = 'Clear', onConfirm }) => {
-  const toConfirmText = value => (typeof value === 'string' ? value.trim() : '')
-  if (
-    !(clearConfirmDialog instanceof HTMLDialogElement) ||
-    typeof clearConfirmDialog.showModal !== 'function'
-  ) {
-    return
-  }
-
-  if (clearConfirmDialog.open) {
-    return
-  }
-
-  if (clearConfirmTitle) {
-    clearConfirmTitle.textContent = title
-  }
-
-  if (clearConfirmCopy instanceof HTMLUListElement) {
-    const lines = toConfirmText(copy)
-      .split('\n')
-      .map(line => line.replace(/^\s*[-*]\s*/, '').trim())
-      .filter(Boolean)
-
-    clearConfirmCopy.replaceChildren()
-    const items = lines.length > 0 ? lines : [toConfirmText(copy)]
-
-    for (const line of items) {
-      if (!line) {
-        continue
-      }
-
-      const listItem = document.createElement('li')
-      listItem.textContent = line
-      clearConfirmCopy.append(listItem)
-    }
-  } else if (clearConfirmCopy) {
-    clearConfirmCopy.textContent = copy
-  }
-
-  if (clearConfirmButton instanceof HTMLButtonElement) {
-    clearConfirmButton.textContent = confirmButtonText
-    clearConfirmButton.removeAttribute('aria-label')
-  }
-
-  pendingClearAction = onConfirm
-  clearConfirmDialog.showModal()
-}
-
-const confirmClearSource = ({ label, onConfirm }) => {
-  confirmAction({
-    title: `Clear ${label} source?`,
-    copy: 'This action will remove all text from the editor. This cannot be undone.',
-    onConfirm,
+  setCssSourceValue({
+    value,
+    cssCodeEditor,
+    setSuppressEditorChangeSideEffects: nextValue =>
+      (suppressEditorChangeSideEffects = nextValue),
+    cssEditor,
   })
 }
 
-const copyTextToClipboard = async text => {
-  if (!clipboardSupported) {
-    throw new Error('Clipboard API is not available in this browser context.')
-  }
-
-  await navigator.clipboard.writeText(text)
-}
-
-const copyComponentSource = async () => {
-  try {
-    await copyTextToClipboard(getJsxSource())
-    setStatus('Component copied', 'neutral')
-  } catch {
-    setStatus('Copy failed', 'error')
-  }
-}
-
-const copyStylesSource = async () => {
-  try {
-    await copyTextToClipboard(getCssSource())
-    setStatus('Styles copied', 'neutral')
-  } catch {
-    setStatus('Copy failed', 'error')
-  }
-}
-
-const initializePreviewBackgroundPicker = () => {
-  previewBackground.initializePreviewBackgroundPicker()
-}
-
-const updateRenderButtonVisibility = () => {
-  renderButton.hidden = autoRenderToggle.checked
-}
+const confirmAction = options => runtimeCore.confirmAction(options)
 
 function applyRenderMode({ mode, fromActivePrContext: _fromActivePrContext = false }) {
-  const nextMode = normalizeRenderMode(mode)
-
-  if (renderMode.value !== nextMode) {
-    renderMode.value = nextMode
-  }
-
-  persistRenderMode(nextMode)
-
-  resetDiagnosticsFlow()
-
-  maybeRender()
-  void flushWorkspaceSave().catch(() => {
-    /* Save failures are already surfaced through saver onError. */
-  })
+  runtimeCore.applyRenderMode({ mode, fromActivePrContext: _fromActivePrContext })
 }
 
 function applyStyleMode({ mode }) {
-  const nextMode = normalizeStyleMode(mode)
-
-  if (styleMode.value !== nextMode) {
-    styleMode.value = nextMode
-  }
-
-  resetDiagnosticsFlow()
-
-  if (cssCodeEditor) {
-    suppressEditorChangeSideEffects = true
-    try {
-      cssCodeEditor.setLanguage(getStyleEditorLanguage(nextMode))
-    } finally {
-      suppressEditorChangeSideEffects = false
-    }
-  }
-
-  const activeTab = getActiveWorkspaceTab()
-  if (activeTab && getTabKind(activeTab) === 'styles') {
-    const nextLanguage =
-      nextMode === 'less'
-        ? 'less'
-        : nextMode === 'sass'
-          ? 'sass'
-          : nextMode === 'module'
-            ? 'module'
-            : 'css'
-
-    if (activeTab.language !== nextLanguage) {
-      workspaceTabsState.upsertTab(
-        {
-          ...activeTab,
-          language: nextLanguage,
-          lastModified: Date.now(),
-          isActive: true,
-        },
-        { emitReason: 'styleModeChange' },
-      )
-      queueWorkspaceSave()
-    }
-  }
-
-  maybeRender()
-  void flushWorkspaceSave().catch(() => {
-    /* Save failures are already surfaced through saver onError. */
-  })
+  runtimeCore.applyStyleMode({ mode })
 }
 
-renderMode.addEventListener('change', () => {
-  applyRenderMode({ mode: renderMode.value })
-})
-styleMode.addEventListener('change', () => {
-  applyStyleMode({ mode: styleMode.value })
-})
-autoRenderToggle.addEventListener('change', () => {
-  renderRuntime.clearPreview()
-  updateRenderButtonVisibility()
-  if (autoRenderToggle.checked) {
-    renderPreview()
-  }
-})
-if (diagnosticsToggle) {
-  diagnosticsToggle.addEventListener('click', () => {
-    setDiagnosticsDrawerOpen(!getDiagnosticsDrawerOpen())
-  })
-}
-if (diagnosticsClose) {
-  diagnosticsClose.addEventListener('click', () => {
-    setDiagnosticsDrawerOpen(false)
-  })
-}
-if (diagnosticsClearComponent) {
-  diagnosticsClearComponent.addEventListener('click', () => {
-    clearDiagnosticsScope('component')
-    typeDiagnostics.clearTypeDiagnosticsState()
-    clearComponentLintDiagnosticsState()
-    if (statusNode.textContent.startsWith('Rendered (Type errors:')) {
-      setStatus('Rendered', 'neutral')
-    }
-  })
-}
-if (diagnosticsClearStyles) {
-  diagnosticsClearStyles.addEventListener('click', () => {
-    clearDiagnosticsScope('styles')
-    clearStylesLintDiagnosticsState()
-  })
-}
-if (diagnosticsClearAll) {
-  diagnosticsClearAll.addEventListener('click', () => {
-    clearAllDiagnostics()
-    typeDiagnostics.clearTypeDiagnosticsState()
-    clearComponentLintDiagnosticsState()
-    clearStylesLintDiagnosticsState()
-    if (statusNode.textContent.startsWith('Rendered (Type errors:')) {
-      setStatus('Rendered', 'neutral')
-    }
-  })
-}
-if (typecheckButton) {
-  typecheckButton.addEventListener('click', () => {
-    typeDiagnostics.triggerTypeDiagnostics({
-      userInitiated: true,
-      source: getJsxSource(),
-      sourcePath: getTypecheckSourcePath(),
-    })
-  })
-}
-if (lintComponentButton) {
-  lintComponentButton.addEventListener('click', () => {
-    void runComponentLint({
-      userInitiated: true,
-      source: getJsxSource(),
-    })
-  })
-}
-if (lintStylesButton) {
-  lintStylesButton.addEventListener('click', () => {
-    void runStylesLint({
-      userInitiated: true,
-      source: getCssSource(),
-    })
-  })
-}
-renderButton.addEventListener('click', renderPreview)
-if (clipboardSupported) {
-  copyComponentButton.addEventListener('click', () => {
-    void copyComponentSource()
-  })
-  copyStylesButton.addEventListener('click', () => {
-    void copyStylesSource()
-  })
-} else {
-  copyComponentButton.hidden = true
-  copyStylesButton.hidden = true
-}
-if (clearConfirmDialog instanceof HTMLDialogElement) {
-  clearConfirmDialog.addEventListener('close', () => {
-    if (clearConfirmDialog.returnValue === 'confirm') {
-      pendingClearAction?.()
-    }
-    pendingClearAction = null
-  })
-}
-
-clearComponentButton.addEventListener('click', () => {
-  confirmClearSource({
-    label: 'Component',
-    onConfirm: clearComponentSource,
-  })
-})
-
-clearStylesButton.addEventListener('click', () => {
-  confirmClearSource({
-    label: 'Styles',
-    onConfirm: clearStylesSource,
-  })
-})
-
-jsxEditor.addEventListener('input', maybeRenderFromComponentEditorChange)
-jsxEditor.addEventListener('input', markTypeDiagnosticsStale)
-jsxEditor.addEventListener('input', markComponentLintDiagnosticsStale)
-jsxEditor.addEventListener('input', queueWorkspaceSave)
-jsxEditor.addEventListener('blur', () => {
-  void flushWorkspaceSave().catch(() => {
-    /* Save failures are already surfaced through saver onError. */
-  })
-})
-cssEditor.addEventListener('input', maybeRender)
-cssEditor.addEventListener('input', markStylesLintDiagnosticsStale)
-cssEditor.addEventListener('input', queueWorkspaceSave)
-cssEditor.addEventListener('blur', () => {
-  void flushWorkspaceSave().catch(() => {
-    /* Save failures are already surfaced through saver onError. */
-  })
-})
-
-for (const element of [githubPrBaseBranch, githubPrHeadBranch, githubPrTitle]) {
-  bindWorkspaceMetadataPersistence(element)
-}
-
-for (const button of appThemeButtons) {
-  button.addEventListener('click', () => {
-    const nextTheme = button.dataset.appTheme
-    if (!nextTheme) {
-      return
-    }
-    applyTheme(nextTheme)
-  })
-}
-
-if (aiControlsToggle instanceof HTMLButtonElement) {
-  aiControlsToggle.addEventListener('click', () => {
-    if (!isCompactViewport()) {
-      return
-    }
-
-    setCompactAiControlsOpen(!compactAiControlsOpen)
-  })
-}
-
-if (githubTokenInfo instanceof HTMLButtonElement && githubTokenInfoPanel) {
-  githubTokenInfo.addEventListener('click', event => {
-    event.preventDefault()
-    setGitHubTokenInfoOpen(!githubTokenInfoOpen)
-  })
-}
-
-document.addEventListener('click', event => {
-  const clickTarget = event.target
-  if (!(clickTarget instanceof Node)) {
-    return
-  }
-
-  if (isCompactViewport() && compactAiControlsOpen) {
-    if (
-      !githubAiControls.contains(clickTarget) &&
-      !aiControlsToggle?.contains(clickTarget)
-    ) {
-      setCompactAiControlsOpen(false)
-    }
-  }
-
-  if (githubTokenInfoOpen) {
-    if (
-      !githubTokenInfo?.contains(clickTarget) &&
-      !githubTokenInfoPanel?.contains(clickTarget)
-    ) {
-      setGitHubTokenInfoOpen(false)
-    }
-  }
-})
-
-document.addEventListener('keydown', event => {
-  if (event.key !== 'Escape') {
-    return
-  }
-
-  setCompactAiControlsOpen(false)
-  setGitHubTokenInfoOpen(false)
-})
-
-for (const button of editorToolsButtons) {
-  button.addEventListener('click', () => {
-    const panelName = button.dataset.editorToolsToggle
-    if (!panelName || !Object.hasOwn(panelToolsState, panelName)) {
-      return
-    }
-
-    panelToolsState[panelName] = !panelToolsState[panelName]
-    applyEditorToolsVisibility()
-  })
-}
-
-for (const button of panelCollapseButtons) {
-  button.addEventListener('click', () => {
-    const panelName = button.dataset.panelCollapse
-    if (!panelName) {
-      return
-    }
-
-    togglePanelCollapse(panelName)
-  })
-}
-
-const handleCompactViewportChange = () => {
-  applyPanelCollapseState()
-  setCompactAiControlsOpen(false)
-}
-
-if (typeof compactViewportMediaQuery.addEventListener === 'function') {
-  compactViewportMediaQuery.addEventListener('change', handleCompactViewportChange)
-} else {
-  compactViewportMediaQuery.onchange = handleCompactViewportChange
-}
-
-window.addEventListener('beforeunload', () => {
-  if (appToastDismissTimer) {
-    clearTimeout(appToastDismissTimer)
-    appToastDismissTimer = null
-  }
-  clearComponentLintRecheckTimer()
-  clearStylesLintRecheckTimer()
-  lintDiagnostics.dispose()
-  void flushWorkspaceSave().catch(() => {
-    /* noop */
-  })
-  workspaceSaver?.dispose()
-  void workspaceStorage.close()
-  chatDrawerController.dispose()
-  prDrawerController.dispose()
-})
-
-document.addEventListener('pointerdown', event => {
-  if (!workspaceTabAddMenuOpen) {
-    return
-  }
-
-  const target = event.target
-  if (target instanceof Element && target.closest('#workspace-tab-add-wrap')) {
-    return
-  }
-
-  setWorkspaceTabAddMenuOpen(false)
-})
-
-document.addEventListener('keydown', event => {
-  if (!workspaceTabAddMenuOpen || event.key !== 'Escape') {
-    return
-  }
-
-  event.preventDefault()
-  setWorkspaceTabAddMenuOpen(false)
-})
-
-if (workspaceTabAddButton instanceof HTMLButtonElement) {
-  workspaceTabAddButton.addEventListener('click', event => {
-    event.stopPropagation()
-    setWorkspaceTabAddMenuOpen(!workspaceTabAddMenuOpen)
-  })
-
-  workspaceTabAddButton.addEventListener('keydown', event => {
-    if (event.key === 'ArrowDown' || event.key === 'Enter' || event.key === ' ') {
-      event.preventDefault()
-      setWorkspaceTabAddMenuOpen(true)
-      if (workspaceTabAddModule instanceof HTMLButtonElement) {
-        workspaceTabAddModule.focus()
+bindAppEventsAndStart({
+  editorUi: {
+    renderMode,
+    styleMode,
+    autoRenderToggle,
+    renderButton,
+    typecheckButton,
+    lintComponentButton,
+    lintStylesButton,
+    copyComponentButton,
+    copyStylesButton,
+    clearConfirmDialog,
+    clearComponentButton,
+    clearStylesButton,
+    jsxEditor,
+    cssEditor,
+  },
+  diagnosticsUi: {
+    diagnosticsToggle,
+    diagnosticsClose,
+    diagnosticsClearComponent,
+    diagnosticsClearStyles,
+    diagnosticsClearAll,
+    statusNode,
+  },
+  sourceActions: {
+    applyRenderMode,
+    applyStyleMode,
+    updateRenderButtonVisibility: () => (renderButton.hidden = autoRenderToggle.checked),
+    clearDiagnosticsScope,
+    clearComponentLintDiagnosticsState,
+    clearStylesLintDiagnosticsState,
+    clearAllDiagnostics,
+    setStatus,
+    getJsxSource,
+    getCssSource,
+    getTypecheckSourcePath,
+    runComponentLint,
+    runStylesLint,
+    renderPreview,
+    setJsxSource,
+    setCssSource,
+    queueWorkspaceSave,
+    maybeRender,
+    maybeRenderFromComponentEditorChange,
+    markTypeDiagnosticsStale,
+    markComponentLintDiagnosticsStale,
+    markStylesLintDiagnosticsStale,
+    flushWorkspaceSave,
+    confirmAction,
+    getPendingClearAction: () => pendingClearAction,
+    setPendingClearAction: value => (pendingClearAction = value),
+    getDiagnosticsDrawerOpen,
+    setDiagnosticsDrawerOpen,
+    setTypeDiagnosticsDetails,
+    setCdnLoading,
+  },
+  workspaceUi: {
+    githubPrBaseBranch,
+    githubPrHeadBranch,
+    githubPrTitle,
+    workspaceTabAddMenuUi,
+    workspaceTabAddButton,
+    workspaceTabAddModule,
+    workspaceTabAddStyles,
+    addWorkspaceTab,
+    syncHeaderLabels,
+    renderWorkspaceTabs,
+    updateRenderModeEditability,
+    loadPreferredWorkspaceContext,
+    getActiveWorkspaceTab,
+    setActiveWorkspaceTab,
+    workspaceTabsState,
+    loadedStylesTabIdRef: {
+      get value() {
+        return loadedStylesTabId
+      },
+    },
+    getWorkspaceTabByKind,
+    workspaceSaveController,
+    workspaceStorage,
+    bindWorkspaceMetadataPersistence,
+    setHasCompletedInitialWorkspaceBootstrap: value =>
+      (hasCompletedInitialWorkspaceBootstrap = value),
+  },
+  themeUi: {
+    appThemeButtons,
+    applyTheme,
+    getInitialTheme,
+    getInitialRenderMode,
+  },
+  githubUi: {
+    aiControlsToggle,
+    compactAiControlsUi,
+    githubTokenInfo,
+    githubTokenInfoPanel,
+    githubTokenInfoUi,
+    prContextUi,
+    githubAiContextState,
+  },
+  panelUi: {
+    editorToolsButtons,
+    panelToolsState,
+    applyEditorToolsVisibility,
+    panelCollapseButtons,
+    togglePanelCollapse,
+    applyPanelCollapseState,
+  },
+  lifecycle: {
+    clearToastTimer: () => {
+      if (!appToastDismissTimer) {
+        return
       }
-    }
-  })
-}
 
-if (workspaceTabAddModule instanceof HTMLButtonElement) {
-  workspaceTabAddModule.addEventListener('click', event => {
-    event.stopPropagation()
-    addWorkspaceTab('component')
-  })
-}
-
-if (workspaceTabAddStyles instanceof HTMLButtonElement) {
-  workspaceTabAddStyles.addEventListener('click', event => {
-    event.stopPropagation()
-    addWorkspaceTab('styles')
-  })
-}
-
-applyTheme(getInitialTheme(), { persist: false })
-renderMode.value = getInitialRenderMode()
-applyEditorToolsVisibility()
-applyPanelCollapseState()
-syncHeaderLabels()
-renderWorkspaceTabs()
-updateRenderModeEditability()
-setCompactAiControlsOpen(false)
-setGitHubTokenInfoOpen(false)
-syncAiChatTokenVisibility(githubAiContextState.token)
-
-updateRenderButtonVisibility()
-renderDiagnosticsScope('component')
-renderDiagnosticsScope('styles')
-updateDiagnosticsToggleLabel()
-updateUiIssueIndicators()
-setDiagnosticsDrawerOpen(false)
-setTypeDiagnosticsDetails({ headline: '' })
-renderRuntime.setStyleCompiling(false)
-setCdnLoading(true)
-initializePreviewBackgroundPicker()
-const workspaceRestoreReady = loadPreferredWorkspaceContext().catch(() => {
-  setStatus('Could not restore local workspace context.', 'neutral')
-})
-void initializeCodeEditors().then(async () => {
-  await workspaceRestoreReady
-
-  const activeTab = getActiveWorkspaceTab()
-  if (activeTab) {
-    setActiveWorkspaceTab(activeTab.id)
-  }
-
-  const stylesTab =
-    workspaceTabsState.getTab(loadedStylesTabId) ?? getWorkspaceTabByKind('styles')
-  if (stylesTab && typeof stylesTab.content === 'string') {
-    setCssSource(stylesTab.content)
-  }
-
-  hasCompletedInitialWorkspaceBootstrap = true
-  await renderPreview()
+      clearTimeout(appToastDismissTimer)
+      appToastDismissTimer = null
+    },
+    diagnosticsFlowController,
+    chatDrawerController,
+    prDrawerController,
+  },
+  startup: {
+    renderRuntime,
+    typeDiagnostics,
+    clipboardSupported,
+    previewBackground,
+    initializeCodeEditors,
+  },
 })

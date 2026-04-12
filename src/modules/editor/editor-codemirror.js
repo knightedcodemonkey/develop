@@ -1,4 +1,4 @@
-import { cdnImports, importFromCdnWithFallback } from './cdn.js'
+import { cdnImports, importFromCdnWithFallback } from '../cdn.js'
 
 let codeMirrorRuntime = null
 let codeMirrorRuntimePromise = null

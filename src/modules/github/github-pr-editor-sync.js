@@ -12,12 +12,18 @@ export const createGitHubPrEditorSyncController = ({
   const setStyles = typeof setStylesSource === 'function' ? setStylesSource : () => {}
   const schedule = typeof scheduleRender === 'function' ? scheduleRender : () => {}
 
-  const syncFromActiveContext = async ({ token, repository, activeContext, signal }) => {
+  const syncFromActiveContext = async ({
+    token,
+    repository,
+    activeContext,
+    syncTargets,
+    signal,
+  }) => {
     const owner = toSafeText(repository?.owner)
     const repo = toSafeText(repository?.name)
     const branch = toSafeText(activeContext?.headBranch)
-    const componentFilePath = toSafeText(activeContext?.componentFilePath)
-    const stylesFilePath = toSafeText(activeContext?.stylesFilePath)
+    const componentFilePath = toSafeText(syncTargets?.componentFilePath)
+    const stylesFilePath = toSafeText(syncTargets?.stylesFilePath)
 
     if (!token || !owner || !repo || !branch || !componentFilePath || !stylesFilePath) {
       return {

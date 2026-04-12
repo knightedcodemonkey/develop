@@ -1,4 +1,4 @@
-import { cdnImports, importFromCdnWithFallback } from './cdn.js'
+import { cdnImports, importFromCdnWithFallback } from '../cdn.js'
 
 const workspaceDbName = 'knighted-develop-workspaces'
 const workspaceDbVersion = 1
