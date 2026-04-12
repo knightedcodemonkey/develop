@@ -154,6 +154,19 @@ const getLocalContextOptionLabels = async (page: Page) => {
     .evaluateAll(nodes => nodes.map(node => node.textContent?.trim() || ''))
 }
 
+const forceGitDatabaseTreeFailure = async (page: Page, repository = 'develop') => {
+  await page.route(
+    `https://api.github.com/repos/knightedcodemonkey/${repository}/git/trees`,
+    async route => {
+      await route.fulfill({
+        status: 500,
+        contentType: 'application/json',
+        body: JSON.stringify({ message: 'Tree API unavailable' }),
+      })
+    },
+  )
+}
+
 test('Open PR drawer confirms and submits component/styles filepaths', async ({
   page,
 }) => {
@@ -182,6 +195,8 @@ test('Open PR drawer confirms and submits component/styles filepaths', async ({
   await mockRepositoryBranches(page, {
     'knightedcodemonkey/develop': ['main', 'release'],
   })
+
+  await forceGitDatabaseTreeFailure(page)
 
   await page.route(
     'https://api.github.com/repos/knightedcodemonkey/develop/git/ref/**',
@@ -256,21 +271,13 @@ test('Open PR drawer confirms and submits component/styles filepaths', async ({
   await ensureOpenPrDrawerOpen(page)
 
   await page.getByLabel('Head').fill('Develop/Open-Pr-Test')
-  await page.getByLabel('Component filename').fill('examples/component/App.tsx')
-  await page.getByLabel('Styles filename').fill('examples/styles/app.css')
   await page.getByLabel('PR title').fill('Apply editor updates from develop')
   await page
     .getByLabel('PR description')
     .fill('Generated from editor content in @knighted/develop.')
   await page.getByLabel('Commit message').fill(customCommitMessage)
 
-  await submitOpenPrAndConfirm(page, {
-    expectedSummaryLines: [
-      'Open pull request with editor content?',
-      'Component file path: examples/component/App.tsx',
-      'Styles file path: examples/styles/app.css',
-    ],
-  })
+  await submitOpenPrAndConfirm(page)
 
   await expect(
     page.getByRole('status', { name: 'Open pull request status', includeHidden: true }),
@@ -285,18 +292,14 @@ test('Open PR drawer confirms and submits component/styles filepaths', async ({
   expect(createdRefPayload?.sha).toBe('abc123mainsha')
 
   expect(upsertRequests).toHaveLength(2)
-  expect(upsertRequests[0]?.path).toBe('examples/component/App.tsx')
-  expect(upsertRequests[1]?.path).toBe('examples/styles/app.css')
+  expect(upsertRequests[0]?.path).toBe('src/components/App.tsx')
+  expect(upsertRequests[1]?.path).toBe('src/styles/app.css')
   expect(upsertRequests[0]?.body.message).toBe(customCommitMessage)
   expect(upsertRequests[1]?.body.message).toBe(customCommitMessage)
   expect(pullRequestPayload?.head).toBe('Develop/Open-Pr-Test')
   expect(pullRequestPayload?.base).toBe('main')
 
   await ensureOpenPrDrawerOpen(page)
-  await expect(page.getByLabel('Component filename')).toHaveValue(
-    'examples/component/App.tsx',
-  )
-  await expect(page.getByLabel('Styles filename')).toHaveValue('examples/styles/app.css')
   await expect(page.getByLabel('Pull request base branch')).toHaveValue('main')
   await expect(page.getByLabel('Head')).toHaveValue('Develop/Open-Pr-Test')
   await expect(page.getByLabel('PR title')).toHaveValue(
@@ -332,7 +335,7 @@ test('Open PR drawer can filter stored local contexts by search', async ({ page 
   ])
 
   await connectByotWithSingleRepo(page)
-  await ensureOpenPrDrawerOpen(page)
+  await page.getByRole('button', { name: 'Workspaces' }).click()
 
   const search = page.getByLabel('Search stored local contexts')
   await expect(search).toBeEnabled()
@@ -482,8 +485,6 @@ test('Open PR drawer uses Git Database API atomic commit path by default', async
   await ensureOpenPrDrawerOpen(page)
 
   await page.getByLabel('Head').fill('Develop/Open-Pr-Test')
-  await page.getByLabel('Component filename').fill('examples/component/App.tsx')
-  await page.getByLabel('Styles filename').fill('examples/styles/app.css')
   await page.getByLabel('PR title').fill('Apply editor updates from develop')
 
   await submitOpenPrAndConfirm(page)
@@ -624,8 +625,6 @@ test('Open PR drawer falls back to Contents API when Git Database commit fails',
   await ensureOpenPrDrawerOpen(page)
 
   await page.getByLabel('Head').fill('Develop/Open-Pr-Test')
-  await page.getByLabel('Component filename').fill('examples/component/App.tsx')
-  await page.getByLabel('Styles filename').fill('examples/styles/app.css')
   await page.getByLabel('PR title').fill('Apply editor updates from develop')
 
   await submitOpenPrAndConfirm(page)
@@ -638,8 +637,8 @@ test('Open PR drawer falls back to Contents API when Git Database commit fails',
 
   expect(treeRequests).toHaveLength(1)
   expect(contentsPutRequests).toHaveLength(2)
-  expect(contentsPutRequests[0]?.path).toBe('examples/component/App.tsx')
-  expect(contentsPutRequests[1]?.path).toBe('examples/styles/app.css')
+  expect(contentsPutRequests[0]?.path).toBe('src/components/App.tsx')
+  expect(contentsPutRequests[1]?.path).toBe('src/styles/app.css')
 })
 
 test('Open PR drawer starts with empty title/description and short default head', async ({
@@ -777,15 +776,14 @@ test('Open PR drawer keeps a single active PR context in localStorage', async ({
   await ensureOpenPrDrawerOpen(page)
 
   const repoSelect = page.getByLabel('Pull request repository')
-  const componentPath = page.getByLabel('Component filename')
 
   await repoSelect.selectOption('knightedcodemonkey/develop')
-  await componentPath.fill('examples/develop/App.tsx')
-  await componentPath.blur()
+  await page.getByLabel('Head').fill('examples/develop/head')
+  await page.getByLabel('Head').blur()
 
   await repoSelect.selectOption('knightedcodemonkey/css')
-  await componentPath.fill('examples/css/App.tsx')
-  await componentPath.blur()
+  await page.getByLabel('Head').fill('examples/css/head')
+  await page.getByLabel('Head').blur()
 
   const activeContext = await page.evaluate(() => {
     const storagePrefix = 'knighted:develop:github-pr-config:'
@@ -807,7 +805,7 @@ test('Open PR drawer keeps a single active PR context in localStorage', async ({
   expect(activeContext.key).toBe(
     'knighted:develop:github-pr-config:knightedcodemonkey/css',
   )
-  expect(activeContext.parsed?.componentFilePath).toBe('examples/css/App.tsx')
+  expect(activeContext.parsed?.headBranch).toBe('examples/css/head')
 })
 
 test('Open PR drawer does not prune saved PR context on repo switch before save', async ({
@@ -852,11 +850,10 @@ test('Open PR drawer does not prune saved PR context on repo switch before save'
   await ensureOpenPrDrawerOpen(page)
 
   const repoSelect = page.getByLabel('Pull request repository')
-  const componentPath = page.getByLabel('Component filename')
 
   await repoSelect.selectOption('knightedcodemonkey/develop')
-  await componentPath.fill('examples/develop/App.tsx')
-  await componentPath.blur()
+  await page.getByLabel('Head').fill('examples/develop/head')
+  await page.getByLabel('Head').blur()
 
   await repoSelect.selectOption('knightedcodemonkey/css')
 
@@ -884,7 +881,7 @@ test('Open PR drawer does not prune saved PR context on repo switch before save'
   expect(contexts[0]?.key).toBe(
     'knighted:develop:github-pr-config:knightedcodemonkey/develop',
   )
-  expect(contexts[0]?.parsed?.componentFilePath).toBe('examples/develop/App.tsx')
+  expect(contexts[0]?.parsed?.headBranch).toBe('examples/develop/head')
 })
 
 test('Active PR context disconnect uses local-only confirmation flow', async ({
@@ -968,8 +965,8 @@ test('Active PR context disconnect uses local-only confirmation flow', async ({
     localStorage.setItem(
       'knighted:develop:github-pr-config:knightedcodemonkey/develop',
       JSON.stringify({
-        componentFilePath: 'examples/component/App.tsx',
-        stylesFilePath: 'examples/styles/app.css',
+        syncComponentFilePath: 'src/components/App.tsx',
+        syncStylesFilePath: 'src/styles/app.css',
         renderMode: 'react',
         baseBranch: 'main',
         headBranch: 'develop/open-pr-test',
@@ -1141,8 +1138,8 @@ test('Active PR context updates controls and can be closed from AI controls', as
     localStorage.setItem(
       'knighted:develop:github-pr-config:knightedcodemonkey/develop',
       JSON.stringify({
-        componentFilePath: 'examples/component/App.tsx',
-        stylesFilePath: 'examples/styles/app.css',
+        syncComponentFilePath: 'src/components/App.tsx',
+        syncStylesFilePath: 'src/styles/app.css',
         renderMode: 'react',
         baseBranch: 'main',
         headBranch: 'develop/open-pr-test',
@@ -1231,8 +1228,8 @@ test('Active PR context is disabled on load when pull request is closed', async 
     localStorage.setItem(
       'knighted:develop:github-pr-config:knightedcodemonkey/develop',
       JSON.stringify({
-        componentFilePath: 'examples/component/App.tsx',
-        stylesFilePath: 'examples/styles/app.css',
+        syncComponentFilePath: 'src/components/App.tsx',
+        syncStylesFilePath: 'src/styles/app.css',
         renderMode: 'react',
         baseBranch: 'main',
         headBranch: 'develop/open-pr-test',
@@ -1330,8 +1327,8 @@ test('Active PR context rehydrates after token remove and re-add', async ({ page
     localStorage.setItem(
       'knighted:develop:github-pr-config:knightedcodemonkey/css',
       JSON.stringify({
-        componentFilePath: 'examples/component/App.tsx',
-        stylesFilePath: 'examples/styles/app.css',
+        syncComponentFilePath: 'src/components/App.tsx',
+        syncStylesFilePath: 'src/styles/app.css',
         renderMode: 'react',
         baseBranch: 'main',
         headBranch: 'css/rehydrate-test',
@@ -1441,8 +1438,8 @@ test('Active PR context deactivates after token remove and re-add when PR is clo
     localStorage.setItem(
       'knighted:develop:github-pr-config:knightedcodemonkey/css',
       JSON.stringify({
-        componentFilePath: 'examples/component/App.tsx',
-        stylesFilePath: 'examples/styles/app.css',
+        syncComponentFilePath: 'src/components/App.tsx',
+        syncStylesFilePath: 'src/styles/app.css',
         renderMode: 'react',
         baseBranch: 'main',
         headBranch: 'css/rehydrate-test',
@@ -1555,8 +1552,8 @@ test('Active PR context recovers when saved head branch is missing but PR metada
     localStorage.setItem(
       'knighted:develop:github-pr-config:knightedcodemonkey/develop',
       JSON.stringify({
-        componentFilePath: 'examples/component/App.tsx',
-        stylesFilePath: 'examples/styles/app.css',
+        syncComponentFilePath: 'src/components/App.tsx',
+        syncStylesFilePath: 'src/styles/app.css',
         renderMode: 'react',
         baseBranch: 'main',
         headBranch: '',
@@ -1694,14 +1691,16 @@ test('Active PR context uses Push commit flow without creating a new pull reques
     },
   )
 
+  await forceGitDatabaseTreeFailure(page)
+
   await waitForAppReady(page, `${appEntryPath}`)
 
   await page.evaluate(() => {
     localStorage.setItem(
       'knighted:develop:github-pr-config:knightedcodemonkey/develop',
       JSON.stringify({
-        componentFilePath: 'examples/component/App.tsx',
-        stylesFilePath: 'examples/styles/app.css',
+        syncComponentFilePath: 'src/components/App.tsx',
+        syncStylesFilePath: 'src/styles/app.css',
         renderMode: 'react',
         baseBranch: 'main',
         headBranch: 'develop/open-pr-test',
@@ -1720,11 +1719,9 @@ test('Active PR context uses Push commit flow without creating a new pull reques
   await expect(page.getByLabel('Pull request repository')).toBeDisabled()
   await expect(page.getByLabel('Pull request base branch')).toBeDisabled()
   await expect(page.getByLabel('Head')).toHaveJSProperty('readOnly', true)
-  await expect(page.getByLabel('Component filename')).toHaveJSProperty('readOnly', true)
-  await expect(page.getByLabel('Styles filename')).toHaveJSProperty('readOnly', true)
   await expect(page.getByLabel('PR title')).toHaveJSProperty('readOnly', true)
   await expect(
-    page.getByLabel('Include App wrapper in committed component source'),
+    page.getByLabel('Include entry tab source in committed output'),
   ).toBeEnabled()
   await expect(page.getByLabel('Commit message')).toBeEditable()
 
@@ -1732,7 +1729,7 @@ test('Active PR context uses Push commit flow without creating a new pull reques
   await expect(page.getByLabel('Commit message')).toBeVisible()
 
   const includeWrapperToggle = page.getByLabel(
-    'Include App wrapper in committed component source',
+    'Include entry tab source in committed output',
   )
   await expect(includeWrapperToggle).toBeEnabled()
   await includeWrapperToggle.check()
@@ -1756,11 +1753,12 @@ test('Active PR context uses Push commit flow without creating a new pull reques
   await expect(
     page.getByText('Head branch: develop/open-pr-test', { exact: true }),
   ).toBeVisible()
+  await expect(page.getByText('Files to commit:', { exact: true })).toBeVisible()
   await expect(
-    page.getByText('Component file path: examples/component/App.tsx', { exact: true }),
+    page.getByText('App.tsx -> src/components/App.tsx', { exact: true }),
   ).toBeVisible()
   await expect(
-    page.getByText('Styles file path: examples/styles/app.css', { exact: true }),
+    page.getByText('app.css -> src/styles/app.css', { exact: true }),
   ).toBeVisible()
 
   await dialog.getByRole('button', { name: 'Push commit' }).click()
@@ -1772,8 +1770,8 @@ test('Active PR context uses Push commit flow without creating a new pull reques
   expect(createRefRequestCount).toBe(0)
   expect(pullRequestRequestCount).toBe(0)
   expect(upsertRequests).toHaveLength(2)
-  expect(upsertRequests[0]?.path).toBe('examples/component/App.tsx')
-  expect(upsertRequests[1]?.path).toBe('examples/styles/app.css')
+  expect(upsertRequests[0]?.path).toBe('src/components/App.tsx')
+  expect(upsertRequests[1]?.path).toBe('src/styles/app.css')
   expect(upsertRequests[0]?.body.message).toBe(pushCommitMessage)
   expect(upsertRequests[1]?.body.message).toBe(pushCommitMessage)
 })
@@ -1942,8 +1940,8 @@ test('Active PR context push commit uses Git Database API atomic path by default
     localStorage.setItem(
       'knighted:develop:github-pr-config:knightedcodemonkey/develop',
       JSON.stringify({
-        componentFilePath: 'examples/component/App.tsx',
-        stylesFilePath: 'examples/styles/app.css',
+        syncComponentFilePath: 'src/components/App.tsx',
+        syncStylesFilePath: 'src/styles/app.css',
         renderMode: 'react',
         baseBranch: 'main',
         headBranch: 'develop/open-pr-test',
@@ -2098,14 +2096,16 @@ test('Reloaded active PR context from URL metadata keeps Push mode and status re
     },
   )
 
+  await forceGitDatabaseTreeFailure(page)
+
   await waitForAppReady(page, `${appEntryPath}`)
 
   await page.evaluate(() => {
     localStorage.setItem(
       'knighted:develop:github-pr-config:knightedcodemonkey/develop',
       JSON.stringify({
-        componentFilePath: 'examples/component/App.tsx',
-        stylesFilePath: 'examples/styles/app.css',
+        syncComponentFilePath: 'src/components/App.tsx',
+        syncStylesFilePath: 'src/styles/app.css',
         renderMode: 'react',
         baseBranch: 'main',
         headBranch: 'develop/open-pr-test',
@@ -2144,8 +2144,8 @@ test('Reloaded active PR context from URL metadata keeps Push mode and status re
   expect(createRefRequestCount).toBe(0)
   expect(pullRequestRequestCount).toBe(0)
   expect(upsertRequests).toHaveLength(2)
-  expect(upsertRequests[0]?.path).toBe('examples/component/App.tsx')
-  expect(upsertRequests[1]?.path).toBe('examples/styles/app.css')
+  expect(upsertRequests[0]?.path).toBe('src/components/App.tsx')
+  expect(upsertRequests[1]?.path).toBe('src/styles/app.css')
   expect(upsertRequests[0]?.body.message).toBe(defaultCommitMessage)
   expect(upsertRequests[1]?.body.message).toBe(defaultCommitMessage)
 })
@@ -2213,7 +2213,7 @@ test('Reloaded active PR context syncs editor content from GitHub branch and res
         return
       }
 
-      if (path === 'examples/component/App.tsx') {
+      if (path === 'src/components/App.tsx') {
         await route.fulfill({
           status: 200,
           contentType: 'application/json',
@@ -2225,7 +2225,7 @@ test('Reloaded active PR context syncs editor content from GitHub branch and res
         return
       }
 
-      if (path === 'examples/styles/app.css') {
+      if (path === 'src/styles/app.css') {
         await route.fulfill({
           status: 200,
           contentType: 'application/json',
@@ -2251,8 +2251,8 @@ test('Reloaded active PR context syncs editor content from GitHub branch and res
     localStorage.setItem(
       'knighted:develop:github-pr-config:knightedcodemonkey/develop',
       JSON.stringify({
-        componentFilePath: 'examples/component/App.tsx',
-        stylesFilePath: 'examples/styles/app.css',
+        syncComponentFilePath: 'src/components/App.tsx',
+        syncStylesFilePath: 'src/styles/app.css',
         renderMode: 'react',
         styleMode: 'sass',
         baseBranch: 'main',
@@ -2336,8 +2336,8 @@ test('Reloaded active PR context falls back to css style mode for unsupported va
     localStorage.setItem(
       'knighted:develop:github-pr-config:knightedcodemonkey/develop',
       JSON.stringify({
-        componentFilePath: 'examples/component/App.tsx',
-        stylesFilePath: 'examples/styles/app.css',
+        syncComponentFilePath: 'src/components/App.tsx',
+        syncStylesFilePath: 'src/styles/app.css',
         renderMode: 'react',
         styleMode: 'scss',
         baseBranch: 'main',
@@ -2355,40 +2355,25 @@ test('Reloaded active PR context falls back to css style mode for unsupported va
   await expect(page.getByLabel('Style mode')).toHaveValue('css')
 })
 
-test('Open PR drawer validates unsafe filepaths', async ({ page }) => {
+test('Open PR drawer shows confirmation with tab-derived files', async ({ page }) => {
   await waitForAppReady(page, `${appEntryPath}`)
   await connectByotWithSingleRepo(page)
   await ensureOpenPrDrawerOpen(page)
 
-  const componentPath = page.getByLabel('Component filename')
-  await page.getByLabel('PR title').fill('Validate unsafe paths')
-  await componentPath.fill('../outside/App.tsx')
-  await expect(componentPath).toHaveValue('../outside/App.tsx')
-  await componentPath.blur()
-  await clickOpenPrDrawerSubmit(page)
-
-  await expect(
-    page.getByRole('status', { name: 'Open pull request status', includeHidden: true }),
-  ).toContainText('Component path: File path cannot include parent directory traversal.')
-  await expect(page.getByRole('dialog')).toBeHidden()
+  await page.getByLabel('PR title').fill('Tab-derived summary prompt')
+  const dialog = await triggerOpenPrConfirmation(page)
+  await expect(dialog.getByText('Files to commit:', { exact: true })).toBeVisible()
+  await dialog.getByRole('button', { name: 'Cancel' }).click()
 })
 
-test('Open PR drawer allows dotted file segments that are not traversal', async ({
+test('Open PR drawer confirmation does not report path traversal errors', async ({
   page,
 }) => {
   await waitForAppReady(page, `${appEntryPath}`)
   await connectByotWithSingleRepo(page)
   await ensureOpenPrDrawerOpen(page)
 
-  const componentPath = page.getByLabel('Component filename')
-  const stylesPath = page.getByLabel('Styles filename')
-
-  await componentPath.fill('docs/v1.0..v1.1/App.tsx')
-  await stylesPath.fill('styles/foo..bar.css')
-  await expect(componentPath).toHaveValue('docs/v1.0..v1.1/App.tsx')
-  await expect(stylesPath).toHaveValue('styles/foo..bar.css')
-  await page.getByLabel('PR title').fill('Allow dotted file segments')
-  await stylesPath.blur()
+  await page.getByLabel('PR title').fill('No traversal error in default flow')
 
   await expectOpenPrConfirmationPrompt(page)
   await expect(
@@ -2404,7 +2389,7 @@ test('Open PR drawer include App wrapper checkbox defaults off and resets on reo
   await ensureOpenPrDrawerOpen(page)
 
   const includeWrapperToggle = page.getByLabel(
-    'Include App wrapper in committed component source',
+    'Include entry tab source in committed output',
   )
   await expect(includeWrapperToggle).not.toBeChecked()
 
@@ -2442,6 +2427,8 @@ test('Open PR drawer strips App wrapper from committed component source by defau
   await mockRepositoryBranches(page, {
     'knightedcodemonkey/develop': ['main', 'release'],
   })
+
+  await forceGitDatabaseTreeFailure(page)
 
   await page.route(
     'https://api.github.com/repos/knightedcodemonkey/develop/git/ref/**',
@@ -2531,7 +2518,7 @@ test('Open PR drawer strips App wrapper from committed component source by defau
   )
 
   const componentUpserts = upsertRequests.filter(request =>
-    request.path.endsWith('/App.jsx'),
+    request.path.endsWith('/App.tsx'),
   )
 
   expect(componentUpserts).toHaveLength(1)
@@ -2567,6 +2554,8 @@ test('Open PR drawer includes App wrapper in committed source when toggled on', 
   await mockRepositoryBranches(page, {
     'knightedcodemonkey/develop': ['main', 'release'],
   })
+
+  await forceGitDatabaseTreeFailure(page)
 
   await page.route(
     'https://api.github.com/repos/knightedcodemonkey/develop/git/ref/**',
@@ -2647,7 +2636,7 @@ test('Open PR drawer includes App wrapper in committed source when toggled on', 
   await ensureOpenPrDrawerOpen(page)
 
   const includeWrapperToggle = page.getByLabel(
-    'Include App wrapper in committed component source',
+    'Include entry tab source in committed output',
   )
   await includeWrapperToggle.check()
 
@@ -2662,7 +2651,7 @@ test('Open PR drawer includes App wrapper in committed source when toggled on', 
   )
 
   const componentUpserts = upsertRequests.filter(request =>
-    request.path.endsWith('/App.jsx'),
+    request.path.endsWith('/App.tsx'),
   )
 
   expect(componentUpserts).toHaveLength(1)

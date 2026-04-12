@@ -22,6 +22,8 @@ const toSyncSha = value =>
 const toTargetPrFilePath = value =>
   typeof value === 'string' && value.trim().length > 0 ? value.trim() : null
 
+const toSyncedContent = value => (typeof value === 'string' ? value : null)
+
 const normalizeTabRecord = tab => {
   if (!tab || typeof tab !== 'object') {
     return null
@@ -51,6 +53,7 @@ const normalizeTabRecord = tab => {
     isDirty: Boolean(tab.isDirty),
     syncedAt: toSyncTimestamp(tab.syncedAt),
     lastSyncedRemoteSha: toSyncSha(tab.lastSyncedRemoteSha),
+    syncedContent: toSyncedContent(tab.syncedContent),
     lastModified: Number.isFinite(tab.lastModified) ? tab.lastModified : Date.now(),
   }
 }
@@ -205,6 +208,7 @@ export const createWorkspaceStorageAdapter = ({ loadRuntime } = {}) => {
     isDirty,
     syncedAt,
     lastSyncedRemoteSha,
+    syncedContent,
   }) => {
     if (typeof workspaceId !== 'string' || workspaceId.length === 0) {
       throw new TypeError('workspaceId must be a non-empty string.')
@@ -263,6 +267,10 @@ export const createWorkspaceStorageAdapter = ({ loadRuntime } = {}) => {
 
     if (lastSyncedRemoteSha !== undefined) {
       nextTabRecord.lastSyncedRemoteSha = lastSyncedRemoteSha
+    }
+
+    if (syncedContent !== undefined) {
+      nextTabRecord.syncedContent = syncedContent
     }
 
     if (content !== undefined) {

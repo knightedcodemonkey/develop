@@ -17,11 +17,6 @@ import {
 
 const prConfigStoragePrefix = 'knighted:develop:github-pr-config:'
 
-const defaultPrConfig = {
-  componentFilePath: 'src/components/App.jsx',
-  stylesFilePath: 'src/styles/app.css',
-}
-
 const defaultCommitMessage = 'chore: sync editor updates from @knighted/develop'
 
 const supportedRenderModes = new Set(['dom', 'react'])
@@ -127,19 +122,19 @@ const getActiveRepositoryPrContext = repositoryFullName => {
   }
 
   const headBranch = sanitizeBranchPart(savedConfig.headBranch)
-  const componentFilePath = validateFilePath(savedConfig.componentFilePath)
-  const stylesFilePath = validateFilePath(savedConfig.stylesFilePath)
   const prTitle = toSafeText(savedConfig.prTitle)
   const baseBranch = toSafeText(savedConfig.baseBranch)
+  const componentFilePath = validateFilePath(savedConfig.syncComponentFilePath)
+  const stylesFilePath = validateFilePath(savedConfig.syncStylesFilePath)
 
-  if (!headBranch || !componentFilePath.ok || !stylesFilePath.ok || !prTitle) {
+  if (!headBranch || !prTitle) {
     return null
   }
 
   return {
     headBranch,
-    componentFilePath: componentFilePath.value,
-    stylesFilePath: stylesFilePath.value,
+    componentFilePath: componentFilePath.ok ? componentFilePath.value : '',
+    stylesFilePath: stylesFilePath.ok ? stylesFilePath.value : '',
     renderMode: normalizeRenderMode(savedConfig.renderMode),
     styleMode: normalizeStyleMode(savedConfig.styleMode),
     prTitle,
@@ -218,6 +213,30 @@ const validateFilePath = value => {
   return { ok: true, value: path }
 }
 
+const normalizeFileCommits = fileCommits => {
+  if (!Array.isArray(fileCommits)) {
+    return []
+  }
+
+  const dedupedByPath = new Map()
+
+  for (const item of fileCommits) {
+    const pathValidation = validateFilePath(item?.path)
+    if (!pathValidation.ok) {
+      continue
+    }
+
+    dedupedByPath.set(pathValidation.value, {
+      path: pathValidation.value,
+      content: typeof item?.content === 'string' ? item.content : '',
+      tabLabel: toSafeText(item?.tabLabel),
+      isEntry: item?.isEntry === true,
+    })
+  }
+
+  return [...dedupedByPath.values()]
+}
+
 const sanitizeBranchPart = value => {
   const trimmed = toSafeText(value)
   if (!trimmed) {
@@ -251,8 +270,7 @@ const buildSummary = ({
   repository,
   baseBranch,
   headBranch,
-  componentFilePath,
-  stylesFilePath,
+  fileCommits,
   prTitle,
   commitMessage,
   actionType,
@@ -263,11 +281,22 @@ const buildSummary = ({
   const lines = [
     `Repository: ${repositoryLabel}`,
     `Head branch: ${headBranch}`,
-    `Component file path: ${componentFilePath}`,
-    `Styles file path: ${stylesFilePath}`,
     `PR title: ${prTitle}`,
     `Commit message: ${commitMessage}`,
   ]
+
+  if (Array.isArray(fileCommits) && fileCommits.length > 0) {
+    lines.push('Files to commit:')
+    for (const fileCommit of fileCommits) {
+      const path = toSafeText(fileCommit?.path)
+      if (!path) {
+        continue
+      }
+
+      const tabLabel = toSafeText(fileCommit?.tabLabel)
+      lines.push(tabLabel ? `- ${tabLabel} -> ${path}` : `- ${path}`)
+    }
+  }
 
   if (!isPushCommit) {
     lines.splice(1, 0, `Base branch: ${baseBranch}`)
@@ -404,8 +433,6 @@ export const createGitHubPrDrawer = ({
   repositorySelect,
   baseBranchInput,
   headBranchInput,
-  componentPathInput,
-  stylesPathInput,
   prTitleInput,
   prBodyInput,
   commitMessageInput,
@@ -417,8 +444,8 @@ export const createGitHubPrDrawer = ({
   getSelectedRepository,
   getWritableRepositories,
   setSelectedRepository,
-  getComponentSource,
-  getStylesSource,
+  getFileCommits,
+  getEditorSyncTargets,
   getTopLevelDeclarations,
   getRenderMode,
   getStyleMode,
@@ -479,16 +506,6 @@ export const createGitHubPrDrawer = ({
     if (headBranchInput instanceof HTMLInputElement) {
       headBranchInput.readOnly = isPushCommitMode
       headBranchInput.disabled = submitting
-    }
-
-    if (componentPathInput instanceof HTMLInputElement) {
-      componentPathInput.readOnly = isPushCommitMode
-      componentPathInput.disabled = submitting
-    }
-
-    if (stylesPathInput instanceof HTMLInputElement) {
-      stylesPathInput.readOnly = isPushCommitMode
-      stylesPathInput.disabled = submitting
     }
 
     if (prTitleInput instanceof HTMLInputElement) {
@@ -608,8 +625,6 @@ export const createGitHubPrDrawer = ({
       repositorySelect,
       baseBranchInput,
       headBranchInput,
-      componentPathInput,
-      stylesPathInput,
       prTitleInput,
       prBodyInput,
       commitMessageInput,
@@ -631,8 +646,6 @@ export const createGitHubPrDrawer = ({
     return {
       baseBranch: toSafeText(baseBranchInput?.value),
       headBranch: toSafeText(headBranchInput?.value),
-      componentFilePath: normalizeFilePath(componentPathInput?.value),
-      stylesFilePath: normalizeFilePath(stylesPathInput?.value),
       prTitle: toSafeText(prTitleInput?.value),
       prBody: typeof prBodyInput?.value === 'string' ? prBodyInput.value.trim() : '',
       commitMessage: toSafeText(commitMessageInput?.value),
@@ -672,11 +685,25 @@ export const createGitHubPrDrawer = ({
       return
     }
 
+    const syncTargets =
+      typeof getEditorSyncTargets === 'function' ? getEditorSyncTargets() : null
+    const componentSyncPath =
+      toSafeText(activeContext?.componentFilePath) ||
+      toSafeText(syncTargets?.componentFilePath)
+    const stylesSyncPath =
+      toSafeText(activeContext?.stylesFilePath) || toSafeText(syncTargets?.stylesFilePath)
+
+    if (!componentSyncPath || !stylesSyncPath) {
+      lastActiveContentSyncKey = ''
+      abortPendingActiveContentSyncRequest()
+      return
+    }
+
     const syncKey = [
       repositoryFullName,
       activeContext.headBranch,
-      activeContext.componentFilePath,
-      activeContext.stylesFilePath,
+      componentSyncPath,
+      stylesSyncPath,
       String(activeContext.pullRequestNumber ?? ''),
     ].join('|')
 
@@ -692,7 +719,11 @@ export const createGitHubPrDrawer = ({
       await onSyncActivePrEditorContent({
         token,
         repository,
-        activeContext,
+        activeContext: {
+          ...activeContext,
+          componentFilePath: componentSyncPath,
+          stylesFilePath: stylesSyncPath,
+        },
         signal: abortController.signal,
       })
 
@@ -1044,23 +1075,6 @@ export const createGitHubPrDrawer = ({
     const savedConfig = readRepositoryPrConfig(repositoryFullName)
     const savedDraftConfig = resetAll ? {} : savedConfig
 
-    const componentFilePath =
-      typeof savedConfig.componentFilePath === 'string' && savedConfig.componentFilePath
-        ? savedConfig.componentFilePath
-        : defaultPrConfig.componentFilePath
-    const stylesFilePath =
-      typeof savedConfig.stylesFilePath === 'string' && savedConfig.stylesFilePath
-        ? savedConfig.stylesFilePath
-        : defaultPrConfig.stylesFilePath
-
-    if (componentPathInput instanceof HTMLInputElement) {
-      componentPathInput.value = componentFilePath
-    }
-
-    if (stylesPathInput instanceof HTMLInputElement) {
-      stylesPathInput.value = stylesFilePath
-    }
-
     const baseBranch =
       toSafeText(savedConfig.baseBranch) ||
       toSafeText(repository?.defaultBranch) ||
@@ -1109,7 +1123,7 @@ export const createGitHubPrDrawer = ({
     lastSyncedRepositoryFullName = repositoryFullName
   }
 
-  const persistCurrentPaths = () => {
+  const persistCurrentConfig = () => {
     const repository = getSelectedRepositoryObject()
     const repositoryFullName = getRepositoryFullName(repository)
     if (!repositoryFullName) {
@@ -1119,6 +1133,8 @@ export const createGitHubPrDrawer = ({
     const values = getFormValues()
     const currentRenderMode = normalizeRenderMode(getRenderMode?.())
     const currentStyleMode = normalizeStyleMode(getStyleMode?.())
+    const syncTargets =
+      typeof getEditorSyncTargets === 'function' ? getEditorSyncTargets() : null
     const existingConfig = readRepositoryPrConfig(repositoryFullName)
     const isActivePr = existingConfig?.isActivePr === true
 
@@ -1127,14 +1143,8 @@ export const createGitHubPrDrawer = ({
         repositoryFullName,
         config: {
           ...existingConfig,
-          componentFilePath:
-            typeof existingConfig?.componentFilePath === 'string'
-              ? existingConfig.componentFilePath
-              : values.componentFilePath,
-          stylesFilePath:
-            typeof existingConfig?.stylesFilePath === 'string'
-              ? existingConfig.stylesFilePath
-              : values.stylesFilePath,
+          syncComponentFilePath: toSafeText(syncTargets?.componentFilePath),
+          syncStylesFilePath: toSafeText(syncTargets?.stylesFilePath),
           renderMode: currentRenderMode,
           styleMode: currentStyleMode,
           isActivePr: true,
@@ -1151,12 +1161,12 @@ export const createGitHubPrDrawer = ({
     saveRepositoryPrConfig({
       repositoryFullName,
       config: {
-        componentFilePath: values.componentFilePath,
-        stylesFilePath: values.stylesFilePath,
         baseBranch: values.baseBranch,
         headBranch: isAutoGeneratedHeadBranch(values.headBranch) ? '' : values.headBranch,
         prTitle: values.prTitle,
         prBody: values.prBody,
+        syncComponentFilePath: toSafeText(syncTargets?.componentFilePath),
+        syncStylesFilePath: toSafeText(syncTargets?.stylesFilePath),
         renderMode: currentRenderMode,
         styleMode: currentStyleMode,
         isActivePr: false,
@@ -1260,12 +1270,6 @@ export const createGitHubPrDrawer = ({
       : values.prBody
     const currentRenderMode = normalizeRenderMode(getRenderMode?.())
     const currentStyleMode = normalizeStyleMode(getStyleMode?.())
-    const targetComponentPathValue = isPushCommitMode
-      ? activeContext?.componentFilePath
-      : values.componentFilePath
-    const targetStylesPathValue = isPushCommitMode
-      ? activeContext?.stylesFilePath
-      : values.stylesFilePath
     const targetCommitMessage = values.commitMessage || defaultCommitMessage
 
     if (
@@ -1281,15 +1285,13 @@ export const createGitHubPrDrawer = ({
       includeAppWrapperToggle instanceof HTMLInputElement
         ? includeAppWrapperToggle.checked
         : false
-    const componentPathValidation = validateFilePath(targetComponentPathValue)
-    if (!componentPathValidation.ok) {
-      setStatus(`Component path: ${componentPathValidation.reason}`, 'error')
-      return
-    }
 
-    const stylesPathValidation = validateFilePath(targetStylesPathValue)
-    if (!stylesPathValidation.ok) {
-      setStatus(`Styles path: ${stylesPathValidation.reason}`, 'error')
+    const normalizedFileCommits = normalizeFileCommits(
+      typeof getFileCommits === 'function' ? getFileCommits() : [],
+    )
+
+    if (normalizedFileCommits.length === 0) {
+      setStatus('No workspace files are available to commit.', 'error')
       return
     }
 
@@ -1322,21 +1324,28 @@ export const createGitHubPrDrawer = ({
       repository,
       baseBranch: targetBaseBranch,
       headBranch: targetHeadBranch,
-      componentFilePath: componentPathValidation.value,
-      stylesFilePath: stylesPathValidation.value,
+      fileCommits: normalizedFileCommits,
       prTitle: targetPrTitle,
       commitMessage: targetCommitMessage,
       actionType: isPushCommitMode ? 'push-commit' : 'open-pr',
     })
 
-    const originalComponentSource =
-      typeof getComponentSource === 'function' ? getComponentSource() : ''
-    const componentSource = includeAppWrapper
-      ? originalComponentSource
-      : await stripTopLevelAppWrapper({
-          source: originalComponentSource,
-          getTopLevelDeclarations,
-        })
+    const fileUpdates = await Promise.all(
+      normalizedFileCommits.map(async fileCommit => {
+        const shouldStripEntryWrapper = !includeAppWrapper && fileCommit.isEntry
+        const content = shouldStripEntryWrapper
+          ? await stripTopLevelAppWrapper({
+              source: fileCommit.content,
+              getTopLevelDeclarations,
+            })
+          : fileCommit.content
+
+        return {
+          path: fileCommit.path,
+          content,
+        }
+      }),
+    )
 
     const submitRequest = () => {
       pendingAbortController?.abort()
@@ -1356,10 +1365,7 @@ export const createGitHubPrDrawer = ({
             token,
             repository,
             branch: targetHeadBranch,
-            componentFilePath: componentPathValidation.value,
-            componentSource,
-            stylesFilePath: stylesPathValidation.value,
-            stylesSource: typeof getStylesSource === 'function' ? getStylesSource() : '',
+            fileUpdates,
             commitMessage: targetCommitMessage,
             signal: abortController.signal,
           })
@@ -1370,10 +1376,7 @@ export const createGitHubPrDrawer = ({
             headBranch: targetHeadBranch,
             prTitle: targetPrTitle,
             prBody: targetPrBody,
-            componentFilePath: componentPathValidation.value,
-            componentSource,
-            stylesFilePath: stylesPathValidation.value,
-            stylesSource: typeof getStylesSource === 'function' ? getStylesSource() : '',
+            fileUpdates,
             commitMessage: targetCommitMessage,
             signal: abortController.signal,
           })
@@ -1406,8 +1409,10 @@ export const createGitHubPrDrawer = ({
           saveRepositoryPrConfig({
             repositoryFullName: repositoryLabel,
             config: {
-              componentFilePath: componentPathValidation.value,
-              stylesFilePath: stylesPathValidation.value,
+              syncComponentFilePath: toSafeText(
+                getEditorSyncTargets?.()?.componentFilePath,
+              ),
+              syncStylesFilePath: toSafeText(getEditorSyncTargets?.()?.stylesFilePath),
               renderMode: currentRenderMode,
               styleMode: currentStyleMode,
               baseBranch: targetBaseBranch,
@@ -1503,13 +1508,11 @@ export const createGitHubPrDrawer = ({
     })
   })
 
-  componentPathInput?.addEventListener('blur', persistCurrentPaths)
-  stylesPathInput?.addEventListener('blur', persistCurrentPaths)
-  baseBranchInput?.addEventListener('change', persistCurrentPaths)
-  baseBranchInput?.addEventListener('blur', persistCurrentPaths)
-  headBranchInput?.addEventListener('blur', persistCurrentPaths)
-  prTitleInput?.addEventListener('blur', persistCurrentPaths)
-  prBodyInput?.addEventListener('blur', persistCurrentPaths)
+  baseBranchInput?.addEventListener('change', persistCurrentConfig)
+  baseBranchInput?.addEventListener('blur', persistCurrentConfig)
+  headBranchInput?.addEventListener('blur', persistCurrentConfig)
+  prTitleInput?.addEventListener('blur', persistCurrentConfig)
+  prBodyInput?.addEventListener('blur', persistCurrentConfig)
 
   submitButton?.addEventListener('click', () => {
     if (submitting) {

@@ -19,6 +19,8 @@ const toSyncSha = value =>
 const toTargetPrFilePath = value =>
   typeof value === 'string' && value.trim().length > 0 ? value.trim() : null
 
+const toSyncedContent = value => (typeof value === 'string' ? value : null)
+
 const normalizeTab = (tab, fallbackId = '') => {
   if (!tab || typeof tab !== 'object') {
     return null
@@ -47,6 +49,7 @@ const normalizeTab = (tab, fallbackId = '') => {
     isDirty: Boolean(tab.isDirty),
     syncedAt: toSyncTimestamp(tab.syncedAt),
     lastSyncedRemoteSha: toSyncSha(tab.lastSyncedRemoteSha),
+    syncedContent: toSyncedContent(tab.syncedContent),
     lastModified: Number.isFinite(tab.lastModified) ? tab.lastModified : Date.now(),
   }
 }
@@ -156,6 +159,7 @@ export const createWorkspaceTabsState = ({ tabs = [], activeTabId, onChange } = 
       isDirty: normalized.isDirty,
       syncedAt: normalized.syncedAt,
       lastSyncedRemoteSha: normalized.lastSyncedRemoteSha,
+      syncedContent: normalized.syncedContent,
       lastModified: normalized.lastModified,
     })
 

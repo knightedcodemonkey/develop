@@ -158,6 +158,23 @@
           </button>
 
           <button
+            class="diagnostics-toggle workspaces-toggle"
+            id="workspaces-toggle"
+            type="button"
+            aria-expanded="false"
+            aria-controls="workspaces-drawer"
+            title="Manage local workspaces"
+            disabled
+          >
+            <svg class="workspaces-toggle__icon" viewBox="0 0 24 24" aria-hidden="true">
+              <path
+                d="M12 1.25c2.487 0 4.773.402 6.466 1.079.844.337 1.577.758 2.112 1.264.536.507.922 1.151.922 1.907v12.987l-.026.013h.026c0 .756-.386 1.4-.922 1.907-.535.506-1.268.927-2.112 1.264-1.693.677-3.979 1.079-6.466 1.079s-4.774-.402-6.466-1.079c-.844-.337-1.577-.758-2.112-1.264C2.886 19.9 2.5 19.256 2.5 18.5h.026l-.026-.013V5.5c0-.756.386-1.4.922-1.907.535-.506 1.268-.927 2.112-1.264C7.226 1.652 9.513 1.25 12 1.25ZM4 14.371v4.116l-.013.013H4c0 .211.103.487.453.817.351.332.898.666 1.638.962 1.475.589 3.564.971 5.909.971 2.345 0 4.434-.381 5.909-.971.739-.296 1.288-.63 1.638-.962.349-.33.453-.607.453-.817h.013L20 18.487v-4.116a7.85 7.85 0 0 1-1.534.8c-1.693.677-3.979 1.079-6.466 1.079s-4.774-.402-6.466-1.079a7.843 7.843 0 0 1-1.534-.8ZM20 12V7.871a7.85 7.85 0 0 1-1.534.8C16.773 9.348 14.487 9.75 12 9.75s-4.774-.402-6.466-1.079A7.85 7.85 0 0 1 4 7.871V12c0 .21.104.487.453.817.35.332.899.666 1.638.961 1.475.59 3.564.972 5.909.972 2.345 0 4.434-.382 5.909-.972.74-.295 1.287-.629 1.638-.96.35-.33.453-.607.453-.818ZM4 5.5c0 .211.103.487.453.817.351.332.898.666 1.638.962 1.475.589 3.564.971 5.909.971 2.345 0 4.434-.381 5.909-.971.739-.296 1.288-.63 1.638-.962.349-.33.453-.607.453-.817 0-.211-.103-.487-.453-.817-.351-.332-.898-.666-1.638-.962-1.475-.589-3.564-.971-5.909-.971-2.345 0-4.434.381-5.909.971-.739.296-1.288.63-1.638.962C4.104 5.013 4 5.29 4 5.5Z"
+              ></path>
+            </svg>
+            <span>Workspaces</span>
+          </button>
+
+          <button
             class="diagnostics-toggle github-pr-context-close"
             id="github-pr-context-close"
             type="button"
@@ -746,6 +763,69 @@
       </aside>
 
       <aside
+        class="workspaces-drawer"
+        id="workspaces-drawer"
+        aria-labelledby="workspaces-title"
+        hidden
+      >
+        <div class="workspaces-drawer__header">
+          <h2 id="workspaces-title">Workspaces</h2>
+          <button
+            class="icon-button"
+            id="workspaces-close"
+            type="button"
+            aria-label="Close workspaces drawer"
+            title="Close workspaces drawer"
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M6 6 18 18"></path>
+              <path d="M18 6 6 18"></path>
+            </svg>
+          </button>
+        </div>
+
+        <p
+          class="workspaces-drawer__status"
+          id="workspaces-status"
+          role="status"
+          aria-label="Workspaces status"
+          data-level="neutral"
+        >
+          Manage local workspace contexts stored in this browser.
+        </p>
+
+        <div class="workspaces-drawer__body" role="group" aria-label="Workspaces form">
+          <label class="github-pr-field github-pr-field--full" for="workspaces-search">
+            <span>Search local contexts</span>
+            <input
+              id="workspaces-search"
+              type="search"
+              autocomplete="off"
+              spellcheck="false"
+              placeholder="Search local contexts"
+              aria-label="Search stored local contexts"
+            />
+          </label>
+
+          <label class="github-pr-field github-pr-field--full" for="workspaces-select">
+            <span>Stored contexts</span>
+            <select id="workspaces-select" aria-label="Stored local editor contexts">
+              <option value="" selected>No saved local contexts</option>
+            </select>
+          </label>
+
+          <div class="workspaces-drawer__actions">
+            <button class="render-button" id="workspaces-open" type="button" disabled>
+              Open
+            </button>
+            <button class="render-button" id="workspaces-remove" type="button" disabled>
+              Remove
+            </button>
+          </div>
+        </div>
+      </aside>
+
+      <aside
         class="github-pr-drawer"
         id="github-pr-drawer"
         aria-labelledby="open-pr-title"
@@ -774,41 +854,10 @@
           aria-label="Open pull request status"
           data-level="neutral"
         >
-          Configure repository, file paths, and branch details.
+          Configure repository, branch details, and commit metadata.
         </p>
 
         <div class="github-pr-drawer__form-grid" role="group" aria-label="Open PR form">
-          <label
-            class="github-pr-field github-pr-field--full github-pr-field--local-context"
-            for="github-pr-local-context-select"
-          >
-            <span>Local contexts</span>
-            <input
-              id="github-pr-local-context-search"
-              type="search"
-              autocomplete="off"
-              spellcheck="false"
-              placeholder="Search local contexts"
-              aria-label="Search stored local contexts"
-            />
-            <div class="github-pr-local-context-row">
-              <select
-                id="github-pr-local-context-select"
-                aria-label="Stored local editor contexts"
-              >
-                <option value="" selected>No saved local contexts</option>
-              </select>
-              <button
-                class="render-button github-pr-local-context-remove"
-                id="github-pr-local-context-remove"
-                type="button"
-                disabled
-              >
-                Remove
-              </button>
-            </div>
-          </label>
-
           <label
             class="github-pr-field github-pr-field--repo"
             for="github-pr-repo-select"
@@ -852,39 +901,11 @@
           </label>
 
           <label
-            class="github-pr-field github-pr-field--component-filename"
-            for="github-pr-component-path"
-          >
-            <span>Component filename</span>
-            <input
-              id="github-pr-component-path"
-              type="text"
-              autocomplete="off"
-              spellcheck="false"
-              placeholder="src/components/App.jsx"
-            />
-          </label>
-
-          <label
-            class="github-pr-field github-pr-field--styles-filename"
-            for="github-pr-styles-path"
-          >
-            <span>Styles filename</span>
-            <input
-              id="github-pr-styles-path"
-              type="text"
-              autocomplete="off"
-              spellcheck="false"
-              placeholder="src/styles/app.css"
-            />
-          </label>
-
-          <label
             class="github-pr-field github-pr-field--full github-pr-field--checkbox"
             for="github-pr-include-app-wrapper"
           >
             <input id="github-pr-include-app-wrapper" type="checkbox" />
-            <span>Include App wrapper in committed component source</span>
+            <span>Include entry tab source in committed output</span>
           </label>
 
           <label class="github-pr-field github-pr-field--full" for="github-pr-title">
