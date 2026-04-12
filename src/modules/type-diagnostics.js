@@ -49,6 +49,23 @@ const domJsxTypes =
   '  interface IntrinsicElements { [elemName: string]: Record<string, unknown> }\n' +
   '}\n'
 
+const styleImportTypes =
+  "declare module '*.css' {\n" +
+  '  const cssText: string\n' +
+  '  export default cssText\n' +
+  '}\n' +
+  "declare module '*.less' {\n" +
+  '  const lessText: string\n' +
+  '  export default lessText\n' +
+  '}\n' +
+  "declare module '*.sass' {\n" +
+  '  const sassText: string\n' +
+  '  export default sassText\n' +
+  '}\n' +
+  "declare module '*.scss' {\n" +
+  '  const scssText: string\n' +
+  '  export default scssText\n' +
+  '}\n'
 const normalizeVirtualFileName = fileName =>
   typeof fileName === 'string' && fileName.startsWith('/') ? fileName.slice(1) : fileName
 
@@ -234,6 +251,7 @@ export const createTypeDiagnosticsController = ({
   getTypeScriptLibUrls,
   getTypePackageFileUrls,
   getJsxSource,
+  getTypecheckSourcePath = () => '',
   getWorkspaceTabs = () => [],
   getRenderMode = () => 'dom',
   defaultTypeScriptLibFileName = 'lib.esnext.full.d.ts',
@@ -800,12 +818,21 @@ export const createTypeDiagnosticsController = ({
     )
   }
 
-  const collectTypeDiagnostics = async (compiler, sourceText) => {
+  const collectTypeDiagnostics = async (
+    compiler,
+    { sourceText, sourcePathOverride = '' },
+  ) => {
     const workspaceComponentTabs = toWorkspaceComponentTabs()
     const resolvedEntryTab = resolveWorkspaceEntryForTypecheck(workspaceComponentTabs)
-    const sourceFileName = resolvedEntryTab?.path || 'component.tsx'
+    const normalizedSourcePathOverride =
+      typeof sourcePathOverride === 'string'
+        ? normalizeRelativePath(sourcePathOverride)
+        : ''
+    const sourceFileName =
+      normalizedSourcePathOverride || resolvedEntryTab?.path || 'component.tsx'
     const typecheckSourceFileName = sourceFileName.replace(/\.(jsx?|mjs|cjs)$/i, '.tsx')
     const jsxTypesFileName = 'knighted-jsx-runtime.d.ts'
+    const styleImportTypesFileName = 'knighted-style-imports.d.ts'
     const renderMode = getRenderMode()
     const isReactMode = renderMode === 'react'
     const libFiles = await ensureTypeScriptLibFiles()
@@ -824,6 +851,7 @@ export const createTypeDiagnosticsController = ({
     }
 
     files.set(typecheckSourceFileName, sourceText)
+    files.set(styleImportTypesFileName, styleImportTypes)
 
     if (!isReactMode) {
       files.set(jsxTypesFileName, domJsxTypes)
@@ -978,7 +1006,7 @@ export const createTypeDiagnosticsController = ({
       resolveModuleNames,
     }
 
-    const rootNames = [typecheckSourceFileName]
+    const rootNames = [typecheckSourceFileName, styleImportTypesFileName]
     if (!isReactMode) {
       rootNames.push(jsxTypesFileName)
     }
@@ -1005,7 +1033,11 @@ export const createTypeDiagnosticsController = ({
 
   const runTypeDiagnostics = async (
     runId,
-    { userInitiated = false, sourceOverride = undefined } = {},
+    {
+      userInitiated = false,
+      sourceOverride = undefined,
+      sourcePathOverride = undefined,
+    } = {},
   ) => {
     incrementTypeDiagnosticsRuns()
     setTypeDiagnosticsPending(false)
@@ -1025,7 +1057,14 @@ export const createTypeDiagnosticsController = ({
 
       const sourceForRun =
         typeof sourceOverride === 'string' ? sourceOverride : getJsxSource()
-      const diagnostics = await collectTypeDiagnostics(compiler, sourceForRun)
+      const sourcePathForRun =
+        typeof sourcePathOverride === 'string' && sourcePathOverride.length > 0
+          ? sourcePathOverride
+          : getTypecheckSourcePath()
+      const diagnostics = await collectTypeDiagnostics(compiler, {
+        sourceText: sourceForRun,
+        sourcePathOverride: sourcePathForRun,
+      })
       const errorCategory = compiler.DiagnosticCategory?.Error
       const errors = diagnostics.filter(
         diagnostic => diagnostic.category === errorCategory,
@@ -1087,11 +1126,16 @@ export const createTypeDiagnosticsController = ({
     }
   }
 
-  const triggerTypeDiagnostics = ({ userInitiated = false, source = undefined } = {}) => {
+  const triggerTypeDiagnostics = ({
+    userInitiated = false,
+    source = undefined,
+    sourcePath = undefined,
+  } = {}) => {
     typeCheckRunId += 1
     void runTypeDiagnostics(typeCheckRunId, {
       userInitiated,
       sourceOverride: source,
+      sourcePathOverride: sourcePath,
     })
   }
 

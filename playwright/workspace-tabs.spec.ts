@@ -4,6 +4,7 @@ import {
   ensurePanelToolsVisible,
   reorderWorkspaceTabBefore,
   setWorkspaceTabSource,
+  waitForAppReady,
   waitForInitialRender,
 } from './helpers/app-test-helpers.js'
 
@@ -190,6 +191,21 @@ test('startup restores last active workspace tab after reload', async ({ page })
   ).toHaveAttribute('aria-current', 'true')
   await expect(page.locator('#editor-panel-component')).not.toHaveAttribute('hidden', '')
   await expect(page.locator('#editor-panel-styles')).toHaveAttribute('hidden', '')
+})
+
+test('removed default styles tab stays removed after reload', async ({ page }) => {
+  await waitForInitialRender(page)
+
+  await expect(page.getByRole('button', { name: 'Open tab app.css' })).toHaveCount(1)
+  await page.getByRole('button', { name: 'Remove tab app.css' }).click()
+  await confirmRemoveDialog(page)
+
+  await expect(page.getByRole('button', { name: 'Open tab app.css' })).toHaveCount(0)
+
+  await page.reload()
+  await waitForAppReady(page)
+
+  await expect(page.getByRole('button', { name: 'Open tab app.css' })).toHaveCount(0)
 })
 
 test('workspace tab drag reorder persists across reload', async ({ page }) => {

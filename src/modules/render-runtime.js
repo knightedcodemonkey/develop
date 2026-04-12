@@ -56,6 +56,21 @@ export const createRenderRuntimeController = ({
   const workspaceGraphCache = createPreviewWorkspaceGraphCache()
   const styleTabLanguages = new Set(['css', 'less', 'sass', 'module'])
   const stylePathPattern = /\.(?:css|less|sass|scss)$/i
+  const fallbackEntryTab = {
+    id: 'component',
+    name: 'App.tsx',
+    path: 'src/components/App.tsx',
+    language: 'javascript-jsx',
+    role: 'entry',
+  }
+  const fallbackStylesTab = {
+    id: 'styles',
+    name: 'app.css',
+    path: 'src/styles/app.css',
+    language: 'css',
+    role: 'module',
+    content: '',
+  }
 
   const isStyleTab = tab => {
     if (!tab || typeof tab !== 'object') {
@@ -477,13 +492,10 @@ export const createRenderRuntimeController = ({
 
     return [
       {
-        id: 'component',
-        name: 'App.tsx',
-        path: 'src/components/App.tsx',
-        language: 'javascript-jsx',
-        role: 'entry',
+        ...fallbackEntryTab,
         content: getJsxSource(),
       },
+      { ...fallbackStylesTab },
     ]
   }
 

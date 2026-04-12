@@ -841,6 +841,14 @@ const getWorkspaceTabByKind = kind => {
 const getActiveWorkspaceTab = () =>
   workspaceTabsState.getTab(workspaceTabsState.getActiveTabId())
 
+const getLoadedComponentWorkspaceTab = () =>
+  workspaceTabsState.getTab(loadedComponentTabId) ?? getWorkspaceTabByKind('component')
+
+const getTypecheckSourcePath = () => {
+  const loadedComponentTab = getLoadedComponentWorkspaceTab()
+  return toNonEmptyWorkspaceText(loadedComponentTab?.path) || defaultComponentTabPath
+}
+
 const toStyleModeForTabLanguage = language => {
   const normalized = toNonEmptyWorkspaceText(language)
   if (normalized === 'less') {
@@ -1054,7 +1062,6 @@ const makeUniqueTabPath = ({ basePath, suffix = '' }) => {
 const ensureWorkspaceTabsShape = tabs => {
   const inputTabs = Array.isArray(tabs) ? tabs : []
   const hasComponent = inputTabs.some(tab => tab?.id === 'component')
-  const hasStyles = inputTabs.some(tab => tab?.id === 'styles')
   const nextTabs = [...inputTabs]
 
   if (!hasComponent) {
@@ -1066,18 +1073,6 @@ const ensureWorkspaceTabsShape = tabs => {
       role: 'entry',
       content: defaultJsx,
       isActive: true,
-    })
-  }
-
-  if (!hasStyles) {
-    nextTabs.push({
-      id: 'styles',
-      name: defaultStylesTabName,
-      path: defaultStylesTabPath,
-      language: 'css',
-      role: 'module',
-      content: defaultCss,
-      isActive: false,
     })
   }
 
@@ -1311,6 +1306,8 @@ const applyWorkspaceRecord = async (workspace, { silent = false } = {}) => {
 
     if (typeof stylesTab?.path === 'string' && githubPrStylesPath) {
       githubPrStylesPath.value = stylesTab.path
+    } else if (githubPrStylesPath instanceof HTMLInputElement) {
+      githubPrStylesPath.value = ''
     }
 
     const activeTab = getActiveWorkspaceTab()
@@ -1941,14 +1938,20 @@ const syncTabPathsFromInputs = () => {
     role: 'entry',
     isActive: workspaceTabsState.getActiveTabId() === 'component',
   })
-  workspaceTabsState.upsertTab({
-    id: 'styles',
-    path: stylesPath,
-    name: getPathFileName(stylesPath) || defaultStylesTabName,
-    language: 'css',
-    role: 'module',
-    isActive: workspaceTabsState.getActiveTabId() === 'styles',
-  })
+
+  const defaultStylesTab = workspaceTabsState.getTab('styles')
+  if (defaultStylesTab) {
+    workspaceTabsState.upsertTab({
+      id: 'styles',
+      path: stylesPath,
+      name: getPathFileName(stylesPath) || defaultStylesTabName,
+      language: isStyleTabLanguage(defaultStylesTab.language)
+        ? defaultStylesTab.language
+        : 'css',
+      role: 'module',
+      isActive: workspaceTabsState.getActiveTabId() === 'styles',
+    })
+  }
 
   syncHeaderLabels()
   renderWorkspaceTabs()
@@ -2386,6 +2389,7 @@ const typeDiagnostics = createTypeDiagnosticsController({
   getTypeScriptLibUrls,
   getTypePackageFileUrls,
   getJsxSource: () => getJsxSource(),
+  getTypecheckSourcePath,
   getWorkspaceTabs: () => buildWorkspaceTabsSnapshot(),
   getRenderMode: () => renderMode.value,
   setTypecheckButtonLoading,
@@ -2900,6 +2904,7 @@ if (typecheckButton) {
     typeDiagnostics.triggerTypeDiagnostics({
       userInitiated: true,
       source: getJsxSource(),
+      sourcePath: getTypecheckSourcePath(),
     })
   })
 }

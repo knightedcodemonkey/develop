@@ -219,6 +219,29 @@ test('typecheck resolves parent-relative .js import to workspace tsx module tab'
   expect(diagnosticsText).not.toContain("Cannot find module '../components/module.js'")
 })
 
+test('typecheck does not report TS2307 for stylesheet side-effect imports', async ({
+  page,
+}) => {
+  await waitForInitialRender(page)
+
+  await ensurePanelToolsVisible(page, 'component')
+  await setComponentEditorSource(
+    page,
+    ["import '../styles/app.css'", '', 'const App = () => <p>style import</p>', ''].join(
+      '\n',
+    ),
+  )
+
+  await runTypecheck(page)
+  await ensureDiagnosticsDrawerOpen(page)
+  await expect(page.locator('#diagnostics-component')).toContainText(
+    'No TypeScript errors found.',
+  )
+
+  const diagnosticsText = await page.locator('#diagnostics-component').innerText()
+  expect(diagnosticsText).not.toContain("Cannot find module '../styles/app.css'")
+})
+
 test('component diagnostics rows navigate editor to reported line', async ({ page }) => {
   await waitForInitialRender(page)
 
