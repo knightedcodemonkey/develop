@@ -3133,6 +3133,9 @@ function applyStyleMode({ mode }) {
   }
 
   maybeRender()
+  void flushWorkspaceSave().catch(() => {
+    /* Save failures are already surfaced through saver onError. */
+  })
 }
 
 renderMode.addEventListener('change', () => {

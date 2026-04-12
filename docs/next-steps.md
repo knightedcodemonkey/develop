@@ -33,3 +33,11 @@ Focused follow-up work for `@knighted/develop`.
    - Accept breaking changes for old locally stored app state to simplify maintenance and reduce branching logic.
    - Suggested implementation prompt:
      - "Remove backwards-compatibility code in @knighted/develop that supports pre-multitab component/styles storage/sync behavior. Standardize on the current tab-derived schema only, delete legacy field fallbacks and migration helpers, and update tests/docs to match the simplified contract. Validate with npm run lint and targeted Playwright suites for workspace tabs + PR drawer flows."
+
+6. **Promise handling conventions (consistency of intent)**
+   - Define a project default: use `async`/`await` with `try`/`catch` for most async control flow.
+   - Keep Promise chains where they better express intent (for example, fire-and-forget paths with explicit `.catch()` to avoid unhandled rejections, or concise pass-through composition).
+   - Document this as an intent-first rule so mixed syntax is acceptable only when deliberate and easy to reason about.
+   - Add a lightweight lint/review rule to flag mixed async styles in the same flow unless there is a clear justification.
+   - Suggested implementation prompt:
+     - "Define and apply async handling conventions in @knighted/develop with consistency of intent: default to async/await + try/catch, allow Promise chains for explicit fire-and-forget and concise composition, and require explicit .catch on unawaited promises. Update docs and enforce via lint/review guidance without broad no-op refactors. Validate with npm run lint and targeted Playwright runs."
