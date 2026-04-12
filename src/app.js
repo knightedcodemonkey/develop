@@ -130,6 +130,7 @@ const defaultComponentTabName = 'App.tsx'
 const defaultStylesTabName = 'app.css'
 const defaultEntryTabDirectory = 'src/components'
 const allowedEntryTabFileNames = new Set(['app.tsx', 'app.js'])
+const renderModeStorageKey = 'knighted-develop:render-mode'
 const editorKinds = ['component', 'styles']
 const editorPanelsByKind = {
   component: componentEditorPanel,
@@ -1492,6 +1493,7 @@ const applyWorkspaceRecord = async (workspace, { silent = false } = {}) => {
     if (renderMode.value !== nextRenderMode) {
       renderMode.value = nextRenderMode
     }
+    persistRenderMode(nextRenderMode)
 
     const activeTab = getActiveWorkspaceTab()
     if (activeTab) {
@@ -2421,6 +2423,27 @@ const getStyleEditorLanguage = mode => {
 
 const normalizeRenderMode = mode => (mode === 'react' ? 'react' : 'dom')
 
+const persistRenderMode = mode => {
+  const normalizedMode = normalizeRenderMode(mode)
+
+  try {
+    localStorage.setItem(renderModeStorageKey, normalizedMode)
+  } catch {
+    /* Ignore storage write errors in restricted browsing modes. */
+  }
+}
+
+const getInitialRenderMode = () => {
+  try {
+    const value = localStorage.getItem(renderModeStorageKey)
+    return normalizeRenderMode(value)
+  } catch {
+    /* Ignore storage read errors in restricted browsing modes. */
+  }
+
+  return 'dom'
+}
+
 const updateRenderModeEditability = () => {
   if (!(renderMode instanceof HTMLSelectElement)) {
     return
@@ -3044,6 +3067,8 @@ function applyRenderMode({ mode, fromActivePrContext: _fromActivePrContext = fal
     renderMode.value = nextMode
   }
 
+  persistRenderMode(nextMode)
+
   resetDiagnosticsFlow()
 
   maybeRender()
@@ -3396,6 +3421,7 @@ if (workspaceTabAddStyles instanceof HTMLButtonElement) {
 }
 
 applyTheme(getInitialTheme(), { persist: false })
+renderMode.value = getInitialRenderMode()
 applyEditorToolsVisibility()
 applyPanelCollapseState()
 syncHeaderLabels()
