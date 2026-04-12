@@ -1,9 +1,11 @@
 import { expect, test } from '@playwright/test'
 import {
+  addWorkspaceTab,
   ensurePanelToolsVisible,
   ensureDiagnosticsDrawerOpen,
   getActiveComponentEditorLineNumber,
   getActiveStylesEditorLineNumber,
+  setWorkspaceTabSource,
   runComponentLint,
   runStylesLint,
   runTypecheck,
@@ -145,6 +147,76 @@ test('dom mode typecheck resolves @knighted/jsx type-only imports', async ({ pag
 
   const diagnosticsText = await page.locator('#diagnostics-component').innerText()
   expect(diagnosticsText).not.toContain("Cannot find module '@knighted/jsx'")
+})
+
+test('typecheck resolves .js import to workspace tsx module tab', async ({ page }) => {
+  await waitForInitialRender(page)
+
+  await ensurePanelToolsVisible(page, 'component')
+  await addWorkspaceTab(page)
+
+  await setWorkspaceTabSource(page, {
+    fileName: 'module.tsx',
+    kind: 'component',
+    source: [
+      'type ThingProps = { label: string }',
+      'export const Thing = ({ label }: ThingProps) => <p>{label}</p>',
+    ].join('\n'),
+  })
+
+  await setComponentEditorSource(
+    page,
+    [
+      "import { Thing } from './module.js'",
+      'const App = () => <Thing label="ok" />',
+      '',
+    ].join('\n'),
+  )
+
+  await runTypecheck(page)
+  await ensureDiagnosticsDrawerOpen(page)
+  await expect(page.locator('#diagnostics-component')).toContainText(
+    'No TypeScript errors found.',
+  )
+
+  const diagnosticsText = await page.locator('#diagnostics-component').innerText()
+  expect(diagnosticsText).not.toContain("Cannot find module './module.js'")
+})
+
+test('typecheck resolves parent-relative .js import to workspace tsx module tab', async ({
+  page,
+}) => {
+  await waitForInitialRender(page)
+
+  await ensurePanelToolsVisible(page, 'component')
+  await addWorkspaceTab(page)
+
+  await setWorkspaceTabSource(page, {
+    fileName: 'module.tsx',
+    kind: 'component',
+    source: [
+      'type ThingProps = { label: string }',
+      'export const Thing = ({ label }: ThingProps) => <p>{label}</p>',
+    ].join('\n'),
+  })
+
+  await setComponentEditorSource(
+    page,
+    [
+      "import { Thing } from '../components/module.js'",
+      'const App = () => <Thing label="ok" />',
+      '',
+    ].join('\n'),
+  )
+
+  await runTypecheck(page)
+  await ensureDiagnosticsDrawerOpen(page)
+  await expect(page.locator('#diagnostics-component')).toContainText(
+    'No TypeScript errors found.',
+  )
+
+  const diagnosticsText = await page.locator('#diagnostics-component').innerText()
+  expect(diagnosticsText).not.toContain("Cannot find module '../components/module.js'")
 })
 
 test('component diagnostics rows navigate editor to reported line', async ({ page }) => {

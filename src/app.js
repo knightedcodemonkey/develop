@@ -2386,6 +2386,7 @@ const typeDiagnostics = createTypeDiagnosticsController({
   getTypeScriptLibUrls,
   getTypePackageFileUrls,
   getJsxSource: () => getJsxSource(),
+  getWorkspaceTabs: () => buildWorkspaceTabsSnapshot(),
   getRenderMode: () => renderMode.value,
   setTypecheckButtonLoading,
   setTypeDiagnosticsDetails,
