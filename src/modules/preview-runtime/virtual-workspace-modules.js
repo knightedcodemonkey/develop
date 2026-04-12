@@ -1,5 +1,6 @@
 import {
   isRelativeSpecifier,
+  stripImportDeclarationsBy,
   toModuleSpecifierKey,
   toTabModuleKey,
 } from './workspace-hydration.js'
@@ -25,6 +26,8 @@ const maxModuleDataUrlCacheEntries = 600
 
 const transpiledModuleCache = new Map()
 const moduleDataUrlCache = new Map()
+const styleTabLanguages = new Set(['css', 'less', 'sass', 'module'])
+const stylePathPattern = /\.(?:css|less|sass|scss)$/i
 
 const trimCache = (cache, maxEntries) => {
   while (cache.size > maxEntries) {
@@ -221,6 +224,15 @@ const toAmbiguousResolutionError = ({ source, matches }) => {
   )
 }
 
+const isStyleImportSpecifier = specifier => {
+  if (typeof specifier !== 'string' || specifier.length === 0) {
+    return false
+  }
+
+  const normalized = stripQueryAndHash(specifier).toLowerCase()
+  return stylePathPattern.test(normalized)
+}
+
 const resolveRelativeWorkspaceImport = ({ importerModuleKey, source, byModuleKey }) => {
   const { exactCandidates, compatibilityCandidates } = toRelativeResolutionCandidateSets({
     importerModuleKey,
@@ -255,6 +267,96 @@ const resolveRelativeWorkspaceImport = ({ importerModuleKey, source, byModuleKey
 
   if (compatibilityMatches.length === 1) {
     return compatibilityMatches[0]
+  }
+
+  return null
+}
+
+const resolveWorkspaceStyleImport = ({ source, byModuleKey }) => {
+  const normalizedSource = toModuleSpecifierKey(stripQueryAndHash(source))
+  if (!normalizedSource) {
+    return null
+  }
+
+  const fileName = normalizedSource.split('/').pop() || ''
+  const candidatePool = [
+    normalizedSource,
+    `./${normalizedSource}`,
+    `src/styles/${normalizedSource}`,
+    `./src/styles/${normalizedSource}`,
+  ]
+
+  if (fileName && fileName !== normalizedSource) {
+    candidatePool.push(
+      fileName,
+      `./${fileName}`,
+      `src/styles/${fileName}`,
+      `./src/styles/${fileName}`,
+    )
+  }
+
+  const matches = collectUniqueResolutionMatches({
+    candidates: [...new Set(candidatePool)],
+    byModuleKey,
+  })
+
+  if (matches.length > 1) {
+    throw toAmbiguousResolutionError({
+      source,
+      matches,
+    })
+  }
+
+  return matches[0] ?? null
+}
+
+const resolveRelativeWorkspaceStyleImport = ({
+  importerModuleKey,
+  source,
+  byModuleKey,
+}) => {
+  const { exactCandidates } = toRelativeResolutionCandidateSets({
+    importerModuleKey,
+    source,
+  })
+
+  const exactMatches = collectUniqueResolutionMatches({
+    candidates: exactCandidates,
+    byModuleKey,
+  })
+
+  if (exactMatches.length > 1) {
+    throw toAmbiguousResolutionError({
+      source,
+      matches: exactMatches,
+    })
+  }
+
+  return exactMatches[0] ?? null
+}
+
+const resolveWorkspaceImport = ({ importerModuleKey, source, byModuleKey }) => {
+  if (isStyleImportSpecifier(source)) {
+    if (isRelativeSpecifier(source)) {
+      return resolveRelativeWorkspaceStyleImport({
+        importerModuleKey,
+        source,
+        byModuleKey,
+      })
+    }
+
+    return resolveWorkspaceStyleImport({
+      source,
+      byModuleKey,
+    })
+  }
+
+  if (isRelativeSpecifier(source)) {
+    return resolveRelativeWorkspaceImport({
+      importerModuleKey,
+      source,
+      byModuleKey,
+    })
   }
 
   return null
@@ -355,6 +457,28 @@ const toCycleImportPath = ({ cycleEntries, viaSpecifier }) =>
 
 const ensureMode = mode => (mode === 'react' ? 'react' : 'dom')
 
+const isStyleTab = tab => {
+  if (!tab || typeof tab !== 'object') {
+    return false
+  }
+
+  if (
+    typeof tab.language === 'string' &&
+    styleTabLanguages.has(tab.language.trim().toLowerCase())
+  ) {
+    return true
+  }
+
+  const identity =
+    typeof tab.path === 'string' && tab.path.trim().length > 0
+      ? tab.path
+      : typeof tab.name === 'string'
+        ? tab.name
+        : ''
+
+  return stylePathPattern.test(identity)
+}
+
 const toRuntimePrelude = ({ mode, runtimeSpecifiers }) => {
   if (mode === 'react') {
     return `import __knightedReactRuntime from '${runtimeSpecifiers.react}'`
@@ -439,6 +563,8 @@ export const planWorkspaceVirtualModules = ({
   const visiting = new Set()
   const visitStack = []
   const dependencyOrder = []
+  const styleDependencyOrder = []
+  const moduleDependencyOrder = []
   const importsByTabId = new Map()
 
   const getParsedImportsForTab = tab => {
@@ -448,6 +574,11 @@ export const planWorkspaceVirtualModules = ({
 
     if (importsByTabId.has(tab.id)) {
       return importsByTabId.get(tab.id)
+    }
+
+    if (isStyleTab(tab)) {
+      importsByTabId.set(tab.id, [])
+      return []
     }
 
     const source = typeof tab.content === 'string' ? tab.content : ''
@@ -504,11 +635,14 @@ export const planWorkspaceVirtualModules = ({
       const importerModuleKey = toTabModuleKey(tab)
 
       for (const entry of imports) {
-        if (!isRelativeSpecifier(entry?.source)) {
+        if (
+          !isRelativeSpecifier(entry?.source) &&
+          !isStyleImportSpecifier(entry?.source)
+        ) {
           continue
         }
 
-        const target = resolveRelativeWorkspaceImport({
+        const target = resolveWorkspaceImport({
           importerModuleKey,
           source: entry.source,
           byModuleKey,
@@ -533,9 +667,22 @@ export const planWorkspaceVirtualModules = ({
 
   visit(entryTab)
 
+  for (const tabId of dependencyOrder) {
+    const tab = byId.get(tabId)
+    if (!tab) {
+      continue
+    }
+
+    if (isStyleTab(tab)) {
+      styleDependencyOrder.push(tabId)
+    } else {
+      moduleDependencyOrder.push(tabId)
+    }
+  }
+
   const moduleDataByTabId = new Map()
 
-  for (const tabId of dependencyOrder) {
+  for (const tabId of moduleDependencyOrder) {
     const tab = byId.get(tabId)
     if (!tab) {
       continue
@@ -560,7 +707,7 @@ export const planWorkspaceVirtualModules = ({
   const runtimeRewrites = runtimeSpecifierRewrites(runtimeSpecifiers)
   const moduleUrlByTabId = new Map()
 
-  for (const tabId of dependencyOrder) {
+  for (const tabId of moduleDependencyOrder) {
     const tab = byId.get(tabId)
     const moduleData = moduleDataByTabId.get(tabId)
 
@@ -568,18 +715,52 @@ export const planWorkspaceVirtualModules = ({
       continue
     }
 
+    const sourceWithoutStyleImports = stripImportDeclarationsBy(
+      moduleData.source,
+      moduleData.imports,
+      entry => {
+        if (
+          !isRelativeSpecifier(entry?.source) &&
+          !isStyleImportSpecifier(entry?.source)
+        ) {
+          return false
+        }
+
+        const target = resolveWorkspaceImport({
+          importerModuleKey: moduleData.moduleKey,
+          source: entry.source,
+          byModuleKey,
+        })
+
+        return isStyleTab(target)
+      },
+    )
+
+    const importsForRewrite = parseImports({
+      source: sourceWithoutStyleImports,
+      transformJsxSource,
+      formatTransformDiagnosticsError,
+    })
+
     const rewrittenCode = rewriteImportSpecifiers({
-      source: moduleData.source,
-      imports: moduleData.imports,
+      source: sourceWithoutStyleImports,
+      imports: importsForRewrite,
       resolveSpecifier: sourceSpecifier => {
-        if (isRelativeSpecifier(sourceSpecifier)) {
-          const target = resolveRelativeWorkspaceImport({
+        if (
+          isRelativeSpecifier(sourceSpecifier) ||
+          isStyleImportSpecifier(sourceSpecifier)
+        ) {
+          const target = resolveWorkspaceImport({
             importerModuleKey: moduleData.moduleKey,
             source: sourceSpecifier,
             byModuleKey,
           })
 
           if (!target || typeof target.id !== 'string') {
+            return null
+          }
+
+          if (isStyleTab(target)) {
             return null
           }
 
@@ -632,6 +813,7 @@ export const planWorkspaceVirtualModules = ({
   return {
     entryTabId: entryTab.id,
     includedTabIds: [...dependencyOrder],
+    includedStyleTabIds: [...styleDependencyOrder],
     entrySpecifier: entryModuleUrl,
     entryDisplaySpecifier: `@knighted/workspace/${entryModuleKey}`,
     entryExportName: previewEntryExportName,

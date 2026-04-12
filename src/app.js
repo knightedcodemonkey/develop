@@ -1173,22 +1173,6 @@ const buildWorkspaceTabsSnapshot = () => {
   })
 }
 
-const getPreviewStylesSource = () => {
-  const loadedStylesTab = workspaceTabsState.getTab(loadedStylesTabId)
-
-  if (!loadedStylesTab || getTabKind(loadedStylesTab) !== 'styles') {
-    return getCssSource()
-  }
-
-  if (workspaceTabsState.getActiveTabId() === loadedStylesTab.id) {
-    return getCssSource()
-  }
-
-  return typeof loadedStylesTab.content === 'string'
-    ? loadedStylesTab.content
-    : getCssSource()
-}
-
 const buildWorkspaceRecordSnapshot = ({ recordId } = {}) => {
   const context = getWorkspaceContextSnapshot()
   const id =
@@ -1339,6 +1323,7 @@ const applyWorkspaceRecord = async (workspace, { silent = false } = {}) => {
     }
 
     renderWorkspaceTabs()
+    updateRenderModeEditability()
 
     if (hasCompletedInitialWorkspaceBootstrap) {
       maybeRender()
@@ -1404,6 +1389,7 @@ const setActiveWorkspaceTab = tabId => {
   if (targetTab.id === currentActiveTabId) {
     loadWorkspaceTabIntoEditor(targetTab)
     renderWorkspaceTabs()
+    updateRenderModeEditability()
     return
   }
 
@@ -1416,6 +1402,7 @@ const setActiveWorkspaceTab = tabId => {
   }
 
   renderWorkspaceTabs()
+  updateRenderModeEditability()
 
   if (!changed) {
     return
@@ -1493,9 +1480,14 @@ const finishWorkspaceTabRename = ({ tabId, nextName, cancelled = false }) => {
     githubPrComponentPath.value = normalizedEntryPath
   }
 
+  if (tab.id === 'styles' && githubPrStylesPath instanceof HTMLInputElement) {
+    githubPrStylesPath.value = normalizedEntryPath
+  }
+
   syncHeaderLabels()
   renderWorkspaceTabs()
   queueWorkspaceSave()
+  maybeRender()
 }
 
 const removeWorkspaceTab = tabId => {
@@ -2193,6 +2185,16 @@ const getStyleEditorLanguage = mode => {
 
 const normalizeRenderMode = mode => (mode === 'react' ? 'react' : 'dom')
 
+const updateRenderModeEditability = () => {
+  if (!(renderMode instanceof HTMLSelectElement)) {
+    return
+  }
+
+  const activeTab = getActiveWorkspaceTab()
+  const isEntryTab = activeTab?.role === 'entry'
+  renderMode.disabled = !isEntryTab
+}
+
 const normalizeStyleMode = mode => {
   if (mode === 'module') return 'module'
   if (mode === 'less') return 'less'
@@ -2627,9 +2629,7 @@ renderRuntime = createRenderRuntimeController({
   cdnImports,
   importFromCdnWithFallback,
   renderMode,
-  styleMode,
   isAutoRenderEnabled: () => autoRenderToggle.checked,
-  getCssSource: () => getPreviewStylesSource(),
   getJsxSource: () => getJsxSource(),
   getWorkspaceTabs: () => buildWorkspaceTabsSnapshot(),
   getPreviewHost: () => previewHost,
@@ -2805,6 +2805,31 @@ function applyStyleMode({ mode }) {
       cssCodeEditor.setLanguage(getStyleEditorLanguage(nextMode))
     } finally {
       suppressEditorChangeSideEffects = false
+    }
+  }
+
+  const activeTab = getActiveWorkspaceTab()
+  if (activeTab && getTabKind(activeTab) === 'styles') {
+    const nextLanguage =
+      nextMode === 'less'
+        ? 'less'
+        : nextMode === 'sass'
+          ? 'sass'
+          : nextMode === 'module'
+            ? 'module'
+            : 'css'
+
+    if (activeTab.language !== nextLanguage) {
+      workspaceTabsState.upsertTab(
+        {
+          ...activeTab,
+          language: nextLanguage,
+          lastModified: Date.now(),
+          isActive: true,
+        },
+        { emitReason: 'styleModeChange' },
+      )
+      queueWorkspaceSave()
     }
   }
 
@@ -3182,6 +3207,7 @@ applyEditorToolsVisibility()
 applyPanelCollapseState()
 syncHeaderLabels()
 renderWorkspaceTabs()
+updateRenderModeEditability()
 setCompactAiControlsOpen(false)
 setGitHubTokenInfoOpen(false)
 syncAiChatTokenVisibility(githubAiContextState.token)

@@ -47,6 +47,90 @@ test('renders in react mode with css modules', async ({ page }) => {
   await expectPreviewHasRenderedContent(page)
 })
 
+test('preview styles require explicit import from entry graph', async ({ page }) => {
+  await waitForInitialRender(page)
+
+  await setWorkspaceTabSource(page, {
+    fileName: 'app.css',
+    kind: 'styles',
+    source: ['.counter-button { color: rgb(1, 2, 3); }'].join('\n'),
+  })
+
+  await expect
+    .poll(async () => {
+      const styleContent = await getPreviewFrame(page)
+        .locator('style')
+        .first()
+        .textContent()
+      return styleContent ?? ''
+    })
+    .toContain('rgb(1, 2, 3)')
+
+  await setComponentEditorSource(
+    page,
+    [
+      'const App = () => <button class="counter-button">No style import</button>',
+      '',
+    ].join('\n'),
+  )
+
+  await expect(page.getByRole('status', { name: 'App status' })).toHaveText('Rendered')
+  await expect
+    .poll(async () => {
+      const styleContent = await getPreviewFrame(page)
+        .locator('style')
+        .first()
+        .textContent()
+      return styleContent ?? ''
+    })
+    .not.toContain('rgb(1, 2, 3)')
+})
+
+test('nested module imports can bring styles into preview graph', async ({ page }) => {
+  await waitForInitialRender(page)
+
+  await addWorkspaceTab(page, { kind: 'component' })
+  await addWorkspaceTab(page, { kind: 'styles' })
+
+  await setWorkspaceTabSource(page, {
+    fileName: 'module.tsx',
+    kind: 'component',
+    source: [
+      "import '../styles/module.css'",
+      '',
+      'export const ModuleButton = () => <button class="module-button">Nested style</button>',
+    ].join('\n'),
+  })
+
+  await setWorkspaceTabSource(page, {
+    fileName: 'module.css',
+    kind: 'styles',
+    source: ['.module-button { color: rgb(9, 8, 7); }'].join('\n'),
+  })
+
+  await setComponentEditorSource(
+    page,
+    [
+      "import { ModuleButton } from './module'",
+      '',
+      'const App = () => <ModuleButton />',
+      '',
+    ].join('\n'),
+  )
+
+  await expect(page.getByRole('status', { name: 'App status' })).toHaveText('Rendered')
+  await expect(getPreviewFrame(page).getByRole('button')).toContainText('Nested style')
+  await expect
+    .poll(async () => {
+      const styleContent = await getPreviewFrame(page)
+        .locator('style')
+        .first()
+        .textContent()
+      return styleContent ?? ''
+    })
+    .toContain('rgb(9, 8, 7)')
+})
+
 test('transpiles TypeScript annotations in component source', async ({ page }) => {
   await waitForInitialRender(page)
 
@@ -641,6 +725,20 @@ test('persists render mode across reload', async ({ page }) => {
   await expect(page.getByRole('combobox', { name: 'Render mode' })).toHaveValue('react')
 })
 
+test('persists style mode across reload', async ({ page }) => {
+  await waitForInitialRender(page)
+
+  await ensurePanelToolsVisible(page, 'styles')
+  await page.getByRole('combobox', { name: 'Style mode' }).selectOption('sass')
+  await expect(page.getByRole('status', { name: 'App status' })).toHaveText('Rendered')
+
+  await page.reload()
+  await waitForInitialRender(page)
+  await ensurePanelToolsVisible(page, 'styles')
+
+  await expect(page.getByRole('combobox', { name: 'Style mode' })).toHaveValue('sass')
+})
+
 test('renders with less style mode', async ({ page }) => {
   await waitForInitialRender(page)
 
@@ -827,6 +925,97 @@ test('workspace graph errors for missing modules remain deterministic', async ({
   )
 })
 
+test('renaming an imported module tab re-renders and surfaces missing import errors', async ({
+  page,
+}) => {
+  await waitForInitialRender(page)
+
+  await ensurePanelToolsVisible(page, 'component')
+
+  await addWorkspaceTab(page)
+  await setWorkspaceTabSource(page, {
+    fileName: 'module.tsx',
+    source: [
+      'export const ItemWrap = ({ children }: { children: string }) => {',
+      '  return <span>{children}</span>',
+      '}',
+    ].join('\n'),
+  })
+
+  await setWorkspaceTabSource(page, {
+    fileName: 'App.tsx',
+    source: [
+      "import { ItemWrap } from './module'",
+      'export const App = () => <ItemWrap>hello</ItemWrap>',
+    ].join('\n'),
+  })
+
+  await expect(page.getByRole('status', { name: 'App status' })).toHaveText('Rendered')
+
+  await page.getByRole('button', { name: 'Rename tab module.tsx' }).click()
+  const renameInput = page.getByLabel('Rename module.tsx')
+  await renameInput.fill('module-renamed.tsx')
+  await renameInput.press('Enter')
+
+  await expect(page.getByRole('status', { name: 'App status' })).toHaveText('Error')
+  await expect(page.locator('#preview-host pre')).toContainText(
+    'Preview entry references missing workspace module: ./module',
+  )
+})
+
+test('renaming default styles tab updates graph resolution and surfaces stale import', async ({
+  page,
+}) => {
+  await waitForInitialRender(page)
+
+  await ensurePanelToolsVisible(page, 'styles')
+
+  await page.getByRole('button', { name: 'Rename tab app.css' }).click()
+  const renameInput = page.getByLabel('Rename app.css')
+  await renameInput.fill('app.less')
+  await renameInput.press('Enter')
+
+  await expect(page.getByRole('status', { name: 'App status' })).toHaveText('Error')
+  await expect(page.locator('#preview-host pre')).toContainText(
+    'Preview entry references missing workspace module: ../styles/app.css',
+  )
+
+  await setWorkspaceTabSource(page, {
+    fileName: 'App.tsx',
+    source: [
+      "import '../styles/app.less'",
+      '',
+      'type CounterButtonProps = {',
+      '  label: string',
+      '  onClick: (event: MouseEvent) => void',
+      '}',
+      '',
+      'const CounterButton = ({ label, onClick }: CounterButtonProps) => (',
+      '  <button class="counter-button" type="button" onClick={onClick}>',
+      '    {label}',
+      '  </button>',
+      ')',
+      '',
+      'const App = () => {',
+      '  let count = 0',
+      '  const handleClick = (event: MouseEvent) => {',
+      '    count += 1',
+      '    const button = event.currentTarget as HTMLButtonElement',
+      '    button.textContent = `Clicks: ${count}`',
+      "    button.dataset.active = count % 2 === 0 ? 'false' : 'true'",
+      "    button.classList.toggle('is-even', count % 2 === 0)",
+      '  }',
+      '',
+      "  return <CounterButton label='Clicks: 0' onClick={handleClick} />",
+      '}',
+      '',
+    ].join('\n'),
+  })
+
+  await expect(page.getByRole('status', { name: 'App status' })).toHaveText('Rendered')
+  await expect(page.locator('#preview-host pre')).toHaveCount(0)
+})
+
 test('workspace graph errors for circular imports remain deterministic', async ({
   page,
 }) => {
@@ -902,6 +1091,8 @@ test('children runtime errors recover after module fix and mode switches', async
   await expect(page.locator('#preview-host pre')).toHaveCount(0)
   await expect(getPreviewFrame(page).getByText('hello children')).toBeVisible()
 
+  await openWorkspaceTab(page, 'App.tsx')
+  await ensurePanelToolsVisible(page, 'component')
   await page.getByRole('combobox', { name: 'Render mode' }).selectOption('react')
   await expect(page.getByRole('status', { name: 'App status' })).toHaveText('Rendered')
   await expect(page.locator('#preview-host pre')).toHaveCount(0)

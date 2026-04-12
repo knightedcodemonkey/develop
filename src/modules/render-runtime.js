@@ -14,9 +14,7 @@ export const createRenderRuntimeController = ({
   cdnImports,
   importFromCdnWithFallback,
   renderMode,
-  styleMode,
   isAutoRenderEnabled = () => false,
-  getCssSource,
   getJsxSource,
   getWorkspaceTabs,
   getPreviewHost,
@@ -56,6 +54,73 @@ export const createRenderRuntimeController = ({
   }
   let hasCompletedInitialRender = false
   const workspaceGraphCache = createPreviewWorkspaceGraphCache()
+  const styleTabLanguages = new Set(['css', 'less', 'sass', 'module'])
+  const stylePathPattern = /\.(?:css|less|sass|scss)$/i
+
+  const isStyleTab = tab => {
+    if (!tab || typeof tab !== 'object') {
+      return false
+    }
+
+    if (
+      typeof tab.language === 'string' &&
+      styleTabLanguages.has(tab.language.trim().toLowerCase())
+    ) {
+      return true
+    }
+
+    const identity =
+      typeof tab.path === 'string' && tab.path.trim().length > 0
+        ? tab.path
+        : typeof tab.name === 'string'
+          ? tab.name
+          : ''
+
+    return stylePathPattern.test(identity)
+  }
+
+  const toStyleDialectForTab = tab => {
+    if (!tab || typeof tab !== 'object') {
+      return 'css'
+    }
+
+    const language =
+      typeof tab.language === 'string' ? tab.language.trim().toLowerCase() : ''
+
+    if (language === 'less') {
+      return 'less'
+    }
+
+    if (language === 'sass') {
+      return 'sass'
+    }
+
+    if (language === 'module') {
+      return 'module'
+    }
+
+    const identity =
+      typeof tab.path === 'string' && tab.path.trim().length > 0
+        ? tab.path
+        : typeof tab.name === 'string'
+          ? tab.name
+          : ''
+    const normalizedIdentity = identity.trim().toLowerCase()
+
+    if (normalizedIdentity.endsWith('.less')) {
+      return 'less'
+    }
+
+    if (normalizedIdentity.endsWith('.sass') || normalizedIdentity.endsWith('.scss')) {
+      return 'sass'
+    }
+
+    if (normalizedIdentity.endsWith('.module.css')) {
+      return 'module'
+    }
+
+    return 'css'
+  }
 
   const setStyleCompiling = isCompiling => {
     const previewHost = getPreviewHost()
@@ -402,21 +467,113 @@ export const createRenderRuntimeController = ({
     }
   }
 
-  const compileStyles = async () => {
-    const { cssFromSource } = await ensureCoreRuntime()
-    const dialect = styleMode.value
-    const cssSource = getCssSource()
-    const cacheKey = `${dialect}\u0000${cssSource}`
+  const getWorkspaceTabsForPreview = () => {
+    const workspaceTabsSnapshot =
+      typeof getWorkspaceTabs === 'function' ? getWorkspaceTabs() : []
+
+    if (Array.isArray(workspaceTabsSnapshot) && workspaceTabsSnapshot.length > 0) {
+      return workspaceTabsSnapshot
+    }
+
+    return [
+      {
+        id: 'component',
+        name: 'App.tsx',
+        path: 'src/components/App.tsx',
+        language: 'javascript-jsx',
+        role: 'entry',
+        content: getJsxSource(),
+      },
+    ]
+  }
+
+  const resolveWorkspaceEntryTab = workspaceTabs => {
+    return (
+      resolvePreviewEntryTab(workspaceTabs) ??
+      workspaceTabs.find(tab => tab?.id === 'component') ??
+      workspaceTabs[0] ??
+      null
+    )
+  }
+
+  const compileStyles = async mode => {
+    const { cssFromSource, transformJsxSource } = await ensureCoreRuntime()
+    const workspaceTabs = getWorkspaceTabsForPreview()
+    const entryTab = resolveWorkspaceEntryTab(workspaceTabs)
+
+    if (!entryTab) {
+      clearStyleDiagnostics()
+      return { css: '', moduleExports: null }
+    }
+
+    const runtimeSpecifiers = getWorkspaceRuntimeSpecifiers()
+    const virtualModulePlan = planWorkspaceVirtualModules({
+      tabs: workspaceTabs,
+      entryTab,
+      transformJsxSource,
+      formatTransformDiagnosticsError,
+      workspaceGraphCache,
+      mode,
+      runtimeSpecifiers,
+    })
+
+    if (!virtualModulePlan) {
+      clearStyleDiagnostics()
+      return { css: '', moduleExports: null }
+    }
+
+    const workspaceTabById = new Map(
+      workspaceTabs
+        .filter(tab => tab && typeof tab === 'object' && typeof tab.id === 'string')
+        .map(tab => [tab.id, tab]),
+    )
+
+    const styleInputs = (
+      Array.isArray(virtualModulePlan.includedStyleTabIds)
+        ? virtualModulePlan.includedStyleTabIds
+        : []
+    )
+      .map(tabId => workspaceTabById.get(tabId))
+      .filter(tab => isStyleTab(tab))
+      .map(tab => {
+        const source = typeof tab.content === 'string' ? tab.content : ''
+        const dialect = toStyleDialectForTab(tab)
+        const fileName =
+          (typeof tab.path === 'string' && tab.path.trim()) ||
+          (typeof tab.name === 'string' && tab.name.trim()) ||
+          (dialect === 'less'
+            ? 'playground.less'
+            : dialect === 'sass'
+              ? 'playground.scss'
+              : dialect === 'module'
+                ? 'playground.module.css'
+                : 'playground.css')
+
+        return {
+          id: tab.id,
+          name:
+            typeof tab.name === 'string' && tab.name.trim() ? tab.name.trim() : tab.id,
+          source,
+          dialect,
+          fileName,
+        }
+      })
+
+    const cacheKey = [
+      mode,
+      ...styleInputs.map(
+        input =>
+          `${input.id}\u0000${input.dialect}\u0000${input.fileName}\u0000${input.source}`,
+      ),
+    ].join('\u0001')
+
     if (compiledStylesCache.key === cacheKey && compiledStylesCache.value) {
       return compiledStylesCache.value
     }
 
-    const shouldShowSpinner = dialect !== 'css'
-    setStyleCompiling(shouldShowSpinner)
-
-    if (!shouldShowSpinner) {
+    if (styleInputs.length === 0) {
       clearStyleDiagnostics()
-      const output = { css: cssSource, moduleExports: null }
+      const output = { css: '', moduleExports: null }
       compiledStylesCache = {
         key: cacheKey,
         value: output,
@@ -424,41 +581,81 @@ export const createRenderRuntimeController = ({
       return output
     }
 
+    const shouldShowSpinner = styleInputs.some(input => input.dialect !== 'css')
+    setStyleCompiling(shouldShowSpinner)
+
     try {
-      const options = {
-        dialect,
-        filename:
-          dialect === 'less'
-            ? 'playground.less'
-            : dialect === 'sass'
-              ? 'playground.scss'
-              : 'playground.module.css',
-      }
+      const needsSass = styleInputs.some(input => input.dialect === 'sass')
+      const needsLess = styleInputs.some(input => input.dialect === 'less')
+      const needsLightningCss = styleInputs.some(input => input.dialect === 'module')
+      const styleWarningLines = []
 
-      if (dialect === 'sass') {
-        options.sass = await ensureSassCompiler()
-      } else if (dialect === 'less') {
-        options.less = await ensureLessCompiler()
-      } else if (dialect === 'module') {
-        options.lightningcss = await ensureLightningCssWasm()
-      }
+      const [sass, less, lightningcss] = await Promise.all([
+        needsSass ? ensureSassCompiler() : Promise.resolve(null),
+        needsLess ? ensureLessCompiler() : Promise.resolve(null),
+        needsLightningCss ? ensureLightningCssWasm() : Promise.resolve(null),
+      ])
 
-      const result = await cssFromSource(cssSource, options)
-      if (!result.ok) {
-        throw new Error(result.error.message)
-      }
+      const compiledCssParts = await Promise.all(
+        styleInputs.map(async input => {
+          if (input.dialect === 'css') {
+            return input.source
+          }
 
-      const moduleExports = result.exports ?? null
-      const compiledCss =
-        dialect === 'module'
-          ? appendCssModuleLocalAliases(result.css, moduleExports)
-          : result.css
+          const options = {
+            dialect: input.dialect,
+            filename: input.fileName,
+          }
+
+          if (input.dialect === 'sass' && sass) {
+            options.sass = sass
+            options.sassOptions = {
+              logger: {
+                warn: message => {
+                  const normalized =
+                    typeof message === 'string' ? message.trim() : String(message)
+                  if (!normalized) {
+                    return
+                  }
+
+                  styleWarningLines.push(`[${input.name}] ${normalized}`)
+                },
+                debug: () => {
+                  /* Ignore Sass debug output in diagnostics. */
+                },
+              },
+            }
+          } else if (input.dialect === 'less' && less) {
+            options.less = less
+          } else if (input.dialect === 'module' && lightningcss) {
+            options.lightningcss = lightningcss
+          }
+
+          const result = await cssFromSource(input.source, options)
+          if (!result.ok) {
+            throw new Error(result.error.message)
+          }
+
+          const moduleExports = result.exports ?? null
+          return input.dialect === 'module'
+            ? appendCssModuleLocalAliases(result.css, moduleExports)
+            : result.css
+        }),
+      )
 
       const output = {
-        css: compiledCss,
-        moduleExports,
+        css: compiledCssParts.join('\n\n'),
+        moduleExports: null,
       }
-      clearStyleDiagnostics()
+      if (styleWarningLines.length > 0) {
+        setStyleDiagnosticsDetails({
+          headline: 'Style compilation warnings.',
+          lines: [...new Set(styleWarningLines)],
+          level: 'warning',
+        })
+      } else {
+        clearStyleDiagnostics()
+      }
       compiledStylesCache = {
         key: cacheKey,
         value: output,
@@ -579,26 +776,8 @@ export const createRenderRuntimeController = ({
   }
 
   const renderWorkspaceInIframe = async ({ mode, cssText }) => {
-    const workspaceTabsSnapshot =
-      typeof getWorkspaceTabs === 'function' ? getWorkspaceTabs() : []
-    const workspaceTabs =
-      Array.isArray(workspaceTabsSnapshot) && workspaceTabsSnapshot.length > 0
-        ? workspaceTabsSnapshot
-        : [
-            {
-              id: 'component',
-              name: 'App.tsx',
-              path: 'src/components/App.tsx',
-              language: 'javascript-jsx',
-              role: 'entry',
-              content: getJsxSource(),
-            },
-          ]
-
-    const entryTab =
-      resolvePreviewEntryTab(workspaceTabs) ??
-      workspaceTabs.find(tab => tab?.id === 'component') ??
-      workspaceTabs[0]
+    const workspaceTabs = getWorkspaceTabsForPreview()
+    const entryTab = resolveWorkspaceEntryTab(workspaceTabs)
 
     if (!entryTab) {
       throw new Error('Unable to resolve workspace preview entry tab.')
@@ -686,7 +865,7 @@ export const createRenderRuntimeController = ({
   }
 
   const renderDom = async () => {
-    const compiledStyles = await compileStyles()
+    const compiledStyles = await compileStyles('dom')
 
     if (!hasComponentSource()) {
       disposeIframeBridge()
@@ -703,7 +882,7 @@ export const createRenderRuntimeController = ({
   }
 
   const renderReact = async () => {
-    const compiledStyles = await compileStyles()
+    const compiledStyles = await compileStyles('react')
 
     if (!hasComponentSource()) {
       disposeIframeBridge()

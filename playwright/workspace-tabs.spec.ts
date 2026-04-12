@@ -1,6 +1,7 @@
 import { expect, test } from '@playwright/test'
 import {
   addWorkspaceTab,
+  ensurePanelToolsVisible,
   reorderWorkspaceTabBefore,
   setWorkspaceTabSource,
   waitForInitialRender,
@@ -146,6 +147,28 @@ test('active tab remains source of truth for visible editor panel', async ({ pag
   )
   await expect(stylesPanel).not.toHaveAttribute('hidden', '')
   await expect(componentPanel).toHaveAttribute('hidden', '')
+})
+
+test('render mode can only be changed from entry tab', async ({ page }) => {
+  await waitForInitialRender(page)
+
+  await addWorkspaceTab(page)
+  await ensurePanelToolsVisible(page, 'component')
+
+  const renderMode = page.getByRole('combobox', { name: 'Render mode' })
+
+  await page.getByRole('button', { name: 'Open tab App.tsx' }).click()
+  await expect(renderMode).toBeEnabled()
+  await renderMode.selectOption('react')
+  await expect(renderMode).toHaveValue('react')
+
+  await page.getByRole('button', { name: 'Open tab module.tsx' }).click()
+  await expect(renderMode).toBeDisabled()
+  await expect(renderMode).toHaveValue('react')
+
+  await page.getByRole('button', { name: 'Open tab App.tsx' }).click()
+  await expect(renderMode).toBeEnabled()
+  await expect(renderMode).toHaveValue('react')
 })
 
 test('startup restores last active workspace tab after reload', async ({ page }) => {

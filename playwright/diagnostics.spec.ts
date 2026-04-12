@@ -255,6 +255,23 @@ test('styles diagnostics rows navigate editor to reported line', async ({ page }
   await expect.poll(() => getActiveStylesEditorLineNumber(page)).toBe('3')
 })
 
+test('sass compiler warnings surface in styles diagnostics', async ({ page }) => {
+  await waitForInitialRender(page)
+
+  await ensurePanelToolsVisible(page, 'styles')
+  await page.getByRole('combobox', { name: 'Style mode' }).selectOption('sass')
+  await setStylesEditorSource(
+    page,
+    ['.card {', '  color: darken(#ff0000, 10%);', '}'].join('\n'),
+  )
+
+  await expect(page.getByRole('status', { name: 'App status' })).toHaveText('Rendered')
+  await ensureDiagnosticsDrawerOpen(page)
+  await expect(page.locator('#diagnostics-styles')).toContainText(
+    'Style compilation warnings.',
+  )
+})
+
 test('clear component diagnostics resets rendered lint-issue status pill', async ({
   page,
 }) => {

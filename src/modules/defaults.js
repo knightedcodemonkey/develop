@@ -1,4 +1,6 @@
 export const defaultJsx = [
+  "import '../styles/app.css'",
+  '',
   'type CounterButtonProps = {',
   '  label: string',
   '  onClick: (event: MouseEvent) => void',
