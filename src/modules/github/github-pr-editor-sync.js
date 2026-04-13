@@ -25,14 +25,14 @@ export const createGitHubPrEditorSyncController = ({
     const tabTargets = Array.isArray(syncTargets?.tabTargets)
       ? syncTargets.tabTargets
       : []
-    const componentPath = toSafeText(
+    const componentTabPath = toSafeText(
       tabTargets.find(target => toSafeText(target?.kind) === 'component')?.path,
     )
-    const stylesPath = toSafeText(
+    const stylesTabPath = toSafeText(
       tabTargets.find(target => toSafeText(target?.kind) === 'styles')?.path,
     )
 
-    if (!token || !owner || !repo || !branch || !componentPath || !stylesPath) {
+    if (!token || !owner || !repo || !branch || !componentTabPath || !stylesTabPath) {
       return {
         synced: false,
         componentSynced: false,
@@ -44,19 +44,19 @@ export const createGitHubPrEditorSyncController = ({
       token,
       owner,
       repo,
-      path: componentPath,
+      path: componentTabPath,
       ref: branch,
       signal,
     })
 
     const stylesRequest =
-      stylesPath === componentPath
+      stylesTabPath === componentTabPath
         ? componentRequest
         : getRepositoryFileContent({
             token,
             owner,
             repo,
-            path: stylesPath,
+            path: stylesTabPath,
             ref: branch,
             signal,
           })
@@ -90,7 +90,7 @@ export const createGitHubPrEditorSyncController = ({
       stylesSynced = true
     }
 
-    if (stylesPath === componentPath) {
+    if (stylesTabPath === componentTabPath) {
       stylesSynced = componentSynced
     }
 

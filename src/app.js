@@ -585,11 +585,8 @@ const getWorkspacePrFileCommits = () =>
 
 const getEditorSyncTargets = () => workspaceSyncController.getEditorSyncTargets()
 
-const reconcileWorkspaceTabsWithEditorSync = ({ componentPath, stylesPath } = {}) =>
-  workspaceSyncController.reconcileWorkspaceTabsWithEditorSync({
-    componentPath,
-    stylesPath,
-  })
+const reconcileWorkspaceTabsWithEditorSync = ({ tabTargets } = {}) =>
+  workspaceSyncController.reconcileWorkspaceTabsWithEditorSync({ tabTargets })
 
 const buildWorkspaceRecordSnapshot = ({ recordId } = {}) =>
   workspaceSyncController.buildWorkspaceRecordSnapshot({ recordId })
