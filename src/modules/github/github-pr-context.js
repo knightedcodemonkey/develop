@@ -40,8 +40,6 @@ export const formatActivePrReference = activeContext => {
 export const getActivePrContextSyncKey = activeContext => {
   const repositoryFullName = toSafeText(activeContext?.repositoryFullName)
   const headBranch = toSafeText(activeContext?.headBranch)
-  const componentFilePath = toSafeText(activeContext?.componentFilePath)
-  const stylesFilePath = toSafeText(activeContext?.stylesFilePath)
   const pullRequestNumber =
     typeof activeContext?.pullRequestNumber === 'number' &&
     Number.isFinite(activeContext.pullRequestNumber)
@@ -49,16 +47,9 @@ export const getActivePrContextSyncKey = activeContext => {
       : ''
   const pullRequestUrl = toSafeText(activeContext?.pullRequestUrl)
 
-  if (!repositoryFullName || !headBranch || !componentFilePath || !stylesFilePath) {
+  if (!repositoryFullName || !headBranch) {
     return ''
   }
 
-  return [
-    repositoryFullName,
-    headBranch,
-    componentFilePath,
-    stylesFilePath,
-    pullRequestNumber,
-    pullRequestUrl,
-  ].join('|')
+  return [repositoryFullName, headBranch, pullRequestNumber, pullRequestUrl].join('|')
 }

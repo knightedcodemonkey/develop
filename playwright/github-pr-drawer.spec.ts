@@ -968,8 +968,10 @@ test('Active PR context disconnect uses local-only confirmation flow', async ({
     localStorage.setItem(
       'knighted:develop:github-pr-config:knightedcodemonkey/develop',
       JSON.stringify({
-        syncComponentFilePath: 'src/components/App.tsx',
-        syncStylesFilePath: 'src/styles/app.css',
+        syncTabTargets: [
+          { kind: 'component', path: 'src/components/App.tsx' },
+          { kind: 'styles', path: 'src/styles/app.css' },
+        ],
         renderMode: 'react',
         baseBranch: 'main',
         headBranch: 'develop/open-pr-test',
@@ -1141,8 +1143,10 @@ test('Active PR context updates controls and can be closed from AI controls', as
     localStorage.setItem(
       'knighted:develop:github-pr-config:knightedcodemonkey/develop',
       JSON.stringify({
-        syncComponentFilePath: 'src/components/App.tsx',
-        syncStylesFilePath: 'src/styles/app.css',
+        syncTabTargets: [
+          { kind: 'component', path: 'src/components/App.tsx' },
+          { kind: 'styles', path: 'src/styles/app.css' },
+        ],
         renderMode: 'react',
         baseBranch: 'main',
         headBranch: 'develop/open-pr-test',
@@ -1231,8 +1235,10 @@ test('Active PR context is disabled on load when pull request is closed', async 
     localStorage.setItem(
       'knighted:develop:github-pr-config:knightedcodemonkey/develop',
       JSON.stringify({
-        syncComponentFilePath: 'src/components/App.tsx',
-        syncStylesFilePath: 'src/styles/app.css',
+        syncTabTargets: [
+          { kind: 'component', path: 'src/components/App.tsx' },
+          { kind: 'styles', path: 'src/styles/app.css' },
+        ],
         renderMode: 'react',
         baseBranch: 'main',
         headBranch: 'develop/open-pr-test',
@@ -1330,8 +1336,10 @@ test('Active PR context rehydrates after token remove and re-add', async ({ page
     localStorage.setItem(
       'knighted:develop:github-pr-config:knightedcodemonkey/css',
       JSON.stringify({
-        syncComponentFilePath: 'src/components/App.tsx',
-        syncStylesFilePath: 'src/styles/app.css',
+        syncTabTargets: [
+          { kind: 'component', path: 'src/components/App.tsx' },
+          { kind: 'styles', path: 'src/styles/app.css' },
+        ],
         renderMode: 'react',
         baseBranch: 'main',
         headBranch: 'css/rehydrate-test',
@@ -1441,8 +1449,10 @@ test('Active PR context deactivates after token remove and re-add when PR is clo
     localStorage.setItem(
       'knighted:develop:github-pr-config:knightedcodemonkey/css',
       JSON.stringify({
-        syncComponentFilePath: 'src/components/App.tsx',
-        syncStylesFilePath: 'src/styles/app.css',
+        syncTabTargets: [
+          { kind: 'component', path: 'src/components/App.tsx' },
+          { kind: 'styles', path: 'src/styles/app.css' },
+        ],
         renderMode: 'react',
         baseBranch: 'main',
         headBranch: 'css/rehydrate-test',
@@ -1555,8 +1565,10 @@ test('Active PR context recovers when saved head branch is missing but PR metada
     localStorage.setItem(
       'knighted:develop:github-pr-config:knightedcodemonkey/develop',
       JSON.stringify({
-        syncComponentFilePath: 'src/components/App.tsx',
-        syncStylesFilePath: 'src/styles/app.css',
+        syncTabTargets: [
+          { kind: 'component', path: 'src/components/App.tsx' },
+          { kind: 'styles', path: 'src/styles/app.css' },
+        ],
         renderMode: 'react',
         baseBranch: 'main',
         headBranch: '',
@@ -1699,8 +1711,10 @@ test('Active PR context uses Push commit flow without creating a new pull reques
     localStorage.setItem(
       'knighted:develop:github-pr-config:knightedcodemonkey/develop',
       JSON.stringify({
-        syncComponentFilePath: 'src/components/App.tsx',
-        syncStylesFilePath: 'src/styles/app.css',
+        syncTabTargets: [
+          { kind: 'component', path: 'src/components/App.tsx' },
+          { kind: 'styles', path: 'src/styles/app.css' },
+        ],
         renderMode: 'react',
         baseBranch: 'main',
         headBranch: 'develop/open-pr-test',
@@ -1936,8 +1950,10 @@ test('Active PR context push commit uses Git Database API atomic path by default
     localStorage.setItem(
       'knighted:develop:github-pr-config:knightedcodemonkey/develop',
       JSON.stringify({
-        syncComponentFilePath: 'src/components/App.tsx',
-        syncStylesFilePath: 'src/styles/app.css',
+        syncTabTargets: [
+          { kind: 'component', path: 'src/components/App.tsx' },
+          { kind: 'styles', path: 'src/styles/app.css' },
+        ],
         renderMode: 'react',
         baseBranch: 'main',
         headBranch: 'develop/open-pr-test',
@@ -2098,8 +2114,10 @@ test('Reloaded active PR context from URL metadata keeps Push mode and status re
     localStorage.setItem(
       'knighted:develop:github-pr-config:knightedcodemonkey/develop',
       JSON.stringify({
-        syncComponentFilePath: 'src/components/App.tsx',
-        syncStylesFilePath: 'src/styles/app.css',
+        syncTabTargets: [
+          { kind: 'component', path: 'src/components/App.tsx' },
+          { kind: 'styles', path: 'src/styles/app.css' },
+        ],
         renderMode: 'react',
         baseBranch: 'main',
         headBranch: 'develop/open-pr-test',
@@ -2241,8 +2259,10 @@ test('Reloaded active PR context syncs editor content from GitHub branch and res
     localStorage.setItem(
       'knighted:develop:github-pr-config:knightedcodemonkey/develop',
       JSON.stringify({
-        syncComponentFilePath: 'src/components/App.tsx',
-        syncStylesFilePath: 'src/styles/app.css',
+        syncTabTargets: [
+          { kind: 'component', path: 'src/components/App.tsx' },
+          { kind: 'styles', path: 'src/styles/app.css' },
+        ],
         renderMode: 'react',
         styleMode: 'sass',
         baseBranch: 'main',
@@ -2326,8 +2346,10 @@ test('Reloaded active PR context falls back to css style mode for unsupported va
     localStorage.setItem(
       'knighted:develop:github-pr-config:knightedcodemonkey/develop',
       JSON.stringify({
-        syncComponentFilePath: 'src/components/App.tsx',
-        syncStylesFilePath: 'src/styles/app.css',
+        syncTabTargets: [
+          { kind: 'component', path: 'src/components/App.tsx' },
+          { kind: 'styles', path: 'src/styles/app.css' },
+        ],
         renderMode: 'react',
         styleMode: 'scss',
         baseBranch: 'main',

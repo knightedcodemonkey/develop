@@ -1470,10 +1470,6 @@ export const createEditorContentPullRequest = async ({
   prTitle,
   prBody,
   fileUpdates,
-  componentFilePath,
-  componentSource,
-  stylesFilePath,
-  stylesSource,
   commitMessage,
   signal,
 }) => {
@@ -1506,10 +1502,6 @@ export const createEditorContentPullRequest = async ({
     repository,
     branch: nextBranch,
     fileUpdates,
-    componentFilePath,
-    componentSource,
-    stylesFilePath,
-    stylesSource,
     commitMessage,
     signal,
   })
@@ -1537,10 +1529,6 @@ export const commitEditorContentToExistingBranch = async ({
   repository,
   branch,
   fileUpdates,
-  componentFilePath,
-  componentSource,
-  stylesFilePath,
-  stylesSource,
   commitMessage,
   signal,
 }) => {
@@ -1555,26 +1543,16 @@ export const commitEditorContentToExistingBranch = async ({
     throw new Error('An existing head branch is required.')
   }
 
-  const files =
-    Array.isArray(fileUpdates) && fileUpdates.length > 0
-      ? fileUpdates
-      : [
-          {
-            path: componentFilePath,
-            content: componentSource,
-          },
-          {
-            path: stylesFilePath,
-            content: stylesSource,
-          },
-        ]
+  if (!Array.isArray(fileUpdates) || fileUpdates.length === 0) {
+    throw new Error('At least one file update is required.')
+  }
 
   return commitFilesToExistingBranchWithGitDatabaseApi({
     token,
     owner,
     repo,
     branch,
-    files,
+    files: fileUpdates,
     commitMessage,
     signal,
   })

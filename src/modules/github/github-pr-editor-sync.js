@@ -12,14 +12,27 @@ export const createGitHubPrEditorSyncController = ({
   const setStyles = typeof setStylesSource === 'function' ? setStylesSource : () => {}
   const schedule = typeof scheduleRender === 'function' ? scheduleRender : () => {}
 
-  const syncFromActiveContext = async ({ token, repository, activeContext, signal }) => {
+  const syncFromActiveContext = async ({
+    token,
+    repository,
+    activeContext,
+    syncTargets,
+    signal,
+  }) => {
     const owner = toSafeText(repository?.owner)
     const repo = toSafeText(repository?.name)
     const branch = toSafeText(activeContext?.headBranch)
-    const componentFilePath = toSafeText(activeContext?.componentFilePath)
-    const stylesFilePath = toSafeText(activeContext?.stylesFilePath)
+    const tabTargets = Array.isArray(syncTargets?.tabTargets)
+      ? syncTargets.tabTargets
+      : []
+    const componentTabPath = toSafeText(
+      tabTargets.find(target => toSafeText(target?.kind) === 'component')?.path,
+    )
+    const stylesTabPath = toSafeText(
+      tabTargets.find(target => toSafeText(target?.kind) === 'styles')?.path,
+    )
 
-    if (!token || !owner || !repo || !branch || !componentFilePath || !stylesFilePath) {
+    if (!token || !owner || !repo || !branch || !componentTabPath || !stylesTabPath) {
       return {
         synced: false,
         componentSynced: false,
@@ -31,19 +44,19 @@ export const createGitHubPrEditorSyncController = ({
       token,
       owner,
       repo,
-      path: componentFilePath,
+      path: componentTabPath,
       ref: branch,
       signal,
     })
 
     const stylesRequest =
-      stylesFilePath === componentFilePath
+      stylesTabPath === componentTabPath
         ? componentRequest
         : getRepositoryFileContent({
             token,
             owner,
             repo,
-            path: stylesFilePath,
+            path: stylesTabPath,
             ref: branch,
             signal,
           })
@@ -77,7 +90,7 @@ export const createGitHubPrEditorSyncController = ({
       stylesSynced = true
     }
 
-    if (stylesFilePath === componentFilePath) {
+    if (stylesTabPath === componentTabPath) {
       stylesSynced = componentSynced
     }
 

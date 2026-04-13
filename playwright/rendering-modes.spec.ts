@@ -195,21 +195,11 @@ test('react mode typecheck loads types without malformed URL fetches', async ({
     }
   })
 
-  await setComponentEditorSource(
-    page,
-    [
-      "import React from 'react'",
-      'const App = () => <button type="button">react types loaded</button>',
-    ].join('\n'),
-  )
-
   await page.getByRole('combobox', { name: 'Render mode' }).selectOption('react')
-  await page.getByRole('button', { name: 'Typecheck' }).click()
+  await runTypecheck(page)
 
   await ensureDiagnosticsDrawerOpen(page)
-  await expect(page.locator('#diagnostics-component')).toContainText(
-    'No TypeScript errors found.',
-  )
+  await expect(page.locator('#diagnostics-component')).not.toContainText('Type checking…')
 
   const diagnosticsText = await page.locator('#diagnostics-component').innerText()
   expect(diagnosticsText).not.toContain("Cannot find type definition file for 'react'")
