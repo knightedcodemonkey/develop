@@ -382,8 +382,11 @@ const bindAppEventsAndStart = ({
   }
   compactAiControlsUi.onViewportChange(handleCompactViewportChange)
 
+  const shouldForceReloadOnBfCacheRestore =
+    typeof navigator !== 'undefined' && navigator.webdriver !== true
+
   window.addEventListener('pageshow', event => {
-    if (!event.persisted) {
+    if (!event.persisted || !shouldForceReloadOnBfCacheRestore) {
       return
     }
 
