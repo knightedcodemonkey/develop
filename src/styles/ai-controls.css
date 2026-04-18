@@ -351,11 +351,23 @@
   gap: 6px;
   margin-left: 2px;
   --workspaces-toggle-color: color-mix(in srgb, #60a5fa 84%, var(--panel-text));
+  --workspaces-toggle-color-disabled: color-mix(
+    in srgb,
+    var(--text-muted) 82%,
+    var(--panel-text)
+  );
   color: color-mix(in srgb, var(--panel-text) 84%, var(--text-subtle));
 }
 
 .diagnostics-toggle.workspaces-toggle:hover:not(:disabled) {
   color: var(--workspaces-toggle-color);
+}
+
+.diagnostics-toggle.workspaces-toggle:disabled {
+  opacity: 0.64;
+  cursor: not-allowed;
+  --workspaces-toggle-color: var(--workspaces-toggle-color-disabled);
+  color: color-mix(in srgb, var(--text-muted) 82%, var(--panel-text));
 }
 
 .workspaces-toggle__icon {
