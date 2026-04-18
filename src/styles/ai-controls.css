@@ -350,21 +350,22 @@
   align-items: center;
   gap: 6px;
   margin-left: 2px;
+  --workspaces-toggle-color: color-mix(in srgb, #60a5fa 84%, var(--panel-text));
   color: color-mix(in srgb, var(--panel-text) 84%, var(--text-subtle));
 }
 
 .diagnostics-toggle.workspaces-toggle:hover:not(:disabled) {
-  color: color-mix(in srgb, var(--accent) 82%, var(--panel-text));
+  color: var(--workspaces-toggle-color);
 }
 
 .workspaces-toggle__icon {
   width: 16px;
   height: 16px;
-  fill: currentColor;
+  fill: var(--workspaces-toggle-color);
 }
 
 .workspaces-toggle__icon path {
-  fill: currentColor;
+  fill: var(--workspaces-toggle-color);
 }
 
 .github-pr-context-close {
