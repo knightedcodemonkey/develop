@@ -281,6 +281,14 @@ const normalizeFileCommits = fileCommits => {
   }
 }
 
+const ensureTrailingNewline = value => {
+  if (typeof value !== 'string' || value.length === 0 || value.endsWith('\n')) {
+    return value
+  }
+
+  return `${value}\n`
+}
+
 const sanitizeBranchPart = value => {
   const trimmed = toSafeText(value)
   if (!trimmed) {
@@ -1166,7 +1174,7 @@ export const createGitHubPrDrawer = ({
     }
 
     if (includeAppWrapperToggle instanceof HTMLInputElement) {
-      includeAppWrapperToggle.checked = false
+      includeAppWrapperToggle.checked = true
     }
 
     lastSyncedRepositoryFullName = repositoryFullName
@@ -1331,7 +1339,9 @@ export const createGitHubPrDrawer = ({
         : false
 
     const { fileCommits: normalizedFileCommits, invalidPaths } = normalizeFileCommits(
-      typeof getFileCommits === 'function' ? getFileCommits() : [],
+      typeof getFileCommits === 'function'
+        ? getFileCommits({ includeAllWorkspaceFiles: !isPushCommitMode })
+        : [],
     )
 
     if (invalidPaths.length > 0) {
@@ -1354,7 +1364,12 @@ export const createGitHubPrDrawer = ({
     }
 
     if (normalizedFileCommits.length === 0) {
-      setStatus('No workspace files are available to commit.', 'error')
+      setStatus(
+        isPushCommitMode
+          ? 'No local editor changes to push.'
+          : 'No workspace files are available to commit.',
+        isPushCommitMode ? 'neutral' : 'error',
+      )
       return
     }
 
@@ -1396,12 +1411,13 @@ export const createGitHubPrDrawer = ({
     const fileUpdates = await Promise.all(
       normalizedFileCommits.map(async fileCommit => {
         const shouldStripEntryWrapper = !includeAppWrapper && fileCommit.isEntry
-        const content = shouldStripEntryWrapper
+        const nextContent = shouldStripEntryWrapper
           ? await stripTopLevelAppWrapper({
               source: fileCommit.content,
               getTopLevelDeclarations,
             })
           : fileCommit.content
+        const content = ensureTrailingNewline(nextContent)
 
         return {
           path: fileCommit.path,

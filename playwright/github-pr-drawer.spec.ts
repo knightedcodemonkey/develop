@@ -5,6 +5,7 @@ import type {
   PullRequestCreateBody,
 } from './helpers/app-test-helpers.js'
 import {
+  addWorkspaceTab,
   appEntryPath,
   connectByotWithSingleRepo,
   ensureOpenPrDrawerOpen,
@@ -145,6 +146,71 @@ const getLocalContextOptionLabels = async (page: Page) => {
     .getByLabel('Stored local editor contexts')
     .locator('option')
     .evaluateAll(nodes => nodes.map(node => node.textContent?.trim() || ''))
+}
+
+const getWorkspaceTabsRecord = async (
+  page: Page,
+  { headBranch = '' }: { headBranch?: string } = {},
+) => {
+  return page.evaluate(
+    async input => {
+      const request = indexedDB.open('knighted-develop-workspaces')
+
+      const db = await new Promise<IDBDatabase>((resolve, reject) => {
+        request.onsuccess = () => resolve(request.result)
+        request.onerror = () => reject(request.error)
+        request.onblocked = () => reject(new Error('Could not open IndexedDB.'))
+      })
+
+      try {
+        const tx = db.transaction('prWorkspaces', 'readonly')
+        const store = tx.objectStore('prWorkspaces')
+        const getAllRequest = store.getAll()
+
+        const records = await new Promise<Array<Record<string, unknown>>>(
+          (resolve, reject) => {
+            getAllRequest.onsuccess = () => {
+              const value = Array.isArray(getAllRequest.result)
+                ? getAllRequest.result
+                : []
+              resolve(value as Array<Record<string, unknown>>)
+            }
+            getAllRequest.onerror = () => reject(getAllRequest.error)
+          },
+        )
+
+        const normalizedHead =
+          typeof input?.headBranch === 'string'
+            ? input.headBranch.trim().toLowerCase()
+            : ''
+
+        if (normalizedHead) {
+          const matched = records.find(record => {
+            const headValue =
+              typeof record?.head === 'string' ? record.head.trim().toLowerCase() : ''
+            return headValue === normalizedHead
+          })
+
+          if (matched) {
+            return matched
+          }
+        }
+
+        const sortedByLastModified = [...records].sort((left, right) => {
+          const leftModified =
+            typeof left?.lastModified === 'number' ? left.lastModified : 0
+          const rightModified =
+            typeof right?.lastModified === 'number' ? right.lastModified : 0
+          return rightModified - leftModified
+        })
+
+        return sortedByLastModified[0] ?? null
+      } finally {
+        db.close()
+      }
+    },
+    { headBranch },
+  )
 }
 
 test('Open PR drawer confirms and submits component/styles filepaths', async ({
@@ -337,6 +403,208 @@ test('Open PR drawer confirms and submits component/styles filepaths', async ({
   await expect(
     page.getByRole('button', { name: 'Close active pull request context' }),
   ).toBeVisible()
+})
+
+test('Open PR success normalizes trailing newline without showing Edited indicators', async ({
+  page,
+}) => {
+  const treeRequests: Array<Record<string, unknown>> = []
+
+  await page.route('https://api.github.com/user/repos**', async route => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify([
+        {
+          id: 11,
+          owner: { login: 'knightedcodemonkey' },
+          name: 'develop',
+          full_name: 'knightedcodemonkey/develop',
+          default_branch: 'main',
+          permissions: { push: true },
+        },
+      ]),
+    })
+  })
+
+  await mockRepositoryBranches(page, {
+    'knightedcodemonkey/develop': ['main', 'release'],
+  })
+
+  await page.route(
+    'https://api.github.com/repos/knightedcodemonkey/develop/git/ref/**',
+    async route => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          ref: 'refs/heads/main',
+          object: { type: 'commit', sha: 'abc123mainsha' },
+        }),
+      })
+    },
+  )
+
+  await page.route(
+    'https://api.github.com/repos/knightedcodemonkey/develop/git/commits/abc123mainsha',
+    async route => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          sha: 'abc123mainsha',
+          tree: { sha: 'base-tree-sha' },
+        }),
+      })
+    },
+  )
+
+  await page.route(
+    'https://api.github.com/repos/knightedcodemonkey/develop/git/trees',
+    async route => {
+      treeRequests.push(route.request().postDataJSON() as Record<string, unknown>)
+      await route.fulfill({
+        status: 201,
+        contentType: 'application/json',
+        body: JSON.stringify({ sha: 'new-tree-sha' }),
+      })
+    },
+  )
+
+  await page.route(
+    'https://api.github.com/repos/knightedcodemonkey/develop/git/commits',
+    async route => {
+      await route.fulfill({
+        status: 201,
+        contentType: 'application/json',
+        body: JSON.stringify({ sha: 'new-commit-sha' }),
+      })
+    },
+  )
+
+  await page.route(
+    'https://api.github.com/repos/knightedcodemonkey/develop/git/refs/**',
+    async route => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ ref: 'refs/heads/Develop/Open-Pr-Test' }),
+      })
+    },
+  )
+
+  await page.route(
+    'https://api.github.com/repos/knightedcodemonkey/develop/git/refs',
+    async route => {
+      await route.fulfill({
+        status: 201,
+        contentType: 'application/json',
+        body: JSON.stringify({ ref: 'refs/heads/develop/open-pr-test' }),
+      })
+    },
+  )
+
+  await page.route(
+    'https://api.github.com/repos/knightedcodemonkey/develop/contents/**',
+    async route => {
+      await route.fulfill({
+        status: 404,
+        contentType: 'application/json',
+        body: JSON.stringify({ message: 'Not Found' }),
+      })
+    },
+  )
+
+  await page.route(
+    'https://api.github.com/repos/knightedcodemonkey/develop/pulls',
+    async route => {
+      await route.fulfill({
+        status: 201,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          number: 62,
+          html_url: 'https://github.com/knightedcodemonkey/develop/pull/62',
+        }),
+      })
+    },
+  )
+
+  await waitForAppReady(page, `${appEntryPath}`)
+  await connectByotWithSingleRepo(page)
+
+  await setComponentEditorSource(page, 'const App = () => <button>tap me</button>')
+  await setStylesEditorSource(page, '.button { color: red; }')
+
+  await ensureOpenPrDrawerOpen(page)
+  await page.getByLabel('Head').fill('Develop/Open-Pr-Test')
+  await page.getByLabel('PR title').fill('Normalize trailing newline after open PR')
+
+  await submitOpenPrAndConfirm(page)
+
+  await expect(
+    page.getByRole('status', { name: 'Open pull request status', includeHidden: true }),
+  ).toContainText(
+    'Pull request opened: https://github.com/knightedcodemonkey/develop/pull/62',
+  )
+
+  await expect
+    .poll(
+      async () => {
+        const workspaceRecord = await getWorkspaceTabsRecord(page, {
+          headBranch: 'Develop/Open-Pr-Test',
+        })
+        const tabs = Array.isArray(workspaceRecord?.tabs)
+          ? (workspaceRecord.tabs as Array<Record<string, unknown>>)
+          : []
+
+        const componentTab = tabs.find(tab => tab?.id === 'component')
+        const stylesTab = tabs.find(tab => tab?.id === 'styles')
+
+        const componentContent =
+          typeof componentTab?.content === 'string' ? componentTab.content : ''
+        const stylesContent =
+          typeof stylesTab?.content === 'string' ? stylesTab.content : ''
+
+        return {
+          componentHasTrailingNewline: componentContent.endsWith('\n'),
+          stylesHasTrailingNewline: stylesContent.endsWith('\n'),
+          componentNotDirty: componentTab?.isDirty === false,
+          stylesNotDirty: stylesTab?.isDirty === false,
+          componentSynced: componentTab?.syncedContent === componentContent,
+          stylesSynced: stylesTab?.syncedContent === stylesContent,
+        }
+      },
+      { timeout: 10_000 },
+    )
+    .toEqual({
+      componentHasTrailingNewline: true,
+      stylesHasTrailingNewline: true,
+      componentNotDirty: true,
+      stylesNotDirty: true,
+      componentSynced: true,
+      stylesSynced: true,
+    })
+
+  await expect(
+    page
+      .getByRole('listitem', { name: 'Workspace tab App.tsx' })
+      .locator('.workspace-tab__dirty-indicator'),
+  ).toHaveCount(0)
+  await expect(
+    page
+      .getByRole('listitem', { name: 'Workspace tab app.css' })
+      .locator('.workspace-tab__dirty-indicator'),
+  ).toHaveCount(0)
+  await expect(page.locator('#component-dirty-status')).toBeHidden()
+  await expect(page.locator('#styles-dirty-status')).toBeHidden()
+
+  const treePayload = treeRequests[0]?.tree as Array<Record<string, unknown>>
+  const componentBlob = treePayload?.find(file => file.path === 'src/components/App.tsx')
+  const stylesBlob = treePayload?.find(file => file.path === 'src/styles/app.css')
+  expect(typeof componentBlob?.content).toBe('string')
+  expect(typeof stylesBlob?.content).toBe('string')
+  expect(String(componentBlob?.content).endsWith('\n')).toBe(true)
+  expect(String(stylesBlob?.content).endsWith('\n')).toBe(true)
 })
 
 test('Open PR drawer can filter stored local contexts by search', async ({ page }) => {
@@ -1734,17 +2002,13 @@ test('Active PR context uses Push commit flow without creating a new pull reques
   await expect(page.getByLabel('Pull request base branch')).toBeDisabled()
   await expect(page.getByLabel('Head')).toHaveJSProperty('readOnly', true)
   await expect(page.getByLabel('PR title')).toHaveJSProperty('readOnly', true)
-  await expect(
-    page.getByLabel('Include entry tab source in committed output'),
-  ).toBeEnabled()
+  await expect(page.getByLabel('Include entry tab')).toBeEnabled()
   await expect(page.getByLabel('Commit message')).toBeEditable()
 
   await expect(page.getByLabel('PR description')).toBeHidden()
   await expect(page.getByLabel('Commit message')).toBeVisible()
 
-  const includeWrapperToggle = page.getByLabel(
-    'Include entry tab source in committed output',
-  )
+  const includeWrapperToggle = page.getByLabel('Include entry tab')
   await expect(includeWrapperToggle).toBeEnabled()
   await includeWrapperToggle.check()
   await expect(includeWrapperToggle).toBeChecked()
@@ -1784,6 +2048,262 @@ test('Active PR context uses Push commit flow without creating a new pull reques
   expect(createRefRequestCount).toBe(0)
   expect(pullRequestRequestCount).toBe(0)
   expect(contentsPutRequests).toHaveLength(0)
+})
+
+test('Active PR context push with no local changes shows neutral status', async ({
+  page,
+}) => {
+  const updateRefRequests: Array<Record<string, unknown>> = []
+
+  await page.route('https://api.github.com/user/repos**', async route => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify([
+        {
+          id: 11,
+          owner: { login: 'knightedcodemonkey' },
+          name: 'develop',
+          full_name: 'knightedcodemonkey/develop',
+          default_branch: 'main',
+          permissions: { push: true },
+        },
+      ]),
+    })
+  })
+
+  await mockRepositoryBranches(page, {
+    'knightedcodemonkey/develop': ['main', 'release', 'develop/open-pr-test'],
+  })
+
+  await page.route(
+    'https://api.github.com/repos/knightedcodemonkey/develop/pulls/2',
+    async route => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          number: 2,
+          state: 'open',
+          title: 'Existing PR context from storage',
+          html_url: 'https://github.com/knightedcodemonkey/develop/pull/2',
+          head: { ref: 'develop/open-pr-test' },
+          base: { ref: 'main' },
+        }),
+      })
+    },
+  )
+
+  await page.route(
+    'https://api.github.com/repos/knightedcodemonkey/develop/git/ref/**',
+    async route => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          ref: 'refs/heads/develop/open-pr-test',
+          object: { type: 'commit', sha: 'existing-head-sha' },
+        }),
+      })
+    },
+  )
+
+  await page.route(
+    'https://api.github.com/repos/knightedcodemonkey/develop/git/commits/existing-head-sha',
+    async route => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          sha: 'existing-head-sha',
+          tree: { sha: 'base-tree-sha' },
+        }),
+      })
+    },
+  )
+
+  await page.route(
+    'https://api.github.com/repos/knightedcodemonkey/develop/git/trees',
+    async route => {
+      await route.fulfill({
+        status: 201,
+        contentType: 'application/json',
+        body: JSON.stringify({ sha: 'new-tree-sha' }),
+      })
+    },
+  )
+
+  await page.route(
+    'https://api.github.com/repos/knightedcodemonkey/develop/git/commits',
+    async route => {
+      await route.fulfill({
+        status: 201,
+        contentType: 'application/json',
+        body: JSON.stringify({ sha: 'new-commit-sha' }),
+      })
+    },
+  )
+
+  await page.route(
+    'https://api.github.com/repos/knightedcodemonkey/develop/git/refs/**',
+    async route => {
+      if (route.request().method() === 'PATCH') {
+        updateRefRequests.push(route.request().postDataJSON() as Record<string, unknown>)
+      }
+
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ ref: 'refs/heads/develop/open-pr-test' }),
+      })
+    },
+  )
+
+  await page.route(
+    'https://api.github.com/repos/knightedcodemonkey/develop/contents/**',
+    async route => {
+      await route.fulfill({
+        status: 404,
+        contentType: 'application/json',
+        body: JSON.stringify({ message: 'Not Found' }),
+      })
+    },
+  )
+
+  await waitForAppReady(page, `${appEntryPath}`)
+
+  await page.evaluate(() => {
+    localStorage.setItem(
+      'knighted:develop:github-pr-config:knightedcodemonkey/develop',
+      JSON.stringify({
+        syncTabTargets: [
+          { kind: 'component', path: 'src/components/App.tsx' },
+          { kind: 'styles', path: 'src/styles/app.css' },
+        ],
+        renderMode: 'react',
+        baseBranch: 'main',
+        headBranch: 'develop/open-pr-test',
+        prTitle: 'Existing PR context from storage',
+        prBody: 'Saved body',
+        isActivePr: true,
+        pullRequestNumber: 2,
+        pullRequestUrl: 'https://github.com/knightedcodemonkey/develop/pull/2',
+      }),
+    )
+  })
+
+  await connectByotWithSingleRepo(page)
+  await ensureOpenPrDrawerOpen(page)
+
+  await setComponentEditorSource(page, 'const commitMarker = 2')
+  await ensureOpenPrDrawerOpen(page)
+
+  await page.getByRole('button', { name: 'Push commit' }).last().click()
+  const dialog = page.getByRole('dialog')
+  await expect(dialog).toBeVisible()
+  await dialog.getByRole('button', { name: 'Push commit' }).click()
+
+  await expect(
+    page.getByRole('status', { name: 'Open pull request status', includeHidden: true }),
+  ).toContainText('Commit pushed to develop/open-pr-test')
+  expect(updateRefRequests).toHaveLength(1)
+
+  await ensureOpenPrDrawerOpen(page)
+
+  await page.getByRole('button', { name: 'Push commit' }).last().click()
+
+  await expect(
+    page.getByRole('status', { name: 'Open pull request status', includeHidden: true }),
+  ).toContainText('No local editor changes to push.')
+  await expect(page.locator('#clear-confirm-dialog')).toBeHidden()
+})
+
+test('New workspace tabs show Edited indicator in active PR context', async ({
+  page,
+}) => {
+  await page.route('https://api.github.com/user/repos**', async route => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify([
+        {
+          id: 11,
+          owner: { login: 'knightedcodemonkey' },
+          name: 'develop',
+          full_name: 'knightedcodemonkey/develop',
+          default_branch: 'main',
+          permissions: { push: true },
+        },
+      ]),
+    })
+  })
+
+  await mockRepositoryBranches(page, {
+    'knightedcodemonkey/develop': ['main', 'release', 'develop/open-pr-test'],
+  })
+
+  await page.route(
+    'https://api.github.com/repos/knightedcodemonkey/develop/pulls/2',
+    async route => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          number: 2,
+          state: 'open',
+          title: 'Existing PR context from storage',
+          html_url: 'https://github.com/knightedcodemonkey/develop/pull/2',
+          head: { ref: 'develop/open-pr-test' },
+          base: { ref: 'main' },
+        }),
+      })
+    },
+  )
+
+  await page.route(
+    'https://api.github.com/repos/knightedcodemonkey/develop/git/ref/**',
+    async route => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          ref: 'refs/heads/develop/open-pr-test',
+          object: { type: 'commit', sha: 'existing-head-sha' },
+        }),
+      })
+    },
+  )
+
+  await waitForAppReady(page, `${appEntryPath}`)
+
+  await page.evaluate(() => {
+    localStorage.setItem(
+      'knighted:develop:github-pr-config:knightedcodemonkey/develop',
+      JSON.stringify({
+        syncTabTargets: [
+          { kind: 'component', path: 'src/components/App.tsx' },
+          { kind: 'styles', path: 'src/styles/app.css' },
+        ],
+        renderMode: 'react',
+        baseBranch: 'main',
+        headBranch: 'develop/open-pr-test',
+        prTitle: 'Existing PR context from storage',
+        prBody: 'Saved body',
+        isActivePr: true,
+        pullRequestNumber: 2,
+        pullRequestUrl: 'https://github.com/knightedcodemonkey/develop/pull/2',
+      }),
+    )
+  })
+
+  await connectByotWithSingleRepo(page)
+  await addWorkspaceTab(page)
+
+  await expect(
+    page
+      .getByRole('listitem', { name: 'Workspace tab module.tsx' })
+      .locator('.workspace-tab__dirty-indicator'),
+  ).toHaveCount(1)
 })
 
 test('Active PR context push commit uses Git Database API atomic path by default', async ({
@@ -2393,28 +2913,26 @@ test('Open PR drawer confirmation does not report path traversal errors', async 
   ).not.toContainText('File path cannot include parent directory traversal.')
 })
 
-test('Open PR drawer include App wrapper checkbox defaults off and resets on reopen', async ({
+test('Open PR drawer include entry tab checkbox defaults on and resets on reopen', async ({
   page,
 }) => {
   await waitForAppReady(page, `${appEntryPath}`)
   await connectByotWithSingleRepo(page)
   await ensureOpenPrDrawerOpen(page)
 
-  const includeWrapperToggle = page.getByLabel(
-    'Include entry tab source in committed output',
-  )
-  await expect(includeWrapperToggle).not.toBeChecked()
-
-  await includeWrapperToggle.check()
+  const includeWrapperToggle = page.getByLabel('Include entry tab')
   await expect(includeWrapperToggle).toBeChecked()
+
+  await includeWrapperToggle.uncheck()
+  await expect(includeWrapperToggle).not.toBeChecked()
 
   await page.getByRole('button', { name: 'Close open pull request drawer' }).click()
   await ensureOpenPrDrawerOpen(page)
 
-  await expect(includeWrapperToggle).not.toBeChecked()
+  await expect(includeWrapperToggle).toBeChecked()
 })
 
-test('Open PR drawer strips App wrapper from committed component source by default', async ({
+test('Open PR drawer includes App wrapper in committed component source by default', async ({
   page,
 }) => {
   const treeRequests: Array<Record<string, unknown>> = []
@@ -2550,7 +3068,7 @@ test('Open PR drawer strips App wrapper from committed component source by defau
   await ensureOpenPrDrawerOpen(page)
 
   await page.getByLabel('Head').fill('develop/repo/editor-sync-without-app')
-  await page.getByLabel('PR title').fill('Strip App wrapper by default')
+  await page.getByLabel('PR title').fill('Include App wrapper by default')
   await submitOpenPrAndConfirm(page)
 
   await expect(
@@ -2562,13 +3080,13 @@ test('Open PR drawer strips App wrapper from committed component source by defau
   const treePayload = treeRequests[0]?.tree as Array<Record<string, unknown>>
   const componentBlob = treePayload?.find(file => file.path === 'src/components/App.tsx')
   expect(componentBlob?.content).toEqual(expect.any(String))
-  const strippedComponentSource = String(componentBlob?.content)
+  const fullComponentSource = String(componentBlob?.content)
 
-  expect(strippedComponentSource).toContain('const CounterButton = () =>')
-  expect(strippedComponentSource).not.toContain('const App = () =>')
+  expect(fullComponentSource).toContain('const CounterButton = () =>')
+  expect(fullComponentSource).toContain('const App = () =>')
 })
 
-test('Open PR drawer includes App wrapper in committed source when toggled on', async ({
+test('Open PR drawer strips App wrapper from committed source when toggled off', async ({
   page,
 }) => {
   const treeRequests: Array<Record<string, unknown>> = []
@@ -2704,13 +3222,11 @@ test('Open PR drawer includes App wrapper in committed source when toggled on', 
   )
   await ensureOpenPrDrawerOpen(page)
 
-  const includeWrapperToggle = page.getByLabel(
-    'Include entry tab source in committed output',
-  )
-  await includeWrapperToggle.check()
+  const includeWrapperToggle = page.getByLabel('Include entry tab')
+  await includeWrapperToggle.uncheck()
 
   await page.getByLabel('Head').fill('develop/repo/editor-sync-with-app')
-  await page.getByLabel('PR title').fill('Include App wrapper in commit')
+  await page.getByLabel('PR title').fill('Strip App wrapper in commit')
   await submitOpenPrAndConfirm(page)
 
   await expect(
@@ -2722,7 +3238,7 @@ test('Open PR drawer includes App wrapper in committed source when toggled on', 
   const treePayload = treeRequests[0]?.tree as Array<Record<string, unknown>>
   const componentBlob = treePayload?.find(file => file.path === 'src/components/App.tsx')
   expect(componentBlob?.content).toEqual(expect.any(String))
-  const fullComponentSource = String(componentBlob?.content)
-  expect(fullComponentSource).toContain('const CounterButton = () =>')
-  expect(fullComponentSource).toContain('const App = () =>')
+  const strippedComponentSource = String(componentBlob?.content)
+  expect(strippedComponentSource).toContain('const CounterButton = () =>')
+  expect(strippedComponentSource).not.toContain('const App = () =>')
 })

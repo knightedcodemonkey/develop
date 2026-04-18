@@ -143,6 +143,7 @@ const createWorkspaceControllersSetup = ({
     setActiveWorkspaceTab,
     makeUniqueTabPath,
     createWorkspaceTabId,
+    getShouldShowEditedDesign,
   })
 
   const beginWorkspaceTabRenameDelegate = tabId =>

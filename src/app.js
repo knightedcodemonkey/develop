@@ -30,6 +30,7 @@ import {
 } from './modules/app-core/workspace-local-helpers.js'
 import { createWorkspaceEditorHelpers } from './modules/app-core/workspace-editor-helpers.js'
 import { createEditedIndicatorVisibilityController } from './modules/app-core/edited-indicator-visibility-controller.js'
+import { createPublishTrailingNewlineNormalizer } from './modules/app-core/publish-trailing-newline-normalizer.js'
 import { createLayoutDiagnosticsSetup } from './modules/app-core/layout-diagnostics-setup.js'
 import { createWorkspaceControllersSetup } from './modules/app-core/workspace-controllers-setup.js'
 import { createGitHubWorkflowsSetup } from './modules/app-core/github-workflows-setup.js'
@@ -393,6 +394,8 @@ const githubAiContextState = {
   hasSyncedActivePrEditorContent: false,
 }
 
+let workspacePrContextState = 'inactive'
+
 let chatDrawerController = {
   setOpen: () => {},
   setSelectedRepository: () => {},
@@ -492,11 +495,16 @@ const getCurrentGitHubToken = () => githubAiContextState.token ?? byotControls.g
 const getCurrentSelectedRepository = () =>
   githubAiContextState.selectedRepository ?? byotControls.getSelectedRepository()
 
+const getCurrentSelectedRepositoryFullName = () =>
+  getCurrentSelectedRepository()?.fullName ?? ''
+
 const getWorkspaceContextSnapshot = createWorkspaceContextSnapshotGetter({
-  getCurrentSelectedRepository,
+  getCurrentSelectedRepository: getCurrentSelectedRepositoryFullName,
   githubPrBaseBranch,
   githubPrHeadBranch,
   githubPrTitle,
+  getActivePrContext: () => githubAiContextState.activePrContext,
+  getPrContextState: () => workspacePrContextState,
 })
 
 let loadedComponentTabId = 'component'
@@ -597,11 +605,8 @@ const ensureWorkspaceTabsShape = createEnsureWorkspaceTabsShape({
 const buildWorkspaceTabsSnapshot = () =>
   workspaceSyncController.buildWorkspaceTabsSnapshot()
 
-const reconcileWorkspaceTabsWithPushUpdates = fileUpdates =>
-  workspaceSyncController.reconcileWorkspaceTabsWithPushUpdates(fileUpdates)
-
-const getWorkspacePrFileCommits = () =>
-  workspaceSyncController.getWorkspacePrFileCommits()
+const getWorkspacePrFileCommits = options =>
+  workspaceSyncController.getWorkspacePrFileCommits(options)
 
 const getEditorSyncTargets = () => workspaceSyncController.getEditorSyncTargets()
 
@@ -634,7 +639,7 @@ const {
   getActiveWorkspaceCreatedAt: () => activeWorkspaceCreatedAt,
   setActiveWorkspaceRecordId: value => (activeWorkspaceRecordId = value),
   setActiveWorkspaceCreatedAt: value => (activeWorkspaceCreatedAt = value),
-  getCurrentSelectedRepository,
+  getCurrentSelectedRepository: getCurrentSelectedRepositoryFullName,
   getActiveWorkspaceRecordId: () => activeWorkspaceRecordId,
   setIsApplyingWorkspaceSnapshot: value => (isApplyingWorkspaceSnapshot = value),
   ensureWorkspaceTabsShape,
@@ -699,6 +704,41 @@ editedIndicatorVisibilityController.setRefreshHandlers({
   syncHeaderLabels,
   renderWorkspaceTabs,
 })
+
+const normalizeWorkspaceEditorsTrailingNewlineAfterPublish =
+  createPublishTrailingNewlineNormalizer({
+    workspaceTabsState,
+    getLoadedTabIds: () => [loadedComponentTabId, loadedStylesTabId],
+    getJsxSource: () => getJsxSource(),
+    getCssSource: () => getCssSource(),
+    setJsxSource,
+    setCssSource,
+    setSuppressEditorChangeSideEffects: value => {
+      suppressEditorChangeSideEffects = value
+    },
+    queueWorkspaceSave: () => queueWorkspaceSave(),
+  })
+
+const reconcileWorkspaceTabsWithPushUpdates = fileUpdates => {
+  normalizeWorkspaceEditorsTrailingNewlineAfterPublish()
+  return workspaceSyncController.reconcileWorkspaceTabsWithPushUpdates(fileUpdates)
+}
+
+const setWorkspacePrContextState = nextState => {
+  if (typeof nextState !== 'string' || !nextState.trim()) {
+    return
+  }
+
+  workspacePrContextState = nextState.trim()
+}
+
+const persistWorkspacePrContextState = nextState => {
+  setWorkspacePrContextState(nextState)
+  queueWorkspaceSave()
+  void flushWorkspaceSave().catch(() => {
+    /* Save failures are already surfaced through saver onError. */
+  })
+}
 
 const githubWorkflows = createGitHubWorkflowsSetup({
   factories: {
@@ -774,8 +814,19 @@ const githubWorkflows = createGitHubWorkflowsSetup({
     getStyleMode: () => styleMode.value,
     getActivePrContextSyncKey,
     prContextUi,
-    onPrContextStateChange: () => {
+    onPrContextStateChange: activeContext => {
+      if (activeContext?.prTitle) {
+        setWorkspacePrContextState('active')
+      } else if (workspacePrContextState === 'active') {
+        setWorkspacePrContextState('inactive')
+      }
       editedIndicatorVisibilityController.refreshIndicators()
+    },
+    onPrContextClosed: () => {
+      persistWorkspacePrContextState('closed')
+    },
+    onPrContextDisconnected: () => {
+      persistWorkspacePrContextState('disconnected')
     },
     getTokenForVisibility: () => githubAiContextState.token,
     closeWorkspacesDrawer: () => {

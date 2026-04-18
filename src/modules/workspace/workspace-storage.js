@@ -81,6 +81,10 @@ const normalizeWorkspaceRecord = record => {
         ? record.prNumber
         : null,
     prTitle: typeof record.prTitle === 'string' ? record.prTitle : '',
+    prContextState:
+      typeof record.prContextState === 'string' && record.prContextState.trim().length > 0
+        ? record.prContextState.trim()
+        : 'inactive',
     renderMode: normalizeRenderMode(record.renderMode),
     tabs: normalizedTabs,
     activeTabId: typeof record.activeTabId === 'string' ? record.activeTabId : null,

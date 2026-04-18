@@ -27,6 +27,7 @@ const createWorkspaceTabMutationsController = ({
   setActiveWorkspaceTab,
   makeUniqueTabPath,
   createWorkspaceTabId,
+  getShouldShowEditedDesign,
 }) => {
   const beginWorkspaceTabRename = tabId => {
     setWorkspaceTabAddMenuOpen(false)
@@ -162,6 +163,10 @@ const createWorkspaceTabMutationsController = ({
     const path = makeUniqueTabPath({ basePath })
     const tabId = createWorkspaceTabId(normalizedKind === 'styles' ? 'style' : 'module')
     const name = getPathFileName(path) || `${normalizedKind}-tab`
+    const shouldMarkNewTabEdited =
+      typeof getShouldShowEditedDesign === 'function'
+        ? Boolean(getShouldShowEditedDesign())
+        : false
 
     persistActiveTabEditorContent()
 
@@ -173,6 +178,7 @@ const createWorkspaceTabMutationsController = ({
       role: 'module',
       isActive: false,
       content: '',
+      isDirty: shouldMarkNewTabEdited,
       lastModified: Date.now(),
     })
 

@@ -59,6 +59,8 @@ const initializeGitHubWorkflows = ({
   getActivePrContextSyncKey,
   prContextUi,
   onPrContextStateChange,
+  onPrContextClosed,
+  onPrContextDisconnected,
   getTokenForVisibility,
   closeWorkspacesDrawer,
   getActivePrEditorSyncKey,
@@ -323,6 +325,9 @@ const initializeGitHubWorkflows = ({
                 : 'Closed pull request on GitHub and cleared active context.',
               'neutral',
             )
+            if (typeof onPrContextClosed === 'function') {
+              onPrContextClosed()
+            }
             showAppToast(
               reference
                 ? `Closed pull request on GitHub and cleared active context (${reference}).`
@@ -364,6 +369,9 @@ const initializeGitHubWorkflows = ({
             : 'Disconnected PR context. Pull request remains open on GitHub.',
           'neutral',
         )
+        if (typeof onPrContextDisconnected === 'function') {
+          onPrContextDisconnected()
+        }
       },
     })
   })
