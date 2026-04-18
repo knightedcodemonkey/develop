@@ -128,6 +128,7 @@ const createWorkspaceControllersSetup = ({
     getDirtyStateForTabChange,
     syncHeaderLabels,
     queueWorkspaceSave,
+    flushWorkspaceSave,
     maybeRender: () => maybeRender(),
     setWorkspaceTabAddMenuOpen,
     confirmAction,

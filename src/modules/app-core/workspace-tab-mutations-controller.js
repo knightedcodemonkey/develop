@@ -12,6 +12,7 @@ const createWorkspaceTabMutationsController = ({
   getDirtyStateForTabChange,
   syncHeaderLabels,
   queueWorkspaceSave,
+  flushWorkspaceSave,
   maybeRender,
   setWorkspaceTabAddMenuOpen,
   confirmAction,
@@ -143,7 +144,13 @@ const createWorkspaceTabMutationsController = ({
         }
 
         renderWorkspaceTabs()
-        queueWorkspaceSave()
+        if (typeof flushWorkspaceSave === 'function') {
+          void flushWorkspaceSave().catch(() => {
+            /* Save failures are surfaced through workspace saver onError. */
+          })
+        } else {
+          queueWorkspaceSave()
+        }
         maybeRender()
       },
     })
