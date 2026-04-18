@@ -293,7 +293,15 @@ export const ensureDiagnosticsDrawerOpen = async (page: Page) => {
   const isExpanded = await toggle.getAttribute('aria-expanded')
 
   if (isExpanded !== 'true') {
-    await toggle.click()
+    try {
+      await toggle.click({ timeout: 2_000 })
+    } catch {
+      /* WebKit can report pointer interception from the drawer during transitions. */
+      await toggle.focus()
+      await page.keyboard.press('Enter')
+    }
+
+    await expect(toggle).toHaveAttribute('aria-expanded', 'true')
   }
 
   await expect(page.getByRole('complementary', { name: 'Diagnostics' })).toBeVisible()
