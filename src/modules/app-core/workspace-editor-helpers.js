@@ -5,6 +5,7 @@ const createWorkspaceEditorHelpers = ({
   editorPanelsByKind,
   editorHeaderLabelByKind,
   editorHeaderDirtyStatusByKind,
+  getShouldShowEditedDesign,
   defaultTabNameByKind,
   toNonEmptyWorkspaceText,
   getLoadedStylesTabId,
@@ -54,7 +55,11 @@ const createWorkspaceEditorHelpers = ({
       }
 
       if (dirtyStatusLabel instanceof HTMLElement) {
-        const isDirty = Boolean(tab?.isDirty)
+        const shouldShowEditedDesign =
+          typeof getShouldShowEditedDesign === 'function'
+            ? Boolean(getShouldShowEditedDesign())
+            : true
+        const isDirty = shouldShowEditedDesign && Boolean(tab?.isDirty)
         dirtyStatusLabel.hidden = !isDirty
         if (isDirty) {
           dirtyStatusLabel.removeAttribute('aria-hidden')

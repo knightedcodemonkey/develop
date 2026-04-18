@@ -29,6 +29,7 @@ import {
   toStyleModeForTabLanguage,
 } from './modules/app-core/workspace-local-helpers.js'
 import { createWorkspaceEditorHelpers } from './modules/app-core/workspace-editor-helpers.js'
+import { createEditedIndicatorVisibilityController } from './modules/app-core/edited-indicator-visibility-controller.js'
 import { createLayoutDiagnosticsSetup } from './modules/app-core/layout-diagnostics-setup.js'
 import { createWorkspaceControllersSetup } from './modules/app-core/workspace-controllers-setup.js'
 import { createGitHubWorkflowsSetup } from './modules/app-core/github-workflows-setup.js'
@@ -436,6 +437,11 @@ const prContextUi = createGitHubPrContextUiController({
   closeWorkspacesDrawer: () => workspacesDrawerController?.setOpen(false),
 })
 
+const editedIndicatorVisibilityController = createEditedIndicatorVisibilityController({
+  getToken: () => githubAiContextState.token,
+  getActivePrContext: () => githubAiContextState.activePrContext,
+})
+
 const byotControls = createGitHubByotControls({
   controlsRoot: githubAiControls,
   tokenInput: githubTokenInput,
@@ -472,6 +478,7 @@ const byotControls = createGitHubByotControls({
     prContextUi.syncAiChatTokenVisibility(token)
     chatDrawerController.setToken(token)
     prDrawerController.setToken(token)
+    editedIndicatorVisibilityController.refreshIndicators()
   },
   setStatus,
 })
@@ -510,6 +517,8 @@ const {
   editorPanelsByKind,
   editorHeaderLabelByKind,
   editorHeaderDirtyStatusByKind,
+  getShouldShowEditedDesign:
+    editedIndicatorVisibilityController.getShouldShowEditedDesign,
   defaultTabNameByKind,
   toNonEmptyWorkspaceText,
   getLoadedStylesTabId: () => loadedStylesTabId,
@@ -660,6 +669,8 @@ const {
   setHasPendingWorkspaceTabsRender: value => (hasPendingWorkspaceTabsRender = value),
   persistActiveTabEditorContent,
   getWorkspaceTabDisplay,
+  getShouldShowEditedDesign:
+    editedIndicatorVisibilityController.getShouldShowEditedDesign,
   workspaceTabsShell,
   workspaceTabAddWrap,
   setWorkspaceTabRenameState: value => (workspaceTabRenameState = value),
@@ -682,6 +693,11 @@ const {
   getWorkspaceTabByKind,
   makeUniqueTabPath,
   createWorkspaceTabId,
+})
+
+editedIndicatorVisibilityController.setRefreshHandlers({
+  syncHeaderLabels,
+  renderWorkspaceTabs,
 })
 
 const githubWorkflows = createGitHubWorkflowsSetup({
@@ -758,6 +774,9 @@ const githubWorkflows = createGitHubWorkflowsSetup({
     getStyleMode: () => styleMode.value,
     getActivePrContextSyncKey,
     prContextUi,
+    onPrContextStateChange: () => {
+      editedIndicatorVisibilityController.refreshIndicators()
+    },
     getTokenForVisibility: () => githubAiContextState.token,
     closeWorkspacesDrawer: () => {
       void workspacesDrawerController?.setOpen(false)

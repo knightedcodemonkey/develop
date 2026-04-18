@@ -40,6 +40,7 @@ Repository structure:
 
 - Preserve current project formatting: single quotes, no semicolons, print width 90, arrowParens avoid.
 - Do not use index files or barrel-file architecture; prefer explicit file names and explicit import paths.
+- Prefer modular, colocated architecture; split focused features into nearby files and avoid monolithic modules.
 - Keep UI changes intentional and lightweight; avoid broad visual rewrites unless requested.
 - Keep runtime logic defensive for flaky/slow CDN conditions.
 - Preserve progressive loading behavior (lazy-load optional compilers/runtime pieces where possible).

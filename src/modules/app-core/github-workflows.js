@@ -58,6 +58,7 @@ const initializeGitHubWorkflows = ({
   reconcileWorkspaceTabsWithPushUpdates,
   getActivePrContextSyncKey,
   prContextUi,
+  onPrContextStateChange,
   getTokenForVisibility,
   closeWorkspacesDrawer,
   getActivePrEditorSyncKey,
@@ -191,6 +192,10 @@ const initializeGitHubWorkflows = ({
       if (activeContext) {
         closeWorkspacesDrawer()
       }
+
+      if (typeof onPrContextStateChange === 'function') {
+        onPrContextStateChange(activeContext)
+      }
     },
     onSyncActivePrEditorContent: async args => {
       const result = await prEditorSyncController.syncFromActiveContext(args)
@@ -289,6 +294,9 @@ const initializeGitHubWorkflows = ({
   prDrawerController.setSelectedRepository(githubAiContextState.selectedRepository)
   prDrawerController.syncRepositories()
   prContextUi.setActivePrContext(prDrawerController.getActivePrContext())
+  if (typeof onPrContextStateChange === 'function') {
+    onPrContextStateChange(prDrawerController.getActivePrContext())
+  }
 
   githubPrContextClose?.addEventListener('click', () => {
     if (!githubAiContextState.activePrContext) {

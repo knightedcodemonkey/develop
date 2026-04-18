@@ -19,6 +19,7 @@ const createWorkspaceTabsRenderer = ({
   finishWorkspaceTabRename,
   removeWorkspaceTab,
   getWorkspaceTabDisplay,
+  getShouldShowEditedDesign,
   workspaceTabsShell,
   workspaceTabAddWrap,
   syncEditorFromActiveWorkspaceTab,
@@ -43,6 +44,10 @@ const createWorkspaceTabsRenderer = ({
     try {
       const tabs = workspaceTabsState.getTabs()
       const activeTabId = workspaceTabsState.getActiveTabId()
+      const shouldShowEditedDesign =
+        typeof getShouldShowEditedDesign === 'function'
+          ? Boolean(getShouldShowEditedDesign())
+          : true
 
       workspaceTabsStrip.replaceChildren()
 
@@ -226,7 +231,7 @@ const createWorkspaceTabsRenderer = ({
           tabContainer.append(metaBadge)
         }
 
-        if (tab.isDirty) {
+        if (shouldShowEditedDesign && tab.isDirty) {
           const dirtyBadge = document.createElement('span')
           dirtyBadge.className = 'workspace-tab__dirty-indicator'
           dirtyBadge.setAttribute('aria-hidden', 'true')
