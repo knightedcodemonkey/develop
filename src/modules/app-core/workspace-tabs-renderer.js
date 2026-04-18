@@ -228,8 +228,8 @@ const createWorkspaceTabsRenderer = ({
 
         if (tab.isDirty) {
           const dirtyBadge = document.createElement('span')
-          dirtyBadge.className = 'workspace-tab__meta workspace-tab__meta--dirty'
-          dirtyBadge.textContent = 'Dirty'
+          dirtyBadge.className = 'workspace-tab__dirty-indicator'
+          dirtyBadge.setAttribute('aria-hidden', 'true')
           tabContainer.append(dirtyBadge)
         }
 

@@ -376,7 +376,15 @@
           >
             <div class="panel-header panel-header--grid">
               <h2 id="editor-header-component" class="panel-header__title-with-status">
-                <span>Component</span>
+                <span data-editor-header-label>Component</span>
+                <span
+                  class="panel-header__status panel-header__status--dirty"
+                  id="component-dirty-status"
+                  aria-hidden="true"
+                  hidden
+                >
+                  Edited
+                </span>
                 <svg
                   class="panel-header__sync-icon"
                   id="component-pr-sync-icon"
@@ -500,7 +508,15 @@
           >
             <div class="panel-header panel-header--grid">
               <h2 id="editor-header-styles" class="panel-header__title-with-status">
-                <span>Styles</span>
+                <span data-editor-header-label>Styles</span>
+                <span
+                  class="panel-header__status panel-header__status--dirty"
+                  id="styles-dirty-status"
+                  aria-hidden="true"
+                  hidden
+                >
+                  Edited
+                </span>
                 <svg
                   class="panel-header__sync-icon"
                   id="styles-pr-sync-icon"

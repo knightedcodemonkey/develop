@@ -135,8 +135,14 @@ const componentPrSyncIcon = document.getElementById('component-pr-sync-icon')
 const componentPrSyncIconPath = document.getElementById('component-pr-sync-icon-path')
 const stylesPrSyncIcon = document.getElementById('styles-pr-sync-icon')
 const stylesPrSyncIconPath = document.getElementById('styles-pr-sync-icon-path')
-const componentEditorHeaderLabel = document.querySelector('#editor-header-component span')
-const stylesEditorHeaderLabel = document.querySelector('#editor-header-styles span')
+const componentEditorHeaderLabel = document.querySelector(
+  '#editor-header-component [data-editor-header-label]',
+)
+const stylesEditorHeaderLabel = document.querySelector(
+  '#editor-header-styles [data-editor-header-label]',
+)
+const componentEditorDirtyStatus = document.getElementById('component-dirty-status')
+const stylesEditorDirtyStatus = document.getElementById('styles-dirty-status')
 const aiControlsToggle = document.getElementById('ai-controls-toggle')
 const appThemeButtons = document.querySelectorAll('[data-app-theme]')
 const workspaceTabsShell = document.getElementById('workspace-tabs-shell')
@@ -193,6 +199,10 @@ const editorPanelsByKind = {
 const editorHeaderLabelByKind = {
   component: componentEditorHeaderLabel,
   styles: stylesEditorHeaderLabel,
+}
+const editorHeaderDirtyStatusByKind = {
+  component: componentEditorDirtyStatus,
+  styles: stylesEditorDirtyStatus,
 }
 const defaultTabNameByKind = {
   component: defaultComponentTabName,
@@ -499,6 +509,7 @@ const {
   editorKinds,
   editorPanelsByKind,
   editorHeaderLabelByKind,
+  editorHeaderDirtyStatusByKind,
   defaultTabNameByKind,
   toNonEmptyWorkspaceText,
   getLoadedStylesTabId: () => loadedStylesTabId,

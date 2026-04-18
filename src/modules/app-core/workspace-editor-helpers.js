@@ -4,6 +4,7 @@ const createWorkspaceEditorHelpers = ({
   editorKinds,
   editorPanelsByKind,
   editorHeaderLabelByKind,
+  editorHeaderDirtyStatusByKind,
   defaultTabNameByKind,
   toNonEmptyWorkspaceText,
   getLoadedStylesTabId,
@@ -45,10 +46,21 @@ const createWorkspaceEditorHelpers = ({
           : (workspaceTabsState.getTab(getLoadedComponentTabId()) ??
             getWorkspaceTabByKind('component'))
       const headerLabel = editorHeaderLabelByKind[editorKind]
+      const dirtyStatusLabel = editorHeaderDirtyStatusByKind[editorKind]
 
       if (headerLabel) {
         headerLabel.textContent =
           toNonEmptyWorkspaceText(tab?.name) || defaultTabNameByKind[editorKind]
+      }
+
+      if (dirtyStatusLabel instanceof HTMLElement) {
+        const isDirty = Boolean(tab?.isDirty)
+        dirtyStatusLabel.hidden = !isDirty
+        if (isDirty) {
+          dirtyStatusLabel.removeAttribute('aria-hidden')
+        } else {
+          dirtyStatusLabel.setAttribute('aria-hidden', 'true')
+        }
       }
     }
   }

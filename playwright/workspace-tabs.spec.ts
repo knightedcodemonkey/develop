@@ -282,7 +282,8 @@ test('editing a synced tab marks it dirty', async ({ page }) => {
   const componentTab = page
     .getByRole('listitem', { name: 'Workspace tab App.tsx' })
     .first()
-  await expect(componentTab).toContainText('Dirty')
+  await expect(componentTab.locator('.workspace-tab__dirty-indicator')).toBeVisible()
+  await expect(page.locator('#component-dirty-status')).toHaveText('Edited')
 })
 
 test('removed default styles tab stays removed after reload', async ({ page }) => {
