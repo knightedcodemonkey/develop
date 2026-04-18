@@ -8,7 +8,10 @@ const toContentWithTrailingNewline = value => {
 
 const createPublishTrailingNewlineNormalizer = ({
   workspaceTabsState,
-  getLoadedTabIds,
+  getTabPublishPath,
+  normalizePublishPath,
+  getLoadedComponentTabId,
+  getLoadedStylesTabId,
   getJsxSource,
   getCssSource,
   setJsxSource,
@@ -16,17 +19,33 @@ const createPublishTrailingNewlineNormalizer = ({
   setSuppressEditorChangeSideEffects,
   queueWorkspaceSave,
 }) => {
-  return () => {
+  return ({ fileUpdates } = {}) => {
+    const normalizedFileUpdates = Array.isArray(fileUpdates) ? fileUpdates : []
+    const publishedPaths = new Set(
+      normalizedFileUpdates
+        .map(update => {
+          const path = typeof update?.path === 'string' ? update.path : ''
+          return typeof normalizePublishPath === 'function'
+            ? normalizePublishPath(path)
+            : path.trim()
+        })
+        .filter(Boolean),
+    )
+
+    if (publishedPaths.size === 0) {
+      return
+    }
+
     const tabs = workspaceTabsState.getTabs()
     const activeTabId = workspaceTabsState.getActiveTabId()
-    const loadedTabIds = new Set(
-      (Array.isArray(getLoadedTabIds?.()) ? getLoadedTabIds() : []).filter(Boolean),
-    )
     const now = Date.now()
     let didUpdateTabs = false
+    const updatedContentByTabId = new Map()
 
     const nextTabs = tabs.map(tab => {
-      if (!loadedTabIds.has(tab?.id)) {
+      const publishPath =
+        typeof getTabPublishPath === 'function' ? getTabPublishPath(tab) : ''
+      if (!publishPath || !publishedPaths.has(publishPath)) {
         return tab
       }
 
@@ -37,6 +56,7 @@ const createPublishTrailingNewlineNormalizer = ({
       }
 
       didUpdateTabs = true
+      updatedContentByTabId.set(tab.id, nextContent)
       return {
         ...tab,
         content: nextContent,
@@ -50,8 +70,12 @@ const createPublishTrailingNewlineNormalizer = ({
       workspaceTabsState.replaceTabs({ tabs: nextTabs, activeTabId })
     }
 
-    const nextJsxSource = toContentWithTrailingNewline(getJsxSource())
-    if (nextJsxSource !== getJsxSource()) {
+    const loadedComponentTabId =
+      typeof getLoadedComponentTabId === 'function' ? getLoadedComponentTabId() : ''
+    const nextJsxSource = loadedComponentTabId
+      ? updatedContentByTabId.get(loadedComponentTabId)
+      : null
+    if (typeof nextJsxSource === 'string' && nextJsxSource !== getJsxSource()) {
       setSuppressEditorChangeSideEffects(true)
       try {
         setJsxSource(nextJsxSource)
@@ -60,8 +84,12 @@ const createPublishTrailingNewlineNormalizer = ({
       }
     }
 
-    const nextCssSource = toContentWithTrailingNewline(getCssSource())
-    if (nextCssSource !== getCssSource()) {
+    const loadedStylesTabId =
+      typeof getLoadedStylesTabId === 'function' ? getLoadedStylesTabId() : ''
+    const nextCssSource = loadedStylesTabId
+      ? updatedContentByTabId.get(loadedStylesTabId)
+      : null
+    if (typeof nextCssSource === 'string' && nextCssSource !== getCssSource()) {
       setSuppressEditorChangeSideEffects(true)
       try {
         setCssSource(nextCssSource)

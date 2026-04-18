@@ -708,7 +708,11 @@ editedIndicatorVisibilityController.setRefreshHandlers({
 const normalizeWorkspaceEditorsTrailingNewlineAfterPublish =
   createPublishTrailingNewlineNormalizer({
     workspaceTabsState,
-    getLoadedTabIds: () => [loadedComponentTabId, loadedStylesTabId],
+    getTabPublishPath: tab =>
+      getTabTargetPrFilePath(tab) || normalizeWorkspacePathValue(tab?.path) || '',
+    normalizePublishPath: path => normalizeWorkspacePathValue(path),
+    getLoadedComponentTabId: () => loadedComponentTabId,
+    getLoadedStylesTabId: () => loadedStylesTabId,
     getJsxSource: () => getJsxSource(),
     getCssSource: () => getCssSource(),
     setJsxSource,
@@ -720,7 +724,7 @@ const normalizeWorkspaceEditorsTrailingNewlineAfterPublish =
   })
 
 const reconcileWorkspaceTabsWithPushUpdates = fileUpdates => {
-  normalizeWorkspaceEditorsTrailingNewlineAfterPublish()
+  normalizeWorkspaceEditorsTrailingNewlineAfterPublish({ fileUpdates })
   return workspaceSyncController.reconcileWorkspaceTabsWithPushUpdates(fileUpdates)
 }
 

@@ -534,6 +534,15 @@ test('Open PR success normalizes trailing newline without showing Edited indicat
 
   await setComponentEditorSource(page, 'const App = () => <button>tap me</button>')
   await setStylesEditorSource(page, '.button { color: red; }')
+  await addWorkspaceTab(page, { kind: 'styles' })
+
+  const moduleStylesEditor = page
+    .locator('.editor-panel[data-editor-kind="styles"] .cm-content')
+    .first()
+  await moduleStylesEditor.fill('.button { padding: 20px; }')
+  await moduleStylesEditor.press('End')
+  await moduleStylesEditor.type(' ')
+  await moduleStylesEditor.press('Backspace')
 
   await ensureOpenPrDrawerOpen(page)
   await page.getByLabel('Head').fill('Develop/Open-Pr-Test')
@@ -558,31 +567,48 @@ test('Open PR success normalizes trailing newline without showing Edited indicat
           : []
 
         const componentTab = tabs.find(tab => tab?.id === 'component')
-        const stylesTab = tabs.find(tab => tab?.id === 'styles')
+        const appStylesTab = tabs.find(
+          tab =>
+            typeof tab?.path === 'string' && tab.path.trim() === 'src/styles/app.css',
+        )
+        const moduleStylesTab = tabs.find(
+          tab =>
+            typeof tab?.path === 'string' &&
+            tab.path.trim().startsWith('src/styles/module') &&
+            tab.path.trim().endsWith('.css'),
+        )
 
         const componentContent =
           typeof componentTab?.content === 'string' ? componentTab.content : ''
-        const stylesContent =
-          typeof stylesTab?.content === 'string' ? stylesTab.content : ''
+        const appStylesContent =
+          typeof appStylesTab?.content === 'string' ? appStylesTab.content : ''
+        const moduleStylesContent =
+          typeof moduleStylesTab?.content === 'string' ? moduleStylesTab.content : ''
 
         return {
           componentHasTrailingNewline: componentContent.endsWith('\n'),
-          stylesHasTrailingNewline: stylesContent.endsWith('\n'),
+          appStylesHasTrailingNewline: appStylesContent.endsWith('\n'),
+          moduleStylesHasTrailingNewline: moduleStylesContent.endsWith('\n'),
           componentNotDirty: componentTab?.isDirty === false,
-          stylesNotDirty: stylesTab?.isDirty === false,
+          appStylesNotDirty: appStylesTab?.isDirty === false,
+          moduleStylesNotDirty: moduleStylesTab?.isDirty === false,
           componentSynced: componentTab?.syncedContent === componentContent,
-          stylesSynced: stylesTab?.syncedContent === stylesContent,
+          appStylesSynced: appStylesTab?.syncedContent === appStylesContent,
+          moduleStylesSynced: moduleStylesTab?.syncedContent === moduleStylesContent,
         }
       },
       { timeout: 10_000 },
     )
     .toEqual({
       componentHasTrailingNewline: true,
-      stylesHasTrailingNewline: true,
+      appStylesHasTrailingNewline: true,
+      moduleStylesHasTrailingNewline: true,
       componentNotDirty: true,
-      stylesNotDirty: true,
+      appStylesNotDirty: true,
+      moduleStylesNotDirty: true,
       componentSynced: true,
-      stylesSynced: true,
+      appStylesSynced: true,
+      moduleStylesSynced: true,
     })
 
   await expect(
@@ -2304,6 +2330,95 @@ test('New workspace tabs show Edited indicator in active PR context', async ({
       .getByRole('listitem', { name: 'Workspace tab module.tsx' })
       .locator('.workspace-tab__dirty-indicator'),
   ).toHaveCount(1)
+})
+
+test('Dirty tabs expose Edited in accessible names during active PR context', async ({
+  page,
+}) => {
+  await page.route('https://api.github.com/user/repos**', async route => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify([
+        {
+          id: 11,
+          owner: { login: 'knightedcodemonkey' },
+          name: 'develop',
+          full_name: 'knightedcodemonkey/develop',
+          default_branch: 'main',
+          permissions: { push: true },
+        },
+      ]),
+    })
+  })
+
+  await mockRepositoryBranches(page, {
+    'knightedcodemonkey/develop': ['main', 'release', 'develop/open-pr-test'],
+  })
+
+  await page.route(
+    'https://api.github.com/repos/knightedcodemonkey/develop/pulls/2',
+    async route => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          number: 2,
+          state: 'open',
+          title: 'Existing PR context from storage',
+          html_url: 'https://github.com/knightedcodemonkey/develop/pull/2',
+          head: { ref: 'develop/open-pr-test' },
+          base: { ref: 'main' },
+        }),
+      })
+    },
+  )
+
+  await page.route(
+    'https://api.github.com/repos/knightedcodemonkey/develop/git/ref/**',
+    async route => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          ref: 'refs/heads/develop/open-pr-test',
+          object: { type: 'commit', sha: 'existing-head-sha' },
+        }),
+      })
+    },
+  )
+
+  await waitForAppReady(page, `${appEntryPath}`)
+
+  await page.evaluate(() => {
+    localStorage.setItem(
+      'knighted:develop:github-pr-config:knightedcodemonkey/develop',
+      JSON.stringify({
+        syncTabTargets: [
+          { kind: 'component', path: 'src/components/App.tsx' },
+          { kind: 'styles', path: 'src/styles/app.css' },
+        ],
+        renderMode: 'react',
+        baseBranch: 'main',
+        headBranch: 'develop/open-pr-test',
+        prTitle: 'Existing PR context from storage',
+        prBody: 'Saved body',
+        isActivePr: true,
+        pullRequestNumber: 2,
+        pullRequestUrl: 'https://github.com/knightedcodemonkey/develop/pull/2',
+      }),
+    )
+  })
+
+  await connectByotWithSingleRepo(page)
+  await addWorkspaceTab(page)
+
+  await expect(
+    page.getByRole('button', { name: 'Open tab module.tsx (Edited)' }),
+  ).toBeVisible()
+  await expect(
+    page.getByRole('listitem', { name: 'Workspace tab module.tsx (Edited)' }),
+  ).toBeVisible()
 })
 
 test('Active PR context push commit uses Git Database API atomic path by default', async ({

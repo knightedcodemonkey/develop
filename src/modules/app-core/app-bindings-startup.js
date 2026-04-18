@@ -382,6 +382,15 @@ const bindAppEventsAndStart = ({
   }
   compactAiControlsUi.onViewportChange(handleCompactViewportChange)
 
+  window.addEventListener('pageshow', event => {
+    if (!event.persisted) {
+      return
+    }
+
+    /* BFCache restore can leave CodeMirror styles partially detached. */
+    window.location.reload()
+  })
+
   window.addEventListener('beforeunload', () => {
     clearToastTimer()
     diagnosticsFlowController.dispose()

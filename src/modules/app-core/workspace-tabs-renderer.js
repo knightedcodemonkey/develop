@@ -54,11 +54,16 @@ const createWorkspaceTabsRenderer = ({
       for (const tab of tabs) {
         const isActive = tab.id === activeTabId
         const isRenaming = getWorkspaceTabRenameState().tabId === tab.id
+        const isEdited = shouldShowEditedDesign && tab.isDirty
+        const editedSuffix = isEdited ? ' (Edited)' : ''
         const tabContainer = document.createElement('li')
         tabContainer.className = 'workspace-tab'
         tabContainer.dataset.active = isActive ? 'true' : 'false'
         tabContainer.dataset.tabId = tab.id
-        tabContainer.setAttribute('aria-label', `Workspace tab ${tab.name}`)
+        tabContainer.setAttribute(
+          'aria-label',
+          `Workspace tab ${tab.name}${editedSuffix}`,
+        )
         tabContainer.draggable = !isRenaming
         tabContainer.dataset.dragOver =
           getDragOverWorkspaceTabId() && getDragOverWorkspaceTabId() === tab.id
@@ -214,7 +219,7 @@ const createWorkspaceTabsRenderer = ({
         } else {
           selectButton.removeAttribute('aria-current')
         }
-        selectButton.setAttribute('aria-label', `Open tab ${tab.name}`)
+        selectButton.setAttribute('aria-label', `Open tab ${tab.name}${editedSuffix}`)
         selectButton.addEventListener('click', event => {
           event.stopPropagation()
           setActiveWorkspaceTab(tab.id)
