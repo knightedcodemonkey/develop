@@ -266,7 +266,9 @@ test('startup restores last active workspace tab after reload', async ({ page })
   await expect(page.locator('#editor-panel-styles')).toHaveAttribute('hidden', '')
 })
 
-test('editing a synced tab marks it dirty', async ({ page }) => {
+test('editing a synced tab keeps dirty state local without Edited indicators', async ({
+  page,
+}) => {
   await waitForInitialRender(page)
 
   await seedSyncedComponentTab(page)
@@ -282,7 +284,8 @@ test('editing a synced tab marks it dirty', async ({ page }) => {
   const componentTab = page
     .getByRole('listitem', { name: 'Workspace tab App.tsx' })
     .first()
-  await expect(componentTab).toContainText('Dirty')
+  await expect(componentTab.locator('.workspace-tab__dirty-indicator')).toHaveCount(0)
+  await expect(page.locator('#component-dirty-status')).toBeHidden()
 })
 
 test('removed default styles tab stays removed after reload', async ({ page }) => {

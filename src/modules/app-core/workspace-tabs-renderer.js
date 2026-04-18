@@ -19,6 +19,7 @@ const createWorkspaceTabsRenderer = ({
   finishWorkspaceTabRename,
   removeWorkspaceTab,
   getWorkspaceTabDisplay,
+  getShouldShowEditedDesign,
   workspaceTabsShell,
   workspaceTabAddWrap,
   syncEditorFromActiveWorkspaceTab,
@@ -43,17 +44,26 @@ const createWorkspaceTabsRenderer = ({
     try {
       const tabs = workspaceTabsState.getTabs()
       const activeTabId = workspaceTabsState.getActiveTabId()
+      const shouldShowEditedDesign =
+        typeof getShouldShowEditedDesign === 'function'
+          ? Boolean(getShouldShowEditedDesign())
+          : true
 
       workspaceTabsStrip.replaceChildren()
 
       for (const tab of tabs) {
         const isActive = tab.id === activeTabId
         const isRenaming = getWorkspaceTabRenameState().tabId === tab.id
+        const isEdited = shouldShowEditedDesign && tab.isDirty
+        const editedSuffix = isEdited ? ' (Edited)' : ''
         const tabContainer = document.createElement('li')
         tabContainer.className = 'workspace-tab'
         tabContainer.dataset.active = isActive ? 'true' : 'false'
         tabContainer.dataset.tabId = tab.id
-        tabContainer.setAttribute('aria-label', `Workspace tab ${tab.name}`)
+        tabContainer.setAttribute(
+          'aria-label',
+          `Workspace tab ${tab.name}${editedSuffix}`,
+        )
         tabContainer.draggable = !isRenaming
         tabContainer.dataset.dragOver =
           getDragOverWorkspaceTabId() && getDragOverWorkspaceTabId() === tab.id
@@ -209,7 +219,7 @@ const createWorkspaceTabsRenderer = ({
         } else {
           selectButton.removeAttribute('aria-current')
         }
-        selectButton.setAttribute('aria-label', `Open tab ${tab.name}`)
+        selectButton.setAttribute('aria-label', `Open tab ${tab.name}${editedSuffix}`)
         selectButton.addEventListener('click', event => {
           event.stopPropagation()
           setActiveWorkspaceTab(tab.id)
@@ -226,10 +236,10 @@ const createWorkspaceTabsRenderer = ({
           tabContainer.append(metaBadge)
         }
 
-        if (tab.isDirty) {
+        if (shouldShowEditedDesign && tab.isDirty) {
           const dirtyBadge = document.createElement('span')
-          dirtyBadge.className = 'workspace-tab__meta workspace-tab__meta--dirty'
-          dirtyBadge.textContent = 'Dirty'
+          dirtyBadge.className = 'workspace-tab__dirty-indicator'
+          dirtyBadge.setAttribute('aria-hidden', 'true')
           tabContainer.append(dirtyBadge)
         }
 

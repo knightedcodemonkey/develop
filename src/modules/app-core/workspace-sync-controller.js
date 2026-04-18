@@ -106,12 +106,16 @@ const createWorkspaceSyncController = ({
     return updatedTabCount
   }
 
-  const getWorkspacePrFileCommits = () => {
+  const getWorkspacePrFileCommits = options => {
+    const includeAllWorkspaceFiles =
+      options?.includeAllWorkspaceFiles === true || options?.includeAll === true
     const snapshotTabs = buildWorkspaceTabsSnapshot()
     const dedupedByPath = new Map()
 
     for (const tab of snapshotTabs) {
-      const shouldCommitTab = Boolean(tab?.isDirty) || !hasTabCommittedSyncState(tab)
+      const shouldCommitTab = includeAllWorkspaceFiles
+        ? true
+        : Boolean(tab?.isDirty) || !hasTabCommittedSyncState(tab)
       if (!shouldCommitTab) {
         continue
       }
@@ -235,8 +239,15 @@ const createWorkspaceSyncController = ({
       repo: context.repositoryFullName || '',
       base: context.baseBranch || '',
       head: context.headBranch || '',
-      prNumber: null,
+      prNumber:
+        typeof context.prNumber === 'number' && Number.isFinite(context.prNumber)
+          ? context.prNumber
+          : null,
       prTitle: context.prTitle || '',
+      prContextState:
+        typeof context.prContextState === 'string' && context.prContextState.trim()
+          ? context.prContextState.trim()
+          : 'inactive',
       renderMode: normalizeRenderMode(getRenderModeValue()),
       tabs: buildWorkspaceTabsSnapshot(),
       activeTabId: workspaceTabsState.getActiveTabId(),

@@ -48,6 +48,7 @@ const createWorkspaceControllersSetup = ({
   setHasPendingWorkspaceTabsRender,
   persistActiveTabEditorContent,
   getWorkspaceTabDisplay,
+  getShouldShowEditedDesign,
   workspaceTabsShell,
   workspaceTabAddWrap,
   setWorkspaceTabRenameState,
@@ -142,6 +143,7 @@ const createWorkspaceControllersSetup = ({
     setActiveWorkspaceTab,
     makeUniqueTabPath,
     createWorkspaceTabId,
+    getShouldShowEditedDesign,
   })
 
   const beginWorkspaceTabRenameDelegate = tabId =>
@@ -178,6 +180,7 @@ const createWorkspaceControllersSetup = ({
     finishWorkspaceTabRename: finishWorkspaceTabRenameDelegate,
     removeWorkspaceTab: removeWorkspaceTabDelegate,
     getWorkspaceTabDisplay,
+    getShouldShowEditedDesign,
     workspaceTabsShell,
     workspaceTabAddWrap,
     syncEditorFromActiveWorkspaceTab: syncEditorFromActiveWorkspaceTabDelegate,

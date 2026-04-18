@@ -29,6 +29,8 @@ import {
   toStyleModeForTabLanguage,
 } from './modules/app-core/workspace-local-helpers.js'
 import { createWorkspaceEditorHelpers } from './modules/app-core/workspace-editor-helpers.js'
+import { createEditedIndicatorVisibilityController } from './modules/app-core/edited-indicator-visibility-controller.js'
+import { createPublishTrailingNewlineNormalizer } from './modules/app-core/publish-trailing-newline-normalizer.js'
 import { createLayoutDiagnosticsSetup } from './modules/app-core/layout-diagnostics-setup.js'
 import { createWorkspaceControllersSetup } from './modules/app-core/workspace-controllers-setup.js'
 import { createGitHubWorkflowsSetup } from './modules/app-core/github-workflows-setup.js'
@@ -135,8 +137,14 @@ const componentPrSyncIcon = document.getElementById('component-pr-sync-icon')
 const componentPrSyncIconPath = document.getElementById('component-pr-sync-icon-path')
 const stylesPrSyncIcon = document.getElementById('styles-pr-sync-icon')
 const stylesPrSyncIconPath = document.getElementById('styles-pr-sync-icon-path')
-const componentEditorHeaderLabel = document.querySelector('#editor-header-component span')
-const stylesEditorHeaderLabel = document.querySelector('#editor-header-styles span')
+const componentEditorHeaderLabel = document.querySelector(
+  '#editor-header-component [data-editor-header-label]',
+)
+const stylesEditorHeaderLabel = document.querySelector(
+  '#editor-header-styles [data-editor-header-label]',
+)
+const componentEditorDirtyStatus = document.getElementById('component-dirty-status')
+const stylesEditorDirtyStatus = document.getElementById('styles-dirty-status')
 const aiControlsToggle = document.getElementById('ai-controls-toggle')
 const appThemeButtons = document.querySelectorAll('[data-app-theme]')
 const workspaceTabsShell = document.getElementById('workspace-tabs-shell')
@@ -193,6 +201,10 @@ const editorPanelsByKind = {
 const editorHeaderLabelByKind = {
   component: componentEditorHeaderLabel,
   styles: stylesEditorHeaderLabel,
+}
+const editorHeaderDirtyStatusByKind = {
+  component: componentEditorDirtyStatus,
+  styles: stylesEditorDirtyStatus,
 }
 const defaultTabNameByKind = {
   component: defaultComponentTabName,
@@ -382,6 +394,8 @@ const githubAiContextState = {
   hasSyncedActivePrEditorContent: false,
 }
 
+let workspacePrContextState = 'inactive'
+
 let chatDrawerController = {
   setOpen: () => {},
   setSelectedRepository: () => {},
@@ -426,6 +440,11 @@ const prContextUi = createGitHubPrContextUiController({
   closeWorkspacesDrawer: () => workspacesDrawerController?.setOpen(false),
 })
 
+const editedIndicatorVisibilityController = createEditedIndicatorVisibilityController({
+  getToken: () => githubAiContextState.token,
+  getActivePrContext: () => githubAiContextState.activePrContext,
+})
+
 const byotControls = createGitHubByotControls({
   controlsRoot: githubAiControls,
   tokenInput: githubTokenInput,
@@ -462,6 +481,7 @@ const byotControls = createGitHubByotControls({
     prContextUi.syncAiChatTokenVisibility(token)
     chatDrawerController.setToken(token)
     prDrawerController.setToken(token)
+    editedIndicatorVisibilityController.refreshIndicators()
   },
   setStatus,
 })
@@ -475,11 +495,16 @@ const getCurrentGitHubToken = () => githubAiContextState.token ?? byotControls.g
 const getCurrentSelectedRepository = () =>
   githubAiContextState.selectedRepository ?? byotControls.getSelectedRepository()
 
+const getCurrentSelectedRepositoryFullName = () =>
+  getCurrentSelectedRepository()?.fullName ?? ''
+
 const getWorkspaceContextSnapshot = createWorkspaceContextSnapshotGetter({
-  getCurrentSelectedRepository,
+  getCurrentSelectedRepository: getCurrentSelectedRepositoryFullName,
   githubPrBaseBranch,
   githubPrHeadBranch,
   githubPrTitle,
+  getActivePrContext: () => githubAiContextState.activePrContext,
+  getPrContextState: () => workspacePrContextState,
 })
 
 let loadedComponentTabId = 'component'
@@ -499,6 +524,9 @@ const {
   editorKinds,
   editorPanelsByKind,
   editorHeaderLabelByKind,
+  editorHeaderDirtyStatusByKind,
+  getShouldShowEditedDesign:
+    editedIndicatorVisibilityController.getShouldShowEditedDesign,
   defaultTabNameByKind,
   toNonEmptyWorkspaceText,
   getLoadedStylesTabId: () => loadedStylesTabId,
@@ -577,11 +605,8 @@ const ensureWorkspaceTabsShape = createEnsureWorkspaceTabsShape({
 const buildWorkspaceTabsSnapshot = () =>
   workspaceSyncController.buildWorkspaceTabsSnapshot()
 
-const reconcileWorkspaceTabsWithPushUpdates = fileUpdates =>
-  workspaceSyncController.reconcileWorkspaceTabsWithPushUpdates(fileUpdates)
-
-const getWorkspacePrFileCommits = () =>
-  workspaceSyncController.getWorkspacePrFileCommits()
+const getWorkspacePrFileCommits = options =>
+  workspaceSyncController.getWorkspacePrFileCommits(options)
 
 const getEditorSyncTargets = () => workspaceSyncController.getEditorSyncTargets()
 
@@ -614,7 +639,7 @@ const {
   getActiveWorkspaceCreatedAt: () => activeWorkspaceCreatedAt,
   setActiveWorkspaceRecordId: value => (activeWorkspaceRecordId = value),
   setActiveWorkspaceCreatedAt: value => (activeWorkspaceCreatedAt = value),
-  getCurrentSelectedRepository,
+  getCurrentSelectedRepository: getCurrentSelectedRepositoryFullName,
   getActiveWorkspaceRecordId: () => activeWorkspaceRecordId,
   setIsApplyingWorkspaceSnapshot: value => (isApplyingWorkspaceSnapshot = value),
   ensureWorkspaceTabsShape,
@@ -649,6 +674,8 @@ const {
   setHasPendingWorkspaceTabsRender: value => (hasPendingWorkspaceTabsRender = value),
   persistActiveTabEditorContent,
   getWorkspaceTabDisplay,
+  getShouldShowEditedDesign:
+    editedIndicatorVisibilityController.getShouldShowEditedDesign,
   workspaceTabsShell,
   workspaceTabAddWrap,
   setWorkspaceTabRenameState: value => (workspaceTabRenameState = value),
@@ -672,6 +699,50 @@ const {
   makeUniqueTabPath,
   createWorkspaceTabId,
 })
+
+editedIndicatorVisibilityController.setRefreshHandlers({
+  syncHeaderLabels,
+  renderWorkspaceTabs,
+})
+
+const normalizeWorkspaceEditorsTrailingNewlineAfterPublish =
+  createPublishTrailingNewlineNormalizer({
+    workspaceTabsState,
+    getTabPublishPath: tab =>
+      getTabTargetPrFilePath(tab) || normalizeWorkspacePathValue(tab?.path) || '',
+    normalizePublishPath: path => normalizeWorkspacePathValue(path),
+    getLoadedComponentTabId: () => loadedComponentTabId,
+    getLoadedStylesTabId: () => loadedStylesTabId,
+    getJsxSource: () => getJsxSource(),
+    getCssSource: () => getCssSource(),
+    setJsxSource,
+    setCssSource,
+    setSuppressEditorChangeSideEffects: value => {
+      suppressEditorChangeSideEffects = value
+    },
+    queueWorkspaceSave: () => queueWorkspaceSave(),
+  })
+
+const reconcileWorkspaceTabsWithPushUpdates = fileUpdates => {
+  normalizeWorkspaceEditorsTrailingNewlineAfterPublish({ fileUpdates })
+  return workspaceSyncController.reconcileWorkspaceTabsWithPushUpdates(fileUpdates)
+}
+
+const setWorkspacePrContextState = nextState => {
+  if (typeof nextState !== 'string' || !nextState.trim()) {
+    return
+  }
+
+  workspacePrContextState = nextState.trim()
+}
+
+const persistWorkspacePrContextState = nextState => {
+  setWorkspacePrContextState(nextState)
+  queueWorkspaceSave()
+  void flushWorkspaceSave().catch(() => {
+    /* Save failures are already surfaced through saver onError. */
+  })
+}
 
 const githubWorkflows = createGitHubWorkflowsSetup({
   factories: {
@@ -747,6 +818,20 @@ const githubWorkflows = createGitHubWorkflowsSetup({
     getStyleMode: () => styleMode.value,
     getActivePrContextSyncKey,
     prContextUi,
+    onPrContextStateChange: activeContext => {
+      if (activeContext?.prTitle) {
+        setWorkspacePrContextState('active')
+      } else if (workspacePrContextState === 'active') {
+        setWorkspacePrContextState('inactive')
+      }
+      editedIndicatorVisibilityController.refreshIndicators()
+    },
+    onPrContextClosed: () => {
+      persistWorkspacePrContextState('closed')
+    },
+    onPrContextDisconnected: () => {
+      persistWorkspacePrContextState('disconnected')
+    },
     getTokenForVisibility: () => githubAiContextState.token,
     closeWorkspacesDrawer: () => {
       void workspacesDrawerController?.setOpen(false)

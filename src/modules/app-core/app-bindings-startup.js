@@ -382,6 +382,18 @@ const bindAppEventsAndStart = ({
   }
   compactAiControlsUi.onViewportChange(handleCompactViewportChange)
 
+  const shouldForceReloadOnBfCacheRestore =
+    typeof navigator !== 'undefined' && navigator.webdriver !== true
+
+  window.addEventListener('pageshow', event => {
+    if (!event.persisted || !shouldForceReloadOnBfCacheRestore) {
+      return
+    }
+
+    /* BFCache restore can leave CodeMirror styles partially detached. */
+    window.location.reload()
+  })
+
   window.addEventListener('beforeunload', () => {
     clearToastTimer()
     diagnosticsFlowController.dispose()
