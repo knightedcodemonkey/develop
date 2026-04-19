@@ -121,16 +121,15 @@ const createWorkspaceEditorHelpers = ({
 
     const nextContent = typeof tab.content === 'string' ? tab.content : ''
 
-    if (getTabKind(tab) === 'styles') {
-      setLoadedStylesTabId(tab.id)
-      setCssSource(nextContent)
+    const applyStyleLanguage = language => {
       const nextStyleMode = toStyleModeForTabLanguage({
-        language: tab.language,
+        language,
         toNonEmptyWorkspaceText,
       })
       if (styleMode.value !== nextStyleMode) {
         styleMode.value = nextStyleMode
       }
+
       const cssCodeEditor = getCssCodeEditor()
       if (cssCodeEditor) {
         setSuppressEditorChangeSideEffects(true)
@@ -140,11 +139,25 @@ const createWorkspaceEditorHelpers = ({
           setSuppressEditorChangeSideEffects(false)
         }
       }
+    }
+
+    if (getTabKind(tab) === 'styles') {
+      setLoadedStylesTabId(tab.id)
+      setCssSource(nextContent)
+      applyStyleLanguage(tab.language)
       setVisibleEditorPanelForKind('styles')
       editorPool.activate('styles')
     } else {
       setLoadedComponentTabId(tab.id)
       setJsxSource(nextContent)
+
+      const stylesTab =
+        workspaceTabsState.getTab(getLoadedStylesTabId()) ??
+        getWorkspaceTabByKind('styles')
+      if (stylesTab) {
+        applyStyleLanguage(stylesTab.language)
+      }
+
       setVisibleEditorPanelForKind('component')
       editorPool.activate('component')
     }

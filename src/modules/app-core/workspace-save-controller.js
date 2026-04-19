@@ -9,6 +9,7 @@ const createWorkspaceSaveController = ({
   getActiveWorkspaceCreatedAt,
   setActiveWorkspaceRecordId,
   setActiveWorkspaceCreatedAt,
+  getHasCompletedInitialWorkspaceBootstrap,
 }) => {
   const workspaceSaver = createDebouncedWorkspaceSaver({
     save: async payload => {
@@ -71,6 +72,13 @@ const createWorkspaceSaveController = ({
       return
     }
 
+    if (
+      typeof getHasCompletedInitialWorkspaceBootstrap === 'function' &&
+      !getHasCompletedInitialWorkspaceBootstrap()
+    ) {
+      return
+    }
+
     const snapshot = buildWorkspaceRecordSnapshot()
     setActiveWorkspaceRecordId(snapshot.id)
     workspaceSaver.queue(snapshot)
@@ -78,6 +86,13 @@ const createWorkspaceSaveController = ({
 
   const flushWorkspaceSave = async () => {
     if (getIsApplyingWorkspaceSnapshot()) {
+      return
+    }
+
+    if (
+      typeof getHasCompletedInitialWorkspaceBootstrap === 'function' &&
+      !getHasCompletedInitialWorkspaceBootstrap()
+    ) {
       return
     }
 

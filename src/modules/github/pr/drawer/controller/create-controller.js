@@ -74,6 +74,7 @@ export const createGitHubPrDrawer = ({
     pendingBranchesAbortController: null,
     pendingContextVerifyAbortController: null,
     pendingActiveContentSyncAbortController: null,
+    pendingActiveContentSyncKey: '',
     pendingBranchesRequestKey: '',
     pendingBranchesPromise: null,
     pendingContextVerifyRequestKey: '',
@@ -100,7 +101,9 @@ export const createGitHubPrDrawer = ({
 
     const headBranch = sanitizeBranchPart(activeContext.headBranch)
     const prTitle = toSafeText(activeContext.prTitle)
-    if (!headBranch || !prTitle) {
+    const pullRequestNumber = toPullRequestNumber(activeContext.pullRequestNumber)
+
+    if ((!headBranch && pullRequestNumber === null) || !prTitle) {
       return null
     }
 
@@ -112,7 +115,7 @@ export const createGitHubPrDrawer = ({
       prTitle,
       prBody: typeof activeContext.prBody === 'string' ? activeContext.prBody : '',
       baseBranch: toSafeText(activeContext.baseBranch),
-      pullRequestNumber: toPullRequestNumber(activeContext.pullRequestNumber),
+      pullRequestNumber,
       pullRequestUrl: toSafeText(activeContext.pullRequestUrl),
     }
   }
@@ -332,10 +335,27 @@ export const createGitHubPrDrawer = ({
     toSafeText,
   })
 
+  const hydrateActivePrContext = activeContext => {
+    const repository = getSelectedRepositoryObject()
+    const repositoryFullName = getRepositoryFullName(repository)
+    if (!repositoryFullName) {
+      return false
+    }
+
+    setRepositoryActivePrContext({
+      repositoryFullName,
+      activeContext,
+    })
+    uiHandlers.setSubmitButtonLabel()
+    uiHandlers.emitActivePrContextChange()
+    return Boolean(getCurrentActivePrContext())
+  }
+
   return {
     setOpen: repositoryFormHandlers.setOpen,
     isOpen: () => state.open,
     getActivePrContext: () => getCurrentActivePrContext(),
+    hydrateActivePrContext,
     ...publicActions,
     syncRepositories: repositoryFormHandlers.syncRepositories,
   }

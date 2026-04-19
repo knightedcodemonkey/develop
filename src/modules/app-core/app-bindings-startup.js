@@ -472,6 +472,7 @@ const bindAppEventsAndStart = ({
     }
 
     setHasCompletedInitialWorkspaceBootstrap(true)
+    prDrawerController.syncRepositories()
     await renderPreview()
   })
 }

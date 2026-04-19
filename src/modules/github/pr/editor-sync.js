@@ -2,6 +2,29 @@ import { getRepositoryFileContent } from '../api/repository-files.js'
 
 const toSafeText = value => (typeof value === 'string' ? value.trim() : '')
 
+const toComponentPathFallbacks = path => {
+  const normalizedPath = toSafeText(path)
+  if (!normalizedPath) {
+    return []
+  }
+
+  const separatorIndex = normalizedPath.lastIndexOf('/')
+  const directory = separatorIndex >= 0 ? normalizedPath.slice(0, separatorIndex + 1) : ''
+
+  const candidateFileNames = ['App.tsx', 'app.tsx', 'App.js', 'app.js']
+  const fallbackPaths = candidateFileNames
+    .map(candidate => `${directory}${candidate}`)
+    .filter(candidate => candidate !== normalizedPath)
+
+  for (const canonicalPath of ['src/components/App.tsx', 'src/components/App.js']) {
+    if (canonicalPath !== normalizedPath && !fallbackPaths.includes(canonicalPath)) {
+      fallbackPaths.push(canonicalPath)
+    }
+  }
+
+  return fallbackPaths
+}
+
 export const createGitHubPrEditorSyncController = ({
   setComponentSource,
   setStylesSource,
@@ -40,26 +63,41 @@ export const createGitHubPrEditorSyncController = ({
       }
     }
 
-    const componentRequest = getRepositoryFileContent({
-      token,
-      owner,
-      repo,
-      path: componentTabPath,
-      ref: branch,
-      signal,
-    })
+    const requestFileContent = path =>
+      getRepositoryFileContent({
+        token,
+        owner,
+        repo,
+        path,
+        ref: branch,
+        signal,
+      })
+
+    const componentRequest = (async () => {
+      const primary = await requestFileContent(componentTabPath)
+      if (primary) {
+        return primary
+      }
+
+      const fallbackPaths = toComponentPathFallbacks(componentTabPath)
+      const fallbackResults = await Promise.all(
+        fallbackPaths.map(path => requestFileContent(path)),
+      )
+      const fallback = fallbackResults.find(Boolean)
+      if (fallback) {
+        return {
+          ...fallback,
+          path: componentTabPath,
+        }
+      }
+
+      return null
+    })()
 
     const stylesRequest =
       stylesTabPath === componentTabPath
         ? componentRequest
-        : getRepositoryFileContent({
-            token,
-            owner,
-            repo,
-            path: stylesTabPath,
-            ref: branch,
-            signal,
-          })
+        : requestFileContent(stylesTabPath)
 
     const [componentFile, stylesFile] = await Promise.all([
       componentRequest,
@@ -80,6 +118,9 @@ export const createGitHubPrEditorSyncController = ({
 
     if (componentFile && typeof componentFile.content === 'string') {
       setComponent(componentFile.content)
+      queueMicrotask(() => {
+        setComponent(componentFile.content)
+      })
       updated = true
       componentSynced = true
     }

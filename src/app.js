@@ -420,6 +420,7 @@ let prDrawerController = {
   setOpen: () => {},
   setSelectedRepository: () => {},
   getActivePrContext: () => null,
+  hydrateActivePrContext: () => false,
   clearActivePrContext: () => {},
   closeActivePullRequestOnGitHub: async () => null,
   setToken: () => {},
@@ -471,14 +472,35 @@ const byotControls = createGitHubByotControls({
 
     activeWorkspaceRecordId = ''
     activeWorkspaceCreatedAt = null
-    void loadPreferredWorkspaceContext().catch(() => {
-      /* noop */
-    })
+    void loadPreferredWorkspaceContext()
+      .then(() => {
+        prDrawerController.syncRepositories()
+      })
+      .catch(() => {
+        /* noop */
+      })
   },
-  onWritableRepositoriesChange: ({ repositories }) => {
+  onWritableRepositoriesChange: ({ repositories, selectedRepository }) => {
     githubAiContextState.writableRepositories = Array.isArray(repositories)
       ? [...repositories]
       : []
+
+    if (selectedRepository) {
+      githubAiContextState.selectedRepository = selectedRepository
+      chatDrawerController.setSelectedRepository(selectedRepository)
+      prDrawerController.setSelectedRepository(selectedRepository)
+
+      if (!activeWorkspaceRecordId) {
+        void loadPreferredWorkspaceContext()
+          .then(() => {
+            prDrawerController.syncRepositories()
+          })
+          .catch(() => {
+            /* noop */
+          })
+      }
+    }
+
     prDrawerController.syncRepositories()
   },
   onTokenDeleteRequest: onConfirm => {
@@ -508,8 +530,22 @@ const getCurrentGitHubToken = () => githubAiContextState.token ?? byotControls.g
 const getCurrentSelectedRepository = () =>
   githubAiContextState.selectedRepository ?? byotControls.getSelectedRepository()
 
-const getCurrentSelectedRepositoryFullName = () =>
-  getCurrentSelectedRepository()?.fullName ?? ''
+const getCurrentSelectedRepositoryFullName = () => {
+  const selectedRepositoryFullName = getCurrentSelectedRepository()?.fullName
+  if (
+    typeof selectedRepositoryFullName === 'string' &&
+    selectedRepositoryFullName.trim()
+  ) {
+    return selectedRepositoryFullName.trim()
+  }
+
+  try {
+    const storedRepository = localStorage.getItem('knighted:develop:github-repository')
+    return typeof storedRepository === 'string' ? storedRepository.trim() : ''
+  } catch {
+    return ''
+  }
+}
 
 const getPersistedActivePrContext = createPersistedActivePrContextGetter({
   getCurrentSelectedRepositoryFullName,
@@ -726,6 +762,33 @@ const {
   getWorkspaceTabByKind,
   makeUniqueTabPath,
   createWorkspaceTabId,
+  onWorkspaceRecordApplied: workspace => {
+    if (!workspace || typeof workspace !== 'object') {
+      return
+    }
+
+    const state =
+      typeof workspace.prContextState === 'string'
+        ? workspace.prContextState.trim().toLowerCase()
+        : ''
+    if (state !== 'active') {
+      return
+    }
+
+    prDrawerController.hydrateActivePrContext({
+      baseBranch: typeof workspace.base === 'string' ? workspace.base : '',
+      headBranch: typeof workspace.head === 'string' ? workspace.head : '',
+      prTitle: typeof workspace.prTitle === 'string' ? workspace.prTitle : '',
+      prBody: typeof githubPrBody?.value === 'string' ? githubPrBody.value : '',
+      pullRequestNumber:
+        typeof workspace.prNumber === 'number' && Number.isFinite(workspace.prNumber)
+          ? workspace.prNumber
+          : null,
+      pullRequestUrl: '',
+      renderMode: normalizeRenderMode(workspace.renderMode),
+      styleMode: styleMode.value,
+    })
+  },
 })
 
 editedIndicatorVisibilityController.setRefreshHandlers({
@@ -855,17 +918,24 @@ const githubWorkflows = createGitHubWorkflowsSetup({
         const nextPrNumber =
           toPullRequestNumber(activeContext.pullRequestNumber) ??
           parsePullRequestNumberFromUrl(activeContext.pullRequestUrl)
-        const shouldPersistPrContext =
-          workspacePrContextState !== 'active' || workspacePrNumber !== nextPrNumber
-
         setWorkspacePrNumber(nextPrNumber)
-
-        if (shouldPersistPrContext) {
-          persistWorkspacePrContextState('active')
-        }
+        persistWorkspacePrContextState('active')
       } else if (workspacePrContextState === 'active') {
-        setWorkspacePrNumber(null)
-        persistWorkspacePrContextState('inactive')
+        const hasHeadBranch =
+          typeof githubPrHeadBranch?.value === 'string' &&
+          githubPrHeadBranch.value.trim().length > 0
+        const hasPrTitle =
+          typeof githubPrTitle?.value === 'string' &&
+          githubPrTitle.value.trim().length > 0
+
+        if (workspacePrNumber !== null && hasHeadBranch && hasPrTitle) {
+          persistWorkspacePrContextState('closed')
+        }
+
+        if (!hasHeadBranch || !hasPrTitle) {
+          setWorkspacePrNumber(null)
+          persistWorkspacePrContextState('inactive')
+        }
       }
       editedIndicatorVisibilityController.refreshIndicators()
     },

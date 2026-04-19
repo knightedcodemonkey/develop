@@ -75,12 +75,20 @@ export const createContextSyncHandlers = ({
       return
     }
 
+    if (
+      state.pendingActiveContentSyncAbortController &&
+      state.pendingActiveContentSyncKey === syncKey
+    ) {
+      return
+    }
+
     abortPendingActiveContentSyncRequest()
     const abortController = new AbortController()
     state.pendingActiveContentSyncAbortController = abortController
+    state.pendingActiveContentSyncKey = syncKey
 
     try {
-      await onSyncActivePrEditorContent({
+      const syncResult = await onSyncActivePrEditorContent({
         token,
         repository,
         activeContext,
@@ -97,7 +105,7 @@ export const createContextSyncHandlers = ({
         return
       }
 
-      state.lastActiveContentSyncKey = syncKey
+      state.lastActiveContentSyncKey = syncResult?.synced === true ? syncKey : ''
     } catch {
       if (abortController.signal.aborted) {
         return
@@ -105,6 +113,7 @@ export const createContextSyncHandlers = ({
     } finally {
       if (state.pendingActiveContentSyncAbortController === abortController) {
         state.pendingActiveContentSyncAbortController = null
+        state.pendingActiveContentSyncKey = ''
       }
     }
   }

@@ -127,9 +127,6 @@ export const createGitHubPrContextUiController = ({
       if (contextState.activePrContext) {
         githubPrContextClose?.removeAttribute('hidden')
         githubPrContextDisconnect?.removeAttribute('hidden')
-        if (workspacesToggle instanceof HTMLElement) {
-          workspacesToggle.hidden = true
-        }
       } else {
         githubPrContextClose?.setAttribute('hidden', '')
         githubPrContextDisconnect?.setAttribute('hidden', '')

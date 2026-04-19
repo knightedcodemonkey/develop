@@ -249,7 +249,12 @@ const initializeGitHubWorkflows = ({
           return false
         }
 
-        return applyWorkspaceRecord(record, { silent: false })
+        const applied = await applyWorkspaceRecord(record, { silent: false })
+        if (applied) {
+          prDrawerController.syncRepositories()
+        }
+
+        return applied
       } catch {
         workspacesDrawerController?.setStatus(
           'Could not load selected local context.',
