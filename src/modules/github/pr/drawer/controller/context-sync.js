@@ -6,16 +6,14 @@ export const createContextSyncHandlers = ({
   getEditorSyncTargets,
   onSyncActivePrEditorContent,
   getCurrentActivePrContext,
+  setRepositoryActivePrContext,
+  clearRepositoryActivePrContext,
   syncFormForRepository,
   setSubmitButtonLabel,
   emitActivePrContextChange,
   setStatus,
   toSafeText,
   sanitizeBranchPart,
-  parsePullRequestNumberFromUrl,
-  readRepositoryPrConfig,
-  saveRepositoryPrConfig,
-  sanitizeRepositoryPrConfig,
   getRepositoryPullRequest,
   findOpenRepositoryPullRequestByHead,
 }) => {
@@ -122,17 +120,17 @@ export const createContextSyncHandlers = ({
       return
     }
 
-    const savedConfig = readRepositoryPrConfig(repositoryFullName)
-    if (savedConfig?.isActivePr !== true) {
+    const activeContext = getCurrentActivePrContext()
+    if (!activeContext) {
       return
     }
 
     const pullRequestNumberFromConfig =
-      typeof savedConfig.pullRequestNumber === 'number' &&
-      Number.isFinite(savedConfig.pullRequestNumber)
-        ? savedConfig.pullRequestNumber
-        : parsePullRequestNumberFromUrl(savedConfig.pullRequestUrl)
-    const headBranch = sanitizeBranchPart(savedConfig.headBranch)
+      typeof activeContext.pullRequestNumber === 'number' &&
+      Number.isFinite(activeContext.pullRequestNumber)
+        ? activeContext.pullRequestNumber
+        : null
+    const headBranch = sanitizeBranchPart(activeContext.headBranch)
 
     if (!pullRequestNumberFromConfig && !headBranch) {
       return
@@ -142,7 +140,7 @@ export const createContextSyncHandlers = ({
       repositoryFullName,
       String(pullRequestNumberFromConfig || ''),
       headBranch,
-      toSafeText(savedConfig.baseBranch),
+      toSafeText(activeContext.baseBranch),
     ].join('|')
 
     if (
@@ -185,7 +183,7 @@ export const createContextSyncHandlers = ({
             repo,
             headOwner: owner,
             headBranch,
-            baseBranch: toSafeText(savedConfig.baseBranch),
+            baseBranch: toSafeText(activeContext.baseBranch),
             signal: abortController.signal,
           })
         }
@@ -195,24 +193,23 @@ export const createContextSyncHandlers = ({
         }
 
         if (resolvedPullRequest?.isOpen) {
-          const normalizedSavedConfig = sanitizeRepositoryPrConfig(savedConfig)
           const nextHeadBranch =
             sanitizeBranchPart(resolvedPullRequest.headRef) || headBranch
           const nextBaseBranch =
-            toSafeText(resolvedPullRequest.baseRef) || toSafeText(savedConfig.baseBranch)
+            toSafeText(resolvedPullRequest.baseRef) ||
+            toSafeText(activeContext.baseBranch)
 
-          saveRepositoryPrConfig({
+          setRepositoryActivePrContext({
             repositoryFullName,
-            config: {
-              ...normalizedSavedConfig,
-              isActivePr: true,
-              prContextState: 'active',
+            activeContext: {
+              ...activeContext,
               headBranch: nextHeadBranch,
               baseBranch: nextBaseBranch,
               pullRequestNumber: resolvedPullRequest.number,
               pullRequestUrl: resolvedPullRequest.htmlUrl,
               prTitle:
-                toSafeText(savedConfig.prTitle) || toSafeText(resolvedPullRequest.title),
+                toSafeText(activeContext.prTitle) ||
+                toSafeText(resolvedPullRequest.title),
             },
           })
           syncFormForRepository({ resetBranch: true })
@@ -222,14 +219,7 @@ export const createContextSyncHandlers = ({
           return
         }
 
-        saveRepositoryPrConfig({
-          repositoryFullName,
-          config: {
-            ...sanitizeRepositoryPrConfig(savedConfig),
-            isActivePr: false,
-            prContextState: 'closed',
-          },
-        })
+        clearRepositoryActivePrContext(repositoryFullName)
         setSubmitButtonLabel()
         emitActivePrContextChange()
         state.lastActiveContentSyncKey = ''

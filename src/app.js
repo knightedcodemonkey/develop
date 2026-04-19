@@ -37,8 +37,17 @@ import { createGitHubWorkflowsSetup } from './modules/app-core/github-workflows-
 import { defaultCss, defaultJsx } from './modules/app-core/defaults.js'
 import { createGitHubPrContextUiController } from './modules/app-core/github-pr-context-ui.js'
 import { createGitHubTokenInfoUiController } from './modules/app-core/github-token-info-ui.js'
+import {
+  githubPrOpenIcon,
+  githubPrPushCommitIcon,
+} from './modules/app-core/github-pr-icons.js'
 import { createWorkspaceSyncController } from './modules/app-core/workspace-sync-controller.js'
 import { createWorkspaceTabAddMenuUiController } from './modules/app-core/workspace-tab-add-menu-ui.js'
+import {
+  clearLegacyPrConfigStorage,
+  legacyPrConfigStoragePrefix,
+} from './modules/app-core/legacy-pr-config-storage.js'
+import { createPersistedActivePrContextGetter } from './modules/app-core/persisted-active-pr-context.js'
 import { createDiagnosticsUiController } from './modules/diagnostics/diagnostics-ui.js'
 import { createGitHubChatDrawer } from './modules/github/chat-drawer/drawer.js'
 import { createGitHubByotControls } from './modules/github/byot-controls.js'
@@ -263,14 +272,6 @@ let draggedWorkspaceTabId = ''
 let dragOverWorkspaceTabId = ''
 let suppressWorkspaceTabClick = false
 const clipboardSupported = Boolean(navigator.clipboard?.writeText)
-const githubPrOpenIcon = {
-  viewBox: '0 0 16 16',
-  path: 'M1.5 3.25a2.25 2.25 0 1 1 3 2.122v5.256a2.251 2.251 0 1 1-1.5 0V5.372A2.25 2.25 0 0 1 1.5 3.25Zm5.677-.177L9.573.677A.25.25 0 0 1 10 .854V2.5h1A2.5 2.5 0 0 1 13.5 5v5.628a2.251 2.251 0 1 1-1.5 0V5a1 1 0 0 0-1-1h-1v1.646a.25.25 0 0 1-.427.177L7.177 3.427a.25.25 0 0 1 0-.354ZM3.75 2.5a.75.75 0 1 0 0 1.5.75.75 0 0 0 0-1.5Zm0 9.5a.75.75 0 1 0 0 1.5.75.75 0 0 0 0-1.5Zm8.25.75a.75.75 0 1 0 1.5 0 .75.75 0 0 0-1.5 0Z',
-}
-const githubPrPushCommitIcon = {
-  viewBox: '0 0 24 24',
-  path: 'M16.944 11h4.306a.75.75 0 0 1 0 1.5h-4.306a5.001 5.001 0 0 1-9.888 0H2.75a.75.75 0 0 1 0-1.5h4.306a5.001 5.001 0 0 1 9.888 0Zm-1.444.75a3.5 3.5 0 1 0-7 0 3.5 3.5 0 0 0 7 0Z',
-}
 
 const showAppToast = message => {
   if (!(appToast instanceof HTMLElement)) {
@@ -340,6 +341,8 @@ const workspaceTabAddMenuUi = createWorkspaceTabAddMenuUiController({
   addMenu: workspaceTabAddMenu,
   addModuleButton: workspaceTabAddModule,
 })
+
+clearLegacyPrConfigStorage({ prefix: legacyPrConfigStoragePrefix })
 
 const {
   panelToolsState,
@@ -507,6 +510,18 @@ const getCurrentSelectedRepository = () =>
 
 const getCurrentSelectedRepositoryFullName = () =>
   getCurrentSelectedRepository()?.fullName ?? ''
+
+const getPersistedActivePrContext = createPersistedActivePrContextGetter({
+  getCurrentSelectedRepositoryFullName,
+  getWorkspacePrContextState: () => workspacePrContextState,
+  getWorkspacePrNumber: () => workspacePrNumber,
+  githubPrBaseBranch,
+  githubPrHeadBranch,
+  githubPrTitle,
+  githubPrBody,
+  renderMode,
+  styleMode,
+})
 
 const getWorkspaceContextSnapshot = createWorkspaceContextSnapshotGetter({
   getCurrentSelectedRepository: getCurrentSelectedRepositoryFullName,
@@ -862,6 +877,7 @@ const githubWorkflows = createGitHubWorkflowsSetup({
       setWorkspacePrNumber(result?.pullRequestNumber)
       persistWorkspacePrContextState('disconnected')
     },
+    getPersistedActivePrContext,
     getTokenForVisibility: () => githubAiContextState.token,
     closeWorkspacesDrawer: () => {
       void workspacesDrawerController?.setOpen(false)

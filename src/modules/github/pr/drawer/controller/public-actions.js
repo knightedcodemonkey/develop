@@ -20,12 +20,8 @@ export const createPublicActions = ({
   abortPendingActiveContentSyncRequest,
   closeRepositoryPullRequest,
   formatActivePrReference,
-  parsePullRequestNumberFromUrl,
-  readRepositoryPrConfig,
-  saveRepositoryPrConfig,
-  sanitizeRepositoryPrConfig,
-  removeRepositoryPrConfig,
-  sanitizeBranchPart,
+  setRepositoryActivePrContext,
+  clearRepositoryActivePrContext,
   toSafeText,
 }) => {
   return {
@@ -36,30 +32,8 @@ export const createPublicActions = ({
         return { reference: '' }
       }
 
-      const savedConfig = readRepositoryPrConfig(repositoryFullName)
-      const normalizedSavedConfig = sanitizeRepositoryPrConfig(savedConfig)
-      const previousActiveContext =
-        savedConfig?.isActivePr === true
-          ? {
-              repositoryFullName,
-              pullRequestNumber:
-                typeof savedConfig.pullRequestNumber === 'number' &&
-                Number.isFinite(savedConfig.pullRequestNumber)
-                  ? savedConfig.pullRequestNumber
-                  : parsePullRequestNumberFromUrl(savedConfig.pullRequestUrl),
-            }
-          : null
-
-      if (Object.keys(savedConfig).length > 0) {
-        saveRepositoryPrConfig({
-          repositoryFullName,
-          config: {
-            ...normalizedSavedConfig,
-            isActivePr: false,
-            prContextState: 'disconnected',
-          },
-        })
-      }
+      const activeContext = getCurrentActivePrContext()
+      clearRepositoryActivePrContext(repositoryFullName)
 
       state.lastActiveContentSyncKey = ''
       abortPendingActiveContentSyncRequest()
@@ -67,11 +41,11 @@ export const createPublicActions = ({
       emitActivePrContextChange()
 
       return {
-        reference: formatActivePrReference(previousActiveContext),
+        reference: formatActivePrReference(activeContext),
         pullRequestNumber:
-          typeof previousActiveContext?.pullRequestNumber === 'number' &&
-          Number.isFinite(previousActiveContext.pullRequestNumber)
-            ? previousActiveContext.pullRequestNumber
+          typeof activeContext?.pullRequestNumber === 'number' &&
+          Number.isFinite(activeContext.pullRequestNumber)
+            ? activeContext.pullRequestNumber
             : null,
       }
     },
@@ -82,7 +56,7 @@ export const createPublicActions = ({
         return
       }
 
-      removeRepositoryPrConfig(repositoryFullName)
+      clearRepositoryActivePrContext(repositoryFullName)
       state.lastActiveContentSyncKey = ''
       abortPendingActiveContentSyncRequest()
       syncFormForRepository({ resetAll: true, resetBranch: true })
@@ -94,9 +68,7 @@ export const createPublicActions = ({
       const repositoryFullName = getRepositoryFullName(repository)
       const token = toSafeText(getToken?.())
       const activeContext = getCurrentActivePrContext()
-      const pullRequestNumber =
-        activeContext?.pullRequestNumber ??
-        parsePullRequestNumberFromUrl(activeContext?.pullRequestUrl)
+      const pullRequestNumber = activeContext?.pullRequestNumber
 
       if (!repositoryFullName || !repository?.owner || !repository?.name) {
         throw new Error('Select a repository before closing pull request context.')
@@ -119,27 +91,9 @@ export const createPublicActions = ({
         pullRequestNumber,
       })
 
-      const savedConfig = sanitizeRepositoryPrConfig(
-        readRepositoryPrConfig(repositoryFullName),
-      )
-      saveRepositoryPrConfig({
+      setRepositoryActivePrContext({
         repositoryFullName,
-        config: {
-          ...savedConfig,
-          baseBranch: toSafeText(activeContext?.baseBranch) || savedConfig.baseBranch,
-          headBranch:
-            sanitizeBranchPart(activeContext?.headBranch) || savedConfig.headBranch,
-          prTitle: toSafeText(activeContext?.prTitle) || savedConfig.prTitle,
-          prBody:
-            typeof activeContext?.prBody === 'string'
-              ? activeContext.prBody
-              : savedConfig.prBody,
-          isActivePr: false,
-          prContextState: 'closed',
-          pullRequestNumber,
-          pullRequestUrl:
-            toSafeText(activeContext?.pullRequestUrl) || savedConfig.pullRequestUrl,
-        },
+        activeContext: null,
       })
       syncFormForRepository({ resetAll: true, resetBranch: true })
       setSubmitButtonLabel()

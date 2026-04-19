@@ -55,6 +55,7 @@ const initializeGitHubWorkflows = ({
   getRenderMode,
   getStyleMode,
   setCurrentSelectedRepository,
+  getPersistedActivePrContext,
   reconcileWorkspaceTabsWithPushUpdates,
   getActivePrContextSyncKey,
   prContextUi,
@@ -130,6 +131,7 @@ const initializeGitHubWorkflows = ({
     getDrawerSide: () => {
       return 'right'
     },
+    getPersistedActivePrContext,
   })
 
   const prDrawerController = createGitHubPrDrawer({
