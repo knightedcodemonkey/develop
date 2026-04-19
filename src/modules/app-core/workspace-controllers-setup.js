@@ -111,9 +111,6 @@ const createWorkspaceControllersSetup = ({
   const setActiveWorkspaceTab = tabId =>
     workspaceTabSelectionController.setActiveWorkspaceTab(tabId)
 
-  const syncEditorFromActiveWorkspaceTabDelegate = () =>
-    workspaceTabSelectionController.syncEditorFromActiveWorkspaceTab()
-
   workspaceTabMutationsController = createWorkspaceTabMutationsController({
     toNonEmptyWorkspaceText,
     workspaceTabsState,
@@ -186,7 +183,6 @@ const createWorkspaceControllersSetup = ({
     getShouldShowEditedDesign,
     workspaceTabsShell,
     workspaceTabAddWrap,
-    syncEditorFromActiveWorkspaceTab: syncEditorFromActiveWorkspaceTabDelegate,
   })
 
   const workspaceContextController = createWorkspaceContextController({

@@ -577,7 +577,7 @@ test('shows App-only error when auto render is disabled and App is missing', asy
   )
 })
 
-test('auto render implicitly wraps source with App in dom and react modes', async ({
+test('auto render shows App-only error in dom and react modes when App is missing', async ({
   page,
 }) => {
   await waitForInitialRender(page)
@@ -589,9 +589,9 @@ test('auto render implicitly wraps source with App in dom and react modes', asyn
     'const Button = () => <button type="button">implicit app dom</button>',
   )
 
-  await expect(page.getByRole('status', { name: 'App status' })).toHaveText('Rendered')
-  await expect(getPreviewFrame(page).getByRole('button')).toContainText(
-    'implicit app dom',
+  await expect(page.getByRole('status', { name: 'App status' })).toHaveText('Error')
+  await expect(page.locator('#preview-host pre')).toContainText(
+    'Expected a function or const named App.',
   )
 
   await page.getByRole('combobox', { name: 'Render mode' }).selectOption('react')
@@ -604,13 +604,13 @@ test('auto render implicitly wraps source with App in dom and react modes', asyn
     page.locator('.editor-panel[data-editor-kind="component"] .cm-content').first(),
   ).toContainText('implicit app react')
 
-  await expect(page.getByRole('status', { name: 'App status' })).toHaveText('Rendered')
-  await expect(getPreviewFrame(page).getByRole('button')).toContainText(
-    'implicit app react',
+  await expect(page.getByRole('status', { name: 'App status' })).toHaveText('Error')
+  await expect(page.locator('#preview-host pre')).toContainText(
+    'Expected a function or const named App.',
   )
 })
 
-test('auto render implicit App includes multiple component declarations', async ({
+test('auto render renders successfully when explicit App is defined in dom and react modes', async ({
   page,
 }) => {
   await waitForInitialRender(page)
@@ -619,15 +619,25 @@ test('auto render implicit App includes multiple component declarations', async 
 
   await setComponentEditorSource(
     page,
-    [
-      'const OtherButton = () => <button type="button">bar</button>',
-      'const Button = () => <button type="button">foo</button>',
-    ].join('\n'),
+    'const App = () => <button type="button">explicit app dom</button>',
   )
 
   await expect(page.getByRole('status', { name: 'App status' })).toHaveText('Rendered')
-  await expect(getPreviewFrame(page).getByRole('button')).toHaveCount(2)
-  await expect(getPreviewFrame(page).getByRole('button')).toContainText(['bar', 'foo'])
+  await expect(getPreviewFrame(page).getByRole('button')).toContainText(
+    'explicit app dom',
+  )
+
+  await page.getByRole('combobox', { name: 'Render mode' }).selectOption('react')
+  await expect(page.getByRole('combobox', { name: 'Render mode' })).toHaveValue('react')
+  await setComponentEditorSource(
+    page,
+    'const App = () => <button type="button">explicit app react</button>',
+  )
+
+  await expect(page.getByRole('status', { name: 'App status' })).toHaveText('Rendered')
+  await expect(getPreviewFrame(page).getByRole('button')).toContainText(
+    'explicit app react',
+  )
 })
 
 test('auto render does not treat lowercase helpers as implicit components', async ({
@@ -651,7 +661,7 @@ test('auto render does not treat lowercase helpers as implicit components', asyn
   )
 })
 
-test('auto render wraps standalone JSX with trailing semicolon and comment', async ({
+test('auto render shows App-only error for standalone JSX expression', async ({
   page,
 }) => {
   await waitForInitialRender(page)
@@ -663,13 +673,13 @@ test('auto render wraps standalone JSX with trailing semicolon and comment', asy
     '(<button type="button">implicit app from jsx expression</button>) as any; // trailing',
   )
 
-  await expect(page.getByRole('status', { name: 'App status' })).toHaveText('Rendered')
-  await expect(getPreviewFrame(page).getByRole('button')).toContainText(
-    'implicit app from jsx expression',
+  await expect(page.getByRole('status', { name: 'App status' })).toHaveText('Error')
+  await expect(page.locator('#preview-host pre')).toContainText(
+    'Expected a function or const named App.',
   )
 })
 
-test('auto render requires explicit App for declarations plus top-level JSX expression', async ({
+test('auto render shows App-only error for declarations plus top-level JSX expression', async ({
   page,
 }) => {
   await waitForInitialRender(page)
@@ -687,7 +697,7 @@ test('auto render requires explicit App for declarations plus top-level JSX expr
 
   await expect(page.getByRole('status', { name: 'App status' })).toHaveText('Error')
   await expect(page.locator('#preview-host pre')).toContainText(
-    'Top-level JSX with declarations or imports requires an explicit App component.',
+    'Expected a function or const named App.',
   )
 })
 

@@ -1,8 +1,3 @@
-import {
-  collectTopLevelTransformMetadata,
-  getFunctionLikeDeclarationNames,
-  hasFunctionLikeDeclarationNamed,
-} from './jsx-top-level-declarations.js'
 import { canRenderPreview, resolvePreviewEntryTab } from './preview-entry-resolver.js'
 import { createWorkspaceIframePreviewBridge } from '../preview-runtime/iframe-preview-executor.js'
 import { planWorkspaceVirtualModules } from '../preview-runtime/virtual-workspace-modules.js'
@@ -14,7 +9,7 @@ export const createRenderRuntimeController = ({
   cdnImports,
   importFromCdnWithFallback,
   renderMode,
-  isAutoRenderEnabled = () => false,
+  isAutoRenderEnabled: _isAutoRenderEnabled = () => false,
   getJsxSource,
   getWorkspaceTabs,
   getPreviewHost,
@@ -47,11 +42,6 @@ export const createRenderRuntimeController = ({
   let iframeRuntimeBridge = null
   let lastRenderedEntryTabId = ''
   let lastRenderedDependencyTabIds = new Set()
-  let topLevelTransformMetadataCache = {
-    source: null,
-    transformJsxSource: null,
-    value: null,
-  }
   let hasCompletedInitialRender = false
   const workspaceGraphCache = createPreviewWorkspaceGraphCache()
   const styleTabLanguages = new Set(['css', 'less', 'sass', 'module'])
@@ -275,104 +265,6 @@ export const createRenderRuntimeController = ({
     }
 
     return lines.join('\n')
-  }
-
-  const hasAppDeclaration = declarations =>
-    hasFunctionLikeDeclarationNamed({ declarations, name: 'App' })
-
-  const isComponentLikeName = name => typeof name === 'string' && /^[A-Z]/.test(name)
-
-  const getComponentNames = declarations =>
-    getFunctionLikeDeclarationNames({ declarations, excludeNames: ['App'] }).filter(
-      isComponentLikeName,
-    )
-
-  const isSourceRange = range =>
-    Array.isArray(range) &&
-    range.length === 2 &&
-    Number.isInteger(range[0]) &&
-    Number.isInteger(range[1])
-
-  const sourceFromRange = ({ source, range }) => {
-    if (!isSourceRange(range)) {
-      return null
-    }
-
-    const [start, end] = range
-    if (start < 0 || end < start || end > source.length) {
-      return null
-    }
-
-    const expression = source.slice(start, end).trim()
-    return expression || null
-  }
-
-  const getTopLevelTransformMetadata = ({ source, transformJsxSource }) => {
-    if (
-      topLevelTransformMetadataCache.source === source &&
-      topLevelTransformMetadataCache.transformJsxSource === transformJsxSource &&
-      topLevelTransformMetadataCache.value
-    ) {
-      return topLevelTransformMetadataCache.value
-    }
-
-    const value = collectTopLevelTransformMetadata({ source, transformJsxSource })
-    topLevelTransformMetadataCache = {
-      source,
-      transformJsxSource,
-      value,
-    }
-
-    return value
-  }
-
-  const withImplicitAppWrapper = (source, transformJsxSource) => {
-    if (!source.trim()) {
-      return source
-    }
-
-    if (/^\s*export\s+default\b/m.test(source)) {
-      return source
-    }
-
-    const {
-      declarations,
-      importCount,
-      hasTopLevelJsxExpression,
-      topLevelJsxExpressionRange,
-    } = getTopLevelTransformMetadata({ source, transformJsxSource })
-    if (hasAppDeclaration(declarations)) {
-      return source
-    }
-
-    if (hasTopLevelJsxExpression) {
-      const expressionSource = sourceFromRange({
-        source,
-        range: topLevelJsxExpressionRange,
-      })
-
-      if (!expressionSource) {
-        throw new Error(
-          'Unable to infer top-level JSX entry for implicit App. Define App explicitly.',
-        )
-      }
-
-      if (declarations.length > 0 || importCount > 0) {
-        throw new Error(
-          'Top-level JSX with declarations or imports requires an explicit App component.',
-        )
-      }
-
-      return `const App = () => (${expressionSource})`
-    }
-
-    const componentNames = getComponentNames(declarations)
-    if (componentNames.length > 0) {
-      const children = componentNames.map(name => `    <${name} />`).join('\n')
-      return `${source}\n\nconst App = () => (\n  <>\n${children}\n  </>\n)`
-    }
-
-    return source
   }
 
   const isSassCompiler = candidate =>
@@ -765,28 +657,6 @@ export const createRenderRuntimeController = ({
     reactDomClient: getRuntimeSpecifier('reactDomClient'),
   })
 
-  const withPreparedEntrySource = ({ tabs, entryTab, transformJsxSource }) => {
-    if (!isAutoRenderEnabled()) {
-      return tabs
-    }
-
-    const entrySource = typeof entryTab?.content === 'string' ? entryTab.content : ''
-    const wrappedEntrySource = withImplicitAppWrapper(entrySource, transformJsxSource)
-
-    if (wrappedEntrySource === entrySource) {
-      return tabs
-    }
-
-    return tabs.map(tab =>
-      tab?.id === entryTab.id
-        ? {
-            ...tab,
-            content: wrappedEntrySource,
-          }
-        : tab,
-    )
-  }
-
   const renderWorkspaceInIframe = async ({ mode, cssText }) => {
     const workspaceTabs = getWorkspaceTabsForPreview()
     const entryTab = resolveWorkspaceEntryTab(workspaceTabs)
@@ -796,11 +666,7 @@ export const createRenderRuntimeController = ({
     }
 
     const { transformJsxSource } = await ensureCoreRuntime()
-    const tabsForExecution = withPreparedEntrySource({
-      tabs: workspaceTabs,
-      entryTab,
-      transformJsxSource,
-    })
+    const tabsForExecution = workspaceTabs
     const entryTabForExecution =
       resolvePreviewEntryTab(tabsForExecution) ??
       tabsForExecution.find(tab => tab?.id === entryTab.id) ??

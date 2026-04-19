@@ -171,6 +171,22 @@ export const openWorkspaceTab = async (page: Page, fileName: string) => {
   await page.getByRole('button', { name: pattern }).click()
 }
 
+const replaceEditorSource = async ({
+  editorContent,
+  source,
+}: {
+  editorContent: ReturnType<Page['locator']>
+  source: string
+}) => {
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    await editorContent.fill('')
+    await editorContent.fill(source)
+    await editorContent.press('End')
+    await editorContent.type(' ')
+    await editorContent.press('Backspace')
+  }
+}
+
 export const reorderWorkspaceTabBefore = async (
   page: Page,
   { from, to }: { from: string; to: string },
@@ -199,35 +215,29 @@ export const setWorkspaceTabSource = async (
   },
 ) => {
   await openWorkspaceTab(page, fileName)
+  await expect(page.getByRole('region', { name: fileName })).toBeVisible()
   const editorContent = page
     .locator(`.editor-panel[data-editor-kind="${kind}"] .cm-content`)
     .first()
-  await editorContent.fill(source)
-  await editorContent.press('End')
-  await editorContent.type(' ')
-  await editorContent.press('Backspace')
+  await replaceEditorSource({ editorContent, source })
 }
 
 export const setComponentEditorSource = async (page: Page, source: string) => {
   await page.getByRole('button', { name: 'Open tab App.tsx' }).click()
+  await expect(page.getByRole('region', { name: 'App.tsx' })).toBeVisible()
   const editorContent = page
     .locator('.editor-panel[data-editor-kind="component"] .cm-content')
     .first()
-  await editorContent.fill(source)
-  await editorContent.press('End')
-  await editorContent.type(' ')
-  await editorContent.press('Backspace')
+  await replaceEditorSource({ editorContent, source })
 }
 
 export const setStylesEditorSource = async (page: Page, source: string) => {
   await page.getByRole('button', { name: 'Open tab app.css' }).click()
+  await expect(page.getByRole('region', { name: 'app.css' })).toBeVisible()
   const editorContent = page
     .locator('.editor-panel[data-editor-kind="styles"] .cm-content')
     .first()
-  await editorContent.fill(source)
-  await editorContent.press('End')
-  await editorContent.type(' ')
-  await editorContent.press('Backspace')
+  await replaceEditorSource({ editorContent, source })
 }
 
 export const getActiveComponentEditorLineNumber = async (page: Page) => {
