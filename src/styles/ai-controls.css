@@ -22,11 +22,11 @@
 }
 
 .app-grid-ai-controls[hidden] {
-  display: none !important;
+  display: none;
 }
 
 .app-grid-ai-controls .layout-toggle[hidden] {
-  display: none !important;
+  display: none;
 }
 
 .github-token-control-wrap {
@@ -178,7 +178,7 @@
 }
 
 .github-token-info-panel[hidden] {
-  display: none !important;
+  display: none;
 }
 
 .github-token-info-message {
@@ -433,7 +433,7 @@
 }
 
 .github-pr-context-close[hidden] {
-  display: none !important;
+  display: none;
 }
 
 .diagnostics-toggle.github-pr-context-disconnect {
@@ -488,15 +488,15 @@
 }
 
 .github-pr-context-disconnect[hidden] {
-  display: none !important;
+  display: none;
 }
 
 .github-pr-toggle[hidden] {
-  display: none !important;
+  display: none;
 }
 
 .ai-chat-toggle[hidden] {
-  display: none !important;
+  display: none;
 }
 
 .ai-chat-drawer {
@@ -530,7 +530,7 @@
 }
 
 .ai-chat-drawer[hidden] {
-  display: none !important;
+  display: none;
 }
 
 .github-pr-drawer {
@@ -564,7 +564,7 @@
 }
 
 .github-pr-drawer[hidden] {
-  display: none !important;
+  display: none;
 }
 
 .workspaces-drawer {
@@ -598,7 +598,7 @@
 }
 
 .workspaces-drawer[hidden] {
-  display: none !important;
+  display: none;
 }
 
 .workspaces-drawer__header {
@@ -713,7 +713,7 @@
 }
 
 .github-pr-field[hidden] {
-  display: none !important;
+  display: none;
 }
 
 .github-pr-field--checkbox {

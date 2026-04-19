@@ -23,6 +23,11 @@ test('PR/BYOT controls are visible and chat stays hidden until token connect', a
     exact: true,
     includeHidden: true,
   })
+  const workspacesToggle = page.getByRole('button', {
+    name: 'Workspaces',
+    exact: true,
+    includeHidden: true,
+  })
   await expect(byotControls).toBeVisible()
   await expect(page.getByRole('textbox', { name: 'GitHub token' })).toBeVisible()
   await expect(page.getByRole('button', { name: 'Add GitHub token' })).toBeVisible()
@@ -30,6 +35,8 @@ test('PR/BYOT controls are visible and chat stays hidden until token connect', a
   await expect(page.getByRole('heading', { name: 'AI Chat' })).toBeHidden()
   await expect(prToggle).toHaveCount(1)
   await expect(prToggle).toBeHidden()
+  await expect(workspacesToggle).toHaveCount(1)
+  await expect(workspacesToggle).toBeHidden()
 })
 
 test('chat becomes available after token connect', async ({ page }) => {
@@ -37,6 +44,7 @@ test('chat becomes available after token connect', async ({ page }) => {
   await connectByotWithSingleRepo(page)
 
   await expect(page.getByRole('button', { name: 'Open pull request' })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Workspaces' })).toBeVisible()
   await expect(page.getByRole('button', { name: 'Chat' })).toBeVisible()
 })
 
@@ -49,12 +57,19 @@ test('BYOT controls render with default app entry', async ({ page }) => {
     exact: true,
     includeHidden: true,
   })
+  const workspacesToggle = page.getByRole('button', {
+    name: 'Workspaces',
+    exact: true,
+    includeHidden: true,
+  })
   await expect(byotControls).toBeVisible()
   await expect(page.getByRole('textbox', { name: 'GitHub token' })).toBeVisible()
   await expect(page.getByRole('button', { name: 'Add GitHub token' })).toBeVisible()
   await expect(page.getByRole('button', { name: 'Chat' })).toBeHidden()
   await expect(prToggle).toHaveCount(1)
   await expect(prToggle).toBeHidden()
+  await expect(workspacesToggle).toHaveCount(1)
+  await expect(workspacesToggle).toBeHidden()
 })
 
 test('GitHub token info panel reflects missing and present token states', async ({
