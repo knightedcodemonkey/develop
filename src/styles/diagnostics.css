@@ -91,6 +91,10 @@
   cursor: pointer;
 }
 
+.diagnostics-toggle[hidden] {
+  display: none;
+}
+
 .diagnostics-toggle:hover {
   background: var(--surface-control-hover);
 }

@@ -47,18 +47,8 @@ const createWorkspaceTabSelectionController = ({
     })
   }
 
-  const syncEditorFromActiveWorkspaceTab = () => {
-    const activeTab = getActiveWorkspaceTab()
-    if (!activeTab) {
-      return
-    }
-
-    loadWorkspaceTabIntoEditor(activeTab)
-  }
-
   return {
     setActiveWorkspaceTab,
-    syncEditorFromActiveWorkspaceTab,
   }
 }
 

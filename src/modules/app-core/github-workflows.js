@@ -187,9 +187,6 @@ const initializeGitHubWorkflows = ({
     onActivePrContextChange: activeContext => {
       prContextUi.setActivePrContext(activeContext)
       prContextUi.syncAiChatTokenVisibility(getTokenForVisibility())
-      if (workspacesToggle instanceof HTMLButtonElement) {
-        workspacesToggle.hidden = Boolean(activeContext)
-      }
 
       if (activeContext) {
         closeWorkspacesDrawer()

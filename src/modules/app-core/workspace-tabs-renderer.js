@@ -22,7 +22,6 @@ const createWorkspaceTabsRenderer = ({
   getShouldShowEditedDesign,
   workspaceTabsShell,
   workspaceTabAddWrap,
-  syncEditorFromActiveWorkspaceTab,
 }) => {
   const clearWorkspaceTabDragState = () => {
     setDraggedWorkspaceTabId('')
@@ -294,8 +293,6 @@ const createWorkspaceTabsRenderer = ({
       renderWorkspaceTabs()
       return
     }
-
-    syncEditorFromActiveWorkspaceTab()
   }
 
   return {

@@ -111,17 +111,25 @@ export const createGitHubPrContextUiController = ({
         workspacesToggle.disabled = false
       }
 
-      aiChatToggle?.removeAttribute('hidden')
+      if (aiChatToggle instanceof HTMLElement) {
+        aiChatToggle.hidden = false
+      }
 
-      githubPrToggle?.removeAttribute('hidden')
+      if (githubPrToggle instanceof HTMLElement) {
+        githubPrToggle.hidden = false
+      }
       if (!contextState.activePrContext) {
-        workspacesToggle?.removeAttribute('hidden')
+        if (workspacesToggle instanceof HTMLElement) {
+          workspacesToggle.hidden = false
+        }
       }
 
       if (contextState.activePrContext) {
         githubPrContextClose?.removeAttribute('hidden')
         githubPrContextDisconnect?.removeAttribute('hidden')
-        workspacesToggle?.setAttribute('hidden', '')
+        if (workspacesToggle instanceof HTMLElement) {
+          workspacesToggle.hidden = true
+        }
       } else {
         githubPrContextClose?.setAttribute('hidden', '')
         githubPrContextDisconnect?.setAttribute('hidden', '')
@@ -129,7 +137,9 @@ export const createGitHubPrContextUiController = ({
       return
     }
 
-    aiChatToggle?.setAttribute('hidden', '')
+    if (aiChatToggle instanceof HTMLElement) {
+      aiChatToggle.hidden = true
+    }
     aiChatToggle?.setAttribute('aria-expanded', 'false')
     if (workspacesToggle instanceof HTMLButtonElement) {
       workspacesToggle.disabled = true
@@ -139,9 +149,13 @@ export const createGitHubPrContextUiController = ({
     contextState.hasSyncedActivePrEditorContent = false
     syncEditorPrContextIndicators(false)
     setGitHubPrToggleVisual('open-pr')
-    githubPrToggle?.setAttribute('hidden', '')
+    if (githubPrToggle instanceof HTMLElement) {
+      githubPrToggle.hidden = true
+    }
     githubPrToggle?.setAttribute('aria-expanded', 'false')
-    workspacesToggle?.setAttribute('hidden', '')
+    if (workspacesToggle instanceof HTMLElement) {
+      workspacesToggle.hidden = true
+    }
     workspacesToggle?.setAttribute('aria-expanded', 'false')
     githubPrContextClose?.setAttribute('hidden', '')
     githubPrContextDisconnect?.setAttribute('hidden', '')

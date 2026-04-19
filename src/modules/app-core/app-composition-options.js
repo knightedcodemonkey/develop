@@ -91,7 +91,6 @@ const createRuntimeCoreOptions = ({
     cdnImports,
     importFromCdnWithFallback,
     renderMode,
-    isAutoRenderEnabled: () => autoRenderToggle.checked,
     getJsxSource,
     getWorkspaceTabs: () => buildWorkspaceTabsSnapshot(),
     getPreviewHost,
