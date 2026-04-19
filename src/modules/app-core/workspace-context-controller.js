@@ -5,6 +5,8 @@ const createWorkspaceContextController = ({
   getActiveWorkspaceRecordId,
   setActiveWorkspaceRecordId,
   setActiveWorkspaceCreatedAt,
+  setWorkspacePrContextState,
+  setWorkspacePrNumber,
   setIsApplyingWorkspaceSnapshot,
   ensureWorkspaceTabsShape,
   githubPrBaseBranch,
@@ -55,6 +57,22 @@ const createWorkspaceContextController = ({
     try {
       setActiveWorkspaceRecordId(workspace.id)
       setActiveWorkspaceCreatedAt(workspace.createdAt ?? null)
+
+      if (typeof setWorkspacePrContextState === 'function') {
+        const nextPrContextState =
+          typeof workspace.prContextState === 'string' && workspace.prContextState.trim()
+            ? workspace.prContextState.trim()
+            : 'inactive'
+        setWorkspacePrContextState(nextPrContextState)
+      }
+
+      if (typeof setWorkspacePrNumber === 'function') {
+        const nextPrNumber =
+          typeof workspace.prNumber === 'number' && Number.isFinite(workspace.prNumber)
+            ? workspace.prNumber
+            : null
+        setWorkspacePrNumber(nextPrNumber)
+      }
 
       const nextTabs = ensureWorkspaceTabsShape(workspace.tabs)
       if (typeof workspace.base === 'string' && githubPrBaseBranch) {

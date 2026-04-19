@@ -21,6 +21,7 @@ const defaultCommitMessage = 'chore: sync editor updates from @knighted/develop'
 
 const supportedRenderModes = new Set(['dom', 'react'])
 const supportedStyleModes = new Set(['css', 'module', 'less', 'sass'])
+const supportedPrContextStates = new Set(['inactive', 'active', 'disconnected', 'closed'])
 
 const toSafeText = value => (typeof value === 'string' ? value.trim() : '')
 
@@ -40,6 +41,11 @@ const normalizeRenderMode = value => {
 const normalizeStyleMode = value => {
   const mode = toSafeText(value).toLowerCase()
   return supportedStyleModes.has(mode) ? mode : 'css'
+}
+
+const normalizePrContextState = value => {
+  const state = toSafeText(value).toLowerCase()
+  return supportedPrContextStates.has(state) ? state : 'inactive'
 }
 
 const getRepositoryPrConfigStorageKey = repositoryFullName =>
@@ -116,6 +122,13 @@ const sanitizeRepositoryPrConfig = config => {
   const fallbackPullRequestNumber = parsePullRequestNumberFromUrl(pullRequestUrl)
   const pullRequestNumber =
     toPullRequestNumber(source.pullRequestNumber) ?? fallbackPullRequestNumber
+  const isActivePr = source.isActivePr === true
+  const normalizedPrContextState = normalizePrContextState(source.prContextState)
+  const prContextState = isActivePr
+    ? 'active'
+    : normalizedPrContextState === 'active'
+      ? 'inactive'
+      : normalizedPrContextState
 
   return {
     baseBranch: toSafeText(source.baseBranch),
@@ -124,7 +137,8 @@ const sanitizeRepositoryPrConfig = config => {
     prBody: typeof source.prBody === 'string' ? source.prBody.trim() : '',
     renderMode: normalizeRenderMode(source.renderMode),
     styleMode: normalizeStyleMode(source.styleMode),
-    isActivePr: source.isActivePr === true,
+    isActivePr,
+    prContextState,
     pullRequestNumber,
     pullRequestUrl,
   }
@@ -143,7 +157,9 @@ const removeRepositoryPrConfig = repositoryFullName => {
 }
 
 const getActiveRepositoryPrContext = repositoryFullName => {
-  const savedConfig = readRepositoryPrConfig(repositoryFullName)
+  const savedConfig = sanitizeRepositoryPrConfig(
+    readRepositoryPrConfig(repositoryFullName),
+  )
 
   if (savedConfig?.isActivePr !== true) {
     return null
@@ -893,6 +909,7 @@ export const createGitHubPrDrawer = ({
             config: {
               ...normalizedSavedConfig,
               isActivePr: true,
+              prContextState: 'active',
               headBranch: nextHeadBranch,
               baseBranch: nextBaseBranch,
               pullRequestNumber: resolvedPullRequest.number,
@@ -913,6 +930,7 @@ export const createGitHubPrDrawer = ({
           config: {
             ...sanitizeRepositoryPrConfig(savedConfig),
             isActivePr: false,
+            prContextState: 'closed',
           },
         })
         setSubmitButtonLabel()
@@ -1202,6 +1220,7 @@ export const createGitHubPrDrawer = ({
           renderMode: currentRenderMode,
           styleMode: currentStyleMode,
           isActivePr: true,
+          prContextState: 'active',
           pullRequestNumber: existingConfig?.pullRequestNumber,
           pullRequestUrl: existingConfig?.pullRequestUrl,
         },
@@ -1211,6 +1230,12 @@ export const createGitHubPrDrawer = ({
       emitActivePrContextChange()
       return
     }
+
+    const nextPrContextState =
+      normalizedExistingConfig.prContextState === 'disconnected' ||
+      normalizedExistingConfig.prContextState === 'closed'
+        ? normalizedExistingConfig.prContextState
+        : 'inactive'
 
     saveRepositoryPrConfig({
       repositoryFullName,
@@ -1222,6 +1247,7 @@ export const createGitHubPrDrawer = ({
         renderMode: currentRenderMode,
         styleMode: currentStyleMode,
         isActivePr: false,
+        prContextState: nextPrContextState,
         pullRequestNumber: existingConfig?.pullRequestNumber,
         pullRequestUrl: existingConfig?.pullRequestUrl,
       },
@@ -1495,6 +1521,7 @@ export const createGitHubPrDrawer = ({
               prTitle: targetPrTitle,
               prBody: targetPrBody,
               isActivePr: true,
+              prContextState: 'active',
               pullRequestNumber: result.pullRequest.number,
               pullRequestUrl: result.pullRequest.htmlUrl,
             },
@@ -1630,6 +1657,7 @@ export const createGitHubPrDrawer = ({
           config: {
             ...normalizedSavedConfig,
             isActivePr: false,
+            prContextState: 'disconnected',
           },
         })
       }
@@ -1641,6 +1669,11 @@ export const createGitHubPrDrawer = ({
 
       return {
         reference: formatActivePrReference(previousActiveContext),
+        pullRequestNumber:
+          typeof previousActiveContext?.pullRequestNumber === 'number' &&
+          Number.isFinite(previousActiveContext.pullRequestNumber)
+            ? previousActiveContext.pullRequestNumber
+            : null,
       }
     },
     clearActivePrContext: () => {
@@ -1687,7 +1720,28 @@ export const createGitHubPrDrawer = ({
         pullRequestNumber,
       })
 
-      removeRepositoryPrConfig(repositoryFullName)
+      const savedConfig = sanitizeRepositoryPrConfig(
+        readRepositoryPrConfig(repositoryFullName),
+      )
+      saveRepositoryPrConfig({
+        repositoryFullName,
+        config: {
+          ...savedConfig,
+          baseBranch: toSafeText(activeContext?.baseBranch) || savedConfig.baseBranch,
+          headBranch:
+            sanitizeBranchPart(activeContext?.headBranch) || savedConfig.headBranch,
+          prTitle: toSafeText(activeContext?.prTitle) || savedConfig.prTitle,
+          prBody:
+            typeof activeContext?.prBody === 'string'
+              ? activeContext.prBody
+              : savedConfig.prBody,
+          isActivePr: false,
+          prContextState: 'closed',
+          pullRequestNumber,
+          pullRequestUrl:
+            toSafeText(activeContext?.pullRequestUrl) || savedConfig.pullRequestUrl,
+        },
+      })
       syncFormForRepository({ resetAll: true, resetBranch: true })
       setSubmitButtonLabel()
       emitActivePrContextChange()

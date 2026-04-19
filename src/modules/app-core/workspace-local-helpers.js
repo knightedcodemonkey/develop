@@ -6,15 +6,22 @@ const createWorkspaceContextSnapshotGetter =
     githubPrTitle,
     getActivePrContext,
     getPrContextState,
+    getPrNumber,
   }) =>
   () => {
     const activePrContext =
       typeof getActivePrContext === 'function' ? getActivePrContext() : null
-    const prNumber =
+    const activePrNumber =
       typeof activePrContext?.pullRequestNumber === 'number' &&
       Number.isFinite(activePrContext.pullRequestNumber)
         ? activePrContext.pullRequestNumber
         : null
+    const nextPrNumber = typeof getPrNumber === 'function' ? getPrNumber() : null
+    const persistedPrNumber =
+      Number.isFinite(nextPrNumber) && Number(nextPrNumber) > 0
+        ? Number(nextPrNumber)
+        : null
+    const prNumber = activePrNumber ?? persistedPrNumber
 
     return {
       repositoryFullName: getCurrentSelectedRepository(),

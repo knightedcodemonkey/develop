@@ -320,6 +320,9 @@ test('workspace tab drag reorder persists across reload', async ({ page }) => {
   await expect(orderedTabs.nth(0)).toHaveAccessibleName('Workspace tab module-2.tsx')
   await expect(orderedTabs.nth(1)).toHaveAccessibleName('Workspace tab App.tsx')
 
+  /* Reorder persistence is debounced; wait for normal save rather than unload flush. */
+  await page.waitForTimeout(1000)
+
   await page.reload()
   await waitForInitialRender(page)
 
