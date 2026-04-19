@@ -3,7 +3,7 @@ import {
   githubChatModelOptions,
   requestGitHubChatCompletion,
   streamGitHubChatCompletion,
-} from '../github-api.js'
+} from '../api/chat.js'
 import {
   formatModelAccessErrorMessage,
   isModelAccessError,

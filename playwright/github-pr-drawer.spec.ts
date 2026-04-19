@@ -1477,7 +1477,11 @@ test('Active PR context updates controls and can be closed from AI controls', as
   const storedValue = await page.evaluate(() =>
     localStorage.getItem('knighted:develop:github-pr-config:knightedcodemonkey/develop'),
   )
-  expect(storedValue).toBeNull()
+  expect(storedValue).not.toBeNull()
+  const parsedStoredValue = JSON.parse(storedValue as string) as Record<string, unknown>
+  expect(parsedStoredValue.isActivePr).toBe(false)
+  expect(parsedStoredValue.prContextState).toBe('closed')
+  expect(parsedStoredValue.pullRequestNumber).toBe(2)
   expect(closePullRequestRequestCount).toBe(1)
 })
 

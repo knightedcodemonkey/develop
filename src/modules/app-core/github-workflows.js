@@ -326,7 +326,7 @@ const initializeGitHubWorkflows = ({
               'neutral',
             )
             if (typeof onPrContextClosed === 'function') {
-              onPrContextClosed()
+              onPrContextClosed(result)
             }
             showAppToast(
               reference
@@ -370,7 +370,7 @@ const initializeGitHubWorkflows = ({
           'neutral',
         )
         if (typeof onPrContextDisconnected === 'function') {
-          onPrContextDisconnected()
+          onPrContextDisconnected(result)
         }
       },
     })

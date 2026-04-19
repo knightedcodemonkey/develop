@@ -108,6 +108,62 @@ const seedSyncedComponentTab = async (page: import('@playwright/test').Page) => 
   })
 }
 
+const waitForWorkspaceTabOrderPersistence = async (
+  page: import('@playwright/test').Page,
+  expectedLeadingTabNames: string[],
+) => {
+  await expect
+    .poll(async () => {
+      return page.evaluate(async expectedTabNames => {
+        const request = indexedDB.open('knighted-develop-workspaces')
+
+        const db = await new Promise<IDBDatabase>((resolve, reject) => {
+          request.onsuccess = () => resolve(request.result)
+          request.onerror = () => reject(request.error)
+          request.onblocked = () => reject(new Error('Could not open IndexedDB.'))
+        })
+
+        try {
+          const tx = db.transaction('prWorkspaces', 'readonly')
+          const store = tx.objectStore('prWorkspaces')
+          const getAllRequest = store.getAll()
+
+          const records = await new Promise<Array<Record<string, unknown>>>(
+            (resolve, reject) => {
+              getAllRequest.onsuccess = () => {
+                const value = Array.isArray(getAllRequest.result)
+                  ? getAllRequest.result
+                  : []
+                resolve(value as Array<Record<string, unknown>>)
+              }
+              getAllRequest.onerror = () => reject(getAllRequest.error)
+            },
+          )
+
+          return records.some(record => {
+            const tabs = Array.isArray(record.tabs) ? record.tabs : []
+            const tabNames = tabs
+              .map(tab => {
+                if (!tab || typeof tab !== 'object') {
+                  return ''
+                }
+
+                return typeof (tab as { name?: unknown }).name === 'string'
+                  ? ((tab as { name: string }).name ?? '')
+                  : ''
+              })
+              .filter(name => name.length > 0)
+
+            return expectedTabNames.every((name, index) => tabNames[index] === name)
+          })
+        } finally {
+          db.close()
+        }
+      }, expectedLeadingTabNames)
+    })
+    .toBe(true)
+}
+
 test('removing active tab selects deterministic adjacent tab', async ({ page }) => {
   await waitForInitialRender(page)
 
@@ -319,6 +375,9 @@ test('workspace tab drag reorder persists across reload', async ({ page }) => {
     .getByRole('listitem')
   await expect(orderedTabs.nth(0)).toHaveAccessibleName('Workspace tab module-2.tsx')
   await expect(orderedTabs.nth(1)).toHaveAccessibleName('Workspace tab App.tsx')
+
+  /* Reorder persistence is debounced; wait until IndexedDB reflects the new order. */
+  await waitForWorkspaceTabOrderPersistence(page, ['module-2.tsx', 'App.tsx'])
 
   await page.reload()
   await waitForInitialRender(page)

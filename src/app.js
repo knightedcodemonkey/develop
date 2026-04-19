@@ -41,13 +41,14 @@ import { createWorkspaceSyncController } from './modules/app-core/workspace-sync
 import { createWorkspaceTabAddMenuUiController } from './modules/app-core/workspace-tab-add-menu-ui.js'
 import { createDiagnosticsUiController } from './modules/diagnostics/diagnostics-ui.js'
 import { createGitHubChatDrawer } from './modules/github/chat-drawer/drawer.js'
-import { createGitHubByotControls } from './modules/github/github-byot-controls.js'
+import { createGitHubByotControls } from './modules/github/byot-controls.js'
 import {
   formatActivePrReference,
   getActivePrContextSyncKey,
-} from './modules/github/github-pr-context.js'
-import { createGitHubPrEditorSyncController } from './modules/github/github-pr-editor-sync.js'
-import { createGitHubPrDrawer } from './modules/github/github-pr-drawer.js'
+  parsePullRequestNumberFromUrl,
+} from './modules/github/pr/context.js'
+import { createGitHubPrEditorSyncController } from './modules/github/pr/editor-sync.js'
+import { createGitHubPrDrawer } from './modules/github/pr/drawer/controller/create-controller.js'
 import { createLayoutThemeController } from './modules/ui/layout-theme.js'
 import { createLintDiagnosticsController } from './modules/diagnostics/lint-diagnostics.js'
 import { createPreviewBackgroundController } from './modules/preview/preview-background.js'
@@ -395,6 +396,15 @@ const githubAiContextState = {
 }
 
 let workspacePrContextState = 'inactive'
+let workspacePrNumber = null
+
+const toPullRequestNumber = value => {
+  if (typeof value === 'number' && Number.isFinite(value) && value > 0) {
+    return value
+  }
+
+  return null
+}
 
 let chatDrawerController = {
   setOpen: () => {},
@@ -505,6 +515,7 @@ const getWorkspaceContextSnapshot = createWorkspaceContextSnapshotGetter({
   githubPrTitle,
   getActivePrContext: () => githubAiContextState.activePrContext,
   getPrContextState: () => workspacePrContextState,
+  getPrNumber: () => workspacePrNumber,
 })
 
 let loadedComponentTabId = 'component'
@@ -639,6 +650,8 @@ const {
   getActiveWorkspaceCreatedAt: () => activeWorkspaceCreatedAt,
   setActiveWorkspaceRecordId: value => (activeWorkspaceRecordId = value),
   setActiveWorkspaceCreatedAt: value => (activeWorkspaceCreatedAt = value),
+  setWorkspacePrContextState: value => (workspacePrContextState = value),
+  setWorkspacePrNumber: value => (workspacePrNumber = toPullRequestNumber(value)),
   getCurrentSelectedRepository: getCurrentSelectedRepositoryFullName,
   getActiveWorkspaceRecordId: () => activeWorkspaceRecordId,
   setIsApplyingWorkspaceSnapshot: value => (isApplyingWorkspaceSnapshot = value),
@@ -736,6 +749,10 @@ const setWorkspacePrContextState = nextState => {
   workspacePrContextState = nextState.trim()
 }
 
+const setWorkspacePrNumber = nextValue => {
+  workspacePrNumber = toPullRequestNumber(nextValue)
+}
+
 const persistWorkspacePrContextState = nextState => {
   setWorkspacePrContextState(nextState)
   queueWorkspaceSave()
@@ -820,16 +837,29 @@ const githubWorkflows = createGitHubWorkflowsSetup({
     prContextUi,
     onPrContextStateChange: activeContext => {
       if (activeContext?.prTitle) {
-        setWorkspacePrContextState('active')
+        const nextPrNumber =
+          toPullRequestNumber(activeContext.pullRequestNumber) ??
+          parsePullRequestNumberFromUrl(activeContext.pullRequestUrl)
+        const shouldPersistPrContext =
+          workspacePrContextState !== 'active' || workspacePrNumber !== nextPrNumber
+
+        setWorkspacePrNumber(nextPrNumber)
+
+        if (shouldPersistPrContext) {
+          persistWorkspacePrContextState('active')
+        }
       } else if (workspacePrContextState === 'active') {
-        setWorkspacePrContextState('inactive')
+        setWorkspacePrNumber(null)
+        persistWorkspacePrContextState('inactive')
       }
       editedIndicatorVisibilityController.refreshIndicators()
     },
-    onPrContextClosed: () => {
+    onPrContextClosed: result => {
+      setWorkspacePrNumber(result?.pullRequestNumber)
       persistWorkspacePrContextState('closed')
     },
-    onPrContextDisconnected: () => {
+    onPrContextDisconnected: result => {
+      setWorkspacePrNumber(result?.pullRequestNumber)
       persistWorkspacePrContextState('disconnected')
     },
     getTokenForVisibility: () => githubAiContextState.token,

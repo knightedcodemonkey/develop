@@ -1,4 +1,4 @@
-import { defaultGitHubChatModel } from '../github-api.js'
+import { defaultGitHubChatModel } from '../api/chat.js'
 
 export const toChatText = value => {
   if (typeof value !== 'string') {

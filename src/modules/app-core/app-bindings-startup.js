@@ -397,9 +397,6 @@ const bindAppEventsAndStart = ({
   window.addEventListener('beforeunload', () => {
     clearToastTimer()
     diagnosticsFlowController.dispose()
-    void flushWorkspaceSave().catch(() => {
-      /* noop */
-    })
     workspaceSaveController.dispose()
     void workspaceStorage.close()
     chatDrawerController.dispose()
