@@ -595,10 +595,14 @@ test('auto render implicitly wraps source with App in dom and react modes', asyn
   )
 
   await page.getByRole('combobox', { name: 'Render mode' }).selectOption('react')
+  await expect(page.getByRole('combobox', { name: 'Render mode' })).toHaveValue('react')
   await setComponentEditorSource(
     page,
     'const Button = () => <button type="button">implicit app react</button>',
   )
+  await expect(
+    page.locator('.editor-panel[data-editor-kind="component"] .cm-content').first(),
+  ).toContainText('implicit app react')
 
   await expect(page.getByRole('status', { name: 'App status' })).toHaveText('Rendered')
   await expect(getPreviewFrame(page).getByRole('button')).toContainText(
@@ -720,13 +724,13 @@ test('persists style mode across reload', async ({ page }) => {
 
   await ensurePanelToolsVisible(page, 'styles')
   await page.getByRole('combobox', { name: 'Style mode' }).selectOption('sass')
+  await expect(page.locator('#style-mode')).toHaveValue('sass')
   await expect(page.getByRole('status', { name: 'App status' })).toHaveText('Rendered')
 
   await page.reload()
   await waitForInitialRender(page)
-  await ensurePanelToolsVisible(page, 'styles')
 
-  await expect(page.getByRole('combobox', { name: 'Style mode' })).toHaveValue('sass')
+  await expect(page.locator('#style-mode')).toHaveValue('sass')
 })
 
 test('renders with less style mode', async ({ page }) => {
