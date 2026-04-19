@@ -837,13 +837,20 @@ const githubWorkflows = createGitHubWorkflowsSetup({
     prContextUi,
     onPrContextStateChange: activeContext => {
       if (activeContext?.prTitle) {
-        setWorkspacePrContextState('active')
-        setWorkspacePrNumber(
+        const nextPrNumber =
           toPullRequestNumber(activeContext.pullRequestNumber) ??
-            parsePullRequestNumberFromUrl(activeContext.pullRequestUrl),
-        )
+          parsePullRequestNumberFromUrl(activeContext.pullRequestUrl)
+        const shouldPersistPrContext =
+          workspacePrContextState !== 'active' || workspacePrNumber !== nextPrNumber
+
+        setWorkspacePrNumber(nextPrNumber)
+
+        if (shouldPersistPrContext) {
+          persistWorkspacePrContextState('active')
+        }
       } else if (workspacePrContextState === 'active') {
-        setWorkspacePrContextState('inactive')
+        setWorkspacePrNumber(null)
+        persistWorkspacePrContextState('inactive')
       }
       editedIndicatorVisibilityController.refreshIndicators()
     },
