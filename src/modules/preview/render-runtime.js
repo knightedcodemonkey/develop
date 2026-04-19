@@ -9,7 +9,6 @@ export const createRenderRuntimeController = ({
   cdnImports,
   importFromCdnWithFallback,
   renderMode,
-  isAutoRenderEnabled: _isAutoRenderEnabled = () => false,
   getJsxSource,
   getWorkspaceTabs,
   getPreviewHost,

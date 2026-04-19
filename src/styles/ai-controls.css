@@ -359,12 +359,6 @@
   color: color-mix(in srgb, var(--panel-text) 84%, var(--text-subtle));
 }
 
-.diagnostics-toggle.ai-chat-toggle[hidden],
-.diagnostics-toggle.github-pr-toggle[hidden],
-.diagnostics-toggle.workspaces-toggle[hidden] {
-  display: none;
-}
-
 .diagnostics-toggle.workspaces-toggle:hover:not(:disabled) {
   color: var(--workspaces-toggle-color);
 }
@@ -488,14 +482,6 @@
 }
 
 .github-pr-context-disconnect[hidden] {
-  display: none;
-}
-
-.github-pr-toggle[hidden] {
-  display: none;
-}
-
-.ai-chat-toggle[hidden] {
   display: none;
 }
 
