@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test'
-import { defaultGitHubChatModel } from '../src/modules/github/github-api.js'
+import { defaultGitHubChatModel } from '../src/modules/github/api/chat.js'
 import type { ChatRequestBody, ChatRequestMessage } from './helpers/app-test-helpers.js'
 import {
   appEntryPath,

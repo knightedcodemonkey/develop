@@ -3,9 +3,9 @@ import {
   loadGitHubToken,
   maskGitHubToken,
   saveGitHubToken,
-} from './github-token-store.js'
-import { listWritableRepositories } from './github-api.js'
-import { findRepositoryWithActivePrContext } from './github-pr-drawer.js'
+} from './token-store.js'
+import { listWritableRepositories } from './api/repositories.js'
+import { findRepositoryWithActivePrContext } from './pr/drawer/config.js'
 
 const selectedRepositoryStorageKey = 'knighted:develop:github-repository'
 

@@ -1,4 +1,4 @@
-import { getRepositoryFileContent } from './github-api.js'
+import { getRepositoryFileContent } from '../api/repository-files.js'
 
 const toSafeText = value => (typeof value === 'string' ? value.trim() : '')
 

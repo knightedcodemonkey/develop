@@ -41,14 +41,14 @@ import { createWorkspaceSyncController } from './modules/app-core/workspace-sync
 import { createWorkspaceTabAddMenuUiController } from './modules/app-core/workspace-tab-add-menu-ui.js'
 import { createDiagnosticsUiController } from './modules/diagnostics/diagnostics-ui.js'
 import { createGitHubChatDrawer } from './modules/github/chat-drawer/drawer.js'
-import { createGitHubByotControls } from './modules/github/github-byot-controls.js'
+import { createGitHubByotControls } from './modules/github/byot-controls.js'
 import {
   formatActivePrReference,
   getActivePrContextSyncKey,
   parsePullRequestNumberFromUrl,
-} from './modules/github/github-pr-context.js'
-import { createGitHubPrEditorSyncController } from './modules/github/github-pr-editor-sync.js'
-import { createGitHubPrDrawer } from './modules/github/github-pr-drawer.js'
+} from './modules/github/pr/context.js'
+import { createGitHubPrEditorSyncController } from './modules/github/pr/editor-sync.js'
+import { createGitHubPrDrawer } from './modules/github/pr/drawer/controller/create-controller.js'
 import { createLayoutThemeController } from './modules/ui/layout-theme.js'
 import { createLintDiagnosticsController } from './modules/diagnostics/lint-diagnostics.js'
 import { createPreviewBackgroundController } from './modules/preview/preview-background.js'
