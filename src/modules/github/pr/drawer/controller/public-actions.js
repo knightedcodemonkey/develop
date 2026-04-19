@@ -20,7 +20,6 @@ export const createPublicActions = ({
   abortPendingActiveContentSyncRequest,
   closeRepositoryPullRequest,
   formatActivePrReference,
-  setRepositoryActivePrContext,
   clearRepositoryActivePrContext,
   toSafeText,
 }) => {
@@ -91,10 +90,7 @@ export const createPublicActions = ({
         pullRequestNumber,
       })
 
-      setRepositoryActivePrContext({
-        repositoryFullName,
-        activeContext: null,
-      })
+      clearRepositoryActivePrContext(repositoryFullName)
       syncFormForRepository({ resetAll: true, resetBranch: true })
       setSubmitButtonLabel()
       emitActivePrContextChange()

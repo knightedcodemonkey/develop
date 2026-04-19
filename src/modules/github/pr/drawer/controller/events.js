@@ -10,7 +10,7 @@ export const bindControllerEvents = ({
   submitButton,
   setOpen,
   runSubmit,
-  persistCurrentConfig,
+  refreshContextUi,
   setSelectedRepository,
   setSubmitButtonLabel,
   emitActivePrContextChange,
@@ -48,11 +48,11 @@ export const bindControllerEvents = ({
     })
   })
 
-  baseBranchInput?.addEventListener('change', persistCurrentConfig)
-  baseBranchInput?.addEventListener('blur', persistCurrentConfig)
-  headBranchInput?.addEventListener('blur', persistCurrentConfig)
-  prTitleInput?.addEventListener('blur', persistCurrentConfig)
-  prBodyInput?.addEventListener('blur', persistCurrentConfig)
+  baseBranchInput?.addEventListener('change', refreshContextUi)
+  baseBranchInput?.addEventListener('blur', refreshContextUi)
+  headBranchInput?.addEventListener('blur', refreshContextUi)
+  prTitleInput?.addEventListener('blur', refreshContextUi)
+  prBodyInput?.addEventListener('blur', refreshContextUi)
 
   submitButton?.addEventListener('click', () => {
     if (state.submitting) {
