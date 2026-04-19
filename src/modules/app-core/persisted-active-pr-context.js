@@ -28,8 +28,17 @@ const createPersistedActivePrContextGetter = ({
       typeof githubPrHeadBranch?.value === 'string' ? githubPrHeadBranch.value.trim() : ''
     const prTitle =
       typeof githubPrTitle?.value === 'string' ? githubPrTitle.value.trim() : ''
+    const rawPullRequestNumber = getWorkspacePrNumber()
+    const pullRequestNumber =
+      typeof rawPullRequestNumber === 'number' && Number.isFinite(rawPullRequestNumber)
+        ? rawPullRequestNumber
+        : null
 
-    if (!headBranch || !prTitle) {
+    if (!prTitle) {
+      return null
+    }
+
+    if (!headBranch && pullRequestNumber === null) {
       return null
     }
 
@@ -42,7 +51,7 @@ const createPersistedActivePrContextGetter = ({
       headBranch,
       prTitle,
       prBody: typeof githubPrBody?.value === 'string' ? githubPrBody.value : '',
-      pullRequestNumber: getWorkspacePrNumber(),
+      pullRequestNumber,
       pullRequestUrl: '',
       renderMode: renderMode?.value,
       styleMode: styleMode?.value,

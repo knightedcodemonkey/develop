@@ -210,7 +210,7 @@ const initializeGitHubWorkflows = ({
         prContextUi.markActivePrEditorContentSynced()
 
         syncFromActiveContext({
-          tabTargets: args?.syncTargets?.tabTargets,
+          tabTargets: result?.syncTargets?.tabTargets ?? args?.syncTargets?.tabTargets,
         })
       }
 

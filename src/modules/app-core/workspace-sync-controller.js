@@ -191,7 +191,7 @@ const createWorkspaceSyncController = ({
         normalizeWorkspacePathValue(tab.path),
       ].filter(Boolean)
       const matchedPath = candidatePaths.find(path => path === expectedPath)
-      if (!matchedPath) {
+      if (!matchedPath && tabKind !== 'component' && tabKind !== 'styles') {
         return tab
       }
 
@@ -199,7 +199,7 @@ const createWorkspaceSyncController = ({
       updatedTabCount += 1
       return {
         ...tab,
-        targetPrFilePath: matchedPath,
+        targetPrFilePath: expectedPath,
         content: syncedContent,
         syncedContent,
         isDirty: false,

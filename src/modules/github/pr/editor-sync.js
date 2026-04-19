@@ -73,6 +73,9 @@ export const createGitHubPrEditorSyncController = ({
         signal,
       })
 
+    let resolvedComponentTabPath = componentTabPath
+    let resolvedStylesTabPath = stylesTabPath
+
     const componentRequest = (async () => {
       const primary = await requestFileContent(componentTabPath)
       if (primary) {
@@ -81,14 +84,15 @@ export const createGitHubPrEditorSyncController = ({
 
       const fallbackPaths = toComponentPathFallbacks(componentTabPath)
       const fallbackResults = await Promise.all(
-        fallbackPaths.map(path => requestFileContent(path)),
+        fallbackPaths.map(async path => ({
+          path,
+          file: await requestFileContent(path),
+        })),
       )
-      const fallback = fallbackResults.find(Boolean)
-      if (fallback) {
-        return {
-          ...fallback,
-          path: componentTabPath,
-        }
+      const fallback = fallbackResults.find(candidate => candidate.file)
+      if (fallback?.file) {
+        resolvedComponentTabPath = fallback.path
+        return fallback.file
       }
 
       return null
@@ -104,6 +108,10 @@ export const createGitHubPrEditorSyncController = ({
       stylesRequest,
     ])
 
+    if (stylesTabPath === componentTabPath) {
+      resolvedStylesTabPath = resolvedComponentTabPath
+    }
+
     if (signal?.aborted) {
       return {
         synced: false,
@@ -118,9 +126,6 @@ export const createGitHubPrEditorSyncController = ({
 
     if (componentFile && typeof componentFile.content === 'string') {
       setComponent(componentFile.content)
-      queueMicrotask(() => {
-        setComponent(componentFile.content)
-      })
       updated = true
       componentSynced = true
     }
@@ -143,6 +148,12 @@ export const createGitHubPrEditorSyncController = ({
       synced: componentSynced && stylesSynced,
       componentSynced,
       stylesSynced,
+      syncTargets: {
+        tabTargets: [
+          { kind: 'component', path: resolvedComponentTabPath },
+          { kind: 'styles', path: resolvedStylesTabPath },
+        ],
+      },
     }
   }
 
