@@ -28,6 +28,7 @@ See the full storage ownership docs for non-PR keys:
 ### localStorage
 
 - Not used for PR context state.
+- No legacy PR-context migration/cleanup path is supported.
 
 ## Status Matrix
 
@@ -39,6 +40,29 @@ Use this matrix as the source of truth when debugging UI/storage mismatch.
 | B. Workspace is for an active, open PR        | `active`             | PR number                         | none                   | Push mode in PR controls.                                   |
 | C. Workspace is for a disconnected PR context | `disconnected`       | last known PR number if available | none                   | PR may still be open on GitHub; reconnect can verify later. |
 | D. Workspace is for a PR closed on GitHub     | `closed`             | closed PR number                  | none                   | Historical context retained for debugging/reference.        |
+
+## Current Workspace Selection On Load
+
+When the app loads or the selected repository changes, the app selects a workspace from IndexedDB using repository-scoped records only.
+
+Selection order:
+
+1. Load records for the currently selected repository (`repo` match).
+2. Compute a preferred id from in-memory state:
+
+- Existing in-memory active record id when available.
+- Otherwise canonical id derived from current repository + head.
+
+3. If the preferred record exists and is `active`, select it.
+4. Otherwise select the first `active` record in that repository.
+5. Otherwise select the preferred record if present.
+6. Otherwise fall back to the first record returned by IDB ordering.
+
+Notes:
+
+- No `active workspace` pointer is stored in `localStorage`.
+- Restore behavior is intentionally derived from IDB workspace records + in-memory runtime state.
+- This avoids cross-storage drift between `localStorage` and IndexedDB.
 
 ## Why PR Context Lives In IDB Only
 

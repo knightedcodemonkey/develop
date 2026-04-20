@@ -29,6 +29,9 @@ const createWorkspaceContextController = ({
   toWorkspaceRecordId,
   getHeadBranchValue,
 }) => {
+  const toWorkspacePrContextState = value =>
+    typeof value === 'string' ? value.trim().toLowerCase() : ''
+
   const listLocalContextRecords = async () => {
     const selectedRepository = getCurrentSelectedRepository()
     return workspaceStorage.listWorkspaces({
@@ -144,7 +147,14 @@ const createWorkspaceContextController = ({
       })
 
     const preferred = options.find(workspace => workspace.id === preferredId)
-    const next = preferred ?? options[0]
+    const preferredIsActive =
+      toWorkspacePrContextState(preferred?.prContextState) === 'active'
+    const activeContextOption = options.find(
+      workspace => toWorkspacePrContextState(workspace?.prContextState) === 'active',
+    )
+    const next = preferredIsActive
+      ? preferred
+      : (activeContextOption ?? preferred ?? options[0])
 
     if (!next) {
       return

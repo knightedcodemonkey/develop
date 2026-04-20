@@ -231,6 +231,7 @@ const createWorkspaceSyncController = ({
             repositoryFullName: context.repositoryFullName,
             headBranch: context.headBranch,
             activeRecordId: getActiveWorkspaceRecordId(),
+            prContextState: context.prContextState,
           })
 
     return {
