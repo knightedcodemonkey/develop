@@ -3006,15 +3006,14 @@ test('Reload keeps persisted active PR workspace context active', async ({ page 
   })
 
   await page.evaluate(
-    ({ repo, workspaceRecordId }) => {
+    ({ repo }) => {
       localStorage.setItem(
         'knighted:develop:github-pat',
         'github_pat_fake_chat_1234567890',
       )
       localStorage.setItem('knighted:develop:github-repository', repo)
-      localStorage.setItem('knighted:develop:active-workspace-id', workspaceRecordId)
     },
-    { repo: repositoryFullName, workspaceRecordId: workspaceId },
+    { repo: repositoryFullName },
   )
 
   await waitForAppReady(page, `${appEntryPath}`)
@@ -3038,7 +3037,7 @@ test('Reload keeps persisted active PR workspace context active', async ({ page 
   expect(activeRecordsForPr).toHaveLength(1)
 })
 
-test('Reload prefers active PR workspace over inactive preferred workspace id', async ({
+test('Reload prefers active PR workspace when mixed workspace records exist', async ({
   page,
 }) => {
   const repositoryFullName = 'knightedcodemonkey/develop'
@@ -3161,15 +3160,14 @@ test('Reload prefers active PR workspace over inactive preferred workspace id', 
   ])
 
   await page.evaluate(
-    ({ repo, staleWorkspaceId }) => {
+    ({ repo }) => {
       localStorage.setItem(
         'knighted:develop:github-pat',
         'github_pat_fake_chat_1234567890',
       )
       localStorage.setItem('knighted:develop:github-repository', repo)
-      localStorage.setItem('knighted:develop:active-workspace-id', staleWorkspaceId)
     },
-    { repo: repositoryFullName, staleWorkspaceId: inactiveWorkspaceId },
+    { repo: repositoryFullName },
   )
 
   await waitForAppReady(page, `${appEntryPath}`)

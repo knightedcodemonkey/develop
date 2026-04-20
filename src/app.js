@@ -72,7 +72,6 @@ import {
   createWorkspaceTabId as createWorkspaceTabIdFactory,
   makeUniqueTabPath as makeUniqueTabPathFactory,
 } from './modules/workspace/workspace-tab-factory.js'
-import { createWorkspaceActiveRecordStorage } from './modules/workspace/workspace-active-record-storage.js'
 import { createEnsureWorkspaceTabsShape } from './modules/workspace/workspace-tab-shape.js'
 import {
   getDirtyStateForTabChange,
@@ -231,8 +230,7 @@ let pendingClearAction = null
 let suppressEditorChangeSideEffects = false
 let appToastDismissTimer = null
 const workspaceStorage = createWorkspaceStorageAdapter()
-const activeWorkspaceRecordStorage = createWorkspaceActiveRecordStorage()
-let activeWorkspaceRecordId = activeWorkspaceRecordStorage.load()
+let activeWorkspaceRecordId = ''
 let activeWorkspaceCreatedAt = null
 let workspacesDrawerController = null
 let isApplyingWorkspaceSnapshot = false
@@ -408,7 +406,6 @@ const toPullRequestNumber = value => {
 
 const setActiveWorkspaceRecordId = nextValue => {
   activeWorkspaceRecordId = toNonEmptyWorkspaceText(nextValue)
-  activeWorkspaceRecordStorage.persist(activeWorkspaceRecordId)
 }
 
 let chatDrawerController = {
