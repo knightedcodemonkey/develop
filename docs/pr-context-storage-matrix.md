@@ -28,6 +28,7 @@ See the full storage ownership docs for non-PR keys:
 ### localStorage
 
 - Not used for PR context state.
+- No legacy PR-context migration/cleanup path is supported.
 
 ## Status Matrix
 

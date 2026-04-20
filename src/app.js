@@ -43,10 +43,6 @@ import {
 } from './modules/app-core/github-pr-icons.js'
 import { createWorkspaceSyncController } from './modules/app-core/workspace-sync-controller.js'
 import { createWorkspaceTabAddMenuUiController } from './modules/app-core/workspace-tab-add-menu-ui.js'
-import {
-  clearLegacyPrConfigStorage,
-  legacyPrConfigStoragePrefix,
-} from './modules/app-core/legacy-pr-config-storage.js'
 import { createPersistedActivePrContextGetter } from './modules/app-core/persisted-active-pr-context.js'
 import { createDiagnosticsUiController } from './modules/diagnostics/diagnostics-ui.js'
 import { createGitHubChatDrawer } from './modules/github/chat-drawer/drawer.js'
@@ -341,8 +337,6 @@ const workspaceTabAddMenuUi = createWorkspaceTabAddMenuUiController({
   addMenu: workspaceTabAddMenu,
   addModuleButton: workspaceTabAddModule,
 })
-
-clearLegacyPrConfigStorage({ prefix: legacyPrConfigStoragePrefix })
 
 const {
   panelToolsState,
