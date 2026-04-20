@@ -830,7 +830,14 @@ const normalizeWorkspaceEditorsTrailingNewlineAfterPublish =
 
 const reconcileWorkspaceTabsWithPushUpdates = fileUpdates => {
   normalizeWorkspaceEditorsTrailingNewlineAfterPublish({ fileUpdates })
-  return workspaceSyncController.reconcileWorkspaceTabsWithPushUpdates(fileUpdates)
+  const updatedCount =
+    workspaceSyncController.reconcileWorkspaceTabsWithPushUpdates(fileUpdates)
+
+  if (updatedCount > 0) {
+    editedIndicatorVisibilityController.refreshIndicators()
+  }
+
+  return updatedCount
 }
 
 const setWorkspacePrContextState = nextState => {
@@ -977,7 +984,13 @@ const githubWorkflows = createGitHubWorkflowsSetup({
     },
     getActivePrEditorSyncKey: () => githubAiContextState.activePrEditorSyncKey,
     syncFromActiveContext: ({ tabTargets }) => {
+      const activeTabIdBeforeSync = workspaceTabsState.getActiveTabId()
       reconcileWorkspaceTabsWithEditorSync({ tabTargets })
+      const activeTabAfterSync =
+        workspaceTabsState.getTab(activeTabIdBeforeSync) ?? getActiveWorkspaceTab()
+      if (activeTabAfterSync) {
+        loadWorkspaceTabIntoEditor(activeTabAfterSync)
+      }
     },
     formatActivePrReference,
     githubPrContextClose,

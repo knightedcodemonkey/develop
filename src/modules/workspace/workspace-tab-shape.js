@@ -37,6 +37,7 @@ const createEnsureWorkspaceTabsShape =
         const normalizedEntryPath = normalizeEntryTabPath(tab.path, {
           preferredFileName: tab.name,
         })
+        const normalizedEntryTargetPath = normalizeWorkspacePathValue(normalizedEntryPath)
         return {
           ...tab,
           role: 'entry',
@@ -44,9 +45,7 @@ const createEnsureWorkspaceTabsShape =
           content: typeof tab?.content === 'string' ? tab.content : '',
           path: normalizedEntryPath,
           name: getPathFileName(normalizedEntryPath) || defaultComponentTabName,
-          targetPrFilePath:
-            getTabTargetPrFilePath(tab) ||
-            normalizeWorkspacePathValue(normalizedEntryPath),
+          targetPrFilePath: normalizedEntryTargetPath || null,
           isDirty: Boolean(tab?.isDirty),
           syncedAt: toWorkspaceSyncTimestamp(tab?.syncedAt),
           lastSyncedRemoteSha: toWorkspaceSyncSha(tab?.lastSyncedRemoteSha),
@@ -61,6 +60,8 @@ const createEnsureWorkspaceTabsShape =
         const normalizedStylesPath =
           toNonEmptyWorkspaceText(tab.path) || defaultStylesTabPath
         const normalizedStylesNameInput = toNonEmptyWorkspaceText(tab.name)
+        const normalizedStylesTargetPath =
+          normalizeWorkspacePathValue(normalizedStylesPath)
         return {
           ...tab,
           language: isStyleTabLanguage(tab.language) ? tab.language : 'css',
@@ -72,9 +73,7 @@ const createEnsureWorkspaceTabsShape =
             normalizedStylesNameInput.toLowerCase() === 'styles'
               ? getPathFileName(normalizedStylesPath) || defaultStylesTabName
               : normalizedStylesNameInput,
-          targetPrFilePath:
-            getTabTargetPrFilePath(tab) ||
-            normalizeWorkspacePathValue(normalizedStylesPath),
+          targetPrFilePath: normalizedStylesTargetPath || null,
           isDirty: Boolean(tab?.isDirty),
           syncedAt: toWorkspaceSyncTimestamp(tab?.syncedAt),
           lastSyncedRemoteSha: toWorkspaceSyncSha(tab?.lastSyncedRemoteSha),
@@ -86,6 +85,7 @@ const createEnsureWorkspaceTabsShape =
       }
 
       const nextPath = toNonEmptyWorkspaceText(tab?.path)
+      const normalizedModuleTargetPath = normalizeWorkspacePathValue(nextPath)
       const nextContent = typeof tab?.content === 'string' ? tab.content : ''
       return {
         ...tab,
@@ -94,7 +94,8 @@ const createEnsureWorkspaceTabsShape =
         path: nextPath,
         content: nextContent,
         name: toNonEmptyWorkspaceText(tab?.name) || getPathFileName(nextPath) || tab?.id,
-        targetPrFilePath: getTabTargetPrFilePath(tab) || null,
+        targetPrFilePath:
+          normalizedModuleTargetPath || getTabTargetPrFilePath(tab) || null,
         isDirty: Boolean(tab?.isDirty),
         syncedAt: toWorkspaceSyncTimestamp(tab?.syncedAt),
         lastSyncedRemoteSha: toWorkspaceSyncSha(tab?.lastSyncedRemoteSha),
