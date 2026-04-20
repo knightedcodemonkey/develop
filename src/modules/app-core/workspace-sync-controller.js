@@ -132,9 +132,7 @@ const createWorkspaceSyncController = ({
 
       const isPrimaryEditorTab = tab?.id === 'component' || tab?.id === 'styles'
       const normalizedPath = normalizeWorkspacePathValue(tab?.path)
-      const path = isPrimaryEditorTab
-        ? normalizedPath || getTabTargetPrFilePath(tab) || ''
-        : normalizedPath || getTabTargetPrFilePath(tab) || ''
+      const path = normalizedPath || getTabTargetPrFilePath(tab) || ''
       if (!path) {
         continue
       }

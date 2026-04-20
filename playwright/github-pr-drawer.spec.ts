@@ -2792,7 +2792,11 @@ test('Active PR context push commit uses Git Database API atomic path by default
         const tabs = Array.isArray(workspaceRecord?.tabs)
           ? (workspaceRecord.tabs as Array<Record<string, unknown>>)
           : []
-        return tabs.every(tab => tab?.isDirty === false)
+        const tabIds = new Set(
+          tabs.map(tab => (typeof tab?.id === 'string' ? tab.id : '')).filter(Boolean),
+        )
+        const hasPrimaryTabs = tabIds.has('component') && tabIds.has('styles')
+        return hasPrimaryTabs && tabs.every(tab => tab?.isDirty === false)
       },
       { timeout: 10_000 },
     )
