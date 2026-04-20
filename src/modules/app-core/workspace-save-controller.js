@@ -23,28 +23,63 @@ const createWorkspaceSaveController = ({
           ? await workspaceStorage.listWorkspaces({ repo: normalizedSavedRepo })
           : await workspaceStorage.listWorkspaces()
 
-        const duplicateRecordIds = siblingRecords
-          .filter(record => {
+        const duplicateRecordIds = new Set(
+          siblingRecords
+            .filter(record => {
+              if (!record || typeof record !== 'object') {
+                return false
+              }
+
+              if (
+                toNonEmptyWorkspaceText(record.id) === toNonEmptyWorkspaceText(saved.id)
+              ) {
+                return false
+              }
+
+              return (
+                toNonEmptyWorkspaceText(record.repo) === normalizedSavedRepo &&
+                toNonEmptyWorkspaceText(record.head) === normalizedSavedHead
+              )
+            })
+            .map(record => toNonEmptyWorkspaceText(record.id))
+            .filter(Boolean),
+        )
+
+        const isSavedActiveContext =
+          toNonEmptyWorkspaceText(saved.prContextState).toLowerCase() === 'active'
+        const hasSavedPrNumber =
+          typeof saved.prNumber === 'number' && Number.isFinite(saved.prNumber)
+
+        if (isSavedActiveContext && hasSavedPrNumber && normalizedSavedRepo) {
+          for (const record of siblingRecords) {
             if (!record || typeof record !== 'object') {
-              return false
+              continue
             }
+
+            const recordId = toNonEmptyWorkspaceText(record.id)
+            if (!recordId || recordId === toNonEmptyWorkspaceText(saved.id)) {
+              continue
+            }
+
+            const isRecordActiveContext =
+              toNonEmptyWorkspaceText(record.prContextState).toLowerCase() === 'active'
+            const hasMatchingPrNumber =
+              typeof record.prNumber === 'number' &&
+              Number.isFinite(record.prNumber) &&
+              record.prNumber === saved.prNumber
 
             if (
-              toNonEmptyWorkspaceText(record.id) === toNonEmptyWorkspaceText(saved.id)
+              isRecordActiveContext &&
+              hasMatchingPrNumber &&
+              toNonEmptyWorkspaceText(record.repo) === normalizedSavedRepo
             ) {
-              return false
+              duplicateRecordIds.add(recordId)
             }
-
-            return (
-              toNonEmptyWorkspaceText(record.repo) === normalizedSavedRepo &&
-              toNonEmptyWorkspaceText(record.head) === normalizedSavedHead
-            )
-          })
-          .map(record => toNonEmptyWorkspaceText(record.id))
-          .filter(Boolean)
+          }
+        }
 
         await Promise.all(
-          duplicateRecordIds.map(duplicateId =>
+          [...duplicateRecordIds].map(duplicateId =>
             workspaceStorage.removeWorkspace(duplicateId),
           ),
         )

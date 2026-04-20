@@ -32,9 +32,12 @@ const resolveWorkspaceRecordIdentity = ({
   repositoryFullName,
   headBranch,
   activeRecordId,
+  prContextState,
 } = {}) => {
   const canonicalId = toWorkspaceRecordId({ repositoryFullName, headBranch })
   const currentId = toNonEmptyWorkspaceText(activeRecordId)
+  const normalizedPrContextState = toNonEmptyWorkspaceText(prContextState).toLowerCase()
+  const isActivePrContext = normalizedPrContextState === 'active'
 
   if (!currentId) {
     return {
@@ -55,6 +58,16 @@ const resolveWorkspaceRecordIdentity = ({
     hasRepository && currentId.startsWith('workspace_')
 
   if (shouldPromoteLocalIdToRepository) {
+    return {
+      id: canonicalId,
+      supersededId: currentId,
+    }
+  }
+
+  const shouldRekeyRepositoryIdentity =
+    hasRepository && isActivePrContext && currentId.startsWith('repo_')
+
+  if (shouldRekeyRepositoryIdentity) {
     return {
       id: canonicalId,
       supersededId: currentId,

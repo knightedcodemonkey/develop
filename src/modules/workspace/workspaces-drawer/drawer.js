@@ -5,15 +5,15 @@ const normalizeQuery = value => toSafeText(value).toLowerCase()
 const toWorkspaceLabel = workspace => {
   const hasTitle = toSafeText(workspace?.prTitle)
   if (hasTitle) {
-    return `Local: ${hasTitle}`
+    return hasTitle
   }
 
   const hasHead = toSafeText(workspace?.head)
   if (hasHead) {
-    return `Local: ${hasHead}`
+    return hasHead
   }
 
-  return `Local: ${toSafeText(workspace?.id) || 'workspace'}`
+  return toSafeText(workspace?.id) || 'workspace'
 }
 
 const matchesQuery = (workspace, query) => {

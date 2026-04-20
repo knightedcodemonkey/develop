@@ -337,6 +337,38 @@ const getWorkspaceTabsRecord = async (
   )
 }
 
+const getAllWorkspaceRecords = async (page: Page) => {
+  return page.evaluate(async () => {
+    const request = indexedDB.open('knighted-develop-workspaces')
+
+    const db = await new Promise<IDBDatabase>((resolve, reject) => {
+      request.onsuccess = () => resolve(request.result)
+      request.onerror = () => reject(request.error)
+      request.onblocked = () => reject(new Error('Could not open IndexedDB.'))
+    })
+
+    try {
+      const tx = db.transaction('prWorkspaces', 'readonly')
+      const store = tx.objectStore('prWorkspaces')
+      const getAllRequest = store.getAll()
+
+      const records = await new Promise<Array<Record<string, unknown>>>(
+        (resolve, reject) => {
+          getAllRequest.onsuccess = () => {
+            const value = Array.isArray(getAllRequest.result) ? getAllRequest.result : []
+            resolve(value as Array<Record<string, unknown>>)
+          }
+          getAllRequest.onerror = () => reject(getAllRequest.error)
+        },
+      )
+
+      return records
+    } finally {
+      db.close()
+    }
+  })
+}
+
 test('Open PR drawer confirms and submits component/styles filepaths', async ({
   page,
 }) => {
@@ -783,7 +815,219 @@ test('Open PR drawer can filter stored local contexts by search', async ({ page 
   await search.fill('beta')
 
   const labels = await getLocalContextOptionLabels(page)
-  expect(labels).toEqual(['Select a stored local context', 'Local: Beta local context'])
+  expect(labels).toEqual(['Select a stored local context', 'Beta local context'])
+})
+
+test('Open PR keeps inactive workspace record when repository changes', async ({
+  page,
+}) => {
+  const oldRepository = 'knightedcodemonkey/contract-case'
+  const newRepository = 'knightedcodemonkey/develop-sandbox'
+  const headBranch = 'feat/component-sync'
+  const oldWorkspaceId = 'repo_knightedcodemonkey_contract-case_feat-component-sync'
+
+  await page.route('https://api.github.com/user/repos**', async route => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify([
+        {
+          id: 12,
+          owner: { login: 'knightedcodemonkey' },
+          name: 'contract-case',
+          full_name: oldRepository,
+          default_branch: 'main',
+          permissions: { push: true },
+        },
+        {
+          id: 13,
+          owner: { login: 'knightedcodemonkey' },
+          name: 'develop-sandbox',
+          full_name: newRepository,
+          default_branch: 'main',
+          permissions: { push: true },
+        },
+      ]),
+    })
+  })
+
+  await mockRepositoryBranches(page, {
+    [oldRepository]: ['main'],
+    [newRepository]: ['main', 'release'],
+  })
+
+  await page.route(
+    `https://api.github.com/repos/${newRepository}/git/ref/**`,
+    async route => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ object: { sha: 'branch-head-sha' } }),
+      })
+    },
+  )
+
+  await page.route(
+    `https://api.github.com/repos/${newRepository}/git/refs`,
+    async route => {
+      await route.fulfill({
+        status: 201,
+        contentType: 'application/json',
+        body: JSON.stringify({ ref: `refs/heads/${headBranch}` }),
+      })
+    },
+  )
+
+  await page.route(
+    `https://api.github.com/repos/${newRepository}/git/commits/branch-head-sha`,
+    async route => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          sha: 'branch-head-sha',
+          tree: { sha: 'base-tree-sha' },
+        }),
+      })
+    },
+  )
+
+  await page.route(
+    `https://api.github.com/repos/${newRepository}/git/trees`,
+    async route => {
+      await route.fulfill({
+        status: 201,
+        contentType: 'application/json',
+        body: JSON.stringify({ sha: 'new-tree-sha' }),
+      })
+    },
+  )
+
+  await page.route(
+    `https://api.github.com/repos/${newRepository}/git/commits`,
+    async route => {
+      await route.fulfill({
+        status: 201,
+        contentType: 'application/json',
+        body: JSON.stringify({ sha: 'new-commit-sha' }),
+      })
+    },
+  )
+
+  await page.route(
+    `https://api.github.com/repos/${newRepository}/git/refs/**`,
+    async route => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ ref: `refs/heads/${headBranch}` }),
+      })
+    },
+  )
+
+  await page.route(
+    `https://api.github.com/repos/${newRepository}/contents/**`,
+    async route => {
+      await route.fulfill({
+        status: 404,
+        contentType: 'application/json',
+        body: JSON.stringify({ message: 'Not Found' }),
+      })
+    },
+  )
+
+  await page.route(`https://api.github.com/repos/${newRepository}/pulls`, async route => {
+    await route.fulfill({
+      status: 201,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        number: 88,
+        html_url: `https://github.com/${newRepository}/pull/88`,
+      }),
+    })
+  })
+
+  await waitForAppReady(page, `${appEntryPath}`)
+
+  await seedLocalWorkspaceContexts(page, [
+    {
+      id: oldWorkspaceId,
+      repo: oldRepository,
+      base: 'main',
+      head: headBranch,
+      prTitle: 'Seeded inactive context',
+      prNumber: null,
+      prContextState: 'inactive',
+      renderMode: 'dom',
+      tabs: [
+        {
+          id: 'component',
+          name: 'App.tsx',
+          path: 'src/components/App.tsx',
+          language: 'javascript-jsx',
+          role: 'entry',
+          isActive: true,
+          content: 'export const App = () => <main>Seeded workspace</main>',
+        },
+        {
+          id: 'styles',
+          name: 'app.css',
+          path: 'src/styles/app.css',
+          language: 'css',
+          role: 'module',
+          isActive: false,
+          content: 'main { color: #111; }',
+        },
+      ],
+      activeTabId: 'component',
+    },
+  ])
+
+  await page
+    .getByRole('textbox', { name: 'GitHub token' })
+    .fill('github_pat_fake_chat_1234567890')
+  await page.getByRole('button', { name: 'Add GitHub token' }).click()
+
+  const repoSelect = page.getByLabel('Pull request repository')
+  await expect(repoSelect).toHaveValue(oldRepository)
+
+  await page.getByRole('button', { name: 'Workspaces' }).click()
+  await page.locator('#workspaces-select').selectOption(oldWorkspaceId)
+  await page.locator('#workspaces-open').click()
+
+  await ensureOpenPrDrawerOpen(page)
+  await repoSelect.selectOption(newRepository)
+
+  await page.getByLabel('Head').fill(headBranch)
+  await page.getByLabel('PR title').fill('Promote inactive context to active PR')
+
+  await submitOpenPrAndConfirm(page)
+
+  await expect(
+    page.getByRole('status', { name: 'Open pull request status', includeHidden: true }),
+  ).toContainText(`Pull request opened: https://github.com/${newRepository}/pull/88`)
+
+  const workspaceRecords = await getAllWorkspaceRecords(page)
+  const recordsByHead = workspaceRecords.filter(
+    record =>
+      typeof record?.head === 'string' && record.head.trim().toLowerCase() === headBranch,
+  )
+
+  const expectedWorkspaceId = buildWorkspaceRecordId({
+    repositoryFullName: newRepository,
+    headBranch,
+  })
+
+  expect(recordsByHead).toHaveLength(1)
+  expect(recordsByHead[0]?.id).toBe(expectedWorkspaceId)
+  expect(recordsByHead[0]?.repo).toBe(newRepository)
+  expect(recordsByHead[0]?.prContextState).toBe('active')
+  expect(recordsByHead[0]?.prNumber).toBe(88)
+
+  const staleRepositoryRecords = workspaceRecords.filter(
+    record => record?.repo === oldRepository,
+  )
+  expect(staleRepositoryRecords).toHaveLength(0)
 })
 
 test('Open PR drawer uses Git Database API atomic commit path by default', async ({
@@ -2701,6 +2945,245 @@ test('Reloaded active PR context from URL metadata keeps Push mode and status re
   expect(createRefRequestCount).toBe(0)
   expect(pullRequestRequestCount).toBe(0)
   expect(contentsPutRequests).toHaveLength(0)
+})
+
+test('Reload keeps persisted active PR workspace context active', async ({ page }) => {
+  const repositoryFullName = 'knightedcodemonkey/develop'
+  const headBranch = 'develop/open-pr-test'
+
+  await page.route('https://api.github.com/user/repos**', async route => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify([
+        {
+          id: 11,
+          owner: { login: 'knightedcodemonkey' },
+          name: 'develop',
+          full_name: repositoryFullName,
+          default_branch: 'main',
+          permissions: { push: true },
+        },
+      ]),
+    })
+  })
+
+  await mockRepositoryBranches(page, {
+    [repositoryFullName]: ['main', 'release', headBranch],
+  })
+
+  await page.route(
+    'https://api.github.com/repos/knightedcodemonkey/develop/pulls/2',
+    async route => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          number: 2,
+          state: 'open',
+          title: 'Existing PR context from storage',
+          html_url: 'https://github.com/knightedcodemonkey/develop/pull/2',
+          head: { ref: headBranch },
+          base: { ref: 'main' },
+        }),
+      })
+    },
+  )
+
+  await waitForAppReady(page, `${appEntryPath}`)
+
+  await seedActivePrWorkspaceContext(page, {
+    repositoryFullName,
+    headBranch,
+    prTitle: 'Existing PR context from storage',
+    prNumber: 2,
+    renderMode: 'react',
+  })
+
+  const workspaceId = buildWorkspaceRecordId({
+    repositoryFullName,
+    headBranch,
+  })
+
+  await page.evaluate(
+    ({ repo, workspaceRecordId }) => {
+      localStorage.setItem(
+        'knighted:develop:github-pat',
+        'github_pat_fake_chat_1234567890',
+      )
+      localStorage.setItem('knighted:develop:github-repository', repo)
+      localStorage.setItem('knighted:develop:active-workspace-id', workspaceRecordId)
+    },
+    { repo: repositoryFullName, workspaceRecordId: workspaceId },
+  )
+
+  await waitForAppReady(page, `${appEntryPath}`)
+
+  await expect(
+    page.getByRole('button', { name: 'Push commit to active pull request branch' }),
+  ).toBeVisible()
+
+  const activeRecord = await getWorkspaceTabsRecord(page, { headBranch })
+  expect(activeRecord?.id).toBe(workspaceId)
+  expect(activeRecord?.prContextState).toBe('active')
+  expect(activeRecord?.prNumber).toBe(2)
+
+  const workspaceRecords = await getAllWorkspaceRecords(page)
+  const activeRecordsForPr = workspaceRecords.filter(
+    record =>
+      record?.repo === repositoryFullName &&
+      record?.prContextState === 'active' &&
+      record?.prNumber === 2,
+  )
+  expect(activeRecordsForPr).toHaveLength(1)
+})
+
+test('Reload prefers active PR workspace over inactive preferred workspace id', async ({
+  page,
+}) => {
+  const repositoryFullName = 'knightedcodemonkey/develop'
+  const activeHeadBranch = 'develop/open-pr-test'
+  const inactiveHeadBranch = 'feat/stale-local-workspace'
+
+  await page.route('https://api.github.com/user/repos**', async route => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify([
+        {
+          id: 11,
+          owner: { login: 'knightedcodemonkey' },
+          name: 'develop',
+          full_name: repositoryFullName,
+          default_branch: 'main',
+          permissions: { push: true },
+        },
+      ]),
+    })
+  })
+
+  await mockRepositoryBranches(page, {
+    [repositoryFullName]: ['main', 'release', activeHeadBranch, inactiveHeadBranch],
+  })
+
+  await page.route(
+    'https://api.github.com/repos/knightedcodemonkey/develop/pulls/2',
+    async route => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          number: 2,
+          state: 'open',
+          title: 'Existing PR context from storage',
+          html_url: 'https://github.com/knightedcodemonkey/develop/pull/2',
+          head: { ref: activeHeadBranch },
+          base: { ref: 'main' },
+        }),
+      })
+    },
+  )
+
+  await waitForAppReady(page, `${appEntryPath}`)
+
+  const activeWorkspaceId = buildWorkspaceRecordId({
+    repositoryFullName,
+    headBranch: activeHeadBranch,
+  })
+  const inactiveWorkspaceId = buildWorkspaceRecordId({
+    repositoryFullName,
+    headBranch: inactiveHeadBranch,
+  })
+
+  await seedLocalWorkspaceContexts(page, [
+    {
+      id: inactiveWorkspaceId,
+      repo: repositoryFullName,
+      base: 'main',
+      head: inactiveHeadBranch,
+      prTitle: '',
+      prNumber: null,
+      prContextState: 'inactive',
+      renderMode: 'dom',
+      tabs: [
+        {
+          id: 'component',
+          name: 'App.tsx',
+          path: 'src/components/App.tsx',
+          language: 'javascript-jsx',
+          role: 'entry',
+          isActive: true,
+          content: 'export const App = () => <main>Inactive workspace</main>',
+        },
+        {
+          id: 'styles',
+          name: 'app.css',
+          path: 'src/styles/app.css',
+          language: 'css',
+          role: 'module',
+          isActive: false,
+          content: 'main { color: #444; }',
+        },
+      ],
+      activeTabId: 'component',
+    },
+    {
+      id: activeWorkspaceId,
+      repo: repositoryFullName,
+      base: 'main',
+      head: activeHeadBranch,
+      prTitle: 'Existing PR context from storage',
+      prNumber: 2,
+      prContextState: 'active',
+      renderMode: 'react',
+      tabs: [
+        {
+          id: 'component',
+          name: 'App.tsx',
+          path: 'src/components/App.tsx',
+          language: 'javascript-jsx',
+          role: 'entry',
+          isActive: true,
+          content: 'export const App = () => <main>Active workspace</main>',
+        },
+        {
+          id: 'styles',
+          name: 'app.css',
+          path: 'src/styles/app.css',
+          language: 'css',
+          role: 'module',
+          isActive: false,
+          content: 'main { color: tomato; }',
+        },
+      ],
+      activeTabId: 'component',
+    },
+  ])
+
+  await page.evaluate(
+    ({ repo, staleWorkspaceId }) => {
+      localStorage.setItem(
+        'knighted:develop:github-pat',
+        'github_pat_fake_chat_1234567890',
+      )
+      localStorage.setItem('knighted:develop:github-repository', repo)
+      localStorage.setItem('knighted:develop:active-workspace-id', staleWorkspaceId)
+    },
+    { repo: repositoryFullName, staleWorkspaceId: inactiveWorkspaceId },
+  )
+
+  await waitForAppReady(page, `${appEntryPath}`)
+
+  await expect(
+    page.getByRole('button', { name: 'Push commit to active pull request branch' }),
+  ).toBeVisible()
+
+  const selectedRecord = await getWorkspaceTabsRecord(page, {
+    headBranch: activeHeadBranch,
+  })
+  expect(selectedRecord?.id).toBe(activeWorkspaceId)
+  expect(selectedRecord?.prContextState).toBe('active')
+  expect(selectedRecord?.prNumber).toBe(2)
 })
 
 test('Reloaded active PR context syncs editor content from GitHub branch and restores style mode', async ({
