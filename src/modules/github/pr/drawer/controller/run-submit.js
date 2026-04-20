@@ -31,7 +31,7 @@ export const createRunSubmit = ({
   commitEditorContentToExistingBranch,
   createEditorContentPullRequest,
   formatActivePrReference,
-  saveRepositoryPrConfig,
+  setRepositoryActivePrContext,
 }) => {
   return async () => {
     const repository = getSelectedRepositoryObject()
@@ -240,17 +240,15 @@ export const createRunSubmit = ({
             return
           }
 
-          saveRepositoryPrConfig({
+          setRepositoryActivePrContext({
             repositoryFullName: repositoryLabel,
-            config: {
+            activeContext: {
               renderMode: currentRenderMode,
               styleMode: currentStyleMode,
               baseBranch: targetBaseBranch,
               headBranch: targetHeadBranch,
               prTitle: targetPrTitle,
               prBody: targetPrBody,
-              isActivePr: true,
-              prContextState: 'active',
               pullRequestNumber: result.pullRequest.number,
               pullRequestUrl: result.pullRequest.htmlUrl,
             },

@@ -55,6 +55,7 @@ const initializeGitHubWorkflows = ({
   getRenderMode,
   getStyleMode,
   setCurrentSelectedRepository,
+  getPersistedActivePrContext,
   reconcileWorkspaceTabsWithPushUpdates,
   getActivePrContextSyncKey,
   prContextUi,
@@ -130,6 +131,7 @@ const initializeGitHubWorkflows = ({
     getDrawerSide: () => {
       return 'right'
     },
+    getPersistedActivePrContext,
   })
 
   const prDrawerController = createGitHubPrDrawer({
@@ -208,7 +210,7 @@ const initializeGitHubWorkflows = ({
         prContextUi.markActivePrEditorContentSynced()
 
         syncFromActiveContext({
-          tabTargets: args?.syncTargets?.tabTargets,
+          tabTargets: result?.syncTargets?.tabTargets ?? args?.syncTargets?.tabTargets,
         })
       }
 
@@ -247,7 +249,12 @@ const initializeGitHubWorkflows = ({
           return false
         }
 
-        return applyWorkspaceRecord(record, { silent: false })
+        const applied = await applyWorkspaceRecord(record, { silent: false })
+        if (applied) {
+          prDrawerController.syncRepositories()
+        }
+
+        return applied
       } catch {
         workspacesDrawerController?.setStatus(
           'Could not load selected local context.',

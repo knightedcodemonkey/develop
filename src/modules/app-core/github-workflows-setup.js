@@ -29,6 +29,7 @@ const createGitHubWorkflowsSetup = ({
     getEditorSyncTargets: workspace.getEditorSyncTargets,
     getRenderMode: runtime.getRenderMode,
     getStyleMode: runtime.getStyleMode,
+    getPersistedActivePrContext: runtime.getPersistedActivePrContext,
     setCurrentSelectedRepository: byot.setCurrentSelectedRepository,
     reconcileWorkspaceTabsWithPushUpdates:
       workspace.reconcileWorkspaceTabsWithPushUpdates,

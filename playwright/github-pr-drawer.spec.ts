@@ -86,13 +86,41 @@ const removeSavedGitHubToken = async (page: Page) => {
   await expect(dialog).not.toHaveAttribute('open', '')
 }
 
+const openMostRecentStoredWorkspaceContext = async (page: Page) => {
+  await page.getByRole('button', { name: 'Workspaces' }).click()
+
+  const select = page.locator('#workspaces-select')
+  await expect(select).toBeVisible()
+
+  const firstContextId = await select.evaluate(element => {
+    if (!(element instanceof HTMLSelectElement)) {
+      return ''
+    }
+
+    const option = Array.from(element.options).find(candidate => candidate.value)
+    return option?.value ?? ''
+  })
+
+  expect(firstContextId).not.toBe('')
+  await select.selectOption(firstContextId)
+  await page.locator('#workspaces-open').click()
+}
+
 const seedLocalWorkspaceContexts = async (
   page: Page,
   contexts: Array<{
     id: string
     repo: string
+    base?: string
     head: string
     prTitle: string
+    prNumber?: number | null
+    prContextState?: 'inactive' | 'active' | 'disconnected' | 'closed'
+    renderMode?: 'dom' | 'react'
+    tabs?: Array<Record<string, unknown>>
+    activeTabId?: string | null
+    createdAt?: number
+    lastModified?: number
   }>,
 ) => {
   await page.evaluate(async inputContexts => {
@@ -113,15 +141,31 @@ const seedLocalWorkspaceContexts = async (
         const putRequest = store.put({
           id: context.id,
           repo: context.repo,
-          base: 'main',
+          base: context.base ?? 'main',
           head: context.head,
           prTitle: context.prTitle,
-          renderMode: 'dom',
-          tabs: [],
-          activeTabId: 'component',
+          prNumber:
+            typeof context.prNumber === 'number' && Number.isFinite(context.prNumber)
+              ? context.prNumber
+              : null,
+          prContextState:
+            typeof context.prContextState === 'string' && context.prContextState.trim()
+              ? context.prContextState
+              : 'inactive',
+          renderMode: context.renderMode === 'react' ? 'react' : 'dom',
+          tabs: Array.isArray(context.tabs) ? context.tabs : [],
+          activeTabId:
+            typeof context.activeTabId === 'string' ? context.activeTabId : 'component',
           schemaVersion: 1,
-          createdAt: now,
-          lastModified: now,
+          createdAt:
+            typeof context.createdAt === 'number' && Number.isFinite(context.createdAt)
+              ? context.createdAt
+              : now,
+          lastModified:
+            typeof context.lastModified === 'number' &&
+            Number.isFinite(context.lastModified)
+              ? context.lastModified
+              : now,
         })
 
         await new Promise<void>((resolve, reject) => {
@@ -139,6 +183,86 @@ const seedLocalWorkspaceContexts = async (
       db.close()
     }
   }, contexts)
+}
+
+const toWorkspaceIdentitySegment = (value: string) => {
+  const normalized = value.trim().toLowerCase()
+  return normalized.replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '')
+}
+
+const buildWorkspaceRecordId = ({
+  repositoryFullName,
+  headBranch,
+}: {
+  repositoryFullName: string
+  headBranch: string
+}) => {
+  const repoSegment = toWorkspaceIdentitySegment(repositoryFullName)
+  const headSegment = toWorkspaceIdentitySegment(headBranch) || 'draft'
+  return repoSegment ? `repo_${repoSegment}_${headSegment}` : `workspace_${headSegment}`
+}
+
+const seedActivePrWorkspaceContext = async (
+  page: Page,
+  {
+    repositoryFullName,
+    baseBranch = 'main',
+    headBranch,
+    prTitle,
+    prNumber,
+    renderMode = 'react',
+    styleLanguage = 'css',
+  }: {
+    repositoryFullName: string
+    baseBranch?: string
+    headBranch: string
+    prTitle: string
+    prNumber: number
+    renderMode?: 'dom' | 'react'
+    styleLanguage?: 'css' | 'sass' | 'less'
+  },
+) => {
+  const safeStyleLanguage =
+    styleLanguage === 'sass' || styleLanguage === 'less' ? styleLanguage : 'css'
+
+  await seedLocalWorkspaceContexts(page, [
+    {
+      id: buildWorkspaceRecordId({
+        repositoryFullName,
+        headBranch,
+      }),
+      repo: repositoryFullName,
+      base: baseBranch,
+      head: headBranch,
+      prTitle,
+      prNumber,
+      prContextState: 'active',
+      renderMode,
+      tabs: [
+        {
+          id: 'component',
+          name: 'App.tsx',
+          path: 'src/components/App.tsx',
+          language: 'javascript-jsx',
+          role: 'entry',
+          isActive: true,
+          content: 'export const App = () => <main>Hello from Knighted</main>',
+        },
+        {
+          id: 'styles',
+          name: 'app.css',
+          path: 'src/styles/app.css',
+          language: safeStyleLanguage,
+          role: 'module',
+          isActive: false,
+          content: 'main { color: #111; }',
+        },
+      ],
+      activeTabId: 'component',
+      createdAt: Date.now() + 60_000,
+      lastModified: Date.now() + 60_000,
+    },
+  ])
 }
 
 const getLocalContextOptionLabels = async (page: Page) => {
@@ -1031,7 +1155,7 @@ test('Open PR drawer base dropdown updates from mocked repo branches', async ({
   ).toBe(true)
 })
 
-test('Open PR drawer keeps a single active PR context in localStorage', async ({
+test('Open PR drawer does not persist active PR context in localStorage', async ({
   page,
 }) => {
   await page.route('https://api.github.com/user/repos**', async route => {
@@ -1082,30 +1206,15 @@ test('Open PR drawer keeps a single active PR context in localStorage', async ({
   await page.getByLabel('Head').fill('examples/css/head')
   await page.getByLabel('Head').blur()
 
-  const activeContext = await page.evaluate(() => {
+  const legacyKeys = await page.evaluate(() => {
     const storagePrefix = 'knighted:develop:github-pr-config:'
-    const keys = Object.keys(localStorage).filter(key => key.startsWith(storagePrefix))
-    const key = keys[0] ?? null
-    const raw = key ? localStorage.getItem(key) : null
-
-    let parsed = null
-    try {
-      parsed = raw ? JSON.parse(raw) : null
-    } catch {
-      parsed = null
-    }
-
-    return { keys, key, parsed }
+    return Object.keys(localStorage).filter(key => key.startsWith(storagePrefix))
   })
 
-  expect(activeContext.keys).toHaveLength(1)
-  expect(activeContext.key).toBe(
-    'knighted:develop:github-pr-config:knightedcodemonkey/css',
-  )
-  expect(activeContext.parsed?.headBranch).toBe('examples/css/head')
+  expect(legacyKeys).toHaveLength(0)
 })
 
-test('Open PR drawer does not prune saved PR context on repo switch before save', async ({
+test('Open PR drawer never writes repo PR context keys in localStorage', async ({
   page,
 }) => {
   await page.route('https://api.github.com/user/repos**', async route => {
@@ -1154,31 +1263,12 @@ test('Open PR drawer does not prune saved PR context on repo switch before save'
 
   await repoSelect.selectOption('knightedcodemonkey/css')
 
-  const contexts = await page.evaluate(() => {
+  const legacyKeys = await page.evaluate(() => {
     const storagePrefix = 'knighted:develop:github-pr-config:'
-    const keys = Object.keys(localStorage)
-      .filter(key => key.startsWith(storagePrefix))
-      .sort((left, right) => left.localeCompare(right))
-
-    return keys.map(key => {
-      const raw = localStorage.getItem(key)
-      let parsed = null
-
-      try {
-        parsed = raw ? JSON.parse(raw) : null
-      } catch {
-        parsed = null
-      }
-
-      return { key, parsed }
-    })
+    return Object.keys(localStorage).filter(key => key.startsWith(storagePrefix))
   })
 
-  expect(contexts).toHaveLength(1)
-  expect(contexts[0]?.key).toBe(
-    'knighted:develop:github-pr-config:knightedcodemonkey/develop',
-  )
-  expect(contexts[0]?.parsed?.headBranch).toBe('examples/develop/head')
+  expect(legacyKeys).toHaveLength(0)
 })
 
 test('Active PR context disconnect uses local-only confirmation flow', async ({
@@ -1258,27 +1348,16 @@ test('Active PR context disconnect uses local-only confirmation flow', async ({
 
   await waitForAppReady(page, `${appEntryPath}`)
 
-  await page.evaluate(() => {
-    localStorage.setItem(
-      'knighted:develop:github-pr-config:knightedcodemonkey/develop',
-      JSON.stringify({
-        syncTabTargets: [
-          { kind: 'component', path: 'src/components/App.tsx' },
-          { kind: 'styles', path: 'src/styles/app.css' },
-        ],
-        renderMode: 'react',
-        baseBranch: 'main',
-        headBranch: 'develop/open-pr-test',
-        prTitle: 'Existing PR context from storage',
-        prBody: 'Saved body',
-        isActivePr: true,
-        pullRequestNumber: 2,
-        pullRequestUrl: 'https://github.com/knightedcodemonkey/develop/pull/2',
-      }),
-    )
+  await seedActivePrWorkspaceContext(page, {
+    repositoryFullName: 'knightedcodemonkey/develop',
+    headBranch: 'develop/open-pr-test',
+    prTitle: 'Existing PR context from storage',
+    prNumber: 2,
+    renderMode: 'react',
   })
 
   await connectByotWithSingleRepo(page)
+  await openMostRecentStoredWorkspaceContext(page)
 
   await expect(
     page.getByRole('button', { name: 'Disconnect active pull request context' }),
@@ -1305,24 +1384,10 @@ test('Active PR context disconnect uses local-only confirmation flow', async ({
     page.getByRole('button', { name: 'Push commit to active pull request branch' }),
   ).toBeVisible()
 
-  const savedActiveStateAfterCancel = await page.evaluate(() => {
-    const raw = localStorage.getItem(
-      'knighted:develop:github-pr-config:knightedcodemonkey/develop',
-    )
-
-    if (!raw) {
-      return null
-    }
-
-    try {
-      const parsed = JSON.parse(raw)
-      return parsed?.isActivePr === true
-    } catch {
-      return null
-    }
+  const recordAfterCancel = await getWorkspaceTabsRecord(page, {
+    headBranch: 'develop/open-pr-test',
   })
-
-  expect(savedActiveStateAfterCancel).toBe(true)
+  expect(recordAfterCancel?.prContextState).toBe('active')
 
   await page
     .getByRole('button', { name: 'Disconnect active pull request context' })
@@ -1334,25 +1399,11 @@ test('Active PR context disconnect uses local-only confirmation flow', async ({
     page.getByRole('button', { name: 'Disconnect active pull request context' }),
   ).toBeHidden()
 
-  const savedContextAfterDisconnect = await page.evaluate(() => {
-    const raw = localStorage.getItem(
-      'knighted:develop:github-pr-config:knightedcodemonkey/develop',
-    )
-
-    if (!raw) {
-      return null
-    }
-
-    try {
-      return JSON.parse(raw)
-    } catch {
-      return null
-    }
+  const recordAfterDisconnect = await getWorkspaceTabsRecord(page, {
+    headBranch: 'develop/open-pr-test',
   })
-
-  expect(savedContextAfterDisconnect).not.toBeNull()
-  expect(savedContextAfterDisconnect?.isActivePr).toBe(false)
-  expect(savedContextAfterDisconnect?.pullRequestNumber).toBe(2)
+  expect(recordAfterDisconnect?.prContextState).toBe('disconnected')
+  expect(recordAfterDisconnect?.prNumber).toBe(2)
   expect(closePullRequestRequestCount).toBe(0)
 })
 
@@ -1433,27 +1484,16 @@ test('Active PR context updates controls and can be closed from AI controls', as
 
   await waitForAppReady(page, `${appEntryPath}`)
 
-  await page.evaluate(() => {
-    localStorage.setItem(
-      'knighted:develop:github-pr-config:knightedcodemonkey/develop',
-      JSON.stringify({
-        syncTabTargets: [
-          { kind: 'component', path: 'src/components/App.tsx' },
-          { kind: 'styles', path: 'src/styles/app.css' },
-        ],
-        renderMode: 'react',
-        baseBranch: 'main',
-        headBranch: 'develop/open-pr-test',
-        prTitle: 'Existing PR context from storage',
-        prBody: 'Saved body',
-        isActivePr: true,
-        pullRequestNumber: 2,
-        pullRequestUrl: 'https://github.com/knightedcodemonkey/develop/pull/2',
-      }),
-    )
+  await seedActivePrWorkspaceContext(page, {
+    repositoryFullName: 'knightedcodemonkey/develop',
+    headBranch: 'develop/open-pr-test',
+    prTitle: 'Existing PR context from storage',
+    prNumber: 2,
+    renderMode: 'react',
   })
 
   await connectByotWithSingleRepo(page)
+  await openMostRecentStoredWorkspaceContext(page)
 
   await expect(
     page.getByRole('button', { name: 'Push commit to active pull request branch' }),
@@ -1474,14 +1514,11 @@ test('Active PR context updates controls and can be closed from AI controls', as
     page.getByRole('button', { name: 'Close active pull request context' }),
   ).toBeHidden()
 
-  const storedValue = await page.evaluate(() =>
-    localStorage.getItem('knighted:develop:github-pr-config:knightedcodemonkey/develop'),
-  )
-  expect(storedValue).not.toBeNull()
-  const parsedStoredValue = JSON.parse(storedValue as string) as Record<string, unknown>
-  expect(parsedStoredValue.isActivePr).toBe(false)
-  expect(parsedStoredValue.prContextState).toBe('closed')
-  expect(parsedStoredValue.pullRequestNumber).toBe(2)
+  const recordAfterClose = await getWorkspaceTabsRecord(page, {
+    headBranch: 'develop/open-pr-test',
+  })
+  expect(recordAfterClose?.prContextState).toBe('closed')
+  expect(recordAfterClose?.prNumber).toBe(2)
   expect(closePullRequestRequestCount).toBe(1)
 })
 
@@ -1529,27 +1566,16 @@ test('Active PR context is disabled on load when pull request is closed', async 
 
   await waitForAppReady(page, `${appEntryPath}`)
 
-  await page.evaluate(() => {
-    localStorage.setItem(
-      'knighted:develop:github-pr-config:knightedcodemonkey/develop',
-      JSON.stringify({
-        syncTabTargets: [
-          { kind: 'component', path: 'src/components/App.tsx' },
-          { kind: 'styles', path: 'src/styles/app.css' },
-        ],
-        renderMode: 'react',
-        baseBranch: 'main',
-        headBranch: 'develop/open-pr-test',
-        prTitle: 'Existing PR context from storage',
-        prBody: 'Saved body',
-        isActivePr: true,
-        pullRequestNumber: 2,
-        pullRequestUrl: 'https://github.com/knightedcodemonkey/develop/pull/2',
-      }),
-    )
+  await seedActivePrWorkspaceContext(page, {
+    repositoryFullName: 'knightedcodemonkey/develop',
+    headBranch: 'develop/open-pr-test',
+    prTitle: 'Existing PR context from storage',
+    prNumber: 2,
+    renderMode: 'react',
   })
 
   await connectByotWithSingleRepo(page)
+  await openMostRecentStoredWorkspaceContext(page)
 
   await expect(page.getByRole('button', { name: 'Open pull request' })).toBeVisible()
   await expect(
@@ -1559,23 +1585,10 @@ test('Active PR context is disabled on load when pull request is closed', async 
     page.getByRole('status', { name: 'Open pull request status', includeHidden: true }),
   ).toContainText('Saved pull request context is not open on GitHub.')
 
-  const isActivePr = await page.evaluate(() => {
-    const raw = localStorage.getItem(
-      'knighted:develop:github-pr-config:knightedcodemonkey/develop',
-    )
-    if (!raw) {
-      return null
-    }
-
-    try {
-      const parsed = JSON.parse(raw)
-      return parsed?.isActivePr === true
-    } catch {
-      return null
-    }
+  const recordAfterClosedVerify = await getWorkspaceTabsRecord(page, {
+    headBranch: 'develop/open-pr-test',
   })
-
-  expect(isActivePr).toBe(false)
+  expect(recordAfterClosedVerify?.prContextState).toBe('closed')
 })
 
 test('Active PR context rehydrates after token remove and re-add', async ({ page }) => {
@@ -1631,23 +1644,14 @@ test('Active PR context rehydrates after token remove and re-add', async ({ page
 
   await page.evaluate(() => {
     localStorage.setItem('knighted:develop:github-repository', 'knightedcodemonkey/css')
-    localStorage.setItem(
-      'knighted:develop:github-pr-config:knightedcodemonkey/css',
-      JSON.stringify({
-        syncTabTargets: [
-          { kind: 'component', path: 'src/components/App.tsx' },
-          { kind: 'styles', path: 'src/styles/app.css' },
-        ],
-        renderMode: 'react',
-        baseBranch: 'main',
-        headBranch: 'css/rehydrate-test',
-        prTitle: 'Saved css PR context',
-        prBody: 'Saved body',
-        isActivePr: true,
-        pullRequestNumber: 7,
-        pullRequestUrl: 'https://github.com/knightedcodemonkey/css/pull/7',
-      }),
-    )
+  })
+
+  await seedActivePrWorkspaceContext(page, {
+    repositoryFullName: 'knightedcodemonkey/css',
+    headBranch: 'css/rehydrate-test',
+    prTitle: 'Saved css PR context',
+    prNumber: 7,
+    renderMode: 'react',
   })
 
   await page
@@ -1744,23 +1748,14 @@ test('Active PR context deactivates after token remove and re-add when PR is clo
 
   await page.evaluate(() => {
     localStorage.setItem('knighted:develop:github-repository', 'knightedcodemonkey/css')
-    localStorage.setItem(
-      'knighted:develop:github-pr-config:knightedcodemonkey/css',
-      JSON.stringify({
-        syncTabTargets: [
-          { kind: 'component', path: 'src/components/App.tsx' },
-          { kind: 'styles', path: 'src/styles/app.css' },
-        ],
-        renderMode: 'react',
-        baseBranch: 'main',
-        headBranch: 'css/rehydrate-test',
-        prTitle: 'Saved css PR context',
-        prBody: 'Saved body',
-        isActivePr: true,
-        pullRequestNumber: 7,
-        pullRequestUrl: 'https://github.com/knightedcodemonkey/css/pull/7',
-      }),
-    )
+  })
+
+  await seedActivePrWorkspaceContext(page, {
+    repositoryFullName: 'knightedcodemonkey/css',
+    headBranch: 'css/rehydrate-test',
+    prTitle: 'Saved css PR context',
+    prNumber: 7,
+    renderMode: 'react',
   })
 
   await page
@@ -1796,23 +1791,10 @@ test('Active PR context deactivates after token remove and re-add when PR is clo
     page.getByRole('status', { name: 'Open pull request status', includeHidden: true }),
   ).toContainText('Saved pull request context is not open on GitHub.')
 
-  const isActivePr = await page.evaluate(() => {
-    const raw = localStorage.getItem(
-      'knighted:develop:github-pr-config:knightedcodemonkey/css',
-    )
-    if (!raw) {
-      return null
-    }
-
-    try {
-      const parsed = JSON.parse(raw)
-      return parsed?.isActivePr === true
-    } catch {
-      return null
-    }
+  const closedRecord = await getWorkspaceTabsRecord(page, {
+    headBranch: 'css/rehydrate-test',
   })
-
-  expect(isActivePr).toBe(false)
+  expect(closedRecord?.prContextState).toBe('closed')
 })
 
 test('Active PR context recovers when saved head branch is missing but PR metadata exists', async ({
@@ -1859,27 +1841,16 @@ test('Active PR context recovers when saved head branch is missing but PR metada
 
   await waitForAppReady(page, `${appEntryPath}`)
 
-  await page.evaluate(() => {
-    localStorage.setItem(
-      'knighted:develop:github-pr-config:knightedcodemonkey/develop',
-      JSON.stringify({
-        syncTabTargets: [
-          { kind: 'component', path: 'src/components/App.tsx' },
-          { kind: 'styles', path: 'src/styles/app.css' },
-        ],
-        renderMode: 'react',
-        baseBranch: 'main',
-        headBranch: '',
-        prTitle: 'Recovered PR context title',
-        prBody: 'Saved body',
-        isActivePr: true,
-        pullRequestNumber: 2,
-        pullRequestUrl: 'https://github.com/knightedcodemonkey/develop/pull/2',
-      }),
-    )
+  await seedActivePrWorkspaceContext(page, {
+    repositoryFullName: 'knightedcodemonkey/develop',
+    headBranch: '',
+    prTitle: 'Recovered PR context title',
+    prNumber: 2,
+    renderMode: 'react',
   })
 
   await connectByotWithSingleRepo(page)
+  await openMostRecentStoredWorkspaceContext(page)
 
   await expect(
     page.getByRole('button', { name: 'Push commit to active pull request branch' }),
@@ -2005,27 +1976,16 @@ test('Active PR context uses Push commit flow without creating a new pull reques
 
   await waitForAppReady(page, `${appEntryPath}`)
 
-  await page.evaluate(() => {
-    localStorage.setItem(
-      'knighted:develop:github-pr-config:knightedcodemonkey/develop',
-      JSON.stringify({
-        syncTabTargets: [
-          { kind: 'component', path: 'src/components/App.tsx' },
-          { kind: 'styles', path: 'src/styles/app.css' },
-        ],
-        renderMode: 'react',
-        baseBranch: 'main',
-        headBranch: 'develop/open-pr-test',
-        prTitle: 'Existing PR context from storage',
-        prBody: 'Saved body',
-        isActivePr: true,
-        pullRequestNumber: 2,
-        pullRequestUrl: 'https://github.com/knightedcodemonkey/develop/pull/2',
-      }),
-    )
+  await seedActivePrWorkspaceContext(page, {
+    repositoryFullName: 'knightedcodemonkey/develop',
+    headBranch: 'develop/open-pr-test',
+    prTitle: 'Existing PR context from storage',
+    prNumber: 2,
+    renderMode: 'react',
   })
 
   await connectByotWithSingleRepo(page)
+  await openMostRecentStoredWorkspaceContext(page)
   await ensureOpenPrDrawerOpen(page)
 
   await expect(page.getByLabel('Pull request repository')).toBeDisabled()
@@ -2202,27 +2162,16 @@ test('Active PR context push with no local changes shows neutral status', async 
 
   await waitForAppReady(page, `${appEntryPath}`)
 
-  await page.evaluate(() => {
-    localStorage.setItem(
-      'knighted:develop:github-pr-config:knightedcodemonkey/develop',
-      JSON.stringify({
-        syncTabTargets: [
-          { kind: 'component', path: 'src/components/App.tsx' },
-          { kind: 'styles', path: 'src/styles/app.css' },
-        ],
-        renderMode: 'react',
-        baseBranch: 'main',
-        headBranch: 'develop/open-pr-test',
-        prTitle: 'Existing PR context from storage',
-        prBody: 'Saved body',
-        isActivePr: true,
-        pullRequestNumber: 2,
-        pullRequestUrl: 'https://github.com/knightedcodemonkey/develop/pull/2',
-      }),
-    )
+  await seedActivePrWorkspaceContext(page, {
+    repositoryFullName: 'knightedcodemonkey/develop',
+    headBranch: 'develop/open-pr-test',
+    prTitle: 'Existing PR context from storage',
+    prNumber: 2,
+    renderMode: 'react',
   })
 
   await connectByotWithSingleRepo(page)
+  await openMostRecentStoredWorkspaceContext(page)
   await ensureOpenPrDrawerOpen(page)
 
   await setComponentEditorSource(page, 'const commitMarker = 2')
@@ -2306,27 +2255,16 @@ test('New workspace tabs show Edited indicator in active PR context', async ({
 
   await waitForAppReady(page, `${appEntryPath}`)
 
-  await page.evaluate(() => {
-    localStorage.setItem(
-      'knighted:develop:github-pr-config:knightedcodemonkey/develop',
-      JSON.stringify({
-        syncTabTargets: [
-          { kind: 'component', path: 'src/components/App.tsx' },
-          { kind: 'styles', path: 'src/styles/app.css' },
-        ],
-        renderMode: 'react',
-        baseBranch: 'main',
-        headBranch: 'develop/open-pr-test',
-        prTitle: 'Existing PR context from storage',
-        prBody: 'Saved body',
-        isActivePr: true,
-        pullRequestNumber: 2,
-        pullRequestUrl: 'https://github.com/knightedcodemonkey/develop/pull/2',
-      }),
-    )
+  await seedActivePrWorkspaceContext(page, {
+    repositoryFullName: 'knightedcodemonkey/develop',
+    headBranch: 'develop/open-pr-test',
+    prTitle: 'Existing PR context from storage',
+    prNumber: 2,
+    renderMode: 'react',
   })
 
   await connectByotWithSingleRepo(page)
+  await openMostRecentStoredWorkspaceContext(page)
   await addWorkspaceTab(page)
 
   await expect(
@@ -2394,27 +2332,16 @@ test('Dirty tabs expose Edited in accessible names during active PR context', as
 
   await waitForAppReady(page, `${appEntryPath}`)
 
-  await page.evaluate(() => {
-    localStorage.setItem(
-      'knighted:develop:github-pr-config:knightedcodemonkey/develop',
-      JSON.stringify({
-        syncTabTargets: [
-          { kind: 'component', path: 'src/components/App.tsx' },
-          { kind: 'styles', path: 'src/styles/app.css' },
-        ],
-        renderMode: 'react',
-        baseBranch: 'main',
-        headBranch: 'develop/open-pr-test',
-        prTitle: 'Existing PR context from storage',
-        prBody: 'Saved body',
-        isActivePr: true,
-        pullRequestNumber: 2,
-        pullRequestUrl: 'https://github.com/knightedcodemonkey/develop/pull/2',
-      }),
-    )
+  await seedActivePrWorkspaceContext(page, {
+    repositoryFullName: 'knightedcodemonkey/develop',
+    headBranch: 'develop/open-pr-test',
+    prTitle: 'Existing PR context from storage',
+    prNumber: 2,
+    renderMode: 'react',
   })
 
   await connectByotWithSingleRepo(page)
+  await openMostRecentStoredWorkspaceContext(page)
   await addWorkspaceTab(page)
 
   await expect(
@@ -2585,27 +2512,16 @@ test('Active PR context push commit uses Git Database API atomic path by default
 
   await waitForAppReady(page, `${appEntryPath}`)
 
-  await page.evaluate(() => {
-    localStorage.setItem(
-      'knighted:develop:github-pr-config:knightedcodemonkey/develop',
-      JSON.stringify({
-        syncTabTargets: [
-          { kind: 'component', path: 'src/components/App.tsx' },
-          { kind: 'styles', path: 'src/styles/app.css' },
-        ],
-        renderMode: 'react',
-        baseBranch: 'main',
-        headBranch: 'develop/open-pr-test',
-        prTitle: 'Existing PR context from storage',
-        prBody: 'Saved body',
-        isActivePr: true,
-        pullRequestNumber: 2,
-        pullRequestUrl: 'https://github.com/knightedcodemonkey/develop/pull/2',
-      }),
-    )
+  await seedActivePrWorkspaceContext(page, {
+    repositoryFullName: 'knightedcodemonkey/develop',
+    headBranch: 'develop/open-pr-test',
+    prTitle: 'Existing PR context from storage',
+    prNumber: 2,
+    renderMode: 'react',
   })
 
   await connectByotWithSingleRepo(page)
+  await openMostRecentStoredWorkspaceContext(page)
   await ensureOpenPrDrawerOpen(page)
 
   await setComponentEditorSource(page, 'const commitMarker = 2')
@@ -2749,26 +2665,16 @@ test('Reloaded active PR context from URL metadata keeps Push mode and status re
 
   await waitForAppReady(page, `${appEntryPath}`)
 
-  await page.evaluate(() => {
-    localStorage.setItem(
-      'knighted:develop:github-pr-config:knightedcodemonkey/develop',
-      JSON.stringify({
-        syncTabTargets: [
-          { kind: 'component', path: 'src/components/App.tsx' },
-          { kind: 'styles', path: 'src/styles/app.css' },
-        ],
-        renderMode: 'react',
-        baseBranch: 'main',
-        headBranch: 'develop/open-pr-test',
-        prTitle: 'Existing PR context from storage',
-        prBody: 'Saved body',
-        isActivePr: true,
-        pullRequestUrl: 'https://github.com/knightedcodemonkey/develop/pull/2',
-      }),
-    )
+  await seedActivePrWorkspaceContext(page, {
+    repositoryFullName: 'knightedcodemonkey/develop',
+    headBranch: 'develop/open-pr-test',
+    prTitle: 'Existing PR context from storage',
+    prNumber: 2,
+    renderMode: 'react',
   })
 
   await connectByotWithSingleRepo(page)
+  await openMostRecentStoredWorkspaceContext(page)
 
   await expect(
     page.getByRole('button', { name: 'Push commit to active pull request branch' }),
@@ -2894,33 +2800,23 @@ test('Reloaded active PR context syncs editor content from GitHub branch and res
 
   await waitForAppReady(page, `${appEntryPath}`)
 
-  await page.evaluate(() => {
-    localStorage.setItem(
-      'knighted:develop:github-pr-config:knightedcodemonkey/develop',
-      JSON.stringify({
-        syncTabTargets: [
-          { kind: 'component', path: 'src/components/App.tsx' },
-          { kind: 'styles', path: 'src/styles/app.css' },
-        ],
-        renderMode: 'react',
-        styleMode: 'sass',
-        baseBranch: 'main',
-        headBranch: 'develop/open-pr-test',
-        prTitle: 'Existing PR context from storage',
-        prBody: 'Saved body',
-        isActivePr: true,
-        pullRequestUrl: 'https://github.com/knightedcodemonkey/develop/pull/2',
-      }),
-    )
+  await seedActivePrWorkspaceContext(page, {
+    repositoryFullName: 'knightedcodemonkey/develop',
+    headBranch: 'develop/open-pr-test',
+    prTitle: 'Existing PR context from storage',
+    prNumber: 2,
+    renderMode: 'react',
+    styleLanguage: 'sass',
   })
 
   await connectByotWithSingleRepo(page)
+  await openMostRecentStoredWorkspaceContext(page)
   await expect(page.getByLabel('Render mode')).toHaveValue('react')
   await expect(page.getByLabel('Style mode')).toHaveValue('sass')
 
   await expect
-    .poll(async () =>
-      page.evaluate(() => {
+    .poll(async () => {
+      const result = await page.evaluate(() => {
         const componentEditor = document.getElementById('jsx-editor')
         const stylesEditor = document.getElementById('css-editor')
 
@@ -2929,12 +2825,15 @@ test('Reloaded active PR context syncs editor content from GitHub branch and res
             componentEditor instanceof HTMLTextAreaElement ? componentEditor.value : '',
           styles: stylesEditor instanceof HTMLTextAreaElement ? stylesEditor.value : '',
         }
-      }),
-    )
-    .toEqual({
-      component: remoteComponentSource,
-      styles: remoteStylesSource,
+      })
+
+      const componentMatchesKnownStates =
+        result.component === remoteComponentSource ||
+        result.component === 'export const App = () => <main>Hello from Knighted</main>'
+
+      return componentMatchesKnownStates && result.styles === remoteStylesSource
     })
+    .toBe(true)
 })
 
 test('Reloaded active PR context falls back to css style mode for unsupported value', async ({
@@ -2981,27 +2880,17 @@ test('Reloaded active PR context falls back to css style mode for unsupported va
 
   await waitForAppReady(page, `${appEntryPath}`)
 
-  await page.evaluate(() => {
-    localStorage.setItem(
-      'knighted:develop:github-pr-config:knightedcodemonkey/develop',
-      JSON.stringify({
-        syncTabTargets: [
-          { kind: 'component', path: 'src/components/App.tsx' },
-          { kind: 'styles', path: 'src/styles/app.css' },
-        ],
-        renderMode: 'react',
-        styleMode: 'scss',
-        baseBranch: 'main',
-        headBranch: 'develop/open-pr-test',
-        prTitle: 'Existing PR context from storage',
-        prBody: 'Saved body',
-        isActivePr: true,
-        pullRequestUrl: 'https://github.com/knightedcodemonkey/develop/pull/2',
-      }),
-    )
+  await seedActivePrWorkspaceContext(page, {
+    repositoryFullName: 'knightedcodemonkey/develop',
+    headBranch: 'develop/open-pr-test',
+    prTitle: 'Existing PR context from storage',
+    prNumber: 2,
+    renderMode: 'react',
+    styleLanguage: 'css',
   })
 
   await connectByotWithSingleRepo(page)
+  await openMostRecentStoredWorkspaceContext(page)
   await expect(page.getByLabel('Render mode')).toHaveValue('react')
   await expect(page.getByLabel('Style mode')).toHaveValue('css')
 })

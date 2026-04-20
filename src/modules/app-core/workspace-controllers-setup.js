@@ -30,6 +30,7 @@ const createWorkspaceControllersSetup = ({
   getRenderModeValue,
   setRenderModeValue,
   persistRenderMode,
+  onWorkspaceRecordApplied,
   getActiveWorkspaceTab,
   loadWorkspaceTabIntoEditor,
   updateRenderModeEditability,
@@ -91,6 +92,7 @@ const createWorkspaceControllersSetup = ({
     getActiveWorkspaceCreatedAt,
     setActiveWorkspaceRecordId,
     setActiveWorkspaceCreatedAt,
+    getHasCompletedInitialWorkspaceBootstrap,
   })
 
   const queueWorkspaceSave = () => workspaceSaveController.queueWorkspaceSave()
@@ -205,6 +207,7 @@ const createWorkspaceControllersSetup = ({
     getRenderModeValue,
     setRenderModeValue,
     persistRenderMode,
+    onWorkspaceRecordApplied,
     getActiveWorkspaceTab,
     loadWorkspaceTabIntoEditor,
     renderWorkspaceTabs: () => renderWorkspaceTabs(),

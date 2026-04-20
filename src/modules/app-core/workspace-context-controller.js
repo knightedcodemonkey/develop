@@ -18,6 +18,7 @@ const createWorkspaceContextController = ({
   getRenderModeValue,
   setRenderModeValue,
   persistRenderMode,
+  onWorkspaceRecordApplied,
   getActiveWorkspaceTab,
   loadWorkspaceTabIntoEditor,
   renderWorkspaceTabs,
@@ -112,6 +113,11 @@ const createWorkspaceContextController = ({
       if (getHasCompletedInitialWorkspaceBootstrap()) {
         maybeRender()
       }
+
+      if (typeof onWorkspaceRecordApplied === 'function') {
+        onWorkspaceRecordApplied(workspace)
+      }
+
       await refreshLocalContextOptions()
       if (!silent) {
         setStatus('Loaded local workspace context.', 'neutral')
