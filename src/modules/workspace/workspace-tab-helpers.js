@@ -228,6 +228,11 @@ const normalizeModuleTabPathForRename = (
 ) => {
   const currentPath = toNonEmptyWorkspaceText(path)
   const normalizedNextName = toNonEmptyWorkspaceText(nextName)
+
+  if (/[\\/]/.test(normalizedNextName)) {
+    return normalizeWorkspacePathValue(normalizedNextName)
+  }
+
   const nextFileName = getPathFileName(normalizedNextName) || normalizedNextName
 
   if (!nextFileName) {

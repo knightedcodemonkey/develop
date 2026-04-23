@@ -50,16 +50,18 @@ const createWorkspaceTabMutationsController = ({
     }
 
     const normalizedNameInput = toNonEmptyWorkspaceText(nextName)
-    const normalizedName = getPathFileName(normalizedNameInput) || normalizedNameInput
-    if (!normalizedName) {
+    if (!normalizedNameInput) {
       setStatus('Tab name cannot be empty.', 'error')
       renderWorkspaceTabs()
       return
     }
 
+    const includesDirectory = /[\\/]/.test(normalizedNameInput)
+    const nextFileName = getPathFileName(normalizedNameInput) || normalizedNameInput
+
     if (
       tab.role === 'entry' &&
-      !allowedEntryTabFileNames.has(normalizedName.toLowerCase())
+      !allowedEntryTabFileNames.has(nextFileName.toLowerCase())
     ) {
       setStatus('Entry tab name must be App.tsx or App.js.', 'error')
       renderWorkspaceTabs()
@@ -68,12 +70,16 @@ const createWorkspaceTabMutationsController = ({
 
     const normalizedEntryPath =
       tab.role === 'entry'
-        ? normalizeEntryTabPath(tab.path, { preferredFileName: normalizedName })
-        : normalizeModuleTabPathForRename(tab.path, normalizedName)
+        ? normalizeEntryTabPath(includesDirectory ? normalizedNameInput : tab.path, {
+            preferredFileName: includesDirectory
+              ? getPathFileName(normalizedNameInput)
+              : normalizedNameInput,
+          })
+        : normalizeModuleTabPathForRename(tab.path, normalizedNameInput)
     const normalizedTabName =
       tab.role === 'entry'
         ? getPathFileName(normalizedEntryPath) || defaultComponentTabName
-        : getPathFileName(normalizedEntryPath) || normalizedName
+        : getPathFileName(normalizedEntryPath) || nextFileName
     const didPathChange =
       typeof tab?.path === 'string' && normalizedEntryPath !== tab.path
 
