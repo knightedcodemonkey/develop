@@ -330,6 +330,19 @@ test('component lint error reports diagnostics count and details', async ({ page
   await expect(page.getByText('Biome reported issues.')).toBeVisible()
 })
 
+test('component lint reports missing button type prop', async ({ page }) => {
+  await waitForInitialRender(page)
+
+  await setComponentEditorSource(page, 'const App = () => <button>lint me</button>')
+
+  await runComponentLint(page)
+
+  await expect(page.getByText(/Rendered \(Lint issues: [1-9]\d*\)/)).toBeVisible()
+  await ensureDiagnosticsDrawerOpen(page)
+  await expect(page.getByText('Biome reported issues.')).toBeVisible()
+  await expect(page.getByText(/a11y\/useButtonType/)).toBeVisible()
+})
+
 test('styles diagnostics rows navigate editor to reported line', async ({ page }) => {
   await waitForInitialRender(page)
 
@@ -352,6 +365,19 @@ test('styles diagnostics rows navigate editor to reported line', async ({ page }
   await targetDiagnostic.click()
   await expect(targetDiagnostic).toHaveClass(/diagnostic-line-button--active/)
   await expect.poll(() => getActiveStylesEditorLineNumber(page)).toBe('3')
+})
+
+test('styles lint reports CSS syntax errors', async ({ page }) => {
+  await waitForInitialRender(page)
+
+  await ensurePanelToolsVisible(page, 'styles')
+  await setStylesEditorSource(page, ['p {', '  color green;', '}'].join('\n'))
+
+  await runStylesLint(page)
+
+  await expect(page.getByText(/Rendered \(Lint issues: [1-9]\d*\)/)).toBeVisible()
+  await ensureDiagnosticsDrawerOpen(page)
+  await expect(page.getByText('Biome reported issues.')).toBeVisible()
 })
 
 test('sass compiler warnings surface in styles diagnostics', async ({ page }) => {

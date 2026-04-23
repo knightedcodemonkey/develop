@@ -9,6 +9,9 @@ const biomeConfiguration = {
     enabled: true,
     rules: {
       recommended: true,
+      a11y: {
+        useButtonType: 'error',
+      },
     },
   },
 }
@@ -277,7 +280,7 @@ export const createLintDiagnosticsController = ({
 
     try {
       const result = workspace.pullDiagnostics({
-        categories: ['lint'],
+        categories: ['lint', 'syntax'],
         path,
         projectKey,
         pullCodeActions: false,
