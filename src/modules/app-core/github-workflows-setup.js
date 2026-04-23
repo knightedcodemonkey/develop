@@ -36,6 +36,7 @@ const createGitHubWorkflowsSetup = ({
     getActivePrContextSyncKey: runtime.getActivePrContextSyncKey,
     prContextUi: runtime.prContextUi,
     onPrContextStateChange: runtime.onPrContextStateChange,
+    onPrContextVerifiedClosed: runtime.onPrContextVerifiedClosed,
     onPrContextClosed: runtime.onPrContextClosed,
     onPrContextDisconnected: runtime.onPrContextDisconnected,
     getTokenForVisibility: runtime.getTokenForVisibility,

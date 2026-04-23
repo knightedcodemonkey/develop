@@ -118,7 +118,7 @@ const createWorkspaceContextController = ({
       }
 
       if (typeof onWorkspaceRecordApplied === 'function') {
-        onWorkspaceRecordApplied(workspace)
+        onWorkspaceRecordApplied(workspace, { silent })
       }
 
       await refreshLocalContextOptions()

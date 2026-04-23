@@ -122,6 +122,18 @@ const openMostRecentStoredWorkspaceContext = async (page: Page) => {
   await page.locator('#workspaces-open').click()
 }
 
+const openStoredWorkspaceContextById = async (page: Page, workspaceId: string) => {
+  const select = page.locator('#workspaces-select')
+
+  if (!(await select.isVisible())) {
+    await page.locator('#workspaces-toggle').click()
+  }
+
+  await expect(select).toBeVisible()
+  await select.selectOption(workspaceId)
+  await page.locator('#workspaces-open').click()
+}
+
 const seedLocalWorkspaceContexts = async (
   page: Page,
   contexts: Array<{
@@ -831,7 +843,7 @@ test('Open PR drawer can filter stored local contexts by search', async ({ page 
   await search.fill('beta')
 
   const labels = await getLocalContextOptionLabels(page)
-  expect(labels).toEqual(['Select a stored local context', 'Beta local context'])
+  expect(labels).toEqual(['Select a stored local context', 'local:Beta local context'])
 })
 
 test('Open PR keeps inactive workspace record when repository changes', async ({
@@ -1658,13 +1670,202 @@ test('Active PR context disconnect uses local-only confirmation flow', async ({
   await expect(
     page.getByRole('button', { name: 'Disconnect active pull request context' }),
   ).toBeHidden()
+  await expect(
+    page.getByRole('listitem', { name: 'Workspace tab App.tsx' }),
+  ).toBeVisible()
+  await expect(
+    page.getByRole('list', { name: 'Workspace editor tabs' }).getByRole('listitem'),
+  ).toHaveCount(1)
+  await expect(page.locator('#preview-host iframe')).toHaveCount(0)
 
   const recordAfterDisconnect = await getWorkspaceTabsRecord(page, {
     headBranch: 'develop/open-pr-test',
   })
   expect(recordAfterDisconnect?.prContextState).toBe('disconnected')
   expect(recordAfterDisconnect?.prNumber).toBe(2)
+  await expect
+    .poll(async () => {
+      const records = await getAllWorkspaceRecords(page)
+      return records.filter(
+        record =>
+          record?.repo === 'knightedcodemonkey/develop' &&
+          record?.prContextState === 'active' &&
+          record?.prNumber === 2,
+      ).length
+    })
+    .toBe(0)
   expect(closePullRequestRequestCount).toBe(0)
+
+  await waitForAppReady(page, `${appEntryPath}`)
+
+  await expect(page.getByRole('button', { name: 'Open pull request' })).toBeVisible()
+  await expect(
+    page.getByRole('button', { name: 'Disconnect active pull request context' }),
+  ).toBeHidden()
+
+  const recordAfterReload = await getWorkspaceTabsRecord(page, {
+    headBranch: 'develop/open-pr-test',
+  })
+  expect(recordAfterReload?.prContextState).toBe('disconnected')
+  expect(recordAfterReload?.prNumber).toBe(2)
+})
+
+test('Reopening a disconnected workspace from Workspaces restores active PR controls and editor state', async ({
+  page,
+}) => {
+  const repositoryFullName = 'knightedcodemonkey/develop'
+  const activeHeadBranch = 'develop/open-pr-test'
+  const inactiveHeadBranch = 'feat/fallback-workspace'
+  const activeWorkspaceId = buildWorkspaceRecordId({
+    repositoryFullName,
+    headBranch: activeHeadBranch,
+  })
+  const inactiveWorkspaceId = buildWorkspaceRecordId({
+    repositoryFullName,
+    headBranch: inactiveHeadBranch,
+  })
+
+  await page.route('https://api.github.com/user/repos**', async route => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify([
+        {
+          id: 11,
+          owner: { login: 'knightedcodemonkey' },
+          name: 'develop',
+          full_name: repositoryFullName,
+          default_branch: 'main',
+          permissions: { push: true },
+        },
+      ]),
+    })
+  })
+
+  await mockRepositoryBranches(page, {
+    [repositoryFullName]: ['main', 'release', activeHeadBranch, inactiveHeadBranch],
+  })
+
+  await page.route(
+    'https://api.github.com/repos/knightedcodemonkey/develop/pulls/2',
+    async route => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          number: 2,
+          state: 'open',
+          title: 'Existing PR context from storage',
+          html_url: 'https://github.com/knightedcodemonkey/develop/pull/2',
+          head: { ref: activeHeadBranch },
+          base: { ref: 'main' },
+        }),
+      })
+    },
+  )
+
+  await page.route(
+    'https://api.github.com/repos/knightedcodemonkey/develop/git/ref/**',
+    async route => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          ref: `refs/heads/${activeHeadBranch}`,
+          object: { type: 'commit', sha: 'existing-head-sha' },
+        }),
+      })
+    },
+  )
+
+  await waitForAppReady(page, `${appEntryPath}`)
+
+  await seedActivePrWorkspaceContext(page, {
+    repositoryFullName,
+    headBranch: activeHeadBranch,
+    prTitle: 'Existing PR context from storage',
+    prNumber: 2,
+    renderMode: 'react',
+  })
+
+  await seedLocalWorkspaceContexts(page, [
+    {
+      id: inactiveWorkspaceId,
+      repo: repositoryFullName,
+      base: 'main',
+      head: inactiveHeadBranch,
+      prTitle: '',
+      prNumber: null,
+      prContextState: 'inactive',
+      renderMode: 'dom',
+      tabs: [
+        {
+          id: 'component',
+          name: 'App.tsx',
+          path: 'src/components/App.tsx',
+          language: 'javascript-jsx',
+          role: 'entry',
+          isActive: true,
+          content: 'export const App = () => <main>Fallback workspace view</main>',
+        },
+        {
+          id: 'styles',
+          name: 'app.css',
+          path: 'src/styles/app.css',
+          language: 'css',
+          role: 'module',
+          isActive: false,
+          content: 'main { color: #333; }',
+        },
+      ],
+      activeTabId: 'component',
+      createdAt: Date.now() - 120_000,
+      lastModified: Date.now() - 120_000,
+    },
+  ])
+
+  await connectByotWithSingleRepo(page)
+  await openStoredWorkspaceContextById(page, activeWorkspaceId)
+
+  await expect(
+    page.getByRole('button', { name: 'Push commit to active pull request branch' }),
+  ).toBeVisible()
+
+  await page
+    .getByRole('button', { name: 'Disconnect active pull request context' })
+    .click()
+  await page.getByRole('dialog').getByRole('button', { name: 'Disconnect' }).click()
+
+  await expect(page.getByRole('button', { name: 'Open pull request' })).toBeVisible()
+  const disconnectedRecord = await getWorkspaceTabsRecord(page, {
+    headBranch: activeHeadBranch,
+  })
+  expect(disconnectedRecord?.prContextState).toBe('disconnected')
+
+  await openStoredWorkspaceContextById(page, inactiveWorkspaceId)
+
+  await expect(page.getByRole('button', { name: 'Open pull request' })).toBeVisible()
+  await expect(
+    page.locator('.editor-panel[data-editor-kind="component"] .cm-content').first(),
+  ).toContainText('Fallback workspace view')
+
+  await openStoredWorkspaceContextById(page, activeWorkspaceId)
+
+  await expect(
+    page.getByRole('button', { name: 'Push commit to active pull request branch' }),
+  ).toBeVisible()
+  await expect(
+    page.getByRole('button', { name: 'Disconnect active pull request context' }),
+  ).toBeVisible()
+  await expect(
+    page.locator('.editor-panel[data-editor-kind="component"] .cm-content').first(),
+  ).toContainText('Hello from Knighted')
+
+  const reactivatedRecord = await getWorkspaceTabsRecord(page, {
+    headBranch: activeHeadBranch,
+  })
+  expect(reactivatedRecord?.prContextState).toBe('active')
+  expect(reactivatedRecord?.prNumber).toBe(2)
 })
 
 test('Active PR context updates controls and can be closed from AI controls', async ({
@@ -1773,12 +1974,33 @@ test('Active PR context updates controls and can be closed from AI controls', as
   await expect(
     page.getByRole('button', { name: 'Close active pull request context' }),
   ).toBeHidden()
+  await expect(
+    page.getByRole('listitem', { name: 'Workspace tab App.tsx' }),
+  ).toBeVisible()
+  await expect(
+    page.getByRole('list', { name: 'Workspace editor tabs' }).getByRole('listitem'),
+  ).toHaveCount(1)
+  await expect(page.locator('#preview-host iframe')).toHaveCount(0)
 
-  const recordAfterClose = await getWorkspaceTabsRecord(page, {
-    headBranch: 'develop/open-pr-test',
-  })
-  expect(recordAfterClose?.prContextState).toBe('closed')
-  expect(recordAfterClose?.prNumber).toBe(2)
+  await expect
+    .poll(async () => {
+      const records = await getAllWorkspaceRecords(page)
+      const closedRecord = records.find(
+        record =>
+          record?.repo === 'knightedcodemonkey/develop' &&
+          record?.prContextState === 'closed' &&
+          record?.prNumber === 2,
+      )
+
+      return {
+        prContextState: closedRecord?.prContextState,
+        prNumber: closedRecord?.prNumber,
+      }
+    })
+    .toEqual({
+      prContextState: 'closed',
+      prNumber: 2,
+    })
   expect(closePullRequestRequestCount).toBe(1)
 })
 
@@ -1844,14 +2066,12 @@ test('Active PR context is disabled on load when pull request is closed', async 
   await expect(
     page.getByRole('status', { name: 'Open pull request status', includeHidden: true }),
   ).toContainText('Saved pull request context is not open on GitHub.')
-
-  const recordAfterClosedVerify = await getWorkspaceTabsRecord(page, {
-    headBranch: 'develop/open-pr-test',
-  })
-  expect(recordAfterClosedVerify?.prContextState).toBe('closed')
 })
 
 test('Active PR context rehydrates after token remove and re-add', async ({ page }) => {
+  const githubHeadBranch = 'css/rehydrate-test'
+  const staleLocalHeadBranch = 'css/stale-local-head'
+
   await page.route('https://api.github.com/user/repos**', async route => {
     await route.fulfill({
       status: 200,
@@ -1879,7 +2099,7 @@ test('Active PR context rehydrates after token remove and re-add', async ({ page
 
   await mockRepositoryBranches(page, {
     'knightedcodemonkey/develop': ['main', 'release'],
-    'knightedcodemonkey/css': ['main', 'release', 'css/rehydrate-test'],
+    'knightedcodemonkey/css': ['main', 'release', githubHeadBranch],
   })
 
   await page.route(
@@ -1893,7 +2113,7 @@ test('Active PR context rehydrates after token remove and re-add', async ({ page
           state: 'open',
           title: 'Saved css PR context',
           html_url: 'https://github.com/knightedcodemonkey/css/pull/7',
-          head: { ref: 'css/rehydrate-test' },
+          head: { ref: githubHeadBranch },
           base: { ref: 'main' },
         }),
       })
@@ -1908,7 +2128,7 @@ test('Active PR context rehydrates after token remove and re-add', async ({ page
 
   await seedActivePrWorkspaceContext(page, {
     repositoryFullName: 'knightedcodemonkey/css',
-    headBranch: 'css/rehydrate-test',
+    headBranch: staleLocalHeadBranch,
     prTitle: 'Saved css PR context',
     prNumber: 7,
     renderMode: 'react',
@@ -1926,6 +2146,21 @@ test('Active PR context rehydrates after token remove and re-add', async ({ page
   await expect(
     page.getByRole('button', { name: 'Push commit to active pull request branch' }),
   ).toBeVisible()
+
+  await expect
+    .poll(async () => {
+      const records = await getAllWorkspaceRecords(page)
+      const syncedActiveRecord = records.find(
+        record =>
+          record?.repo === 'knightedcodemonkey/css' &&
+          record?.prContextState === 'active' &&
+          record?.prNumber === 7 &&
+          record?.head === githubHeadBranch,
+      )
+
+      return Boolean(syncedActiveRecord)
+    })
+    .toBe(true)
 
   await removeSavedGitHubToken(page)
   await expect(page.getByRole('status', { name: 'App status' })).toHaveText(
@@ -2050,11 +2285,6 @@ test('Active PR context deactivates after token remove and re-add when PR is clo
   await expect(
     page.getByRole('status', { name: 'Open pull request status', includeHidden: true }),
   ).toContainText('Saved pull request context is not open on GitHub.')
-
-  const closedRecord = await getWorkspaceTabsRecord(page, {
-    headBranch: 'css/rehydrate-test',
-  })
-  expect(closedRecord?.prContextState).toBe('closed')
 })
 
 test('Active PR context recovers when saved head branch is missing but PR metadata exists', async ({

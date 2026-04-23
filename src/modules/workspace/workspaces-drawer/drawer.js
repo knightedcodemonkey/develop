@@ -3,17 +3,22 @@ const toSafeText = value => (typeof value === 'string' ? value.trim() : '')
 const normalizeQuery = value => toSafeText(value).toLowerCase()
 
 const toWorkspaceLabel = workspace => {
+  const state = toSafeText(workspace?.prContextState).toLowerCase()
+  const hasPrNumber = Number.isFinite(workspace?.prNumber)
+  const isLocalOnlyInactive = state === 'inactive' && !hasPrNumber
+
   const hasTitle = toSafeText(workspace?.prTitle)
   if (hasTitle) {
-    return hasTitle
+    return isLocalOnlyInactive ? `local:${hasTitle}` : hasTitle
   }
 
   const hasHead = toSafeText(workspace?.head)
   if (hasHead) {
-    return hasHead
+    return isLocalOnlyInactive ? `local:${hasHead}` : hasHead
   }
 
-  return toSafeText(workspace?.id) || 'workspace'
+  const fallbackLabel = toSafeText(workspace?.id) || 'workspace'
+  return isLocalOnlyInactive ? `local:${fallbackLabel}` : fallbackLabel
 }
 
 const matchesQuery = (workspace, query) => {
