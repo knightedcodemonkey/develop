@@ -44,6 +44,7 @@ import {
 import { createWorkspaceSyncController } from './modules/app-core/workspace-sync-controller.js'
 import { createWorkspaceTabAddMenuUiController } from './modules/app-core/workspace-tab-add-menu-ui.js'
 import { createPersistedActivePrContextGetter } from './modules/app-core/persisted-active-pr-context.js'
+import { createWorkspacePrSessionHandoffController } from './modules/app-core/workspace-pr-session-handoff-controller.js'
 import { createDiagnosticsUiController } from './modules/diagnostics/diagnostics-ui.js'
 import { createGitHubChatDrawer } from './modules/github/chat-drawer/drawer.js'
 import { createGitHubByotControls } from './modules/github/byot-controls.js'
@@ -776,16 +777,20 @@ const {
   getWorkspaceTabByKind,
   makeUniqueTabPath,
   createWorkspaceTabId,
-  onWorkspaceRecordApplied: workspace => {
+  onWorkspaceRecordApplied: (workspace, options = {}) => {
     if (!workspace || typeof workspace !== 'object') {
       return
     }
+
+    const isSilentRestore = options?.silent === true
 
     const state =
       typeof workspace.prContextState === 'string'
         ? workspace.prContextState.trim().toLowerCase()
         : ''
-    if (state !== 'active') {
+    const shouldHydratePrContext =
+      state === 'active' || (state === 'disconnected' && !isSilentRestore)
+    if (!shouldHydratePrContext) {
       return
     }
 
@@ -859,6 +864,49 @@ const persistWorkspacePrContextState = nextState => {
     /* Save failures are already surfaced through saver onError. */
   })
 }
+
+const workspacePrSessionHandoffController = createWorkspacePrSessionHandoffController({
+  defaults: {
+    defaultComponentTabName,
+    defaultComponentTabPath,
+  },
+  state: {
+    getWorkspacePrNumber: () => workspacePrNumber,
+    setWorkspacePrContextState,
+    setWorkspacePrNumber,
+    getActiveWorkspaceCreatedAt: () => activeWorkspaceCreatedAt,
+    setActiveWorkspaceRecordId,
+    setActiveWorkspaceCreatedAt: value => (activeWorkspaceCreatedAt = value),
+  },
+  ui: {
+    githubPrBaseBranch,
+    githubPrHeadBranch,
+    githubPrTitle,
+    githubPrBody,
+    setStatus,
+  },
+  workspace: {
+    workspaceStorage,
+    workspaceTabsState,
+    buildWorkspaceRecordSnapshot,
+    buildWorkspaceTabsSnapshot,
+    refreshLocalContextOptions,
+    renderWorkspaceTabs,
+    syncHeaderLabels,
+    loadWorkspaceTabIntoEditor,
+    getActiveWorkspaceTab,
+  },
+  runtime: {
+    getRenderRuntime: () => renderRuntime,
+    getUpdateRenderModeEditability: () => updateRenderModeEditability,
+  },
+  selectors: {
+    getCurrentSelectedRepositoryFullName,
+  },
+  utils: {
+    toNonEmptyWorkspaceText,
+  },
+})
 
 const githubWorkflows = createGitHubWorkflowsSetup({
   factories: {
@@ -937,6 +985,13 @@ const githubWorkflows = createGitHubWorkflowsSetup({
     onPrContextStateChange: activeContext => {
       if (activeContext?.prTitle) {
         hasObservedActivePrContextInSession = true
+        workspacePrSessionHandoffController.setLastKnownPrContextMeta({
+          baseBranch:
+            typeof activeContext.baseBranch === 'string' ? activeContext.baseBranch : '',
+          headBranch:
+            typeof activeContext.headBranch === 'string' ? activeContext.headBranch : '',
+          prTitle: typeof activeContext.prTitle === 'string' ? activeContext.prTitle : '',
+        })
         const nextPrNumber =
           toPullRequestNumber(activeContext.pullRequestNumber) ??
           parsePullRequestNumberFromUrl(activeContext.pullRequestUrl)
@@ -950,15 +1005,6 @@ const githubWorkflows = createGitHubWorkflowsSetup({
           typeof githubPrTitle?.value === 'string' &&
           githubPrTitle.value.trim().length > 0
 
-        if (
-          hasObservedActivePrContextInSession &&
-          workspacePrNumber !== null &&
-          hasHeadBranch &&
-          hasPrTitle
-        ) {
-          persistWorkspacePrContextState('closed')
-        }
-
         if (hasObservedActivePrContextInSession && (!hasHeadBranch || !hasPrTitle)) {
           hasObservedActivePrContextInSession = false
           setWorkspacePrNumber(null)
@@ -970,12 +1016,20 @@ const githubWorkflows = createGitHubWorkflowsSetup({
     onPrContextClosed: result => {
       hasObservedActivePrContextInSession = false
       setWorkspacePrNumber(result?.pullRequestNumber)
-      persistWorkspacePrContextState('closed')
+      workspacePrSessionHandoffController.archivePrWorkspaceAndStartFreshLocal({
+        archivedState: 'closed',
+        statusMessage:
+          'PR context closed. Click Workspaces to open a stored workspace or continue with this fresh local workspace.',
+      })
     },
     onPrContextDisconnected: result => {
       hasObservedActivePrContextInSession = false
       setWorkspacePrNumber(result?.pullRequestNumber)
-      persistWorkspacePrContextState('disconnected')
+      workspacePrSessionHandoffController.archivePrWorkspaceAndStartFreshLocal({
+        archivedState: 'disconnected',
+        statusMessage:
+          'PR context disconnected. Click Workspaces to open a stored workspace or continue with this fresh local workspace.',
+      })
     },
     getPersistedActivePrContext,
     getTokenForVisibility: () => githubAiContextState.token,
