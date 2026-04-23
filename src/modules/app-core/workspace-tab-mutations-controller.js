@@ -74,15 +74,19 @@ const createWorkspaceTabMutationsController = ({
       tab.role === 'entry'
         ? getPathFileName(normalizedEntryPath) || defaultComponentTabName
         : getPathFileName(normalizedEntryPath) || normalizedName
+    const didPathChange =
+      typeof tab?.path === 'string' && normalizedEntryPath !== tab.path
 
     workspaceTabsState.upsertTab({
       ...tab,
       name: normalizedTabName,
       path: normalizedEntryPath,
-      isDirty: getDirtyStateForTabChange(
-        tab,
-        typeof tab?.content === 'string' ? tab.content : '',
-      ),
+      isDirty:
+        didPathChange ||
+        getDirtyStateForTabChange(
+          tab,
+          typeof tab?.content === 'string' ? tab.content : '',
+        ),
       lastModified: Date.now(),
     })
 

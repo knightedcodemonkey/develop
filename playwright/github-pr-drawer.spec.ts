@@ -18,6 +18,22 @@ import {
 const getOpenPrDrawer = (page: Page) =>
   page.getByRole('complementary', { name: /Open Pull Request|Push Commit/ })
 
+const renameWorkspaceTab = async (
+  page: Page,
+  {
+    from,
+    to,
+  }: {
+    from: string
+    to: string
+  },
+) => {
+  await page.getByRole('button', { name: `Rename tab ${from}` }).click()
+  const renameInput = page.getByLabel(`Rename ${from}`)
+  await renameInput.fill(to)
+  await renameInput.press('Enter')
+}
+
 const clickOpenPrDrawerSubmit = async (page: Page) => {
   const drawer = getOpenPrDrawer(page)
   await expect(drawer).toBeVisible()
@@ -2594,6 +2610,226 @@ test('Dirty tabs expose Edited in accessible names during active PR context', as
   await expect(
     page.getByRole('listitem', { name: 'Workspace tab module.tsx (Edited)' }),
   ).toBeVisible()
+})
+
+test('Renaming a synced module tab marks it Edited and includes renamed path in Push commit confirmation', async ({
+  page,
+}) => {
+  const treeRequests: Array<Record<string, unknown>> = []
+
+  await page.route('https://api.github.com/user/repos**', async route => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify([
+        {
+          id: 11,
+          owner: { login: 'knightedcodemonkey' },
+          name: 'develop',
+          full_name: 'knightedcodemonkey/develop',
+          default_branch: 'main',
+          permissions: { push: true },
+        },
+      ]),
+    })
+  })
+
+  await mockRepositoryBranches(page, {
+    'knightedcodemonkey/develop': ['main', 'release', 'develop/open-pr-test'],
+  })
+
+  await page.route(
+    'https://api.github.com/repos/knightedcodemonkey/develop/pulls/2',
+    async route => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          number: 2,
+          state: 'open',
+          title: 'Existing PR context from storage',
+          html_url: 'https://github.com/knightedcodemonkey/develop/pull/2',
+          head: { ref: 'develop/open-pr-test' },
+          base: { ref: 'main' },
+        }),
+      })
+    },
+  )
+
+  await page.route(
+    'https://api.github.com/repos/knightedcodemonkey/develop/git/ref/**',
+    async route => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          ref: 'refs/heads/develop/open-pr-test',
+          object: { type: 'commit', sha: 'existing-head-sha' },
+        }),
+      })
+    },
+  )
+
+  await page.route(
+    'https://api.github.com/repos/knightedcodemonkey/develop/git/commits/existing-head-sha',
+    async route => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          sha: 'existing-head-sha',
+          tree: { sha: 'base-tree-sha' },
+        }),
+      })
+    },
+  )
+
+  await page.route(
+    'https://api.github.com/repos/knightedcodemonkey/develop/git/trees',
+    async route => {
+      treeRequests.push(route.request().postDataJSON() as Record<string, unknown>)
+
+      await route.fulfill({
+        status: 201,
+        contentType: 'application/json',
+        body: JSON.stringify({ sha: 'rename-tree-sha' }),
+      })
+    },
+  )
+
+  await page.route(
+    'https://api.github.com/repos/knightedcodemonkey/develop/git/commits',
+    async route => {
+      await route.fulfill({
+        status: 201,
+        contentType: 'application/json',
+        body: JSON.stringify({ sha: 'rename-commit-sha' }),
+      })
+    },
+  )
+
+  await page.route(
+    'https://api.github.com/repos/knightedcodemonkey/develop/git/refs/**',
+    async route => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          ref: 'refs/heads/develop/open-pr-test',
+          object: { type: 'commit', sha: 'rename-commit-sha' },
+        }),
+      })
+    },
+  )
+
+  await waitForAppReady(page, `${appEntryPath}`)
+
+  const now = Date.now()
+  await seedLocalWorkspaceContexts(page, [
+    {
+      id: buildWorkspaceRecordId({
+        repositoryFullName: 'knightedcodemonkey/develop',
+        headBranch: 'develop/open-pr-test',
+      }),
+      repo: 'knightedcodemonkey/develop',
+      base: 'main',
+      head: 'develop/open-pr-test',
+      prTitle: 'Existing PR context from storage',
+      prNumber: 2,
+      prContextState: 'active',
+      renderMode: 'react',
+      tabs: [
+        {
+          id: 'component',
+          name: 'App.tsx',
+          path: 'src/components/App.tsx',
+          language: 'javascript-jsx',
+          role: 'entry',
+          isActive: true,
+          content: 'export const App = () => <main>Hello from Knighted</main>',
+          targetPrFilePath: 'src/components/App.tsx',
+          syncedContent: 'export const App = () => <main>Hello from Knighted</main>',
+          syncedAt: now,
+          isDirty: false,
+        },
+        {
+          id: 'styles',
+          name: 'app.css',
+          path: 'src/styles/app.css',
+          language: 'css',
+          role: 'module',
+          isActive: false,
+          content: 'main { color: #111; }',
+          targetPrFilePath: 'src/styles/app.css',
+          syncedContent: 'main { color: #111; }',
+          syncedAt: now,
+          isDirty: false,
+        },
+        {
+          id: 'boop',
+          name: 'boop.tsx',
+          path: 'src/components/boop.tsx',
+          language: 'javascript-jsx',
+          role: 'module',
+          isActive: false,
+          content: 'export const Boop = () => <p>boop</p>',
+          targetPrFilePath: 'src/components/boop.tsx',
+          syncedContent: 'export const Boop = () => <p>boop</p>',
+          syncedAt: now,
+          isDirty: false,
+        },
+      ],
+      activeTabId: 'component',
+      createdAt: now,
+      lastModified: now,
+    },
+  ])
+
+  await connectByotWithSingleRepo(page)
+  await openMostRecentStoredWorkspaceContext(page)
+  await renameWorkspaceTab(page, { from: 'boop.tsx', to: 'beep.tsx' })
+
+  await expect(
+    page.getByRole('button', { name: 'Open tab beep.tsx (Edited)' }),
+  ).toBeVisible()
+
+  await ensureOpenPrDrawerOpen(page)
+  await page.getByRole('button', { name: 'Push commit' }).last().click()
+
+  const dialog = page.getByRole('dialog')
+  await expect(dialog).toBeVisible()
+  await expect(page.getByText('Files to commit:', { exact: true })).toBeVisible()
+  await expect(
+    page.getByText('beep.tsx -> src/components/beep.tsx', { exact: true }),
+  ).toBeVisible()
+  await expect(
+    page.getByText('beep.tsx -> src/components/boop.tsx (delete)', { exact: true }),
+  ).toBeVisible()
+
+  await dialog.getByRole('button', { name: 'Push commit' }).click()
+
+  await expect(
+    page.getByRole('status', { name: 'Open pull request status', includeHidden: true }),
+  ).toContainText('Commit pushed to develop/open-pr-test')
+
+  expect(treeRequests).toHaveLength(1)
+  const treePayload = treeRequests[0]?.tree as Array<Record<string, unknown>>
+  const renamedBlob = treePayload?.find(file => file.path === 'src/components/beep.tsx')
+  const deletedBlob = treePayload?.find(file => file.path === 'src/components/boop.tsx')
+
+  expect(renamedBlob).toMatchObject({
+    path: 'src/components/beep.tsx',
+    mode: '100644',
+    type: 'blob',
+  })
+  expect(typeof renamedBlob?.content).toBe('string')
+
+  expect(deletedBlob).toEqual({
+    path: 'src/components/boop.tsx',
+    mode: '100644',
+    type: 'blob',
+    sha: null,
+  })
 })
 
 test('Active PR context push commit uses Git Database API atomic path by default', async ({

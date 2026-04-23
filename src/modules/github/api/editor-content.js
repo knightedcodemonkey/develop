@@ -59,6 +59,7 @@ const normalizeFileUpdateInput = (file, index) => {
   return {
     path: validation.value,
     content: typeof file.content === 'string' ? file.content : '',
+    deleted: file.deleted === true,
   }
 }
 
@@ -100,12 +101,23 @@ const createRepositoryTree = async ({
   files,
   signal,
 }) => {
-  const tree = files.map(file => ({
-    path: file.path,
-    mode: '100644',
-    type: 'blob',
-    content: file.content,
-  }))
+  const tree = files.map(file => {
+    if (file.deleted === true) {
+      return {
+        path: file.path,
+        mode: '100644',
+        type: 'blob',
+        sha: null,
+      }
+    }
+
+    return {
+      path: file.path,
+      mode: '100644',
+      type: 'blob',
+      content: file.content,
+    }
+  })
 
   const response = await requestGitHubJson({
     token,

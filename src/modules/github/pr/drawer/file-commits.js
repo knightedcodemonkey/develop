@@ -77,6 +77,7 @@ const normalizeFileCommits = fileCommits => {
       content: typeof item?.content === 'string' ? item.content : '',
       tabLabel: toSafeText(item?.tabLabel),
       isEntry: item?.isEntry === true,
+      deleted: item?.deleted === true,
     })
   }
 
