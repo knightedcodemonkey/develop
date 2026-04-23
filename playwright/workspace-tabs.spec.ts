@@ -238,6 +238,60 @@ test('renaming module tab input starts with full path and supports directory cha
   await expect(page.getByRole('button', { name: 'Open tab module.tsx' })).toHaveCount(0)
 })
 
+test('renaming module tab ignores invalid path-style input', async ({ page }) => {
+  await waitForInitialRender(page)
+
+  await addWorkspaceTab(page)
+
+  const invalidPathInputs = [
+    'src/ui/cards/',
+    '/src/ui/cards/card-item.tsx',
+    '../card-item.tsx',
+    'src/ui/../card-item.tsx',
+    'src/ui/card item.tsx',
+  ]
+
+  for (const input of invalidPathInputs) {
+    await renameWorkspaceTab(page, {
+      from: 'module.tsx',
+      to: input,
+    })
+
+    const moduleTab = page.getByRole('button', { name: 'Open tab module.tsx' })
+    await expect(moduleTab).toHaveAttribute('title', 'src/components/module.tsx')
+    await expect(
+      page.getByRole('button', { name: 'Open tab card-item.tsx' }),
+    ).toHaveCount(0)
+  }
+})
+
+test('renaming module tab rejects path collisions with existing tabs', async ({
+  page,
+}) => {
+  await waitForInitialRender(page)
+
+  await addWorkspaceTab(page)
+  await addWorkspaceTab(page)
+
+  await renameWorkspaceTab(page, {
+    from: 'module-2.tsx',
+    to: 'module.tsx',
+  })
+
+  await expect(page.getByRole('button', { name: 'Open tab module.tsx' })).toHaveCount(1)
+  await expect(page.getByRole('button', { name: 'Open tab module-2.tsx' })).toHaveCount(1)
+  await expect(page.getByRole('button', { name: 'Open tab module.tsx' })).toHaveAttribute(
+    'title',
+    'src/components/module.tsx',
+  )
+  await expect(
+    page.getByRole('button', { name: 'Open tab module-2.tsx' }),
+  ).toHaveAttribute('title', 'src/components/module-2.tsx')
+  await expect(page.getByRole('status', { name: 'App status' })).toContainText(
+    'A tab with that file path already exists.',
+  )
+})
+
 test('renaming module tab preserves source content', async ({ page }) => {
   await waitForInitialRender(page)
 

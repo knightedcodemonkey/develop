@@ -76,6 +76,29 @@ const createWorkspaceTabMutationsController = ({
               : normalizedNameInput,
           })
         : normalizeModuleTabPathForRename(tab.path, normalizedNameInput)
+
+    const normalizePathForComparison = value =>
+      toNonEmptyWorkspaceText(value).replace(/\\/g, '/').replace(/\/+/g, '/')
+    const normalizedNextPath = normalizePathForComparison(normalizedEntryPath)
+    const hasPathCollision = workspaceTabsState.getTabs().some(existingTab => {
+      if (!existingTab || existingTab.id === tab.id) {
+        return false
+      }
+
+      const existingPath = normalizePathForComparison(existingTab.path)
+      const existingTargetPath = normalizePathForComparison(existingTab.targetPrFilePath)
+      return (
+        (existingPath && existingPath === normalizedNextPath) ||
+        (existingTargetPath && existingTargetPath === normalizedNextPath)
+      )
+    })
+
+    if (hasPathCollision) {
+      setStatus('A tab with that file path already exists.', 'error')
+      renderWorkspaceTabs()
+      return
+    }
+
     const normalizedTabName =
       tab.role === 'entry'
         ? getPathFileName(normalizedEntryPath) || defaultComponentTabName

@@ -230,7 +230,17 @@ const normalizeModuleTabPathForRename = (
   const normalizedNextName = toNonEmptyWorkspaceText(nextName)
 
   if (/[\\/]/.test(normalizedNextName)) {
-    return normalizeWorkspacePathValue(normalizedNextName)
+    const normalizedPathInput = normalizeWorkspacePathValue(normalizedNextName)
+    const segments = normalizedPathInput.split('/').filter(Boolean)
+    const isValidPathInput =
+      Boolean(normalizedPathInput) &&
+      !normalizedPathInput.startsWith('/') &&
+      !normalizedPathInput.endsWith('/') &&
+      segments.length > 0 &&
+      segments.every(segment => segment !== '.' && segment !== '..') &&
+      /^[A-Za-z0-9._\-/]+$/.test(normalizedPathInput)
+
+    return isValidPathInput ? normalizedPathInput : currentPath
   }
 
   const nextFileName = getPathFileName(normalizedNextName) || normalizedNextName
