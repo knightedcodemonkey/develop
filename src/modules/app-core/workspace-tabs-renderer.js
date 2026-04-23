@@ -159,7 +159,7 @@ const createWorkspaceTabsRenderer = ({
         if (isRenaming) {
           const renameInput = document.createElement('input')
           renameInput.className = 'workspace-tab__name-input'
-          renameInput.value = tab.name
+          renameInput.value = tab.path || tab.name
           renameInput.setAttribute('aria-label', `Rename ${tab.name}`)
 
           let renameResolved = false

@@ -77,20 +77,26 @@ const createWorkspaceEditorHelpers = ({
       return
     }
 
-    const nextContent =
-      getTabKind(activeTab) === 'styles' ? getCssSource() : getJsxSource()
+    const activeTabKind = getTabKind(activeTab)
+    const loadedTabId =
+      activeTabKind === 'styles' ? getLoadedStylesTabId() : getLoadedComponentTabId()
+    const loadedTab = loadedTabId ? workspaceTabsState.getTab(loadedTabId) : null
+    const targetTab =
+      loadedTab && getTabKind(loadedTab) === activeTabKind ? loadedTab : activeTab
 
-    if (nextContent === activeTab.content) {
+    const nextContent = activeTabKind === 'styles' ? getCssSource() : getJsxSource()
+
+    if (nextContent === targetTab.content) {
       return
     }
 
     workspaceTabsState.upsertTab(
       {
-        ...activeTab,
+        ...targetTab,
         content: nextContent,
-        isDirty: getDirtyStateForTabChange(activeTab, nextContent),
+        isDirty: getDirtyStateForTabChange(targetTab, nextContent),
         lastModified: Date.now(),
-        isActive: true,
+        isActive: targetTab.id === activeTab.id,
       },
       { emitReason: 'tabContentSync' },
     )

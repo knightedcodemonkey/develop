@@ -269,6 +269,10 @@
   border-top-color: var(--border-control);
 }
 
+.workspace-tabs-strip:has(> .workspace-tab:nth-child(n + 7)) > .workspace-tab {
+  min-width: 148px;
+}
+
 .workspace-tab:active {
   cursor: grabbing;
 }
@@ -324,7 +328,7 @@
 }
 
 .workspace-tab__name-input {
-  width: min(220px, 40vw);
+  width: min(320px, 52vw);
   border: 1px solid var(--border-control);
   border-radius: 8px;
   background: var(--surface-select);

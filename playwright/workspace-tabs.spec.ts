@@ -220,6 +220,78 @@ test('renaming module tab keeps name and path synchronized', async ({ page }) =>
   await expect(page.getByRole('button', { name: 'Open tab module.tsx' })).toHaveCount(0)
 })
 
+test('renaming module tab input starts with full path and supports directory changes', async ({
+  page,
+}) => {
+  await waitForInitialRender(page)
+
+  await addWorkspaceTab(page)
+  await page.getByRole('button', { name: 'Rename tab module.tsx' }).click()
+
+  const renameInput = page.getByLabel('Rename module.tsx')
+  await expect(renameInput).toHaveValue('src/components/module.tsx')
+  await renameInput.fill('src/ui/cards/card-item.tsx')
+  await renameInput.press('Enter')
+
+  const tab = page.getByRole('button', { name: 'Open tab card-item.tsx' })
+  await expect(tab).toHaveAttribute('title', 'src/ui/cards/card-item.tsx')
+  await expect(page.getByRole('button', { name: 'Open tab module.tsx' })).toHaveCount(0)
+})
+
+test('renaming module tab ignores invalid path-style input', async ({ page }) => {
+  await waitForInitialRender(page)
+
+  await addWorkspaceTab(page)
+
+  const invalidPathInputs = [
+    'src/ui/cards/',
+    '/src/ui/cards/card-item.tsx',
+    '../card-item.tsx',
+    'src/ui/../card-item.tsx',
+    'src/ui/card item.tsx',
+  ]
+
+  for (const input of invalidPathInputs) {
+    await renameWorkspaceTab(page, {
+      from: 'module.tsx',
+      to: input,
+    })
+
+    const moduleTab = page.getByRole('button', { name: 'Open tab module.tsx' })
+    await expect(moduleTab).toHaveAttribute('title', 'src/components/module.tsx')
+    await expect(
+      page.getByRole('button', { name: 'Open tab card-item.tsx' }),
+    ).toHaveCount(0)
+  }
+})
+
+test('renaming module tab rejects path collisions with existing tabs', async ({
+  page,
+}) => {
+  await waitForInitialRender(page)
+
+  await addWorkspaceTab(page)
+  await addWorkspaceTab(page)
+
+  await renameWorkspaceTab(page, {
+    from: 'module-2.tsx',
+    to: 'module.tsx',
+  })
+
+  await expect(page.getByRole('button', { name: 'Open tab module.tsx' })).toHaveCount(1)
+  await expect(page.getByRole('button', { name: 'Open tab module-2.tsx' })).toHaveCount(1)
+  await expect(page.getByRole('button', { name: 'Open tab module.tsx' })).toHaveAttribute(
+    'title',
+    'src/components/module.tsx',
+  )
+  await expect(
+    page.getByRole('button', { name: 'Open tab module-2.tsx' }),
+  ).toHaveAttribute('title', 'src/components/module-2.tsx')
+  await expect(page.getByRole('status', { name: 'App status' })).toContainText(
+    'A tab with that file path already exists.',
+  )
+})
+
 test('renaming module tab preserves source content', async ({ page }) => {
   await waitForInitialRender(page)
 
@@ -242,6 +314,81 @@ test('renaming module tab preserves source content', async ({ page }) => {
     .locator('.editor-panel[data-editor-kind="component"] .cm-content')
     .first()
   await expect(editorContent).toContainText('export const Value = () => <p>Kept</p>')
+})
+
+test('rapid tab churn keeps module content isolated from entry content', async ({
+  page,
+}) => {
+  await waitForInitialRender(page)
+
+  await addWorkspaceTab(page)
+  await addWorkspaceTab(page)
+  await addWorkspaceTab(page)
+
+  await renameWorkspaceTab(page, {
+    from: 'module.tsx',
+    to: 'boop.tsx',
+  })
+  await renameWorkspaceTab(page, {
+    from: 'module-2.tsx',
+    to: 'beep.tsx',
+  })
+
+  const appSource = [
+    "import './styles/styles.css'",
+    "import { Boop } from './components/boop.js'",
+    "import { Beep } from './components/beep.js'",
+    '',
+    'export function App() {',
+    '  return (',
+    '    <>',
+    '      <Boop />',
+    '      <Beep />',
+    '    </>',
+    '  )',
+    '}',
+  ].join('\n')
+
+  await setWorkspaceTabSource(page, {
+    fileName: 'App.tsx',
+    kind: 'component',
+    source: appSource,
+  })
+  await setWorkspaceTabSource(page, {
+    fileName: 'boop.tsx',
+    kind: 'component',
+    source: 'export const Boop = () => <p>boop sentinel</p>',
+  })
+  await setWorkspaceTabSource(page, {
+    fileName: 'beep.tsx',
+    kind: 'component',
+    source: 'export const Beep = () => <p>beep sentinel</p>',
+  })
+
+  await page.getByRole('button', { name: 'Open tab boop.tsx' }).click()
+  await page.getByRole('button', { name: 'Open tab App.tsx' }).click()
+  await page.getByRole('button', { name: 'Open tab beep.tsx' }).click()
+  await page.getByRole('button', { name: 'Open tab app.css' }).click()
+  await page.getByRole('button', { name: 'Open tab App.tsx' }).click()
+  await page.getByRole('button', { name: 'Open tab beep.tsx' }).click()
+
+  await page.getByRole('button', { name: 'Remove tab module-3.tsx' }).click()
+  await confirmRemoveDialog(page)
+  await addWorkspaceTab(page)
+
+  await page.getByRole('button', { name: 'Open tab App.tsx' }).click()
+  const entryEditor = page
+    .locator('.editor-panel[data-editor-kind="component"] .cm-content')
+    .first()
+  await expect(entryEditor).toContainText("import './styles/styles.css'")
+  await expect(entryEditor).toContainText("import { Beep } from './components/beep.js'")
+
+  await page.getByRole('button', { name: 'Open tab beep.tsx' }).click()
+  const beepEditor = page
+    .locator('.editor-panel[data-editor-kind="component"] .cm-content')
+    .first()
+  await expect(beepEditor).toContainText('export const Beep = () => <p>beep sentinel</p>')
+  await expect(beepEditor).not.toContainText("import './styles/styles.css'")
 })
 
 test('active tab remains source of truth for visible editor panel', async ({ page }) => {
