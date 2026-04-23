@@ -28,7 +28,12 @@ const buildSummary = ({
       }
 
       const tabLabel = toSafeText(fileCommit?.tabLabel)
-      lines.push(tabLabel ? `- ${tabLabel} -> ${path}` : `- ${path}`)
+      const operationLabel = fileCommit?.deleted === true ? ' (delete)' : ''
+      lines.push(
+        tabLabel
+          ? `- ${tabLabel} -> ${path}${operationLabel}`
+          : `- ${path}${operationLabel}`,
+      )
     }
   }
 

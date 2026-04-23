@@ -113,8 +113,13 @@ const createWorkspaceSyncController = ({
   const getWorkspacePrFileCommits = options => {
     const includeAllWorkspaceFiles =
       options?.includeAllWorkspaceFiles === true || options?.includeAll === true
+    const sourceTabs = workspaceTabsState.getTabs()
+    const sourceTabById = new Map(sourceTabs.map(tab => [tab?.id, tab]))
     const snapshotTabs = buildWorkspaceTabsSnapshot()
     const dedupedByPath = new Map()
+    const currentPaths = new Set(
+      snapshotTabs.map(tab => normalizeWorkspacePathValue(tab?.path)).filter(Boolean),
+    )
     const primaryTabPaths = new Set(
       snapshotTabs
         .filter(tab => tab?.id === 'component' || tab?.id === 'styles')
@@ -147,6 +152,29 @@ const createWorkspaceSyncController = ({
         tabLabel: toNonEmptyWorkspaceText(tab?.name) || toNonEmptyWorkspaceText(tab?.id),
         isEntry: tab?.role === 'entry',
       })
+
+      const sourceTab = sourceTabById.get(tab?.id) ?? tab
+      const previousPath = getTabTargetPrFilePath(sourceTab)
+      const isCommittedRename =
+        hasTabCommittedSyncState(sourceTab) &&
+        Boolean(previousPath) &&
+        Boolean(normalizedPath) &&
+        previousPath !== normalizedPath
+
+      if (
+        isCommittedRename &&
+        !currentPaths.has(previousPath) &&
+        !dedupedByPath.has(previousPath)
+      ) {
+        dedupedByPath.set(previousPath, {
+          path: previousPath,
+          content: '',
+          tabLabel:
+            toNonEmptyWorkspaceText(tab?.name) || toNonEmptyWorkspaceText(tab?.id),
+          isEntry: false,
+          deleted: true,
+        })
+      }
     }
 
     return [...dedupedByPath.values()]

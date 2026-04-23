@@ -165,6 +165,13 @@ export const createRunSubmit = ({
 
     const fileUpdates = await Promise.all(
       normalizedFileCommits.map(async fileCommit => {
+        if (fileCommit.deleted === true) {
+          return {
+            path: fileCommit.path,
+            deleted: true,
+          }
+        }
+
         const shouldStripEntryWrapper = !includeAppWrapper && fileCommit.isEntry
         const nextContent = shouldStripEntryWrapper
           ? await stripTopLevelAppWrapper({
