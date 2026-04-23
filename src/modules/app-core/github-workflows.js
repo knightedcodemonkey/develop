@@ -60,6 +60,7 @@ const initializeGitHubWorkflows = ({
   getActivePrContextSyncKey,
   prContextUi,
   onPrContextStateChange,
+  onPrContextVerifiedClosed,
   onPrContextClosed,
   onPrContextDisconnected,
   getTokenForVisibility,
@@ -196,6 +197,11 @@ const initializeGitHubWorkflows = ({
 
       if (typeof onPrContextStateChange === 'function') {
         onPrContextStateChange(activeContext)
+      }
+    },
+    onSavedPullRequestContextClosed: payload => {
+      if (typeof onPrContextVerifiedClosed === 'function') {
+        onPrContextVerifiedClosed(payload)
       }
     },
     onSyncActivePrEditorContent: async args => {

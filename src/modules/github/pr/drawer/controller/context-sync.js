@@ -11,6 +11,7 @@ export const createContextSyncHandlers = ({
   syncFormForRepository,
   setSubmitButtonLabel,
   emitActivePrContextChange,
+  onSavedPullRequestContextClosed,
   setStatus,
   toSafeText,
   sanitizeBranchPart,
@@ -229,14 +230,28 @@ export const createContextSyncHandlers = ({
         }
 
         clearRepositoryActivePrContext(repositoryFullName)
-        setSubmitButtonLabel()
-        emitActivePrContextChange()
-        state.lastActiveContentSyncKey = ''
-        abortPendingActiveContentSyncRequest()
         setStatus(
           'Saved pull request context is not open on GitHub. Open PR mode restored.',
           'neutral',
         )
+        setSubmitButtonLabel()
+        emitActivePrContextChange()
+        if (typeof onSavedPullRequestContextClosed === 'function') {
+          onSavedPullRequestContextClosed({
+            repositoryFullName,
+            pullRequestNumber:
+              typeof activeContext.pullRequestNumber === 'number' &&
+              Number.isFinite(activeContext.pullRequestNumber)
+                ? activeContext.pullRequestNumber
+                : pullRequestNumberFromConfig,
+            pullRequestUrl: toSafeText(activeContext.pullRequestUrl),
+            headBranch: toSafeText(activeContext.headBranch),
+            baseBranch: toSafeText(activeContext.baseBranch),
+            prTitle: toSafeText(activeContext.prTitle),
+          })
+        }
+        state.lastActiveContentSyncKey = ''
+        abortPendingActiveContentSyncRequest()
       } catch (error) {
         if (abortController.signal.aborted) {
           return

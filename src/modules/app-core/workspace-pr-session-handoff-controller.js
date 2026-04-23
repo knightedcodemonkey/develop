@@ -28,6 +28,7 @@ export const createWorkspacePrSessionHandoffController = ({
     workspaceTabsState,
     buildWorkspaceRecordSnapshot,
     buildWorkspaceTabsSnapshot,
+    flushWorkspaceSave,
     refreshLocalContextOptions,
     renderWorkspaceTabs,
     syncHeaderLabels,
@@ -64,6 +65,7 @@ export const createWorkspacePrSessionHandoffController = ({
   const startFreshLocalWorkspace = async ({ statusMessage } = {}) => {
     const now = Date.now()
     const localWorkspaceId = `local_${now}`
+    let didPersistFreshWorkspace = false
 
     setWorkspacePrContextState('inactive')
     setWorkspacePrNumber(null)
@@ -102,6 +104,13 @@ export const createWorkspacePrSessionHandoffController = ({
 
     renderWorkspaceTabs()
     syncHeaderLabels()
+
+    if (typeof flushWorkspaceSave === 'function') {
+      void flushWorkspaceSave().catch(() => {
+        /* Save failures are already surfaced through saver onError. */
+      })
+    }
+
     const updateRenderModeEditability =
       typeof getUpdateRenderModeEditability === 'function'
         ? getUpdateRenderModeEditability()
@@ -136,11 +145,23 @@ export const createWorkspacePrSessionHandoffController = ({
       }
 
       await refreshLocalContextOptions()
-    } catch {
-      /* Save failures are already surfaced through saver onError. */
+      didPersistFreshWorkspace = true
+    } catch (error) {
+      const message =
+        error instanceof Error
+          ? error.message
+          : 'Could not persist the fresh local workspace.'
+      setStatus(
+        `Switched to a fresh local workspace, but persistence failed: ${message}`,
+        'error',
+      )
     }
 
-    if (typeof statusMessage === 'string' && statusMessage.trim().length > 0) {
+    if (
+      didPersistFreshWorkspace &&
+      typeof statusMessage === 'string' &&
+      statusMessage.trim().length > 0
+    ) {
       setStatus(statusMessage.trim(), 'neutral')
     }
   }
@@ -173,6 +194,19 @@ export const createWorkspacePrSessionHandoffController = ({
       getCurrentSelectedRepositoryFullName(),
     )
     const workspacePrNumber = getWorkspacePrNumber()
+    const fallbackSnapshot = buildWorkspaceRecordSnapshot()
+    const freshWorkspaceTransition = startFreshLocalWorkspace({ statusMessage }).catch(
+      error => {
+        const message =
+          error instanceof Error
+            ? error.message
+            : 'Could not switch to a safe local workspace.'
+        setStatus(
+          `Archive handoff failed to switch to a safe local workspace: ${message}`,
+          'error',
+        )
+      },
+    )
 
     const runArchiveHandoff = async () => {
       try {
@@ -213,7 +247,6 @@ export const createWorkspacePrSessionHandoffController = ({
           return hasMatchingPrNumber || hasMatchingHead
         })
         const primaryArchiveRecord = activeRecordsForContext[0] ?? null
-        const fallbackSnapshot = buildWorkspaceRecordSnapshot()
         const now = Date.now()
 
         const archiveSnapshot = {
@@ -254,19 +287,17 @@ export const createWorkspacePrSessionHandoffController = ({
           )
         }
 
-        if (saved?.id) {
-          setActiveWorkspaceRecordId(saved.id)
-          setActiveWorkspaceCreatedAt(
-            typeof saved.createdAt === 'number' && Number.isFinite(saved.createdAt)
-              ? saved.createdAt
-              : getActiveWorkspaceCreatedAt(),
-          )
-        }
-
         await refreshLocalContextOptions()
-        await startFreshLocalWorkspace({ statusMessage })
-      } catch {
-        /* Save failures are already surfaced through saver onError. */
+      } catch (error) {
+        await freshWorkspaceTransition
+        const message =
+          error instanceof Error
+            ? error.message
+            : 'Could not archive the previous pull request workspace.'
+        setStatus(
+          `Switched to a fresh local workspace, but archive persistence failed: ${message}`,
+          'error',
+        )
       }
     }
 

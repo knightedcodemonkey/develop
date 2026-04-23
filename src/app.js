@@ -890,6 +890,7 @@ const workspacePrSessionHandoffController = createWorkspacePrSessionHandoffContr
     workspaceTabsState,
     buildWorkspaceRecordSnapshot,
     buildWorkspaceTabsSnapshot,
+    flushWorkspaceSave,
     refreshLocalContextOptions,
     renderWorkspaceTabs,
     syncHeaderLabels,
@@ -998,6 +999,13 @@ const githubWorkflows = createGitHubWorkflowsSetup({
         setWorkspacePrNumber(nextPrNumber)
         persistWorkspacePrContextState('active')
       } else if (workspacePrContextState === 'active') {
+        const statusText =
+          typeof githubPrStatus?.textContent === 'string'
+            ? githubPrStatus.textContent
+            : ''
+        const hasClosedStatus = statusText.includes(
+          'Saved pull request context is not open on GitHub.',
+        )
         const hasHeadBranch =
           typeof githubPrHeadBranch?.value === 'string' &&
           githubPrHeadBranch.value.trim().length > 0
@@ -1005,13 +1013,83 @@ const githubWorkflows = createGitHubWorkflowsSetup({
           typeof githubPrTitle?.value === 'string' &&
           githubPrTitle.value.trim().length > 0
 
-        if (hasObservedActivePrContextInSession && (!hasHeadBranch || !hasPrTitle)) {
+        if (hasClosedStatus) {
+          hasObservedActivePrContextInSession = false
+          persistWorkspacePrContextState('closed')
+        } else if (
+          hasObservedActivePrContextInSession &&
+          (!hasHeadBranch || !hasPrTitle)
+        ) {
           hasObservedActivePrContextInSession = false
           setWorkspacePrNumber(null)
           persistWorkspacePrContextState('inactive')
         }
       }
       editedIndicatorVisibilityController.refreshIndicators()
+    },
+    onPrContextVerifiedClosed: result => {
+      hasObservedActivePrContextInSession = false
+      const nextPrNumber =
+        toPullRequestNumber(result?.pullRequestNumber) ??
+        parsePullRequestNumberFromUrl(result?.pullRequestUrl)
+      if (nextPrNumber !== null) {
+        setWorkspacePrNumber(nextPrNumber)
+      }
+      persistWorkspacePrContextState('closed')
+
+      const persistClosedRecords = async () => {
+        const selectedRepository = toNonEmptyWorkspaceText(
+          getCurrentSelectedRepositoryFullName(),
+        )
+        const normalizedHead = toNonEmptyWorkspaceText(githubPrHeadBranch?.value)
+        const siblingRecords = selectedRepository
+          ? await workspaceStorage.listWorkspaces({ repo: selectedRepository })
+          : await workspaceStorage.listWorkspaces()
+
+        const activeRecordsForContext = siblingRecords.filter(record => {
+          if (!record || typeof record !== 'object') {
+            return false
+          }
+
+          if (toNonEmptyWorkspaceText(record.prContextState).toLowerCase() !== 'active') {
+            return false
+          }
+
+          const hasMatchingPrNumber =
+            typeof nextPrNumber === 'number' &&
+            Number.isFinite(nextPrNumber) &&
+            typeof record.prNumber === 'number' &&
+            Number.isFinite(record.prNumber) &&
+            record.prNumber === nextPrNumber
+
+          const hasMatchingHead =
+            normalizedHead && toNonEmptyWorkspaceText(record.head) === normalizedHead
+
+          return hasMatchingPrNumber || hasMatchingHead
+        })
+
+        if (activeRecordsForContext.length === 0) {
+          return
+        }
+
+        const now = Date.now()
+        await Promise.all(
+          activeRecordsForContext.map(record =>
+            workspaceStorage.upsertWorkspace({
+              ...record,
+              prContextState: 'closed',
+              prNumber: nextPrNumber,
+              lastModified: now,
+            }),
+          ),
+        )
+
+        await refreshLocalContextOptions()
+      }
+
+      void persistClosedRecords().catch(() => {
+        /* Save failures are already surfaced through saver onError. */
+      })
     },
     onPrContextClosed: result => {
       hasObservedActivePrContextInSession = false

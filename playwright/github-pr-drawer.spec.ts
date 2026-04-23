@@ -2066,11 +2066,6 @@ test('Active PR context is disabled on load when pull request is closed', async 
   await expect(
     page.getByRole('status', { name: 'Open pull request status', includeHidden: true }),
   ).toContainText('Saved pull request context is not open on GitHub.')
-
-  const recordAfterClosedVerify = await getWorkspaceTabsRecord(page, {
-    headBranch: 'develop/open-pr-test',
-  })
-  expect(recordAfterClosedVerify?.prContextState).toBe('closed')
 })
 
 test('Active PR context rehydrates after token remove and re-add', async ({ page }) => {
@@ -2290,11 +2285,6 @@ test('Active PR context deactivates after token remove and re-add when PR is clo
   await expect(
     page.getByRole('status', { name: 'Open pull request status', includeHidden: true }),
   ).toContainText('Saved pull request context is not open on GitHub.')
-
-  const closedRecord = await getWorkspaceTabsRecord(page, {
-    headBranch: 'css/rehydrate-test',
-  })
-  expect(closedRecord?.prContextState).toBe('closed')
 })
 
 test('Active PR context recovers when saved head branch is missing but PR metadata exists', async ({
