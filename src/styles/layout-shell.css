@@ -11,6 +11,10 @@
   backdrop-filter: blur(8px);
 }
 
+.app-header > div:first-child {
+  min-width: 0;
+}
+
 .app-header h1 {
   margin: 0 0 6px;
   font-size: 1.4rem;
@@ -59,6 +63,19 @@
   border: 1px solid color-mix(in srgb, var(--status-accent) 40%, var(--border-subtle));
   background: var(--status-bg);
   color: var(--status-fg);
+}
+
+.app-header .status {
+  flex: 0 0 auto;
+  width: fit-content;
+  max-inline-size: min(52ch, 48vw);
+  max-block-size: 5.2em;
+  align-items: first baseline;
+  overflow-y: auto;
+  overflow-x: hidden;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  scrollbar-width: thin;
 }
 
 .status::before {
@@ -262,6 +279,7 @@
 
   .app-header .status {
     align-self: flex-start;
+    max-inline-size: min(52ch, 100%);
   }
 }
 

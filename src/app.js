@@ -1097,7 +1097,7 @@ const githubWorkflows = createGitHubWorkflowsSetup({
       workspacePrSessionHandoffController.archivePrWorkspaceAndStartFreshLocal({
         archivedState: 'closed',
         statusMessage:
-          'PR context closed. Click Workspaces to open a stored workspace or continue with this fresh local workspace.',
+          'PR context closed. Open Workspaces to load a saved workspace or continue with this local workspace.',
       })
     },
     onPrContextDisconnected: result => {
@@ -1106,7 +1106,7 @@ const githubWorkflows = createGitHubWorkflowsSetup({
       workspacePrSessionHandoffController.archivePrWorkspaceAndStartFreshLocal({
         archivedState: 'disconnected',
         statusMessage:
-          'PR context disconnected. Click Workspaces to open a stored workspace or continue with this fresh local workspace.',
+          'PR context disconnected. Open Workspaces to load a saved workspace or continue with this local workspace.',
       })
     },
     getPersistedActivePrContext,
