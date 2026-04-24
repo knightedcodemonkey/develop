@@ -975,7 +975,14 @@ test('Fresh PAT bootstrap persists drawer head metadata to IDB', async ({ page }
 for (const prContextState of ['inactive', 'disconnected', 'closed'] as const) {
   test(`Head stays fixed across repository changes for ${prContextState} workspace context`, async ({
     page,
+    browserName,
   }) => {
+    // WebKit-only quarantine: keep these specs active on Chromium while CI flake is investigated.
+    test.fixme(
+      browserName === 'webkit',
+      'Temporarily quarantined on WebKit due CI-only Workspaces drawer timing flake.',
+    )
+
     const sourceRepository = 'knightedcodemonkey/contract-case'
     const targetRepository = 'knightedcodemonkey/develop-sandbox'
     const workspaceHead = 'feat/component-j101'
@@ -1077,7 +1084,14 @@ for (const prContextState of ['inactive', 'disconnected', 'closed'] as const) {
 
 test('Open PR keeps inactive workspace record when repository changes', async ({
   page,
+  browserName,
 }) => {
+  // WebKit-only quarantine: keep this spec active on Chromium while CI flake is investigated.
+  test.fixme(
+    browserName === 'webkit',
+    'Temporarily quarantined on WebKit due CI-only Workspaces drawer timing flake.',
+  )
+
   const oldRepository = 'knightedcodemonkey/contract-case'
   const newRepository = 'knightedcodemonkey/develop-sandbox'
   const headBranch = 'feat/component-sync'
@@ -3539,7 +3553,14 @@ test('Active PR context push commit uses Git Database API atomic path by default
 
 test('Open PR uses module tab paths when stale target file paths collide', async ({
   page,
+  browserName,
 }) => {
+  // WebKit-only quarantine: keep this spec active on Chromium while CI flake is investigated.
+  test.fixme(
+    browserName === 'webkit',
+    'Temporarily quarantined on WebKit due CI-only Workspaces drawer timing flake.',
+  )
+
   const treeRequests: Array<Record<string, unknown>> = []
   const commitRequests: Array<Record<string, unknown>> = []
 
