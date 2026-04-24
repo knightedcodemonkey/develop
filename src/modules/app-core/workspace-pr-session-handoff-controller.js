@@ -42,8 +42,9 @@ export const createWorkspacePrSessionHandoffController = ({
   let lastKnownPrContextMeta = null
 
   const createFreshLocalHeadBranch = () => {
-    const entropy = Math.random().toString(36).slice(2, 6)
-    return `feat/component-${entropy}`
+    const timestampSegment = Date.now().toString(36)
+    const entropySegment = Math.random().toString(36).slice(2, 10)
+    return `feat/component-${timestampSegment}-${entropySegment}`
   }
 
   const createFreshLocalEntryTab = () => {
@@ -70,6 +71,9 @@ export const createWorkspacePrSessionHandoffController = ({
   const startFreshLocalWorkspace = async ({ statusMessage } = {}) => {
     const now = Date.now()
     const localWorkspaceId = `local_${now}`
+    const selectedRepository = toNonEmptyWorkspaceText(
+      getCurrentSelectedRepositoryFullName(),
+    )
     const freshLocalHeadBranch = createFreshLocalHeadBranch()
     let didPersistFreshWorkspace = false
 
@@ -129,7 +133,7 @@ export const createWorkspacePrSessionHandoffController = ({
       const saved = await workspaceStorage.upsertWorkspace({
         ...buildWorkspaceRecordSnapshot({ recordId: localWorkspaceId }),
         id: localWorkspaceId,
-        repo: getCurrentSelectedRepositoryFullName(),
+        repo: selectedRepository,
         base: '',
         head: freshLocalHeadBranch,
         prTitle: '',

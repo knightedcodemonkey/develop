@@ -1915,7 +1915,7 @@ test('Active PR context disconnect uses local-only confirmation flow', async ({
       )
 
       const localHead = typeof localRecord?.head === 'string' ? localRecord.head : ''
-      return /^feat\/component-[a-z0-9]{4}$/.test(localHead)
+      return /^feat\/component-[a-z0-9]+-[a-z0-9]+(?:-\d+)?$/.test(localHead)
     })
     .toBe(true)
   expect(closePullRequestRequestCount).toBe(0)
