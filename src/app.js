@@ -1426,6 +1426,7 @@ bindAppEventsAndStart({
     setCdnLoading,
   },
   workspaceUi: {
+    githubPrRepoSelect,
     githubPrBaseBranch,
     githubPrHeadBranch,
     githubPrTitle,

@@ -41,6 +41,11 @@ export const createWorkspacePrSessionHandoffController = ({
 
   let lastKnownPrContextMeta = null
 
+  const createFreshLocalHeadBranch = () => {
+    const entropy = Math.random().toString(36).slice(2, 6)
+    return `feat/component-${entropy}`
+  }
+
   const createFreshLocalEntryTab = () => {
     const now = Date.now()
 
@@ -65,6 +70,7 @@ export const createWorkspacePrSessionHandoffController = ({
   const startFreshLocalWorkspace = async ({ statusMessage } = {}) => {
     const now = Date.now()
     const localWorkspaceId = `local_${now}`
+    const freshLocalHeadBranch = createFreshLocalHeadBranch()
     let didPersistFreshWorkspace = false
 
     setWorkspacePrContextState('inactive')
@@ -72,7 +78,7 @@ export const createWorkspacePrSessionHandoffController = ({
     lastKnownPrContextMeta = null
 
     if (githubPrHeadBranch) {
-      githubPrHeadBranch.value = ''
+      githubPrHeadBranch.value = freshLocalHeadBranch
     }
 
     if (githubPrTitle) {
@@ -125,7 +131,7 @@ export const createWorkspacePrSessionHandoffController = ({
         id: localWorkspaceId,
         repo: getCurrentSelectedRepositoryFullName(),
         base: '',
-        head: '',
+        head: freshLocalHeadBranch,
         prTitle: '',
         prNumber: null,
         prContextState: 'inactive',
