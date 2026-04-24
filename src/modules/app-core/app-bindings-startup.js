@@ -224,12 +224,7 @@ const bindAppEventsAndStart = ({
   if (diagnosticsClearStyles) {
     diagnosticsClearStyles.addEventListener('click', () => {
       clearDiagnosticsScope('styles')
-      const activeTab = getActiveWorkspaceTab()
-      if (getTabKind(activeTab) === 'styles') {
-        clearStylesLintDiagnosticsState()
-        return
-      }
-
+      clearStylesLintDiagnosticsState()
       clearComponentLintDiagnosticsState()
     })
   }

@@ -165,6 +165,24 @@ const createDiagnosticsFlowController = ({
     }
   }
 
+  const restoreStatusAfterLintInvalidation = () => {
+    if (typeDiagnostics.getLastTypeErrorCount() > 0) {
+      setStatus(
+        `Rendered (Type errors: ${typeDiagnostics.getLastTypeErrorCount()})`,
+        'error',
+      )
+      return
+    }
+
+    if (
+      statusNode.textContent.startsWith('Rendered (Lint issues:') ||
+      statusNode.textContent.startsWith('Linting component with Biome...') ||
+      statusNode.textContent.startsWith('Linting styles with Biome...')
+    ) {
+      setStatus('Rendered', 'neutral')
+    }
+  }
+
   const lintDiagnostics = createLintDiagnosticsController({
     cdnImports,
     importFromCdnWithFallback,
@@ -226,9 +244,7 @@ const createDiagnosticsFlowController = ({
             level: 'muted',
           })
 
-          if (statusNode.textContent.startsWith('Rendered (Lint issues:')) {
-            setStatus('Rendered', 'neutral')
-          }
+          restoreStatusAfterLintInvalidation()
         }
 
         return result
@@ -269,9 +285,7 @@ const createDiagnosticsFlowController = ({
             level: 'muted',
           })
 
-          if (statusNode.textContent.startsWith('Rendered (Lint issues:')) {
-            setStatus('Rendered', 'neutral')
-          }
+          restoreStatusAfterLintInvalidation()
         }
 
         return result
@@ -305,9 +319,7 @@ const createDiagnosticsFlowController = ({
       level: 'muted',
     })
 
-    if (statusNode.textContent.startsWith('Rendered (Lint issues:')) {
-      setStatus('Rendered', 'neutral')
-    }
+    restoreStatusAfterLintInvalidation()
   }
 
   const markStylesLintDiagnosticsStale = () => {
@@ -326,9 +338,7 @@ const createDiagnosticsFlowController = ({
       level: 'muted',
     })
 
-    if (statusNode.textContent.startsWith('Rendered (Lint issues:')) {
-      setStatus('Rendered', 'neutral')
-    }
+    restoreStatusAfterLintInvalidation()
   }
 
   const clearComponentLintDiagnosticsState = () => {

@@ -597,3 +597,31 @@ test('same-tab edits with drawer open replace lint issues with stale state', asy
     'Biome reported issues.',
   )
 })
+
+test('reset lint on styles tab clears in-flight component lint state', async ({
+  page,
+}) => {
+  await waitForInitialRender(page)
+
+  const heavyLintSource = [
+    ...Array.from({ length: 120 }, (_, index) => `const unused${index} = ${index}`),
+    'const App = () => <button>component tab</button>',
+  ].join('\n')
+
+  await setComponentEditorSource(page, heavyLintSource)
+
+  await ensureDiagnosticsDrawerOpen(page)
+  await page.getByRole('button', { name: 'Lint' }).first().click()
+
+  await page.getByRole('button', { name: 'Open tab app.css' }).click()
+  await page.locator('#diagnostics-clear-styles').click()
+
+  await expect(page.getByRole('button', { name: /^Diagnostics/ })).toHaveAttribute(
+    'aria-busy',
+    'false',
+  )
+  await expect(page.locator('#diagnostics-styles')).toContainText('No diagnostics yet.')
+  await expect(page.locator('#diagnostics-styles')).not.toContainText(
+    'Biome reported issues.',
+  )
+})

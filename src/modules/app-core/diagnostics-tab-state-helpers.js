@@ -69,7 +69,7 @@ const createDiagnosticsTabStateHelpers = ({
 
     const diagnosticsFlowController = getDiagnosticsFlowController()
     if (diagnosticsFlowController) {
-      diagnosticsFlowController.typeDiagnostics.clearTypeDiagnosticsState()
+      diagnosticsFlowController.typeDiagnostics.cancelTypeDiagnostics()
       diagnosticsFlowController.clearComponentLintDiagnosticsState()
       diagnosticsFlowController.clearStylesLintDiagnosticsState()
     }
