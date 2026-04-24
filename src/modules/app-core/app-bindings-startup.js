@@ -50,6 +50,8 @@ const bindAppEventsAndStart = ({
     renderPreview,
     setJsxSource,
     setCssSource,
+    persistActiveTabEditorContent,
+    getWorkspaceTabsSnapshot,
     queueWorkspaceSave,
     maybeRender,
     maybeRenderFromComponentEditorChange,
@@ -79,6 +81,7 @@ const bindAppEventsAndStart = ({
     updateRenderModeEditability,
     loadPreferredWorkspaceContext,
     getActiveWorkspaceTab,
+    getTabKind,
     setActiveWorkspaceTab,
     workspaceTabsState,
     loadedStylesTabIdRef,
@@ -86,6 +89,7 @@ const bindAppEventsAndStart = ({
     workspaceSaveController,
     workspaceStorage,
     bindWorkspaceMetadataPersistence,
+    syncDiagnosticsDrawerLayout,
     setHasCompletedInitialWorkspaceBootstrap,
   } = workspaceUi
   const { appThemeButtons, applyTheme, getInitialTheme, getInitialRenderMode } = themeUi
@@ -172,6 +176,18 @@ const bindAppEventsAndStart = ({
     }
   }
 
+  const syncAndCaptureDiagnosticsSnapshot = () => {
+    persistActiveTabEditorContent()
+
+    const activeTab = getActiveWorkspaceTab()
+    const tabsSnapshot = getWorkspaceTabsSnapshot()
+
+    return {
+      activeTab,
+      tabsSnapshot,
+    }
+  }
+
   renderMode.addEventListener('change', () => {
     applyRenderMode({ mode: renderMode.value })
   })
@@ -209,6 +225,7 @@ const bindAppEventsAndStart = ({
     diagnosticsClearStyles.addEventListener('click', () => {
       clearDiagnosticsScope('styles')
       clearStylesLintDiagnosticsState()
+      clearComponentLintDiagnosticsState()
     })
   }
   if (diagnosticsClearAll) {
@@ -224,26 +241,49 @@ const bindAppEventsAndStart = ({
   }
   if (typecheckButton) {
     typecheckButton.addEventListener('click', () => {
+      const { activeTab, tabsSnapshot } = syncAndCaptureDiagnosticsSnapshot()
+      const source =
+        getTabKind(activeTab) === 'component' && typeof activeTab?.content === 'string'
+          ? activeTab.content
+          : getJsxSource()
+      const sourcePath =
+        getTabKind(activeTab) === 'component' && typeof activeTab?.path === 'string'
+          ? activeTab.path
+          : getTypecheckSourcePath()
+
       typeDiagnostics.triggerTypeDiagnostics({
         userInitiated: true,
-        source: getJsxSource(),
-        sourcePath: getTypecheckSourcePath(),
+        source,
+        sourcePath,
+        workspaceTabs: tabsSnapshot,
       })
     })
   }
   if (lintComponentButton) {
     lintComponentButton.addEventListener('click', () => {
+      const { activeTab } = syncAndCaptureDiagnosticsSnapshot()
+      const source =
+        getTabKind(activeTab) === 'component' && typeof activeTab?.content === 'string'
+          ? activeTab.content
+          : getJsxSource()
+
       void runComponentLint({
         userInitiated: true,
-        source: getJsxSource(),
+        source,
       })
     })
   }
   if (lintStylesButton) {
     lintStylesButton.addEventListener('click', () => {
+      const { activeTab } = syncAndCaptureDiagnosticsSnapshot()
+      const source =
+        getTabKind(activeTab) === 'styles' && typeof activeTab?.content === 'string'
+          ? activeTab.content
+          : getCssSource()
+
       void runStylesLint({
         userInitiated: true,
-        source: getCssSource(),
+        source,
       })
     })
   }
@@ -450,6 +490,7 @@ const bindAppEventsAndStart = ({
   updateRenderButtonVisibility()
   setDiagnosticsDrawerOpen(false)
   setTypeDiagnosticsDetails({ headline: '' })
+  syncDiagnosticsDrawerLayout()
   renderRuntime.setStyleCompiling(false)
   setCdnLoading(true)
   previewBackground.initializePreviewBackgroundPicker()
@@ -462,6 +503,7 @@ const bindAppEventsAndStart = ({
     const activeTab = getActiveWorkspaceTab()
     if (activeTab) {
       setActiveWorkspaceTab(activeTab.id)
+      syncDiagnosticsDrawerLayout()
     }
 
     const stylesTab =

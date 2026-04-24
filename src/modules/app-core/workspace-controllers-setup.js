@@ -32,6 +32,7 @@ const createWorkspaceControllersSetup = ({
   persistRenderMode,
   onWorkspaceRecordApplied,
   getActiveWorkspaceTab,
+  onActiveWorkspaceTabChange,
   loadWorkspaceTabIntoEditor,
   updateRenderModeEditability,
   getHasCompletedInitialWorkspaceBootstrap,
@@ -108,6 +109,7 @@ const createWorkspaceControllersSetup = ({
     persistActiveTabEditorContent,
     getActiveWorkspaceTab,
     flushWorkspaceSave,
+    onActiveWorkspaceTabChange,
   })
 
   const setActiveWorkspaceTab = tabId =>

@@ -28,6 +28,7 @@ import {
   createWorkspaceContextSnapshotGetter,
   toStyleModeForTabLanguage,
 } from './modules/app-core/workspace-local-helpers.js'
+import { createDiagnosticsTabStateHelpers } from './modules/app-core/diagnostics-tab-state-helpers.js'
 import { createWorkspaceEditorHelpers } from './modules/app-core/workspace-editor-helpers.js'
 import { createEditedIndicatorVisibilityController } from './modules/app-core/edited-indicator-visibility-controller.js'
 import { createPublishTrailingNewlineNormalizer } from './modules/app-core/publish-trailing-newline-normalizer.js'
@@ -187,6 +188,14 @@ const diagnosticsClearStyles = document.getElementById('diagnostics-clear-styles
 const diagnosticsClearAll = document.getElementById('diagnostics-clear-all')
 const diagnosticsComponent = document.getElementById('diagnostics-component')
 const diagnosticsStyles = document.getElementById('diagnostics-styles')
+const diagnosticsComponentSection = document.querySelector(
+  '[data-diagnostics-scope="component"]',
+)
+const diagnosticsStylesSection = document.querySelector(
+  '[data-diagnostics-scope="styles"]',
+)
+const diagnosticsComponentHeading = diagnosticsComponentSection?.querySelector('h3')
+const diagnosticsStylesHeading = diagnosticsStylesSection?.querySelector('h3')
 const appToast = document.getElementById('app-toast')
 const previewBgColorInput = document.getElementById('preview-bg-color')
 const clearConfirmDialog = document.getElementById('clear-confirm-dialog')
@@ -224,6 +233,7 @@ cssEditor.value = defaultCss
 let previewHost = document.getElementById('preview-host')
 let jsxCodeEditor = null
 let cssCodeEditor = null
+let diagnosticsFlowController = null
 let getJsxSource = () => jsxEditor.value
 let getCssSource = () => cssEditor.value
 let renderRuntime = null
@@ -647,10 +657,39 @@ const workspaceSyncController = createWorkspaceSyncController({
 const getLoadedComponentWorkspaceTab = () =>
   workspaceTabsState.getTab(loadedComponentTabId) ?? getWorkspaceTabByKind('component')
 
+const getLoadedStylesWorkspaceTab = () =>
+  workspaceTabsState.getTab(loadedStylesTabId) ?? getWorkspaceTabByKind('styles')
+
 const getTypecheckSourcePath = () => {
   const loadedComponentTab = getLoadedComponentWorkspaceTab()
   return toNonEmptyWorkspaceText(loadedComponentTab?.path) || defaultComponentTabPath
 }
+
+const {
+  clearDiagnosticsOnTabSwitch,
+  getComponentLintTarget,
+  getStylesLintTarget,
+  syncDiagnosticsDrawerLayout,
+} = createDiagnosticsTabStateHelpers({
+  getActiveWorkspaceTab,
+  getLoadedComponentWorkspaceTab,
+  getLoadedStylesWorkspaceTab,
+  getTabKind,
+  toNonEmptyWorkspaceText,
+  diagnosticsComponentSection,
+  diagnosticsStylesSection,
+  diagnosticsComponentHeading,
+  diagnosticsStylesHeading,
+  diagnosticsClearComponent,
+  diagnosticsClearStyles,
+  diagnosticsClearAll,
+  clearAllDiagnostics,
+  setTypeDiagnosticsPending,
+  setLintDiagnosticsPending,
+  statusNode,
+  setStatus,
+  getDiagnosticsFlowController: () => diagnosticsFlowController,
+})
 
 const createWorkspaceTabId = prefix => createWorkspaceTabIdFactory(prefix)
 
@@ -734,6 +773,13 @@ const {
   },
   persistRenderMode: mode => persistRenderMode(mode),
   getActiveWorkspaceTab,
+  onActiveWorkspaceTabChange: (_tab, { changed } = {}) => {
+    syncDiagnosticsDrawerLayout()
+
+    if (changed) {
+      clearDiagnosticsOnTabSwitch()
+    }
+  },
   loadWorkspaceTabIntoEditor,
   updateRenderModeEditability: () => updateRenderModeEditability(),
   getHasCompletedInitialWorkspaceBootstrap: () => hasCompletedInitialWorkspaceBootstrap,
@@ -1223,6 +1269,8 @@ const runtimeCoreOptions = createRuntimeCoreOptions({
   getJsxSource: () => getJsxSource(),
   getCssSource: () => getCssSource(),
   getTypecheckSourcePath,
+  getComponentLintTarget,
+  getStylesLintTarget,
   buildWorkspaceTabsSnapshot,
   renderMode,
   styleMode,
@@ -1267,7 +1315,7 @@ const runtimeCoreOptions = createRuntimeCoreOptions({
 })
 const runtimeCore = createRuntimeCoreSetup(runtimeCoreOptions)
 
-const diagnosticsFlowController = runtimeCore.diagnosticsFlowController
+diagnosticsFlowController = runtimeCore.diagnosticsFlowController
 renderRuntime = runtimeCore.renderRuntime
 const setCdnLoading = runtimeCore.setCdnLoading
 const typeDiagnostics = diagnosticsFlowController.typeDiagnostics
@@ -1360,6 +1408,8 @@ bindAppEventsAndStart({
     renderPreview,
     setJsxSource,
     setCssSource,
+    persistActiveTabEditorContent,
+    getWorkspaceTabsSnapshot: () => workspaceTabsState.getTabs(),
     queueWorkspaceSave,
     maybeRender,
     maybeRenderFromComponentEditorChange,
@@ -1389,6 +1439,7 @@ bindAppEventsAndStart({
     updateRenderModeEditability,
     loadPreferredWorkspaceContext,
     getActiveWorkspaceTab,
+    getTabKind,
     setActiveWorkspaceTab,
     workspaceTabsState,
     loadedStylesTabIdRef: {
@@ -1397,6 +1448,7 @@ bindAppEventsAndStart({
       },
     },
     getWorkspaceTabByKind,
+    syncDiagnosticsDrawerLayout,
     workspaceSaveController,
     workspaceStorage,
     bindWorkspaceMetadataPersistence,
