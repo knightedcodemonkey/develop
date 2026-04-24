@@ -68,6 +68,7 @@ const bindAppEventsAndStart = ({
     setCdnLoading,
   } = sourceActions
   const {
+    githubPrRepoSelect,
     githubPrBaseBranch,
     githubPrHeadBranch,
     githubPrTitle,
@@ -340,7 +341,12 @@ const bindAppEventsAndStart = ({
     })
   })
 
-  for (const element of [githubPrBaseBranch, githubPrHeadBranch, githubPrTitle]) {
+  for (const element of [
+    githubPrRepoSelect,
+    githubPrBaseBranch,
+    githubPrHeadBranch,
+    githubPrTitle,
+  ]) {
     bindWorkspaceMetadataPersistence(element)
   }
 
@@ -514,6 +520,9 @@ const bindAppEventsAndStart = ({
     }
 
     setHasCompletedInitialWorkspaceBootstrap(true)
+    void flushWorkspaceSave().catch(() => {
+      /* Save failures are already surfaced through saver onError. */
+    })
     prDrawerController.syncRepositories()
     await renderPreview()
   })

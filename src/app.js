@@ -514,8 +514,19 @@ const byotControls = createGitHubByotControls({
       githubAiContextState.selectedRepository = selectedRepository
       chatDrawerController.setSelectedRepository(selectedRepository)
       prDrawerController.setSelectedRepository(selectedRepository)
+      const isBootstrappingTokenSession =
+        typeof githubAiContextState.token !== 'string' ||
+        githubAiContextState.token.trim().length === 0
 
       if (!activeWorkspaceRecordId || activeWorkspaceCreatedAt === null) {
+        void loadPreferredWorkspaceContext()
+          .then(() => {
+            prDrawerController.syncRepositories()
+          })
+          .catch(() => {
+            /* noop */
+          })
+      } else if (isBootstrappingTokenSession) {
         void loadPreferredWorkspaceContext()
           .then(() => {
             prDrawerController.syncRepositories()
@@ -1426,6 +1437,7 @@ bindAppEventsAndStart({
     setCdnLoading,
   },
   workspaceUi: {
+    githubPrRepoSelect,
     githubPrBaseBranch,
     githubPrHeadBranch,
     githubPrTitle,
