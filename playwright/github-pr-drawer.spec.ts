@@ -103,10 +103,45 @@ const removeSavedGitHubToken = async (page: Page) => {
   await expect(dialog).not.toHaveAttribute('open', '')
 }
 
-const openMostRecentStoredWorkspaceContext = async (page: Page) => {
-  await page.getByRole('button', { name: 'Workspaces' }).click()
+const openStoredWorkspaceContextById = async (page: Page, workspaceId: string) => {
+  const select = page.getByLabel('Stored local editor contexts')
+  const openButton = page.locator('#workspaces-open')
 
-  const select = page.locator('#workspaces-select')
+  if (!(await select.isVisible())) {
+    await page.getByRole('button', { name: 'Workspaces' }).click()
+  }
+
+  await expect(select).toBeVisible()
+
+  await expect
+    .poll(async () => {
+      return select.evaluate(
+        (element, id) =>
+          element instanceof HTMLSelectElement &&
+          Array.from(element.options).some(option => option.value === id),
+        workspaceId,
+      )
+    })
+    .toBe(true)
+
+  await expect
+    .poll(async () => {
+      await select.selectOption(workspaceId)
+      const selectedValue = await select.inputValue()
+      return selectedValue === workspaceId && (await openButton.isEnabled())
+    })
+    .toBe(true)
+
+  await openButton.click()
+}
+
+const openMostRecentStoredWorkspaceContext = async (page: Page) => {
+  const select = page.getByLabel('Stored local editor contexts')
+
+  if (!(await select.isVisible())) {
+    await page.getByRole('button', { name: 'Workspaces' }).click()
+  }
+
   await expect(select).toBeVisible()
 
   const firstContextId = await select.evaluate(element => {
@@ -119,20 +154,7 @@ const openMostRecentStoredWorkspaceContext = async (page: Page) => {
   })
 
   expect(firstContextId).not.toBe('')
-  await select.selectOption(firstContextId)
-  await page.locator('#workspaces-open').click()
-}
-
-const openStoredWorkspaceContextById = async (page: Page, workspaceId: string) => {
-  const select = page.locator('#workspaces-select')
-
-  if (!(await select.isVisible())) {
-    await page.locator('#workspaces-toggle').click()
-  }
-
-  await expect(select).toBeVisible()
-  await select.selectOption(workspaceId)
-  await page.locator('#workspaces-open').click()
+  await openStoredWorkspaceContextById(page, firstContextId)
 }
 
 const seedLocalWorkspaceContexts = async (
@@ -1035,9 +1057,7 @@ for (const prContextState of ['inactive', 'disconnected', 'closed'] as const) {
       .fill('github_pat_fake_chat_1234567890')
     await page.getByRole('button', { name: 'Add GitHub token' }).click()
 
-    await page.getByRole('button', { name: 'Workspaces' }).click()
-    await page.locator('#workspaces-select').selectOption(workspaceId)
-    await page.locator('#workspaces-open').click()
+    await openStoredWorkspaceContextById(page, workspaceId)
 
     await ensureOpenPrDrawerOpen(page)
     await expect(page.getByLabel('Pull request repository')).toHaveValue(sourceRepository)
@@ -1228,9 +1248,7 @@ test('Open PR keeps inactive workspace record when repository changes', async ({
   const repoSelect = page.getByLabel('Pull request repository')
   await expect(repoSelect).toHaveValue(oldRepository)
 
-  await page.getByRole('button', { name: 'Workspaces' }).click()
-  await page.locator('#workspaces-select').selectOption(oldWorkspaceId)
-  await page.locator('#workspaces-open').click()
+  await openStoredWorkspaceContextById(page, oldWorkspaceId)
 
   await ensureOpenPrDrawerOpen(page)
   await repoSelect.selectOption(newRepository)
