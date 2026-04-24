@@ -300,10 +300,24 @@ export const createLintDiagnosticsController = ({
     }
   }
 
+  const shouldCommitRun = ({ runId, currentRunId, runContext, isRunContextCurrent }) => {
+    if (runId !== currentRunId) {
+      return false
+    }
+
+    if (typeof isRunContextCurrent === 'function') {
+      return isRunContextCurrent(runContext)
+    }
+
+    return true
+  }
+
   const lintComponent = async ({
     signal,
     userInitiated = false,
     source = undefined,
+    runContext = null,
+    isRunContextCurrent = () => true,
   } = {}) => {
     componentLintRunId += 1
     const runId = componentLintRunId
@@ -322,7 +336,14 @@ export const createLintDiagnosticsController = ({
         signal,
       })
 
-      if (runId !== componentLintRunId) {
+      if (
+        !shouldCommitRun({
+          runId,
+          currentRunId: componentLintRunId,
+          runContext,
+          isRunContextCurrent,
+        })
+      ) {
         return null
       }
 
@@ -352,7 +373,14 @@ export const createLintDiagnosticsController = ({
         issueCount: summary.lines.length,
       }
     } catch (error) {
-      if (runId !== componentLintRunId) {
+      if (
+        !shouldCommitRun({
+          runId,
+          currentRunId: componentLintRunId,
+          runContext,
+          isRunContextCurrent,
+        })
+      ) {
         return null
       }
 
@@ -377,6 +405,8 @@ export const createLintDiagnosticsController = ({
     signal,
     userInitiated = false,
     source = undefined,
+    runContext = null,
+    isRunContextCurrent = () => true,
   } = {}) => {
     stylesLintRunId += 1
     const runId = stylesLintRunId
@@ -407,7 +437,14 @@ export const createLintDiagnosticsController = ({
         signal,
       })
 
-      if (runId !== stylesLintRunId) {
+      if (
+        !shouldCommitRun({
+          runId,
+          currentRunId: stylesLintRunId,
+          runContext,
+          isRunContextCurrent,
+        })
+      ) {
         return null
       }
 
@@ -437,7 +474,14 @@ export const createLintDiagnosticsController = ({
         issueCount: summary.lines.length,
       }
     } catch (error) {
-      if (runId !== stylesLintRunId) {
+      if (
+        !shouldCommitRun({
+          runId,
+          currentRunId: stylesLintRunId,
+          runContext,
+          isRunContextCurrent,
+        })
+      ) {
         return null
       }
 
@@ -463,10 +507,20 @@ export const createLintDiagnosticsController = ({
     stylesLintRunId += 1
   }
 
+  const cancelComponent = () => {
+    componentLintRunId += 1
+  }
+
+  const cancelStyles = () => {
+    stylesLintRunId += 1
+  }
+
   const dispose = () => {}
 
   return {
     cancelAll,
+    cancelComponent,
+    cancelStyles,
     lintComponent,
     lintStyles,
     dispose,

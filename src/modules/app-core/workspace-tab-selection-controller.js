@@ -7,6 +7,7 @@ const createWorkspaceTabSelectionController = ({
   persistActiveTabEditorContent,
   getActiveWorkspaceTab,
   flushWorkspaceSave,
+  onActiveWorkspaceTabChange = () => {},
 }) => {
   const setActiveWorkspaceTab = tabId => {
     const normalizedTabId = toNonEmptyWorkspaceText(tabId)
@@ -24,6 +25,7 @@ const createWorkspaceTabSelectionController = ({
       loadWorkspaceTabIntoEditor(targetTab)
       renderWorkspaceTabs()
       updateRenderModeEditability()
+      onActiveWorkspaceTabChange(targetTab, { changed: false })
       return
     }
 
@@ -33,6 +35,7 @@ const createWorkspaceTabSelectionController = ({
     const activeTab = getActiveWorkspaceTab()
     if (activeTab) {
       loadWorkspaceTabIntoEditor(activeTab)
+      onActiveWorkspaceTabChange(activeTab, { changed: true })
     }
 
     renderWorkspaceTabs()

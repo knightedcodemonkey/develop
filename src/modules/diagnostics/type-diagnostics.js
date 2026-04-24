@@ -284,8 +284,12 @@ export const createTypeDiagnosticsController = ({
     return /\.(css|less|sass|scss)$/.test(path)
   }
 
-  const toWorkspaceComponentTabs = () => {
-    const tabs = typeof getWorkspaceTabs === 'function' ? getWorkspaceTabs() : []
+  const toWorkspaceComponentTabs = tabsInput => {
+    const tabs = Array.isArray(tabsInput)
+      ? tabsInput
+      : typeof getWorkspaceTabs === 'function'
+        ? getWorkspaceTabs()
+        : []
     if (!Array.isArray(tabs)) {
       return []
     }
@@ -387,6 +391,8 @@ export const createTypeDiagnosticsController = ({
   let lastTypeErrorCount = 0
   let hasUnresolvedTypeErrors = false
   let scheduledTypeRecheck = null
+  let sourceVersion = 0
+  let scheduledTypeRecheckSourceVersion = null
 
   const clearTypeRecheckTimer = () => {
     if (!scheduledTypeRecheck) {
@@ -395,6 +401,7 @@ export const createTypeDiagnosticsController = ({
 
     clearTimeout(scheduledTypeRecheck)
     scheduledTypeRecheck = null
+    scheduledTypeRecheckSourceVersion = null
   }
 
   const flattenTypeDiagnosticMessage = (compiler, messageText) => {
@@ -820,9 +827,9 @@ export const createTypeDiagnosticsController = ({
 
   const collectTypeDiagnostics = async (
     compiler,
-    { sourceText, sourcePathOverride = '' },
+    { sourceText, sourcePathOverride = '', workspaceTabsOverride = undefined },
   ) => {
-    const workspaceComponentTabs = toWorkspaceComponentTabs()
+    const workspaceComponentTabs = toWorkspaceComponentTabs(workspaceTabsOverride)
     const resolvedEntryTab = resolveWorkspaceEntryForTypecheck(workspaceComponentTabs)
     const normalizedSourcePathOverride =
       typeof sourcePathOverride === 'string'
@@ -1037,6 +1044,8 @@ export const createTypeDiagnosticsController = ({
       userInitiated = false,
       sourceOverride = undefined,
       sourcePathOverride = undefined,
+      workspaceTabsOverride = undefined,
+      sourceVersionOverride = sourceVersion,
     } = {},
   ) => {
     incrementTypeDiagnosticsRuns()
@@ -1064,7 +1073,12 @@ export const createTypeDiagnosticsController = ({
       const diagnostics = await collectTypeDiagnostics(compiler, {
         sourceText: sourceForRun,
         sourcePathOverride: sourcePathForRun,
+        workspaceTabsOverride,
       })
+      if (runId !== typeCheckRunId || sourceVersionOverride !== sourceVersion) {
+        return
+      }
+
       const errorCategory = compiler.DiagnosticCategory?.Error
       const errors = diagnostics.filter(
         diagnostic => diagnostic.category === errorCategory,
@@ -1100,7 +1114,7 @@ export const createTypeDiagnosticsController = ({
         setRenderedStatus()
       }
     } catch (error) {
-      if (runId !== typeCheckRunId) {
+      if (runId !== typeCheckRunId || sourceVersionOverride !== sourceVersion) {
         return
       }
 
@@ -1118,7 +1132,7 @@ export const createTypeDiagnosticsController = ({
         setStatus('Rendered', 'neutral')
       }
     } finally {
-      if (runId === typeCheckRunId) {
+      if (runId === typeCheckRunId && sourceVersionOverride === sourceVersion) {
         setTypeDiagnosticsPending(false)
       }
       decrementTypeDiagnosticsRuns()
@@ -1130,36 +1144,67 @@ export const createTypeDiagnosticsController = ({
     userInitiated = false,
     source = undefined,
     sourcePath = undefined,
+    workspaceTabs = undefined,
+    sourceVersionForRun = sourceVersion,
   } = {}) => {
+    const sourceForRun = typeof source === 'string' ? source : getJsxSource()
+    const sourcePathForRun =
+      typeof sourcePath === 'string' && sourcePath.length > 0
+        ? sourcePath
+        : getTypecheckSourcePath()
+    const workspaceTabsForRun = Array.isArray(workspaceTabs)
+      ? workspaceTabs
+      : typeof getWorkspaceTabs === 'function'
+        ? getWorkspaceTabs()
+        : []
+
+    clearTypeRecheckTimer()
     typeCheckRunId += 1
     void runTypeDiagnostics(typeCheckRunId, {
       userInitiated,
-      sourceOverride: source,
-      sourcePathOverride: sourcePath,
+      sourceOverride: sourceForRun,
+      sourcePathOverride: sourcePathForRun,
+      workspaceTabsOverride: workspaceTabsForRun,
+      sourceVersionOverride: sourceVersionForRun,
     })
   }
 
-  const scheduleTypeRecheck = () => {
+  const scheduleTypeRecheck = sourceVersionForRun => {
     clearTypeRecheckTimer()
 
     if (!hasUnresolvedTypeErrors) {
       return
     }
 
+    scheduledTypeRecheckSourceVersion = sourceVersionForRun
+
     scheduledTypeRecheck = setTimeout(() => {
+      if (scheduledTypeRecheckSourceVersion !== sourceVersion) {
+        scheduledTypeRecheck = null
+        scheduledTypeRecheckSourceVersion = null
+        return
+      }
+
       scheduledTypeRecheck = null
-      triggerTypeDiagnostics()
+      scheduledTypeRecheckSourceVersion = null
+      triggerTypeDiagnostics({
+        sourceVersionForRun,
+      })
     }, 450)
   }
 
   const markTypeDiagnosticsStale = () => {
+    sourceVersion += 1
+    typeCheckRunId += 1
+    clearTypeRecheckTimer()
+
     if (hasUnresolvedTypeErrors) {
       setTypeDiagnosticsPending(true)
       setTypeDiagnosticsDetails({
         headline: 'Source changed. Re-checking type errors…',
         level: 'muted',
       })
-      scheduleTypeRecheck()
+      scheduleTypeRecheck(sourceVersion)
       return
     }
 
@@ -1183,6 +1228,7 @@ export const createTypeDiagnosticsController = ({
   }
 
   const cancelTypeDiagnostics = () => {
+    sourceVersion += 1
     typeCheckRunId += 1
     clearTypeDiagnosticsState()
     setTypecheckButtonLoading(false)

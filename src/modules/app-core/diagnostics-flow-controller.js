@@ -8,6 +8,8 @@ const createDiagnosticsFlowController = ({
   getJsxSource,
   getCssSource,
   getTypecheckSourcePath,
+  getComponentLintTarget = () => null,
+  getStylesLintTarget = () => null,
   getWorkspaceTabs,
   getRenderMode,
   getStyleMode,
@@ -33,12 +35,59 @@ const createDiagnosticsFlowController = ({
 }) => {
   let activeComponentLintAbortController = null
   let activeStylesLintAbortController = null
-  let lastComponentLintIssueCount = 0
-  let lastStylesLintIssueCount = 0
   let scheduledComponentLintRecheck = null
   let scheduledStylesLintRecheck = null
   let componentLintPending = false
   let stylesLintPending = false
+  let componentLintSourceVersion = 0
+  let stylesLintSourceVersion = 0
+
+  const normalizeLintTargetIdentity = target => {
+    const tabId = typeof target?.tabId === 'string' ? target.tabId.trim() : ''
+    const path = typeof target?.path === 'string' ? target.path.trim() : ''
+    const language =
+      typeof target?.language === 'string' ? target.language.trim().toLowerCase() : ''
+
+    return {
+      tabId,
+      path,
+      language,
+      key: `${tabId}|${path}|${language}`,
+    }
+  }
+
+  const getCurrentLintTargetIdentity = scope => {
+    const resolveTarget =
+      scope === 'styles' ? getStylesLintTarget : getComponentLintTarget
+    return normalizeLintTargetIdentity(resolveTarget())
+  }
+
+  const createLintRunContext = scope => {
+    const target = getCurrentLintTargetIdentity(scope)
+    const sourceVersion =
+      scope === 'styles' ? stylesLintSourceVersion : componentLintSourceVersion
+
+    return {
+      scope,
+      sourceVersion,
+      targetKey: target.key,
+    }
+  }
+
+  const isLintRunContextCurrent = (scope, runContext) => {
+    if (!runContext || runContext.scope !== scope) {
+      return false
+    }
+
+    const currentSourceVersion =
+      scope === 'styles' ? stylesLintSourceVersion : componentLintSourceVersion
+    if (runContext.sourceVersion !== currentSourceVersion) {
+      return false
+    }
+
+    const currentTarget = getCurrentLintTargetIdentity(scope)
+    return runContext.targetKey === currentTarget.key
+  }
 
   const setTypecheckButtonLoading = isLoading => {
     const runtimeTypecheckButton = document.getElementById('typecheck-button')
@@ -122,7 +171,7 @@ const createDiagnosticsFlowController = ({
     getComponentSource: getJsxSource,
     getStylesSource: getCssSource,
     getStyleMode,
-    setComponentDiagnostics: setTypeDiagnosticsDetails,
+    setComponentDiagnostics: setStyleDiagnosticsDetails,
     setStyleDiagnostics: setStyleDiagnosticsDetails,
     setStatus,
     onIssuesDetected: ({ issueCount }) => {
@@ -151,6 +200,8 @@ const createDiagnosticsFlowController = ({
   }
 
   const runComponentLint = ({ userInitiated = false, source = undefined } = {}) => {
+    const runContext = createLintRunContext('component')
+
     activeComponentLintAbortController?.abort()
     const controller = new AbortController()
     activeComponentLintAbortController = controller
@@ -165,11 +216,21 @@ const createDiagnosticsFlowController = ({
         signal: controller.signal,
         userInitiated,
         source,
+        runContext,
+        isRunContextCurrent: context => isLintRunContextCurrent('component', context),
       })
       .then(result => {
-        if (result) {
-          lastComponentLintIssueCount = result.issueCount
+        if (!result && !isLintRunContextCurrent('component', runContext)) {
+          setStyleDiagnosticsDetails({
+            headline: 'Source changed. Click Lint to run diagnostics.',
+            level: 'muted',
+          })
+
+          if (statusNode.textContent.startsWith('Rendered (Lint issues:')) {
+            setStatus('Rendered', 'neutral')
+          }
         }
+
         return result
       })
       .finally(() => {
@@ -182,6 +243,8 @@ const createDiagnosticsFlowController = ({
   }
 
   const runStylesLint = ({ userInitiated = false, source = undefined } = {}) => {
+    const runContext = createLintRunContext('styles')
+
     activeStylesLintAbortController?.abort()
     const controller = new AbortController()
     activeStylesLintAbortController = controller
@@ -196,11 +259,21 @@ const createDiagnosticsFlowController = ({
         signal: controller.signal,
         userInitiated,
         source,
+        runContext,
+        isRunContextCurrent: context => isLintRunContextCurrent('styles', context),
       })
       .then(result => {
-        if (result) {
-          lastStylesLintIssueCount = result.issueCount
+        if (!result && !isLintRunContextCurrent('styles', runContext)) {
+          setStyleDiagnosticsDetails({
+            headline: 'Source changed. Click Lint to run diagnostics.',
+            level: 'muted',
+          })
+
+          if (statusNode.textContent.startsWith('Rendered (Lint issues:')) {
+            setStatus('Rendered', 'neutral')
+          }
         }
+
         return result
       })
       .finally(() => {
@@ -217,26 +290,17 @@ const createDiagnosticsFlowController = ({
   }
 
   const markComponentLintDiagnosticsStale = () => {
+    componentLintSourceVersion += 1
     clearComponentLintRecheckTimer()
 
-    if (lastComponentLintIssueCount > 0) {
-      componentLintPending = true
-      syncLintPendingState()
-      setTypeDiagnosticsDetails({
-        headline: 'Source changed. Re-checking lint issues…',
-        level: 'muted',
-      })
-
-      scheduledComponentLintRecheck = setTimeout(() => {
-        scheduledComponentLintRecheck = null
-        void runComponentLint()
-      }, 450)
-      return
-    }
+    activeComponentLintAbortController?.abort()
+    activeComponentLintAbortController = null
+    lintDiagnostics.cancelComponent()
+    setLintButtonLoading({ button: lintComponentButton, isLoading: false })
 
     componentLintPending = false
     syncLintPendingState()
-    setTypeDiagnosticsDetails({
+    setStyleDiagnosticsDetails({
       headline: 'Source changed. Click Lint to run diagnostics.',
       level: 'muted',
     })
@@ -247,22 +311,13 @@ const createDiagnosticsFlowController = ({
   }
 
   const markStylesLintDiagnosticsStale = () => {
+    stylesLintSourceVersion += 1
     clearStylesLintRecheckTimer()
 
-    if (lastStylesLintIssueCount > 0) {
-      stylesLintPending = true
-      syncLintPendingState()
-      setStyleDiagnosticsDetails({
-        headline: 'Source changed. Re-checking lint issues…',
-        level: 'muted',
-      })
-
-      scheduledStylesLintRecheck = setTimeout(() => {
-        scheduledStylesLintRecheck = null
-        void runStylesLint()
-      }, 450)
-      return
-    }
+    activeStylesLintAbortController?.abort()
+    activeStylesLintAbortController = null
+    lintDiagnostics.cancelStyles()
+    setLintButtonLoading({ button: lintStylesButton, isLoading: false })
 
     stylesLintPending = false
     syncLintPendingState()
@@ -277,14 +332,14 @@ const createDiagnosticsFlowController = ({
   }
 
   const clearComponentLintDiagnosticsState = () => {
-    lastComponentLintIssueCount = 0
+    componentLintSourceVersion += 1
     componentLintPending = false
     clearComponentLintRecheckTimer()
     syncLintPendingState()
   }
 
   const clearStylesLintDiagnosticsState = () => {
-    lastStylesLintIssueCount = 0
+    stylesLintSourceVersion += 1
     stylesLintPending = false
     clearStylesLintRecheckTimer()
     syncLintPendingState()

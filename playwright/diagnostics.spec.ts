@@ -62,7 +62,7 @@ test('clear component diagnostics removes type errors and restores rendered stat
   await expect(page.getByText(/Rendered \(Type errors: [1-9]\d*\)/)).toBeVisible()
 
   await ensureDiagnosticsDrawerOpen(page)
-  await page.getByRole('button', { name: 'Reset component' }).click()
+  await page.getByRole('button', { name: 'Reset types' }).click()
 
   await expect(page.getByText('No diagnostics yet.')).toHaveCount(2)
   await expect(diagnosticsToggle).toHaveText('Diagnostics')
@@ -419,9 +419,9 @@ test('clear component diagnostics resets rendered lint-issue status pill', async
   )
 
   await ensureDiagnosticsDrawerOpen(page)
-  await page.getByRole('button', { name: 'Reset component' }).click()
+  await page.getByRole('button', { name: 'Reset lint' }).click()
 
-  await expect(page.getByText('No diagnostics yet.')).toHaveCount(2)
+  await expect(page.locator('#diagnostics-styles')).toContainText('No diagnostics yet.')
   await expect(diagnosticsToggle).toHaveText('Diagnostics')
   await expect(diagnosticsToggle).toHaveClass(/diagnostics-toggle--neutral/)
   await expect(page.getByText('Rendered', { exact: true })).toHaveClass(/status--neutral/)
@@ -458,7 +458,7 @@ test('component lint ignores only unused App binding', async ({ page }) => {
   expect(diagnosticsText).toContain('This function render is unused')
 })
 
-test('component lint with unresolved issues enters pending diagnostics state while typing', async ({
+test('component lint with unresolved issues becomes stale and waits for manual rerun', async ({
   page,
 }) => {
   await waitForInitialRender(page)
@@ -481,10 +481,119 @@ test('component lint with unresolved issues enters pending diagnostics state whi
     ),
   )
 
-  await expect(diagnosticsToggle).toHaveClass(/diagnostics-toggle--pending/)
-  await expect(diagnosticsToggle).toHaveAttribute('aria-busy', 'true')
-
-  await expect(page.getByText(/Rendered \(Lint issues: [1-9]\d*\)/)).toBeVisible()
-  await expect(diagnosticsToggle).toHaveClass(/diagnostics-toggle--error/)
+  await expect(diagnosticsToggle).toHaveClass(/diagnostics-toggle--neutral/)
   await expect(diagnosticsToggle).toHaveAttribute('aria-busy', 'false')
+
+  await ensureDiagnosticsDrawerOpen(page)
+  await expect(page.locator('#diagnostics-styles')).toContainText(
+    'Source changed. Click Lint to run diagnostics.',
+  )
+
+  await expect(page.getByText('Rendered', { exact: true })).toBeVisible()
+})
+
+test('styles active tab shows lint-only diagnostics drawer actions', async ({ page }) => {
+  await waitForInitialRender(page)
+
+  await ensurePanelToolsVisible(page, 'styles')
+  await ensureDiagnosticsDrawerOpen(page)
+
+  await expect(page.locator('[data-diagnostics-scope="component"]')).toBeHidden()
+  await expect(page.locator('#diagnostics-clear-styles')).toHaveText('Reset lint')
+  await expect(page.locator('#diagnostics-clear-styles')).toBeVisible()
+  await expect(page.locator('#diagnostics-clear-component')).toBeHidden()
+  await expect(page.locator('#diagnostics-clear-all')).toBeHidden()
+})
+
+test('component lint completion is ignored after switching to another component tab', async ({
+  page,
+}) => {
+  await waitForInitialRender(page)
+
+  await ensurePanelToolsVisible(page, 'component')
+  await addWorkspaceTab(page)
+
+  const heavyLintSource = [
+    ...Array.from({ length: 120 }, (_, index) => `const unused${index} = ${index}`),
+    'const App = () => <button>module tab</button>',
+  ].join('\n')
+
+  await setWorkspaceTabSource(page, {
+    fileName: 'module.tsx',
+    kind: 'component',
+    source: heavyLintSource,
+  })
+
+  const lintTrigger = page.getByRole('button', { name: 'Lint' }).first()
+  await lintTrigger.click()
+
+  await setComponentEditorSource(
+    page,
+    'const App = () => <button type="button">A</button>',
+  )
+
+  await expect(page.locator('#diagnostics-styles')).toContainText(
+    'Source changed. Click Lint to run diagnostics.',
+  )
+  await expect(page.locator('#diagnostics-styles')).not.toContainText(
+    'Biome reported issues.',
+  )
+  await expect(page.getByRole('button', { name: /^Diagnostics/ })).toHaveClass(
+    /diagnostics-toggle--neutral/,
+  )
+})
+
+test('switching tabs clears diagnostics while drawer is open', async ({ page }) => {
+  await waitForInitialRender(page)
+
+  await setComponentEditorSource(page, 'const App = () => <button>lint me</button>')
+  await runComponentLint(page)
+
+  await ensureDiagnosticsDrawerOpen(page)
+  await expect(page.locator('#diagnostics-styles')).toContainText(
+    'Biome reported issues.',
+  )
+
+  await page.getByRole('button', { name: 'Open tab app.css' }).click()
+
+  await expect(page.locator('#diagnostics-styles')).toContainText('No diagnostics yet.')
+  await expect(page.getByRole('button', { name: /^Diagnostics/ })).toHaveClass(
+    /diagnostics-toggle--neutral/,
+  )
+})
+
+test('same-tab edits with drawer open replace lint issues with stale state', async ({
+  page,
+}) => {
+  await waitForInitialRender(page)
+
+  await setComponentEditorSource(
+    page,
+    ['const count: string = 1', 'const App = () => <button>Inactive</button>'].join('\n'),
+  )
+
+  await runTypecheck(page)
+  await runComponentLint(page)
+  await ensureDiagnosticsDrawerOpen(page)
+
+  await expect(page.locator('#diagnostics-component')).toContainText('TypeScript found')
+  await expect(page.locator('#diagnostics-styles')).toContainText(
+    'Biome reported issues.',
+  )
+
+  await setComponentEditorSource(
+    page,
+    [
+      'const count: string = "ok"',
+      'const App = () => <button type="button">Inactive</button>',
+    ].join('\n'),
+  )
+
+  await expect(page.locator('#diagnostics-component')).not.toContainText('TS2322')
+  await expect(page.locator('#diagnostics-styles')).toContainText(
+    'Source changed. Click Lint to run diagnostics.',
+  )
+  await expect(page.locator('#diagnostics-styles')).not.toContainText(
+    'Biome reported issues.',
+  )
 })
