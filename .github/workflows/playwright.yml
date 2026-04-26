@@ -34,15 +34,10 @@ jobs:
       matrix:
         include:
           - browser: chromium
-            jobName: E2E (Playwright, chromium, shard 1/2)
-            workers: 1
+            jobName: E2E (Playwright, chromium)
+            workers: 2
             shardIndex: 1
-            shardTotal: 2
-          - browser: chromium
-            jobName: E2E (Playwright, chromium, shard 2/2)
-            workers: 1
-            shardIndex: 2
-            shardTotal: 2
+            shardTotal: 1
           - browser: webkit
             jobName: E2E (Playwright, webkit, shard 1/4)
             workers: 1
