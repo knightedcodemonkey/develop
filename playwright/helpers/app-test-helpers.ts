@@ -263,6 +263,19 @@ export const runStylesLint = async (page: Page) => {
   await page.getByRole('button', { name: 'Styles lint' }).click()
 }
 
+export const waitForLintDiagnosticsIssues = async (page: Page) => {
+  const diagnosticsToggle = page.getByRole('button', { name: /^Diagnostics/ })
+
+  await expect(diagnosticsToggle).toHaveAttribute('aria-busy', 'false')
+  await expect(diagnosticsToggle).toHaveClass(/diagnostics-toggle--error/)
+  await expect(page.getByText(/Rendered \(Lint issues: [1-9]\d*\)/)).toBeVisible()
+
+  await ensureDiagnosticsDrawerOpen(page)
+  await expect(page.locator('#diagnostics-styles')).toContainText(
+    'Biome reported issues.',
+  )
+}
+
 export const getActiveStylesEditorLineNumber = async (page: Page) => {
   return page
     .locator('#editor-panel-styles .cm-activeLineGutter')
