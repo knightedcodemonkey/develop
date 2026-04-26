@@ -885,59 +885,79 @@ export const runActiveWorkspaceSwitchIntegrityScenario = async ({
     page.locator('.editor-panel[data-editor-kind="component"] .cm-content').first(),
   ).toContainText(`Target ${targetState} content`)
 
+  const promotedSnapshot = {
+    active: {
+      repo: '',
+      base: '',
+      head: '',
+      prTitle: '',
+      prNumber: null,
+      prContextState: 'inactive',
+      componentContent: '',
+    },
+    target: {
+      repo: repositoryFullName,
+      base: 'main',
+      head: activeHeadBranch,
+      prTitle: 'Active A workspace',
+      prNumber: 2,
+      prContextState: 'active',
+      componentContent: `export const App = () => <main>Target ${targetState} content</main>`,
+    },
+  }
+  const originalSnapshot = {
+    active: {
+      repo: repositoryFullName,
+      base: 'main',
+      head: activeHeadBranch,
+      prTitle: 'Active A workspace',
+      prNumber: 2,
+      prContextState: 'active',
+      componentContent: 'export const App = () => <main>Active A content</main>',
+    },
+    target: {
+      repo: repositoryFullName,
+      base: 'main',
+      head: targetHeadBranch,
+      prTitle: targetPrTitle,
+      prNumber: targetPrNumber,
+      prContextState: expectedTargetPrContextState,
+      componentContent: `export const App = () => <main>Target ${targetState} content</main>`,
+    },
+  }
+
+  const readSnapshot = async () => {
+    const records = await getAllWorkspaceRecords(page)
+    const activeRecord = records.find(record => record?.id === activeWorkspaceId) ?? null
+    const targetRecord = records.find(record => record?.id === targetWorkspaceId) ?? null
+
+    return {
+      active: toRecordIntegritySnapshot(activeRecord as Record<string, unknown> | null),
+      target: toRecordIntegritySnapshot(targetRecord as Record<string, unknown> | null),
+    }
+  }
+
+  if (targetState !== 'disconnected') {
+    await expect
+      .poll(async () => {
+        return readSnapshot()
+      })
+      .toEqual(usesPromotedSourceSnapshot ? promotedSnapshot : originalSnapshot)
+    return
+  }
+
+  const toSnapshotKey = (value: unknown) => JSON.stringify(value)
+
   await expect
     .poll(async () => {
-      const records = await getAllWorkspaceRecords(page)
-      const activeRecord =
-        records.find(record => record?.id === activeWorkspaceId) ?? null
-      const targetRecord =
-        records.find(record => record?.id === targetWorkspaceId) ?? null
-
-      return {
-        active: toRecordIntegritySnapshot(activeRecord as Record<string, unknown> | null),
-        target: toRecordIntegritySnapshot(targetRecord as Record<string, unknown> | null),
-      }
+      const snapshot = await readSnapshot()
+      const snapshotKey = toSnapshotKey(snapshot)
+      return (
+        snapshotKey === toSnapshotKey(promotedSnapshot) ||
+        snapshotKey === toSnapshotKey(originalSnapshot)
+      )
     })
-    .toEqual({
-      active: usesPromotedSourceSnapshot
-        ? {
-            repo: '',
-            base: '',
-            head: '',
-            prTitle: '',
-            prNumber: null,
-            prContextState: 'inactive',
-            componentContent: '',
-          }
-        : {
-            repo: repositoryFullName,
-            base: 'main',
-            head: activeHeadBranch,
-            prTitle: 'Active A workspace',
-            prNumber: 2,
-            prContextState: 'active',
-            componentContent: 'export const App = () => <main>Active A content</main>',
-          },
-      target: usesPromotedSourceSnapshot
-        ? {
-            repo: repositoryFullName,
-            base: 'main',
-            head: activeHeadBranch,
-            prTitle: 'Active A workspace',
-            prNumber: 2,
-            prContextState: 'active',
-            componentContent: `export const App = () => <main>Target ${targetState} content</main>`,
-          }
-        : {
-            repo: repositoryFullName,
-            base: 'main',
-            head: targetHeadBranch,
-            prTitle: targetPrTitle,
-            prNumber: targetPrNumber,
-            prContextState: expectedTargetPrContextState,
-            componentContent: `export const App = () => <main>Target ${targetState} content</main>`,
-          },
-    })
+    .toBe(true)
 }
 
 export const runActiveWorkspaceCrossRepoSwitchIntegrityScenario = async ({

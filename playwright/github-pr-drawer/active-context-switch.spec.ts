@@ -1561,22 +1561,62 @@ test('Active PR context push with no local changes shows neutral status', async 
   await setComponentEditorSource(page, 'const commitMarker = 2')
   await ensureOpenPrDrawerOpen(page)
 
-  await page.getByRole('button', { name: 'Push commit' }).last().click()
-  const dialog = page.getByRole('dialog')
+  const pushCommitButton = page
+    .locator('#github-pr-drawer')
+    .getByRole('button', { name: 'Push commit', exact: true })
+  await expect(pushCommitButton).toBeEnabled()
+
+  await pushCommitButton.evaluate(element => {
+    if (element instanceof HTMLButtonElement) {
+      element.click()
+    }
+  })
+  const dialog = page.locator('#clear-confirm-dialog')
   await expect(dialog).toBeVisible()
-  await dialog.getByRole('button', { name: 'Push commit' }).click()
+  await dialog.locator('button[value="confirm"]').evaluate(element => {
+    if (element instanceof HTMLButtonElement) {
+      element.click()
+    }
+  })
 
   await expect(
     page.getByRole('status', { name: 'Open pull request status', includeHidden: true }),
   ).toContainText('Commit pushed to develop/open-pr-test')
   expect(updateRefRequests).toHaveLength(1)
 
+  await expect(
+    page
+      .getByRole('listitem', { name: 'Workspace tab App.tsx' })
+      .locator('.workspace-tab__dirty-indicator'),
+  ).toHaveCount(0)
+  await expect(page.locator('#component-dirty-status')).toBeHidden()
+  await expect
+    .poll(async () => {
+      const workspaceRecord = await getWorkspaceTabsRecord(page, {
+        headBranch: 'develop/open-pr-test',
+      })
+      const tabs = Array.isArray(workspaceRecord?.tabs)
+        ? (workspaceRecord.tabs as Array<Record<string, unknown>>)
+        : []
+      const tabIds = new Set(
+        tabs.map(tab => (typeof tab?.id === 'string' ? tab.id : '')).filter(Boolean),
+      )
+      const hasPrimaryTabs = tabIds.has('component') && tabIds.has('styles')
+      return hasPrimaryTabs && tabs.every(tab => tab?.isDirty === false)
+    })
+    .toBe(true)
+
   await ensureOpenPrDrawerOpen(page)
 
-  await page.getByRole('button', { name: 'Push commit' }).last().click()
+  await pushCommitButton.evaluate(element => {
+    if (element instanceof HTMLButtonElement) {
+      element.click()
+    }
+  })
 
   await expect(
     page.getByRole('status', { name: 'Open pull request status', includeHidden: true }),
   ).toContainText('No local editor changes to push.')
+  expect(updateRefRequests).toHaveLength(1)
   await expect(page.locator('#clear-confirm-dialog')).toBeHidden()
 })

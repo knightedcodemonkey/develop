@@ -355,19 +355,31 @@ test('Renaming a synced module tab marks it Edited and includes renamed path in 
   ).toBeVisible()
 
   await ensureOpenPrDrawerOpen(page)
-  await page.getByRole('button', { name: 'Push commit' }).last().click()
+  const pushCommitButton = page
+    .locator('#github-pr-drawer')
+    .getByRole('button', { name: 'Push commit', exact: true })
+  await expect(pushCommitButton).toBeEnabled()
+  await pushCommitButton.evaluate(element => {
+    if (element instanceof HTMLButtonElement) {
+      element.click()
+    }
+  })
 
-  const dialog = page.getByRole('dialog')
+  const dialog = page.locator('#clear-confirm-dialog')
   await expect(dialog).toBeVisible()
-  await expect(page.getByText('Files to commit:', { exact: true })).toBeVisible()
+  await expect(dialog.getByText('Files to commit:', { exact: true })).toBeVisible()
   await expect(
-    page.getByText('beep.tsx -> src/components/beep.tsx', { exact: true }),
+    dialog.getByText('beep.tsx -> src/components/beep.tsx', { exact: true }),
   ).toBeVisible()
   await expect(
-    page.getByText('beep.tsx -> src/components/boop.tsx (delete)', { exact: true }),
+    dialog.getByText('beep.tsx -> src/components/boop.tsx (delete)', { exact: true }),
   ).toBeVisible()
 
-  await dialog.getByRole('button', { name: 'Push commit' }).click()
+  await dialog.locator('button[value="confirm"]').evaluate(element => {
+    if (element instanceof HTMLButtonElement) {
+      element.click()
+    }
+  })
 
   await expect(
     page.getByRole('status', { name: 'Open pull request status', includeHidden: true }),

@@ -50,6 +50,7 @@ Repository structure:
 - In Playwright tests, prefer accessible selectors first: `getByRole`, `getByLabel`, `getByText`, and explicit accessible names.
 - Avoid `locator()` for interactive controls when a semantic selector is available.
 - Use `locator()` only as a fallback for cases without reliable semantics (for example: document root `html`, structural class assertions, or implementation-only hooks).
+- For known WebKit HTML `<dialog>` top-layer issues, prefer a stable dialog id locator and `evaluate`-based click for dialog confirmation controls.
 - When testability needs improvement, prefer adding accessibility semantics (`role`, `aria-label`, `aria-labelledby`) over introducing new id-only selectors.
 
 ## CDN and runtime expectations
