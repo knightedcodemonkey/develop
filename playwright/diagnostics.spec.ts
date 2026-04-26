@@ -338,7 +338,11 @@ test('component lint reports missing button type prop', async ({ page }) => {
 
   await runComponentLint(page)
 
-  await waitForLintDiagnosticsIssues(page)
+  await waitForLintDiagnosticsIssues(page, {
+    rerunLint: async () => {
+      await runComponentLint(page)
+    },
+  })
   await expect(page.getByText(/a11y\/useButtonType/)).toBeVisible()
 })
 
@@ -353,7 +357,11 @@ test('styles diagnostics rows navigate editor to reported line', async ({ page }
 
   await runStylesLint(page)
 
-  await waitForLintDiagnosticsIssues(page)
+  await waitForLintDiagnosticsIssues(page, {
+    rerunLint: async () => {
+      await runStylesLint(page)
+    },
+  })
 
   const targetDiagnostic = page.getByRole('button', { name: /^L3(:\d+)?\s/ }).first()
   await expect(targetDiagnostic).toBeVisible()
@@ -371,7 +379,11 @@ test('styles lint reports CSS syntax errors', async ({ page }) => {
 
   await runStylesLint(page)
 
-  await waitForLintDiagnosticsIssues(page)
+  await waitForLintDiagnosticsIssues(page, {
+    rerunLint: async () => {
+      await runStylesLint(page)
+    },
+  })
   await expect(page.locator('#diagnostics-styles')).toContainText(
     'Biome reported issues.',
   )

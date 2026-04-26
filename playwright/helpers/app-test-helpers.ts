@@ -263,12 +263,32 @@ export const runStylesLint = async (page: Page) => {
   await page.getByRole('button', { name: 'Styles lint' }).click()
 }
 
-export const waitForLintDiagnosticsIssues = async (page: Page) => {
+export const waitForLintDiagnosticsIssues = async (
+  page: Page,
+  {
+    rerunLint,
+  }: {
+    rerunLint?: () => Promise<void>
+  } = {},
+) => {
   const diagnosticsToggle = page.getByRole('button', { name: /^Diagnostics/ })
 
-  await expect(diagnosticsToggle).toHaveAttribute('aria-busy', 'false')
-  await expect(diagnosticsToggle).toHaveClass(/diagnostics-toggle--error/)
-  await expect(page.getByText(/Rendered \(Lint issues: [1-9]\d*\)/)).toBeVisible()
+  const expectLintIssuesVisible = async () => {
+    await expect(diagnosticsToggle).toHaveAttribute('aria-busy', 'false')
+    await expect(diagnosticsToggle).toHaveClass(/diagnostics-toggle--error/)
+    await expect(page.getByText(/Rendered \(Lint issues: [1-9]\d*\)/)).toBeVisible()
+  }
+
+  try {
+    await expectLintIssuesVisible()
+  } catch (error) {
+    if (typeof rerunLint !== 'function') {
+      throw error
+    }
+
+    await rerunLint()
+    await expectLintIssuesVisible()
+  }
 
   await ensureDiagnosticsDrawerOpen(page)
   await expect(page.locator('#diagnostics-styles')).toContainText(
