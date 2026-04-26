@@ -128,9 +128,9 @@ export const removeSavedGitHubToken = async (page: Page) => {
 }
 
 export const ensureWorkspacesDrawerOpen = async (page: Page) => {
-  const select = page.getByLabel('Stored local editor contexts')
+  const drawer = page.getByRole('complementary', { name: 'Workspaces' })
 
-  if (await select.isVisible()) {
+  if (await drawer.isVisible()) {
     return
   }
 
@@ -142,7 +142,7 @@ export const ensureWorkspacesDrawerOpen = async (page: Page) => {
   }
 
   await page.getByRole('button', { name: 'Workspaces' }).click()
-  await expect(select).toBeVisible()
+  await expect(drawer).toBeVisible()
 }
 
 export const getWorkspaceRecordId = (
@@ -183,7 +183,7 @@ export const openStoredWorkspaceContextById = async (
     repositoryFilter?: string
   } = {},
 ) => {
-  const select = page.getByLabel('Stored local editor contexts')
+  const select = page.getByLabel('Stored workspace')
   const openButton = page.locator('#workspaces-open')
 
   const resolveRepositoryFilterForWorkspace = async () => {
@@ -433,7 +433,7 @@ export const seedLocalWorkspaceContexts = async (
     head: string
     prTitle: string
     prNumber?: number | null
-    prContextState?: 'inactive' | 'active' | 'disconnected' | 'closed'
+    prContextState?: 'inactive' | 'active' | 'closed'
     renderMode?: 'dom' | 'react'
     tabs?: Array<Record<string, unknown>>
     activeTabId?: string | null
@@ -585,7 +585,7 @@ export const seedActivePrWorkspaceContext = async (
 
 export const getLocalContextOptionLabels = async (page: Page) => {
   return page
-    .getByLabel('Stored local editor contexts')
+    .getByLabel('Stored workspace')
     .locator('option')
     .evaluateAll(nodes => nodes.map(node => node.textContent?.trim() || ''))
 }
@@ -725,7 +725,7 @@ export const runActiveWorkspaceSwitchIntegrityScenario = async ({
   targetState,
 }: {
   page: Page
-  targetState: 'inactive' | 'disconnected' | 'closed'
+  targetState: 'inactive' | 'closed'
 }) => {
   const repositoryFullName = 'knightedcodemonkey/develop'
   const activeHeadBranch = 'develop/issue-97-active-a'
@@ -742,11 +742,8 @@ export const runActiveWorkspaceSwitchIntegrityScenario = async ({
     targetState === 'inactive' ? '' : `Target ${targetState} workspace`
   const targetPrNumber = targetState === 'inactive' ? null : 9
   const usesPromotedSourceSnapshot =
-    targetState === 'inactive' ||
-    targetState === 'disconnected' ||
-    targetState === 'closed'
-  const expectedTargetPrContextState =
-    targetState === 'disconnected' ? 'active' : targetState
+    targetState === 'inactive' || targetState === 'closed'
+  const expectedTargetPrContextState = targetState
 
   await page.route('https://api.github.com/user/repos**', async route => {
     await route.fulfill({
@@ -937,27 +934,11 @@ export const runActiveWorkspaceSwitchIntegrityScenario = async ({
     }
   }
 
-  if (targetState !== 'disconnected') {
-    await expect
-      .poll(async () => {
-        return readSnapshot()
-      })
-      .toEqual(usesPromotedSourceSnapshot ? promotedSnapshot : originalSnapshot)
-    return
-  }
-
-  const toSnapshotKey = (value: unknown) => JSON.stringify(value)
-
   await expect
     .poll(async () => {
-      const snapshot = await readSnapshot()
-      const snapshotKey = toSnapshotKey(snapshot)
-      return (
-        snapshotKey === toSnapshotKey(promotedSnapshot) ||
-        snapshotKey === toSnapshotKey(originalSnapshot)
-      )
+      return readSnapshot()
     })
-    .toBe(true)
+    .toEqual(usesPromotedSourceSnapshot ? promotedSnapshot : originalSnapshot)
 }
 
 export const runActiveWorkspaceCrossRepoSwitchIntegrityScenario = async ({
@@ -965,7 +946,7 @@ export const runActiveWorkspaceCrossRepoSwitchIntegrityScenario = async ({
   targetState,
 }: {
   page: Page
-  targetState: 'inactive' | 'disconnected' | 'closed'
+  targetState: 'inactive' | 'closed'
 }) => {
   const sourceRepositoryFullName = 'knightedcodemonkey/develop'
   const targetRepositoryFullName = 'knightedcodemonkey/css'
@@ -982,8 +963,7 @@ export const runActiveWorkspaceCrossRepoSwitchIntegrityScenario = async ({
   const targetPrTitle =
     targetState === 'inactive' ? '' : `Cross target ${targetState} workspace`
   const targetPrNumber = 9
-  const expectedTargetPrContextState =
-    targetState === 'disconnected' ? 'active' : targetState
+  const expectedTargetPrContextState = targetState
 
   await page.route('https://api.github.com/user/repos**', async route => {
     await route.fulfill({

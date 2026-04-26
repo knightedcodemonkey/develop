@@ -20,7 +20,7 @@ See the full storage ownership docs for non-PR keys:
 - Database: `knighted-develop-workspaces`
 - Object store: `prWorkspaces`
 - Relevant fields in each workspace record:
-  - `prContextState`: `inactive` | `active` | `disconnected` | `closed`
+  - `prContextState`: `inactive` | `active` | `closed`
   - `prNumber`: `number | null`
   - `prTitle`, `base`, `head`
   - `repo`
@@ -34,12 +34,11 @@ See the full storage ownership docs for non-PR keys:
 
 Use this matrix as the source of truth when debugging UI/storage mismatch.
 
-| Scenario                                      | IDB `prContextState` | IDB `prNumber`                    | localStorage PR fields | Notes                                                                                                          |
-| --------------------------------------------- | -------------------- | --------------------------------- | ---------------------- | -------------------------------------------------------------------------------------------------------------- |
-| A. Local workspace only, no PR context        | `inactive`           | `null`                            | none                   | No connected PR context.                                                                                       |
-| B. Workspace is for an active, open PR        | `active`             | PR number                         | none                   | Push mode in PR controls.                                                                                      |
-| C. Workspace is for a disconnected PR context | `disconnected`       | last known PR number if available | none                   | Opening this workspace from Workspaces restores PR runtime context and verifies open/closed state with GitHub. |
-| D. Workspace is for a PR closed on GitHub     | `closed`             | closed PR number                  | none                   | Historical context retained for debugging/reference.                                                           |
+| Scenario                                  | IDB `prContextState` | IDB `prNumber`   | localStorage PR fields | Notes                                                |
+| ----------------------------------------- | -------------------- | ---------------- | ---------------------- | ---------------------------------------------------- |
+| A. Local workspace only, no PR context    | `inactive`           | `null`           | none                   | No connected PR context.                             |
+| B. Workspace is for an active, open PR    | `active`             | PR number        | none                   | Push mode in PR controls.                            |
+| C. Workspace is for a PR closed on GitHub | `closed`             | closed PR number | none                   | Historical context retained for debugging/reference. |
 
 ## Current Workspace Selection On Load
 
@@ -82,9 +81,8 @@ When the UI does not match expected PR state:
    - `prNumber`
    - `repo`, `head`, `prTitle`
 2. Compare against the matrix above.
-3. If scenario C is expected, open that workspace from Workspaces to restore runtime PR context.
-4. If the PR is still open on GitHub, expect PR controls to return to Push mode and the workspace record to transition back to `active`.
-5. If the PR is no longer open, expect Open PR mode to remain and status messaging to explain verification results.
+3. If the PR is still open on GitHub, expect PR controls to return to Push mode and the workspace record to transition back to `active`.
+4. If the PR is no longer open, expect Open PR mode to remain and status messaging to explain verification results.
 
 ## Console Snippets
 
@@ -99,19 +97,13 @@ indexedDB.open('knighted-develop-workspaces').onsuccess = event => {
 }
 ```
 
-## Reconnect Behavior
-
-Reconnect behavior from the Workspaces drawer is implemented.
-
-Opening a `disconnected` workspace record restores active PR runtime context for that repository and reinitializes editor state from the selected workspace record.
-
 ## End-Of-Session Behavior
 
-`Disconnect` and `Close` are treated as end-of-session actions for PR-linked workspaces.
+`Close` is the end-of-session action for PR-linked workspaces.
 
-When either action is confirmed:
+When close is confirmed:
 
-1. The current workspace is archived as historical (`disconnected` or `closed`).
+1. The current workspace is archived as historical (`closed`).
 2. The app immediately switches to a fresh local workspace (`inactive`) with a single empty entry tab.
 3. Status messaging guides the user to continue locally or reopen a stored workspace from Workspaces.
 

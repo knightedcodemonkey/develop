@@ -44,25 +44,6 @@ export const createPublicActions = ({
   }
 
   return {
-    disconnectActivePrContext: () => {
-      const repository = getSelectedRepositoryObject()
-      const repositoryFullName = getRepositoryFullName(repository)
-      if (!repositoryFullName) {
-        return { reference: '' }
-      }
-
-      const activeContext = getCurrentActivePrContext()
-      clearSelectedRepositoryActivePrContext()
-
-      return {
-        reference: formatActivePrReference(activeContext),
-        pullRequestNumber:
-          typeof activeContext?.pullRequestNumber === 'number' &&
-          Number.isFinite(activeContext.pullRequestNumber)
-            ? activeContext.pullRequestNumber
-            : null,
-      }
-    },
     clearActivePrContext: () => {
       clearSelectedRepositoryActivePrContext({ resetForm: true })
     },

@@ -10,7 +10,6 @@ export const createGitHubPrContextUiController = ({
   stylesPrSyncIcon,
   stylesPrSyncIconPath,
   githubPrContextClose,
-  githubPrContextDisconnect,
   aiChatToggle,
   workspacesToggle,
   githubPrOpenIcon,
@@ -85,12 +84,10 @@ export const createGitHubPrContextUiController = ({
 
     if (!hasActiveContext) {
       githubPrContextClose?.setAttribute('hidden', '')
-      githubPrContextDisconnect?.setAttribute('hidden', '')
       return
     }
 
     githubPrContextClose?.removeAttribute('hidden')
-    githubPrContextDisconnect?.removeAttribute('hidden')
   }
 
   const markActivePrEditorContentSynced = () => {
@@ -126,10 +123,8 @@ export const createGitHubPrContextUiController = ({
 
       if (contextState.activePrContext) {
         githubPrContextClose?.removeAttribute('hidden')
-        githubPrContextDisconnect?.removeAttribute('hidden')
       } else {
         githubPrContextClose?.setAttribute('hidden', '')
-        githubPrContextDisconnect?.setAttribute('hidden', '')
       }
       return
     }
@@ -155,7 +150,6 @@ export const createGitHubPrContextUiController = ({
     }
     workspacesToggle?.setAttribute('aria-expanded', 'false')
     githubPrContextClose?.setAttribute('hidden', '')
-    githubPrContextDisconnect?.setAttribute('hidden', '')
     closeChatDrawer?.()
     closePrDrawer?.()
     void closeWorkspacesDrawer?.()

@@ -1,20 +1,6 @@
-import { repositoryStarterSelectionIdPrefix } from '../../constants.js'
-
 const toSafeText = value => (typeof value === 'string' ? value.trim() : '')
 
 const localRepositoryFilterValue = '__local__'
-
-const toRepositoryStarterSelectionId = repositoryFullName => {
-  const repository = toSafeText(repositoryFullName)
-  if (!repository || repository === localRepositoryFilterValue) {
-    return ''
-  }
-
-  return `${repositoryStarterSelectionIdPrefix}${repository}`
-}
-
-const isRepositoryStarterSelectionId = value =>
-  toSafeText(value).startsWith(repositoryStarterSelectionIdPrefix)
 
 const isLocalWorkspaceEntry = workspace => {
   const repository = toSafeText(workspace?.repo)
@@ -50,6 +36,7 @@ export const createWorkspacesDrawer = ({
   closeButton,
   statusNode,
   repositorySelect,
+  newButton,
   selectInput,
   openButton,
   removeButton,
@@ -58,6 +45,7 @@ export const createWorkspacesDrawer = ({
   getSelectedRepositoryFilter,
   onRepositoryFilterChange,
   onRefreshRequested,
+  onCreateWorkspace,
   onOpenSelected,
   onRemoveSelected,
 } = {}) => {
@@ -66,6 +54,7 @@ export const createWorkspacesDrawer = ({
   let selectedId = ''
   let selectedRepositoryFilter = localRepositoryFilterValue
   let hasUserSelectedRepositoryFilter = false
+  let hasStoredWorkspacesInScope = false
 
   const getNormalizedRepositoryFilter = value => {
     const normalized = toSafeText(value)
@@ -107,14 +96,21 @@ export const createWorkspacesDrawer = ({
   const updateActions = () => {
     const normalizedSelectedId = toSafeText(selectedId)
     const hasSelection = normalizedSelectedId.length > 0
-    const isStarterSelection = isRepositoryStarterSelectionId(normalizedSelectedId)
+
+    if (newButton instanceof HTMLButtonElement) {
+      newButton.disabled = typeof onCreateWorkspace !== 'function'
+    }
 
     if (openButton instanceof HTMLButtonElement) {
+      openButton.toggleAttribute('hidden', !hasStoredWorkspacesInScope)
+      openButton.style.display = hasStoredWorkspacesInScope ? '' : 'none'
       openButton.disabled = !hasSelection
     }
 
     if (removeButton instanceof HTMLButtonElement) {
-      removeButton.disabled = !hasSelection || isStarterSelection
+      removeButton.toggleAttribute('hidden', !hasStoredWorkspacesInScope)
+      removeButton.style.display = hasStoredWorkspacesInScope ? '' : 'none'
+      removeButton.disabled = !hasSelection
     }
   }
 
@@ -125,36 +121,28 @@ export const createWorkspacesDrawer = ({
 
     const repositoryFilteredEntries = getFilteredEntriesByRepository()
     const filteredEntries = repositoryFilteredEntries
-    const normalizedRepositoryFilter = getNormalizedRepositoryFilter(
-      selectedRepositoryFilter,
-    )
-    const starterSelectionId =
-      filteredEntries.length === 0
-        ? toRepositoryStarterSelectionId(normalizedRepositoryFilter)
-        : ''
-    const hasStarterSelection = Boolean(starterSelectionId)
+    const workspaceField = selectInput.closest('label')
+    const hasStoredWorkspaces = filteredEntries.length > 0
+    hasStoredWorkspacesInScope = hasStoredWorkspaces
+
+    if (workspaceField instanceof HTMLElement) {
+      workspaceField.toggleAttribute('hidden', !hasStoredWorkspaces)
+    }
+
+    if (!hasStoredWorkspaces) {
+      selectedId = ''
+      updateActions()
+      return
+    }
 
     selectInput.replaceChildren()
 
     const placeholder = document.createElement('option')
     placeholder.value = ''
-    placeholder.textContent =
-      repositoryFilteredEntries.length === 0
-        ? hasStarterSelection
-          ? 'Select to start a new local context'
-          : 'No saved local contexts'
-        : 'Select a stored local context'
-    placeholder.disabled = filteredEntries.length > 0 || hasStarterSelection
+    placeholder.textContent = 'Select a stored workspace'
+    placeholder.disabled = true
     placeholder.selected = !filteredEntries.some(entry => entry.id === selectedId)
     selectInput.append(placeholder)
-
-    if (hasStarterSelection) {
-      const starterOption = document.createElement('option')
-      starterOption.value = starterSelectionId
-      starterOption.textContent = `Start new context for ${normalizedRepositoryFilter}`
-      starterOption.selected = selectedId === starterSelectionId
-      selectInput.append(starterOption)
-    }
 
     for (const entry of filteredEntries) {
       const option = document.createElement('option')
@@ -167,11 +155,9 @@ export const createWorkspacesDrawer = ({
     const hasSelectedFilteredEntry = filteredEntries.some(
       entry => entry.id === selectedId,
     )
-    const hasSelectedStarterEntry =
-      hasStarterSelection && selectedId === starterSelectionId
 
-    if (!hasSelectedFilteredEntry && !hasSelectedStarterEntry) {
-      selectedId = hasStarterSelection ? starterSelectionId : ''
+    if (!hasSelectedFilteredEntry) {
+      selectedId = ''
       selectInput.value = selectedId
     }
 
@@ -247,7 +233,7 @@ export const createWorkspacesDrawer = ({
     } catch {
       entries = []
       selectedId = ''
-      setStatus('Could not refresh stored local contexts.', 'error')
+      setStatus('Could not refresh stored workspaces.', 'error')
       renderOptions()
       return entries
     }
@@ -294,11 +280,17 @@ export const createWorkspacesDrawer = ({
       open = false
       toggleButton.setAttribute('aria-expanded', 'false')
       drawer.toggleAttribute('hidden', true)
-      setStatus('Could not open local workspaces drawer.', 'error')
+      setStatus('Could not open workspaces drawer.', 'error')
       return
     }
 
-    selectInput?.focus()
+    const workspaceField = selectInput?.closest('label')
+    if (workspaceField instanceof HTMLElement && !workspaceField.hasAttribute('hidden')) {
+      selectInput?.focus()
+      return
+    }
+
+    newButton?.focus()
   }
 
   toggleButton?.addEventListener('click', () => {
@@ -325,6 +317,30 @@ export const createWorkspacesDrawer = ({
     updateActions()
   })
 
+  newButton?.addEventListener('click', async () => {
+    if (typeof onCreateWorkspace !== 'function') {
+      return
+    }
+
+    let created = false
+    try {
+      created = await onCreateWorkspace(
+        getNormalizedRepositoryFilter(selectedRepositoryFilter),
+      )
+    } catch {
+      setStatus('Could not create workspace.', 'error')
+      return
+    }
+
+    if (!created) {
+      return
+    }
+
+    selectedId = ''
+    setStatus('Created workspace.', 'neutral')
+    await refresh({ preserveSelection: false })
+  })
+
   openButton?.addEventListener('click', async () => {
     const id = toSafeText(selectedId)
     if (!id || typeof onOpenSelected !== 'function') {
@@ -337,7 +353,7 @@ export const createWorkspacesDrawer = ({
     try {
       opened = await onOpenSelected(id)
     } catch {
-      setStatus('Could not load selected local context.', 'error')
+      setStatus('Could not load selected workspace.', 'error')
       return
     }
 
@@ -345,7 +361,7 @@ export const createWorkspacesDrawer = ({
       return
     }
 
-    setStatus('Loaded local workspace context.', 'neutral')
+    setStatus('Loaded workspace.', 'neutral')
     void refresh({ preserveSelection: true })
   })
 
@@ -359,7 +375,7 @@ export const createWorkspacesDrawer = ({
     try {
       removed = await onRemoveSelected(id)
     } catch {
-      setStatus('Could not remove selected local context.', 'error')
+      setStatus('Could not remove selected workspace.', 'error')
       return
     }
 
@@ -368,7 +384,7 @@ export const createWorkspacesDrawer = ({
     }
 
     selectedId = ''
-    setStatus('Removed stored local context.', 'neutral')
+    setStatus('Removed stored workspace.', 'neutral')
     await refresh({ preserveSelection: false })
   })
 

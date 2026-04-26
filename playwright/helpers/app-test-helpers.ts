@@ -412,8 +412,7 @@ export const ensureWorkspacesDrawerClosed = async (page: Page) => {
   const toggle = page.locator('#workspaces-toggle')
   await expect(toggle).toBeVisible()
 
-  const isExpanded = await toggle.getAttribute('aria-expanded')
-  if (isExpanded === 'true') {
+  const requestClose = async () => {
     const closeButton = page.locator('#workspaces-close')
     if (await closeButton.isVisible()) {
       await closeButton.evaluate(element => {
@@ -421,14 +420,31 @@ export const ensureWorkspacesDrawerClosed = async (page: Page) => {
           element.click()
         }
       })
-    } else {
-      await toggle.evaluate(element => {
-        if (element instanceof HTMLButtonElement) {
-          element.click()
-        }
-      })
+      return
     }
+
+    await toggle.evaluate(element => {
+      if (element instanceof HTMLButtonElement) {
+        element.click()
+      }
+    })
   }
+
+  const isExpanded = await toggle.getAttribute('aria-expanded')
+  if (isExpanded === 'true') {
+    await requestClose()
+  }
+
+  await expect
+    .poll(async () => {
+      const expanded = await toggle.getAttribute('aria-expanded')
+      if (expanded === 'true') {
+        await requestClose()
+      }
+
+      return expanded
+    })
+    .toBe('false')
 
   await expect(toggle).toHaveAttribute('aria-expanded', 'false')
   await expect(page.getByRole('complementary', { name: 'Workspaces' })).toBeHidden()

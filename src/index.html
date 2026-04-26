@@ -196,30 +196,6 @@
           </button>
 
           <button
-            class="diagnostics-toggle github-pr-context-disconnect"
-            id="github-pr-context-disconnect"
-            type="button"
-            aria-label="Disconnect active pull request context"
-            title="Disconnect active pull request context"
-            hidden
-          >
-            <svg
-              class="github-pr-context-disconnect__icon"
-              xmlns="http://www.w3.org/2000/svg"
-              viewBox="0 0 24 24"
-              aria-hidden="true"
-            >
-              <path
-                d="M9.036 7.976a.75.75 0 0 0-1.06 1.06L10.939 12l-2.963 2.963a.75.75 0 1 0 1.06 1.06L12 13.06l2.963 2.964a.75.75 0 0 0 1.061-1.06L13.061 12l2.963-2.964a.75.75 0 1 0-1.06-1.06L12 10.939 9.036 7.976Z"
-              ></path>
-              <path
-                d="M12 1c6.075 0 11 4.925 11 11s-4.925 11-11 11S1 18.075 1 12 5.925 1 12 1ZM2.5 12a9.5 9.5 0 0 0 9.5 9.5 9.5 9.5 0 0 0 9.5-9.5A9.5 9.5 0 0 0 12 2.5 9.5 9.5 0 0 0 2.5 12Z"
-              ></path>
-            </svg>
-            <span class="github-pr-context-disconnect__label">Disconnect</span>
-          </button>
-
-          <button
             class="diagnostics-toggle ai-chat-toggle"
             id="ai-chat-toggle"
             type="button"
@@ -808,24 +784,29 @@
           aria-label="Workspaces status"
           data-level="neutral"
         >
-          Choose a repository scope, then manage local workspace contexts.
+          Choose a repository scope, then manage local workspaces.
         </p>
 
         <div class="workspaces-drawer__body" role="group" aria-label="Workspaces form">
-          <label
-            class="github-pr-field github-pr-field--full"
-            for="workspaces-repository"
-          >
-            <span>Repository</span>
-            <select id="workspaces-repository" aria-label="Workspace repository filter">
-              <option value="__local__" selected>Local</option>
-            </select>
-          </label>
+          <div class="workspaces-drawer__repository-row">
+            <label
+              class="github-pr-field github-pr-field--full"
+              for="workspaces-repository"
+            >
+              <span>Repository</span>
+              <select id="workspaces-repository" aria-label="Workspace repository filter">
+                <option value="__local__" selected>Local</option>
+              </select>
+            </label>
+            <button class="render-button" id="workspaces-new" type="button">
+              New workspace
+            </button>
+          </div>
 
           <label class="github-pr-field github-pr-field--full" for="workspaces-select">
-            <span>Stored contexts</span>
-            <select id="workspaces-select" aria-label="Stored local editor contexts">
-              <option value="" selected>No saved local contexts</option>
+            <span>Workspace</span>
+            <select id="workspaces-select" aria-label="Stored workspace">
+              <option value="" selected>No saved workspaces</option>
             </select>
           </label>
 

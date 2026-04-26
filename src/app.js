@@ -123,7 +123,6 @@ const githubPrToggleLabel = document.getElementById('github-pr-toggle-label')
 const githubPrToggleIcon = document.getElementById('github-pr-toggle-icon')
 const githubPrToggleIconPath = document.getElementById('github-pr-toggle-icon-path')
 const githubPrContextClose = document.getElementById('github-pr-context-close')
-const githubPrContextDisconnect = document.getElementById('github-pr-context-disconnect')
 const githubPrDrawer = document.getElementById('github-pr-drawer')
 const openPrTitle = document.getElementById('open-pr-title')
 const githubPrClose = document.getElementById('github-pr-close')
@@ -141,6 +140,7 @@ const workspacesDrawer = document.getElementById('workspaces-drawer')
 const workspacesClose = document.getElementById('workspaces-close')
 const workspacesStatus = document.getElementById('workspaces-status')
 const workspacesRepository = document.getElementById('workspaces-repository')
+const workspacesNew = document.getElementById('workspaces-new')
 const workspacesSelect = document.getElementById('workspaces-select')
 const workspacesOpen = document.getElementById('workspaces-open')
 const workspacesRemove = document.getElementById('workspaces-remove')
@@ -458,7 +458,6 @@ const prContextUi = createGitHubPrContextUiController({
   stylesPrSyncIcon,
   stylesPrSyncIconPath,
   githubPrContextClose,
-  githubPrContextDisconnect,
   aiChatToggle,
   workspacesToggle,
   githubPrOpenIcon,
@@ -830,7 +829,7 @@ const {
   getWorkspaceTabByKind,
   makeUniqueTabPath,
   createWorkspaceTabId,
-  onWorkspaceRecordApplied: (workspace, options = {}) => {
+  onWorkspaceRecordApplied: workspace => {
     if (!workspace || typeof workspace !== 'object') {
       return
     }
@@ -844,14 +843,11 @@ const {
 
     prDrawerController.clearSelectedRepositoryActivePrContext({ resetForm: false })
 
-    const isSilentRestore = options?.silent === true
-
     const state =
       typeof workspace.prContextState === 'string'
         ? workspace.prContextState.trim().toLowerCase()
         : ''
-    const shouldHydratePrContext =
-      state === 'active' || (state === 'disconnected' && !isSilentRestore)
+    const shouldHydratePrContext = state === 'active'
     if (!shouldHydratePrContext) {
       return
     }
@@ -1065,6 +1061,7 @@ const githubWorkflows = createGitHubWorkflowsSetup({
     workspacesClose,
     workspacesStatus,
     workspacesRepository,
+    workspacesNew,
     workspacesSelect,
     workspacesOpen,
     workspacesRemove,
@@ -1123,14 +1120,6 @@ const githubWorkflows = createGitHubWorkflowsSetup({
           'PR context closed. Open Workspaces to load a saved workspace or continue with this local workspace.',
       })
     },
-    onPrContextDisconnected: result => {
-      archivePrSessionAndStartFreshLocal({
-        result,
-        archivedState: 'disconnected',
-        statusMessage:
-          'PR context disconnected. Open Workspaces to load a saved workspace or continue with this local workspace.',
-      })
-    },
     getPersistedActivePrContext,
     getTokenForVisibility: () => githubAiContextState.token,
     closeWorkspacesDrawer: () => {
@@ -1148,7 +1137,6 @@ const githubWorkflows = createGitHubWorkflowsSetup({
     },
     formatActivePrReference,
     githubPrContextClose,
-    githubPrContextDisconnect,
   },
   actions: {
     applyRenderMode,

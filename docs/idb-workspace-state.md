@@ -23,7 +23,7 @@ Each workspace record may include:
   - `head`
   - `prTitle`
   - `prNumber`
-  - `prContextState` (`inactive` | `active` | `disconnected` | `closed`)
+  - `prContextState` (`inactive` | `active` | `closed`)
 - Runtime/editor state:
   - `renderMode`
   - `activeTabId`
@@ -37,7 +37,7 @@ IDB supports that by storing:
 
 - Full workspace snapshots
 - Repo-scoped context records
-- Historical transitions such as disconnected or closed PR context
+- Historical transitions such as closed PR context
 
 ## Design Rule
 

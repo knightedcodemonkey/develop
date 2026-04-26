@@ -430,61 +430,6 @@
   display: none;
 }
 
-.diagnostics-toggle.github-pr-context-disconnect {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  --github-pr-disconnect-icon-color: color-mix(
-    in srgb,
-    var(--accent) 78%,
-    var(--panel-text)
-  );
-  --github-pr-disconnect-text-color: var(--shell-text);
-  --github-pr-disconnect-text-color-hover: color-mix(
-    in srgb,
-    var(--accent) 78%,
-    var(--panel-text)
-  );
-
-  color: var(--github-pr-disconnect-text-color);
-}
-
-:root[data-theme='light'] .diagnostics-toggle.github-pr-context-disconnect {
-  --github-pr-disconnect-icon-color: color-mix(in srgb, #6d28d9 84%, var(--panel-text));
-  --github-pr-disconnect-text-color-hover: color-mix(
-    in srgb,
-    #6d28d9 88%,
-    var(--panel-text)
-  );
-}
-
-.github-pr-context-disconnect__icon {
-  width: 14px;
-  height: 14px;
-  fill: var(--github-pr-disconnect-icon-color);
-}
-
-.github-pr-context-disconnect__icon path {
-  fill: var(--github-pr-disconnect-icon-color);
-}
-
-.diagnostics-toggle.github-pr-context-disconnect:hover:not(:disabled) {
-  color: var(--github-pr-disconnect-text-color-hover);
-}
-
-.github-pr-context-disconnect__label {
-  color: inherit;
-}
-
-.github-pr-context-disconnect:focus-visible:not(:disabled) {
-  outline: 2px solid var(--focus-ring);
-  outline-offset: 1px;
-}
-
-.github-pr-context-disconnect[hidden] {
-  display: none;
-}
-
 .ai-chat-drawer {
   position: fixed;
   top: 82px;
@@ -623,10 +568,33 @@
   padding: 2px;
 }
 
+.workspaces-drawer__repository-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: end;
+}
+
+.workspaces-drawer__repository-row .github-pr-field--full {
+  grid-column: auto;
+}
+
+.workspaces-drawer__repository-row .render-button {
+  height: 36px;
+  width: auto;
+  min-width: fit-content;
+  padding-inline: 12px;
+  white-space: nowrap;
+}
+
 .workspaces-drawer__actions {
   display: flex;
   justify-content: flex-end;
   gap: 8px;
+}
+
+.workspaces-drawer__actions[hidden] {
+  display: none;
 }
 
 .github-pr-drawer__header {

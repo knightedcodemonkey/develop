@@ -19,7 +19,7 @@ Do not store pull request context in `localStorage`.
 Examples that must stay out of `localStorage`:
 
 - Selected repository preference (`owner/repo`)
-- PR context state (`active`, `disconnected`, `closed`, `inactive`)
+- PR context state (`active`, `closed`, `inactive`)
 - PR number and URL
 - PR base/head/title/body
 - PR drawer repository-scoped workflow state

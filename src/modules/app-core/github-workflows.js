@@ -1,5 +1,3 @@
-import { repositoryStarterSelectionIdPrefix } from '../constants.js'
-
 const initializeGitHubWorkflows = ({
   createGitHubPrEditorSyncController,
   createGitHubChatDrawer,
@@ -42,6 +40,7 @@ const initializeGitHubWorkflows = ({
   workspacesClose,
   workspacesStatus,
   workspacesRepository,
+  workspacesNew,
   workspacesSelect,
   workspacesOpen,
   workspacesRemove,
@@ -66,7 +65,6 @@ const initializeGitHubWorkflows = ({
   onPrContextStateChange,
   onPrContextVerifiedClosed,
   onPrContextClosed,
-  onPrContextDisconnected,
   getTokenForVisibility,
   closeWorkspacesDrawer,
   getActivePrEditorSyncKey,
@@ -75,7 +73,6 @@ const initializeGitHubWorkflows = ({
   applyStyleMode,
   formatActivePrReference,
   githubPrContextClose,
-  githubPrContextDisconnect,
   confirmAction,
   setStatus,
   showAppToast,
@@ -100,18 +97,6 @@ const initializeGitHubWorkflows = ({
       importFromCdnWithFallback,
     })
     return collectTopLevelDeclarations({ source, transformJsxSource })
-  }
-
-  const parseRepositoryStarterSelectionId = value => {
-    const normalizedValue = typeof value === 'string' ? value.trim() : ''
-    if (!normalizedValue.startsWith(repositoryStarterSelectionIdPrefix)) {
-      return ''
-    }
-
-    const repositoryFullName = normalizedValue.slice(
-      repositoryStarterSelectionIdPrefix.length,
-    )
-    return typeof repositoryFullName === 'string' ? repositoryFullName.trim() : ''
   }
 
   const shouldReconcileWorkspaceUpdatesForRepository = repositoryFullName => {
@@ -315,6 +300,7 @@ const initializeGitHubWorkflows = ({
     closeButton: workspacesClose,
     statusNode: workspacesStatus,
     repositorySelect: workspacesRepository,
+    newButton: workspacesNew,
     selectInput: workspacesSelect,
     openButton: workspacesOpen,
     removeButton: workspacesRemove,
@@ -348,25 +334,38 @@ const initializeGitHubWorkflows = ({
       return 'right'
     },
     onRefreshRequested: listLocalContextRecords,
-    onOpenSelected: async workspaceId => {
+    onCreateWorkspace: async repositoryFilter => {
+      const normalizedFilter =
+        typeof repositoryFilter === 'string' ? repositoryFilter.trim() : ''
+      const repositoryFullName =
+        normalizedFilter && normalizedFilter !== '__local__' ? normalizedFilter : ''
+
       try {
-        const starterRepositoryFullName = parseRepositoryStarterSelectionId(workspaceId)
-        if (starterRepositoryFullName) {
-          setCurrentSelectedRepository?.(starterRepositoryFullName)
-          await syncActiveWorkspaceRepositoryScope?.(starterRepositoryFullName, {
-            rekeyRecord: true,
-          })
-          await refreshLocalContextOptions()
-          prDrawerController.resetStatus?.()
-          prDrawerController.syncRepositories()
-          return true
+        if (!repositoryFullName) {
+          clearCurrentSelectedRepository?.()
+        } else {
+          setCurrentSelectedRepository?.(repositoryFullName)
         }
 
+        await syncActiveWorkspaceRepositoryScope?.(repositoryFullName, {
+          rekeyRecord: true,
+        })
+        await refreshLocalContextOptions()
+        prDrawerController.resetStatus?.()
+        prDrawerController.syncRepositories()
+        return true
+      } catch {
+        workspacesDrawerController?.setStatus('Could not create workspace.', 'error')
+        return false
+      }
+    },
+    onOpenSelected: async workspaceId => {
+      try {
         const record = await workspaceStorage.getWorkspaceById(workspaceId)
         if (!record) {
           await refreshLocalContextOptions()
           workspacesDrawerController?.setStatus(
-            'Stored local context no longer exists.',
+            'Stored workspace no longer exists.',
             'error',
           )
           return false
@@ -381,7 +380,7 @@ const initializeGitHubWorkflows = ({
         return applied
       } catch {
         workspacesDrawerController?.setStatus(
-          'Could not load selected local context.',
+          'Could not load selected workspace.',
           'error',
         )
         return false
@@ -389,7 +388,7 @@ const initializeGitHubWorkflows = ({
     },
     onRemoveSelected: async workspaceId => {
       confirmAction({
-        title: 'Remove stored local context?',
+        title: 'Remove stored workspace?',
         copy: 'This removes only local workspace metadata and editor content from this browser.',
         confirmButtonText: 'Remove',
         onConfirm: () => {
@@ -403,13 +402,13 @@ const initializeGitHubWorkflows = ({
 
               await refreshLocalContextOptions()
               workspacesDrawerController?.setStatus(
-                'Removed stored local context.',
+                'Removed stored workspace.',
                 'neutral',
               )
             })
             .catch(() => {
               workspacesDrawerController?.setStatus(
-                'Could not remove stored local context.',
+                'Could not remove stored workspace.',
                 'error',
               )
             })
@@ -470,36 +469,6 @@ const initializeGitHubWorkflows = ({
             setStatus(`Close context failed: ${message}`, 'error')
             showAppToast(`Close context failed: ${message}`)
           })
-      },
-    })
-  })
-
-  githubPrContextDisconnect?.addEventListener('click', () => {
-    if (!githubAiContextState.activePrContext) {
-      return
-    }
-
-    const activePrReference = formatActivePrReference(
-      githubAiContextState.activePrContext,
-    )
-    const referenceLine = activePrReference ? `PR: ${activePrReference}\n` : ''
-
-    confirmAction({
-      title: 'Disconnect PR context?',
-      copy: `${referenceLine}This will disconnect the active pull request context in this app only.\nYour pull request will stay open on GitHub.\nYour GitHub token and selected repository will stay connected.`,
-      confirmButtonText: 'Disconnect',
-      onConfirm: () => {
-        const result = prDrawerController.disconnectActivePrContext()
-        const reference = result?.reference
-        setStatus(
-          reference
-            ? `Disconnected PR context (${reference}). Pull request remains open on GitHub.`
-            : 'Disconnected PR context. Pull request remains open on GitHub.',
-          'neutral',
-        )
-        if (typeof onPrContextDisconnected === 'function') {
-          onPrContextDisconnected(result)
-        }
       },
     })
   })

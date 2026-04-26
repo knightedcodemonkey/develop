@@ -509,13 +509,58 @@ test('Workspaces repository selector filters contexts and keeps local-only conte
 
   await selectWorkspacesRepositoryFilter(page, 'knightedcodemonkey/develop')
   const developLabels = await getLocalContextOptionLabels(page)
-  expect(developLabels).toEqual(['Select a stored local context', 'Alpha active context'])
+  expect(developLabels).toEqual(['Select a stored workspace', 'Alpha active context'])
 
   await selectWorkspacesRepositoryFilter(page, '__local__')
   const localLabels = await getLocalContextOptionLabels(page)
-  expect(localLabels).toContain('Select a stored local context')
+  expect(localLabels).toContain('Select a stored workspace')
   expect(localLabels).toContain('local:Alpha local context')
   expect(localLabels).not.toContain('Alpha active context')
+})
+
+test('Workspaces repository with no stored entries hides Workspace select and supports New workspace', async ({
+  page,
+}) => {
+  await waitForAppReady(page, `${appEntryPath}`)
+
+  await page.route('https://api.github.com/user/repos**', async route => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify([
+        {
+          id: 2,
+          owner: { login: 'knightedcodemonkey' },
+          name: 'develop',
+          full_name: 'knightedcodemonkey/develop',
+          default_branch: 'main',
+          permissions: { push: true },
+        },
+      ]),
+    })
+  })
+
+  await page
+    .getByRole('textbox', { name: 'GitHub token' })
+    .fill('github_pat_fake_1234567890')
+  await page.getByRole('button', { name: 'Add GitHub token' }).click()
+
+  await selectWorkspacesRepositoryFilter(page, 'knightedcodemonkey/develop')
+  await expect(page.getByLabel('Stored workspace')).toBeHidden()
+  await expect(page.getByRole('button', { name: 'Open', exact: true })).toBeHidden()
+  await expect(page.getByRole('button', { name: 'Remove', exact: true })).toBeHidden()
+
+  const newWorkspaceButton = page.getByRole('button', {
+    name: 'New workspace',
+    exact: true,
+  })
+  await expect(newWorkspaceButton).toBeVisible()
+  await newWorkspaceButton.click()
+
+  await ensureOpenPrDrawerOpen(page)
+  await expect(page.getByLabel('Pull request repository')).toHaveValue(
+    'knightedcodemonkey/develop',
+  )
 })
 
 test('Switching Workspaces repository scope to Local keeps inactive record repo and shows it as local in drawer', async ({
@@ -779,7 +824,7 @@ test('Changing head updates current workspace without creating a new record', as
     })
 })
 
-for (const prContextState of ['inactive', 'disconnected', 'closed'] as const) {
+for (const prContextState of ['inactive', 'closed'] as const) {
   test(`Head stays fixed across repository changes for ${prContextState} workspace context`, async ({
     page,
     browserName,
