@@ -1,11 +1,34 @@
 const toSafeText = value => (typeof value === 'string' ? value.trim() : '')
 
 const normalizeQuery = value => toSafeText(value).toLowerCase()
+const localRepositoryFilterValue = '__local__'
+const createRepositoryStarterIdPrefix = '__create_repository_context__:'
 
-const toWorkspaceLabel = workspace => {
+const toRepositoryStarterSelectionId = repositoryFullName => {
+  const repository = toSafeText(repositoryFullName)
+  if (!repository || repository === localRepositoryFilterValue) {
+    return ''
+  }
+
+  return `${createRepositoryStarterIdPrefix}${repository}`
+}
+
+const isRepositoryStarterSelectionId = value =>
+  toSafeText(value).startsWith(createRepositoryStarterIdPrefix)
+
+const isLocalWorkspaceEntry = workspace => {
+  const repository = toSafeText(workspace?.repo)
+  return !repository
+}
+
+const isLocalOnlyInactiveWorkspace = workspace => {
   const state = toSafeText(workspace?.prContextState).toLowerCase()
   const hasPrNumber = Number.isFinite(workspace?.prNumber)
-  const isLocalOnlyInactive = state === 'inactive' && !hasPrNumber
+  return state === 'inactive' && !hasPrNumber
+}
+
+const toWorkspaceLabel = workspace => {
+  const isLocalOnlyInactive = isLocalOnlyInactiveWorkspace(workspace)
 
   const hasTitle = toSafeText(workspace?.prTitle)
   if (hasTitle) {
@@ -47,11 +70,14 @@ export const createWorkspacesDrawer = ({
   drawer,
   closeButton,
   statusNode,
+  repositorySelect,
   searchInput,
   selectInput,
   openButton,
   removeButton,
   getDrawerSide,
+  getRepositoryFilterOptions,
+  getSelectedRepositoryFilter,
   onRefreshRequested,
   onOpenSelected,
   onRemoveSelected,
@@ -60,6 +86,36 @@ export const createWorkspacesDrawer = ({
   let entries = []
   let query = ''
   let selectedId = ''
+  let selectedRepositoryFilter = localRepositoryFilterValue
+  let hasUserSelectedRepositoryFilter = false
+
+  const getNormalizedRepositoryFilter = value => {
+    const normalized = toSafeText(value)
+    return normalized || localRepositoryFilterValue
+  }
+
+  const getFilteredEntriesByRepository = () => {
+    const normalizedRepositoryFilter = getNormalizedRepositoryFilter(
+      selectedRepositoryFilter,
+    )
+    if (normalizedRepositoryFilter === localRepositoryFilterValue) {
+      return entries.filter(
+        entry => isLocalWorkspaceEntry(entry) || isLocalOnlyInactiveWorkspace(entry),
+      )
+    }
+
+    return entries.filter(entry => {
+      if (toSafeText(entry?.repo) !== normalizedRepositoryFilter) {
+        return false
+      }
+
+      if (isLocalWorkspaceEntry(entry)) {
+        return false
+      }
+
+      return !isLocalOnlyInactiveWorkspace(entry)
+    })
+  }
 
   const setStatus = (text, level = 'neutral') => {
     if (!(statusNode instanceof HTMLElement)) {
@@ -71,14 +127,16 @@ export const createWorkspacesDrawer = ({
   }
 
   const updateActions = () => {
-    const hasSelection = toSafeText(selectedId).length > 0
+    const normalizedSelectedId = toSafeText(selectedId)
+    const hasSelection = normalizedSelectedId.length > 0
+    const isStarterSelection = isRepositoryStarterSelectionId(normalizedSelectedId)
 
     if (openButton instanceof HTMLButtonElement) {
       openButton.disabled = !hasSelection
     }
 
     if (removeButton instanceof HTMLButtonElement) {
-      removeButton.disabled = !hasSelection
+      removeButton.disabled = !hasSelection || isStarterSelection
     }
   }
 
@@ -87,23 +145,42 @@ export const createWorkspacesDrawer = ({
       return
     }
 
-    const filteredEntries = entries.filter(entry =>
+    const repositoryFilteredEntries = getFilteredEntriesByRepository()
+    const filteredEntries = repositoryFilteredEntries.filter(entry =>
       matchesQuery(entry, normalizeQuery(query)),
     )
+    const normalizedRepositoryFilter = getNormalizedRepositoryFilter(
+      selectedRepositoryFilter,
+    )
+    const starterSelectionId =
+      filteredEntries.length === 0
+        ? toRepositoryStarterSelectionId(normalizedRepositoryFilter)
+        : ''
+    const hasStarterSelection = Boolean(starterSelectionId)
 
     selectInput.replaceChildren()
 
     const placeholder = document.createElement('option')
     placeholder.value = ''
     placeholder.textContent =
-      entries.length === 0
-        ? 'No saved local contexts'
+      repositoryFilteredEntries.length === 0
+        ? hasStarterSelection
+          ? 'Select to start a new local context'
+          : 'No saved local contexts'
         : filteredEntries.length > 0
           ? 'Select a stored local context'
           : 'No matching local contexts'
-    placeholder.disabled = filteredEntries.length > 0
+    placeholder.disabled = filteredEntries.length > 0 || hasStarterSelection
     placeholder.selected = !filteredEntries.some(entry => entry.id === selectedId)
     selectInput.append(placeholder)
+
+    if (hasStarterSelection) {
+      const starterOption = document.createElement('option')
+      starterOption.value = starterSelectionId
+      starterOption.textContent = `Start new context for ${normalizedRepositoryFilter}`
+      starterOption.selected = selectedId === starterSelectionId
+      selectInput.append(starterOption)
+    }
 
     for (const entry of filteredEntries) {
       const option = document.createElement('option')
@@ -114,15 +191,76 @@ export const createWorkspacesDrawer = ({
     }
 
     if (searchInput instanceof HTMLInputElement) {
-      searchInput.disabled = entries.length === 0
+      searchInput.disabled = repositoryFilteredEntries.length === 0
     }
 
-    if (!filteredEntries.some(entry => entry.id === selectedId)) {
-      selectedId = ''
-      selectInput.value = ''
+    const hasSelectedFilteredEntry = filteredEntries.some(
+      entry => entry.id === selectedId,
+    )
+    const hasSelectedStarterEntry =
+      hasStarterSelection && selectedId === starterSelectionId
+
+    if (!hasSelectedFilteredEntry && !hasSelectedStarterEntry) {
+      selectedId = hasStarterSelection ? starterSelectionId : ''
+      selectInput.value = selectedId
     }
 
     updateActions()
+  }
+
+  const syncRepositoryFilterOptions = () => {
+    if (!(repositorySelect instanceof HTMLSelectElement)) {
+      return
+    }
+
+    const options =
+      typeof getRepositoryFilterOptions === 'function'
+        ? getRepositoryFilterOptions()
+        : [{ value: localRepositoryFilterValue, label: 'Local' }]
+
+    const normalizedOptions = Array.isArray(options)
+      ? options
+          .map(option => ({
+            value: toSafeText(option?.value),
+            label: toSafeText(option?.label),
+          }))
+          .filter(option => option.value && option.label)
+      : []
+
+    const hasLocalOption = normalizedOptions.some(
+      option => option.value === localRepositoryFilterValue,
+    )
+
+    const repositoryOptions = hasLocalOption
+      ? normalizedOptions
+      : [{ value: localRepositoryFilterValue, label: 'Local' }, ...normalizedOptions]
+
+    const requestedFilter = hasUserSelectedRepositoryFilter
+      ? selectedRepositoryFilter
+      : typeof getSelectedRepositoryFilter === 'function'
+        ? getSelectedRepositoryFilter()
+        : selectedRepositoryFilter
+
+    const nextSelectedFilter = getNormalizedRepositoryFilter(requestedFilter)
+
+    repositorySelect.replaceChildren(
+      ...repositoryOptions.map(option => {
+        const optionNode = document.createElement('option')
+        optionNode.value = option.value
+        optionNode.textContent = option.label
+        optionNode.selected = option.value === nextSelectedFilter
+        return optionNode
+      }),
+    )
+
+    if (repositoryOptions.some(option => option.value === nextSelectedFilter)) {
+      selectedRepositoryFilter = nextSelectedFilter
+      repositorySelect.value = nextSelectedFilter
+      return
+    }
+
+    selectedRepositoryFilter = localRepositoryFilterValue
+    repositorySelect.value = localRepositoryFilterValue
   }
 
   const refresh = async ({ preserveSelection = true } = {}) => {
@@ -143,6 +281,8 @@ export const createWorkspacesDrawer = ({
       renderOptions()
       return entries
     }
+
+    syncRepositoryFilterOptions()
 
     if (!preserveSelection) {
       selectedId = ''
@@ -209,6 +349,18 @@ export const createWorkspacesDrawer = ({
     renderOptions()
   })
 
+  repositorySelect?.addEventListener('change', () => {
+    selectedRepositoryFilter = getNormalizedRepositoryFilter(repositorySelect.value)
+    hasUserSelectedRepositoryFilter = true
+    query = ''
+
+    if (searchInput instanceof HTMLInputElement) {
+      searchInput.value = ''
+    }
+
+    void refresh({ preserveSelection: false })
+  })
+
   selectInput?.addEventListener('change', () => {
     selectedId = toSafeText(selectInput.value)
     updateActions()
@@ -219,6 +371,8 @@ export const createWorkspacesDrawer = ({
     if (!id || typeof onOpenSelected !== 'function') {
       return
     }
+
+    selectedId = id
 
     let opened = false
     try {
@@ -263,6 +417,7 @@ export const createWorkspacesDrawer = ({
     setOpen,
     isOpen: () => open,
     refresh,
+    syncRepositoryFilterOptions,
     setStatus,
     setSelectedId: id => {
       selectedId = toSafeText(id)

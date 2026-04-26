@@ -357,6 +357,32 @@ export const ensureOpenPrDrawerOpen = async (page: Page) => {
   ).toBeVisible()
 }
 
+export const ensureWorkspacesDrawerClosed = async (page: Page) => {
+  const toggle = page.locator('#workspaces-toggle')
+  await expect(toggle).toBeVisible()
+
+  const isExpanded = await toggle.getAttribute('aria-expanded')
+  if (isExpanded === 'true') {
+    const closeButton = page.locator('#workspaces-close')
+    if (await closeButton.isVisible()) {
+      await closeButton.evaluate(element => {
+        if (element instanceof HTMLButtonElement) {
+          element.click()
+        }
+      })
+    } else {
+      await toggle.evaluate(element => {
+        if (element instanceof HTMLButtonElement) {
+          element.click()
+        }
+      })
+    }
+  }
+
+  await expect(toggle).toHaveAttribute('aria-expanded', 'false')
+  await expect(page.getByRole('complementary', { name: 'Workspaces' })).toBeHidden()
+}
+
 export const mockRepositoryBranches = async (
   page: Page,
   branchesByRepo: BranchesByRepo = {},
@@ -379,7 +405,14 @@ export const mockRepositoryBranches = async (
   })
 }
 
-export const connectByotWithSingleRepo = async (page: Page) => {
+export const connectByotWithSingleRepo = async (
+  page: Page,
+  {
+    branchesByRepo,
+  }: {
+    branchesByRepo?: BranchesByRepo
+  } = {},
+) => {
   await page.route('https://api.github.com/user/repos**', async route => {
     await route.fulfill({
       status: 200,
@@ -397,17 +430,32 @@ export const connectByotWithSingleRepo = async (page: Page) => {
     })
   })
 
-  await mockRepositoryBranches(page, {
-    'knightedcodemonkey/develop': ['main', 'release'],
-  })
+  await mockRepositoryBranches(
+    page,
+    branchesByRepo ?? {
+      'knightedcodemonkey/develop': ['main', 'release'],
+    },
+  )
 
   await page
     .getByRole('textbox', { name: 'GitHub token' })
     .fill('github_pat_fake_chat_1234567890')
   await page.getByRole('button', { name: 'Add GitHub token' }).click()
 
+  const workspacesToggle = page.getByRole('button', { name: 'Workspaces' })
+  await expect(workspacesToggle).toBeVisible()
+  await workspacesToggle.click()
+
+  const workspacesRepositoryFilter = page.getByLabel('Workspace repository filter')
+  await expect(workspacesRepositoryFilter).toBeVisible()
+  await workspacesRepositoryFilter.selectOption('knightedcodemonkey/develop')
+  await expect(workspacesRepositoryFilter).toHaveValue('knightedcodemonkey/develop')
+
+  await ensureWorkspacesDrawerClosed(page)
+
   const repoSelect = page.getByLabel('Pull request repository')
   await expect(repoSelect).toHaveValue('knightedcodemonkey/develop')
+  await expect(repoSelect).toBeDisabled()
 
   await expect(
     page.getByRole('button', {

@@ -341,14 +341,14 @@ const bindAppEventsAndStart = ({
     })
   })
 
-  for (const element of [
-    githubPrRepoSelect,
-    githubPrBaseBranch,
-    githubPrHeadBranch,
-    githubPrTitle,
-  ]) {
-    bindWorkspaceMetadataPersistence(element)
-  }
+  bindWorkspaceMetadataPersistence(githubPrRepoSelect)
+  bindWorkspaceMetadataPersistence(githubPrBaseBranch)
+  bindWorkspaceMetadataPersistence(githubPrHeadBranch, {
+    preserveRecordIdOnInput: true,
+    preserveRecordIdOnChange: true,
+    rekeyOnBlur: false,
+  })
+  bindWorkspaceMetadataPersistence(githubPrTitle)
 
   for (const button of appThemeButtons) {
     button.addEventListener('click', () => {

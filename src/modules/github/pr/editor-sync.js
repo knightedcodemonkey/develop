@@ -29,11 +29,14 @@ export const createGitHubPrEditorSyncController = ({
   setComponentSource,
   setStylesSource,
   scheduleRender,
+  shouldApplySyncResult,
 }) => {
   const setComponent =
     typeof setComponentSource === 'function' ? setComponentSource : () => {}
   const setStyles = typeof setStylesSource === 'function' ? setStylesSource : () => {}
   const schedule = typeof scheduleRender === 'function' ? scheduleRender : () => {}
+  const shouldApply =
+    typeof shouldApplySyncResult === 'function' ? shouldApplySyncResult : () => true
 
   const syncFromActiveContext = async ({
     token,
@@ -56,6 +59,25 @@ export const createGitHubPrEditorSyncController = ({
     )
 
     if (!token || !owner || !repo || !branch || !componentTabPath || !stylesTabPath) {
+      return {
+        synced: false,
+        componentSynced: false,
+        stylesSynced: false,
+      }
+    }
+
+    if (
+      !shouldApply({
+        repository,
+        activeContext,
+        syncTargets: {
+          tabTargets: [
+            { kind: 'component', path: componentTabPath },
+            { kind: 'styles', path: stylesTabPath },
+          ],
+        },
+      })
+    ) {
       return {
         synced: false,
         componentSynced: false,
@@ -113,6 +135,25 @@ export const createGitHubPrEditorSyncController = ({
     }
 
     if (signal?.aborted) {
+      return {
+        synced: false,
+        componentSynced: false,
+        stylesSynced: false,
+      }
+    }
+
+    if (
+      !shouldApply({
+        repository,
+        activeContext,
+        syncTargets: {
+          tabTargets: [
+            { kind: 'component', path: resolvedComponentTabPath },
+            { kind: 'styles', path: resolvedStylesTabPath },
+          ],
+        },
+      })
+    ) {
       return {
         synced: false,
         componentSynced: false,

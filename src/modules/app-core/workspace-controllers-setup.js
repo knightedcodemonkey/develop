@@ -37,7 +37,7 @@ const createWorkspaceControllersSetup = ({
   updateRenderModeEditability,
   getHasCompletedInitialWorkspaceBootstrap,
   maybeRender,
-  toWorkspaceRecordId,
+  toWorkspaceRecordKey,
   workspaceTabsStrip,
   getWorkspaceTabRenameState,
   getDraggedWorkspaceTabId,
@@ -90,15 +90,18 @@ const createWorkspaceControllersSetup = ({
     refreshLocalContextOptions,
     setStatus,
     getIsApplyingWorkspaceSnapshot,
+    getActiveWorkspaceRecordId,
     getActiveWorkspaceCreatedAt,
     setActiveWorkspaceRecordId,
     setActiveWorkspaceCreatedAt,
     getHasCompletedInitialWorkspaceBootstrap,
   })
 
-  const queueWorkspaceSave = () => workspaceSaveController.queueWorkspaceSave()
+  const queueWorkspaceSave = options =>
+    workspaceSaveController.queueWorkspaceSave(options)
 
-  const flushWorkspaceSave = async () => workspaceSaveController.flushWorkspaceSave()
+  const flushWorkspaceSave = async options =>
+    workspaceSaveController.flushWorkspaceSave(options)
 
   const workspaceTabSelectionController = createWorkspaceTabSelectionController({
     toNonEmptyWorkspaceText,
@@ -217,7 +220,7 @@ const createWorkspaceControllersSetup = ({
     getHasCompletedInitialWorkspaceBootstrap,
     maybeRender: () => maybeRender(),
     setStatus,
-    toWorkspaceRecordId,
+    toWorkspaceRecordKey,
     getHeadBranchValue: () =>
       typeof githubPrHeadBranch?.value === 'string'
         ? githubPrHeadBranch.value.trim()
@@ -235,8 +238,8 @@ const createWorkspaceControllersSetup = ({
   const loadPreferredWorkspaceContext = async () =>
     workspaceContextController.loadPreferredWorkspaceContext()
 
-  const bindWorkspaceMetadataPersistence = element =>
-    workspaceSaveController.bindWorkspaceMetadataPersistence(element)
+  const bindWorkspaceMetadataPersistence = (element, options) =>
+    workspaceSaveController.bindWorkspaceMetadataPersistence(element, options)
 
   return {
     workspaceSaveController,

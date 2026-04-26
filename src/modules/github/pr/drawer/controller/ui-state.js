@@ -19,11 +19,22 @@ export const createUiStateHandlers = ({
   toSafeText,
   getCurrentActivePrContext,
 }) => {
+  const defaultStatusText =
+    statusNode instanceof HTMLElement
+      ? typeof statusNode.textContent === 'string'
+        ? statusNode.textContent.trim()
+        : ''
+      : ''
+  const defaultStatusLevel =
+    statusNode instanceof HTMLElement
+      ? toSafeText(statusNode.dataset.level) || 'neutral'
+      : 'neutral'
+
   const syncModeFields = () => {
     const isPushCommitMode = Boolean(getCurrentActivePrContext())
 
     if (repositorySelect instanceof HTMLSelectElement) {
-      repositorySelect.disabled = state.submitting || isPushCommitMode
+      repositorySelect.disabled = true
     }
 
     if (baseBranchInput instanceof HTMLSelectElement) {
@@ -143,6 +154,10 @@ export const createUiStateHandlers = ({
     statusNode.dataset.level = level
   }
 
+  const resetStatus = () => {
+    setStatus(defaultStatusText, defaultStatusLevel)
+  }
+
   const setPendingState = isPending => {
     state.submitting = isPending
 
@@ -187,6 +202,7 @@ export const createUiStateHandlers = ({
   return {
     emitActivePrContextChange,
     getFormValues,
+    resetStatus,
     setPendingState,
     setStatus,
     setSubmitButtonLabel,

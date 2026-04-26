@@ -760,15 +760,20 @@ test('BYOT remembers selected repository across reloads', async ({ page }) => {
     .fill('github_pat_fake_1234567890')
   await page.getByRole('button', { name: 'Add GitHub token' }).click()
 
-  await ensureOpenPrDrawerOpen(page)
-
   const repoSelect = page.getByLabel('Pull request repository')
-  await expect(repoSelect).toBeEnabled()
+  await expect(repoSelect).toBeDisabled()
   await expect(page.getByRole('status', { name: 'App status' })).toHaveText(
     'Loaded 2 writable repositories',
   )
 
-  await repoSelect.selectOption('knightedcodemonkey/develop')
+  await page.getByRole('button', { name: 'Workspaces' }).click()
+  const workspaceRepositoryFilter = page.getByLabel('Workspace repository filter')
+  await expect(workspaceRepositoryFilter).toBeVisible()
+  await workspaceRepositoryFilter.selectOption('knightedcodemonkey/develop')
+  await expect(workspaceRepositoryFilter).toHaveValue('knightedcodemonkey/develop')
+  await page.getByRole('button', { name: 'Close workspaces drawer' }).click()
+
+  await ensureOpenPrDrawerOpen(page)
   await expect(repoSelect).toHaveValue('knightedcodemonkey/develop')
 
   await page.reload()
@@ -783,4 +788,5 @@ test('BYOT remembers selected repository across reloads', async ({ page }) => {
   await expect(page.getByRole('button', { name: 'Delete GitHub token' })).toBeVisible()
   await ensureOpenPrDrawerOpen(page)
   await expect(repoSelect).toHaveValue('knightedcodemonkey/develop')
+  await expect(repoSelect).toBeDisabled()
 })

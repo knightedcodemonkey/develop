@@ -6,6 +6,7 @@ const createWorkspaceSyncController = ({
   toWorkspaceSyncedContent,
   toWorkspaceSyncSha,
   toNonEmptyWorkspaceText,
+  toWorkspaceRecordKey,
   hasTabCommittedSyncState,
   getJsxSource,
   getCssSource,
@@ -281,15 +282,23 @@ const createWorkspaceSyncController = ({
             supersededId: '',
           }
         : resolveWorkspaceRecordIdentity({
-            repositoryFullName: context.repositoryFullName,
-            headBranch: context.headBranch,
             activeRecordId: getActiveWorkspaceRecordId(),
-            prContextState: context.prContextState,
           })
+
+    const normalizedPrTitle =
+      typeof context.prTitle === 'string' ? context.prTitle.trim() : ''
+    const requestedPrContextState =
+      typeof context.prContextState === 'string' && context.prContextState.trim()
+        ? context.prContextState.trim()
+        : 'inactive'
 
     return {
       id: identity.id,
       supersededId: identity.supersededId,
+      workspaceKey: toWorkspaceRecordKey({
+        repositoryFullName: context.repositoryFullName,
+        headBranch: context.headBranch,
+      }),
       repo: context.repositoryFullName || '',
       base: context.baseBranch || '',
       head: context.headBranch || '',
@@ -297,11 +306,8 @@ const createWorkspaceSyncController = ({
         typeof context.prNumber === 'number' && Number.isFinite(context.prNumber)
           ? context.prNumber
           : null,
-      prTitle: context.prTitle || '',
-      prContextState:
-        typeof context.prContextState === 'string' && context.prContextState.trim()
-          ? context.prContextState.trim()
-          : 'inactive',
+      prTitle: normalizedPrTitle,
+      prContextState: requestedPrContextState,
       renderMode: normalizeRenderMode(getRenderModeValue()),
       tabs: buildWorkspaceTabsSnapshot(),
       activeTabId: workspaceTabsState.getActiveTabId(),

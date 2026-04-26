@@ -240,6 +240,7 @@ export const createRunSubmit = ({
               'ok',
             )
             onPullRequestCommitPushed?.({
+              repositoryFullName: repositoryLabel,
               branch: targetHeadBranch,
               fileUpdates: Array.isArray(result) ? result : [],
             })
@@ -270,6 +271,7 @@ export const createRunSubmit = ({
             'ok',
           )
           onPullRequestOpened?.({
+            repositoryFullName: repositoryLabel,
             url,
             pullRequestNumber: result.pullRequest.number,
             branch: targetHeadBranch,

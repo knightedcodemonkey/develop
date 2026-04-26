@@ -12,7 +12,6 @@ export const createRepositoryFormHandlers = ({
   getDrawerSide,
   getToken,
   getWritableRepositories,
-  setSelectedRepository,
   getSelectedRepositoryObject,
   getRepositoryFullName,
   getCurrentActivePrContext,
@@ -199,8 +198,6 @@ export const createRepositoryFormHandlers = ({
       return
     }
 
-    const previousValue = toSafeText(repositorySelect.value)
-
     repositorySelect.replaceChildren()
 
     if (!Array.isArray(repositories) || repositories.length === 0) {
@@ -215,6 +212,12 @@ export const createRepositoryFormHandlers = ({
 
     const selectedFullName = getRepositoryFullName(selectedRepository)
 
+    const placeholderOption = document.createElement('option')
+    placeholderOption.value = ''
+    placeholderOption.textContent = 'Select repository from Workspaces'
+    placeholderOption.disabled = false
+    placeholderOption.selected = !selectedFullName
+
     const options = repositories.map(repo => {
       const option = document.createElement('option')
       option.value = repo.fullName
@@ -223,22 +226,15 @@ export const createRepositoryFormHandlers = ({
       return option
     })
 
-    repositorySelect.replaceChildren(...options)
-    repositorySelect.disabled = false
+    repositorySelect.replaceChildren(placeholderOption, ...options)
+    repositorySelect.disabled = true
 
-    if (!selectedFullName && repositories[0]) {
-      repositorySelect.value = repositories[0].fullName
-      setSelectedRepository?.(repositories[0].fullName)
-      if (toSafeText(repositorySelect.value) !== previousValue) {
-        emitMetadataInput(repositorySelect)
-      }
+    if (selectedFullName) {
+      repositorySelect.value = selectedFullName
       return
     }
 
-    repositorySelect.value = selectedFullName
-    if (toSafeText(repositorySelect.value) !== previousValue) {
-      emitMetadataInput(repositorySelect)
-    }
+    repositorySelect.value = ''
   }
 
   const syncFormForRepository = ({ resetBranch = false, resetAll = false } = {}) => {
@@ -340,7 +336,7 @@ export const createRepositoryFormHandlers = ({
       void loadBaseBranchesForSelectedRepository({
         preferredBranch: getFormValues().baseBranch,
       })
-      repositorySelect?.focus()
+      headBranchInput?.focus()
       return
     }
 

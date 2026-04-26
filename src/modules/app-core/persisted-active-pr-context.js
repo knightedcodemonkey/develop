@@ -34,10 +34,6 @@ const createPersistedActivePrContextGetter = ({
         ? rawPullRequestNumber
         : null
 
-    if (!prTitle) {
-      return null
-    }
-
     if (!headBranch && pullRequestNumber === null) {
       return null
     }
