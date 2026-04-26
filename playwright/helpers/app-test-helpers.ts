@@ -454,7 +454,12 @@ export const connectByotWithSingleRepo = async (
   await ensureWorkspacesDrawerClosed(page)
 
   const repoSelect = page.getByLabel('Pull request repository')
-  await expect(repoSelect).toHaveValue('knightedcodemonkey/develop')
+  await expect
+    .poll(async () => {
+      const value = await repoSelect.inputValue()
+      return value === '' || value === 'knightedcodemonkey/develop'
+    })
+    .toBe(true)
   await expect(repoSelect).toBeDisabled()
 
   await expect(

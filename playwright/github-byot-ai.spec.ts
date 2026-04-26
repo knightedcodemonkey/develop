@@ -768,9 +768,21 @@ test('BYOT remembers selected repository across reloads', async ({ page }) => {
 
   await page.getByRole('button', { name: 'Workspaces' }).click()
   const workspaceRepositoryFilter = page.getByLabel('Workspace repository filter')
+  const storedContextsSelect = page.getByLabel('Stored local editor contexts')
+  const openStoredContextButton = page.getByRole('button', {
+    name: 'Open',
+    exact: true,
+  })
   await expect(workspaceRepositoryFilter).toBeVisible()
   await workspaceRepositoryFilter.selectOption('knightedcodemonkey/develop')
   await expect(workspaceRepositoryFilter).toHaveValue('knightedcodemonkey/develop')
+
+  await expect(storedContextsSelect).toBeVisible()
+  await storedContextsSelect.selectOption({
+    label: 'Start new context for knightedcodemonkey/develop',
+  })
+  await expect(openStoredContextButton).toBeEnabled()
+  await openStoredContextButton.click()
   await page.getByRole('button', { name: 'Close workspaces drawer' }).click()
 
   await ensureOpenPrDrawerOpen(page)

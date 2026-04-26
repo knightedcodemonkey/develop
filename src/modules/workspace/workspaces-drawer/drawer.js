@@ -78,6 +78,7 @@ export const createWorkspacesDrawer = ({
   getDrawerSide,
   getRepositoryFilterOptions,
   getSelectedRepositoryFilter,
+  onRepositoryFilterChange,
   onRefreshRequested,
   onOpenSelected,
   onRemoveSelected,
@@ -349,16 +350,20 @@ export const createWorkspacesDrawer = ({
     renderOptions()
   })
 
-  repositorySelect?.addEventListener('change', () => {
+  repositorySelect?.addEventListener('change', async () => {
     selectedRepositoryFilter = getNormalizedRepositoryFilter(repositorySelect.value)
     hasUserSelectedRepositoryFilter = true
     query = ''
+
+    if (typeof onRepositoryFilterChange === 'function') {
+      await onRepositoryFilterChange(selectedRepositoryFilter)
+    }
 
     if (searchInput instanceof HTMLInputElement) {
       searchInput.value = ''
     }
 
-    void refresh({ preserveSelection: false })
+    await refresh({ preserveSelection: false })
   })
 
   selectInput?.addEventListener('change', () => {
