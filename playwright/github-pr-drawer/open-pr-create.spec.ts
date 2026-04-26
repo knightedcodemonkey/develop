@@ -445,36 +445,6 @@ test('Open PR success normalizes trailing newline without showing Edited indicat
   expect(String(stylesBlob?.content).endsWith('\n')).toBe(true)
 })
 
-test('Open PR drawer can filter stored local contexts by search', async ({ page }) => {
-  await waitForAppReady(page, `${appEntryPath}`)
-
-  await seedLocalWorkspaceContexts(page, [
-    {
-      id: 'repo_knightedcodemonkey_develop_feat-alpha',
-      repo: 'knightedcodemonkey/develop',
-      head: 'feat/alpha',
-      prTitle: 'Alpha local context',
-    },
-    {
-      id: 'repo_knightedcodemonkey_develop_feat-beta',
-      repo: 'knightedcodemonkey/develop',
-      head: 'feat/beta',
-      prTitle: 'Beta local context',
-    },
-  ])
-
-  await connectByotWithSingleRepo(page)
-  await page.getByRole('button', { name: 'Workspaces' }).click()
-  await page.getByLabel('Workspace repository filter').selectOption('__local__')
-
-  const search = page.getByLabel('Search stored local contexts')
-  await expect(search).toBeEnabled()
-  await search.fill('beta')
-
-  const labels = await getLocalContextOptionLabels(page)
-  expect(labels).toEqual(['Select a stored local context', 'local:Beta local context'])
-})
-
 test('Workspaces repository selector filters contexts and keeps local-only contexts under Local', async ({
   page,
 }) => {

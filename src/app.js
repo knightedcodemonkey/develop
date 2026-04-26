@@ -141,7 +141,6 @@ const workspacesDrawer = document.getElementById('workspaces-drawer')
 const workspacesClose = document.getElementById('workspaces-close')
 const workspacesStatus = document.getElementById('workspaces-status')
 const workspacesRepository = document.getElementById('workspaces-repository')
-const workspacesSearch = document.getElementById('workspaces-search')
 const workspacesSelect = document.getElementById('workspaces-select')
 const workspacesOpen = document.getElementById('workspaces-open')
 const workspacesRemove = document.getElementById('workspaces-remove')
@@ -1066,7 +1065,6 @@ const githubWorkflows = createGitHubWorkflowsSetup({
     workspacesClose,
     workspacesStatus,
     workspacesRepository,
-    workspacesSearch,
     workspacesSelect,
     workspacesOpen,
     workspacesRemove,

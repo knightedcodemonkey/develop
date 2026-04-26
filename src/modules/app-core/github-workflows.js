@@ -1,3 +1,5 @@
+import { repositoryStarterSelectionIdPrefix } from '../constants.js'
+
 const initializeGitHubWorkflows = ({
   createGitHubPrEditorSyncController,
   createGitHubChatDrawer,
@@ -40,7 +42,6 @@ const initializeGitHubWorkflows = ({
   workspacesClose,
   workspacesStatus,
   workspacesRepository,
-  workspacesSearch,
   workspacesSelect,
   workspacesOpen,
   workspacesRemove,
@@ -100,8 +101,6 @@ const initializeGitHubWorkflows = ({
     })
     return collectTopLevelDeclarations({ source, transformJsxSource })
   }
-
-  const repositoryStarterSelectionIdPrefix = '__create_repository_context__:'
 
   const parseRepositoryStarterSelectionId = value => {
     const normalizedValue = typeof value === 'string' ? value.trim() : ''
@@ -316,7 +315,6 @@ const initializeGitHubWorkflows = ({
     closeButton: workspacesClose,
     statusNode: workspacesStatus,
     repositorySelect: workspacesRepository,
-    searchInput: workspacesSearch,
     selectInput: workspacesSelect,
     openButton: workspacesOpen,
     removeButton: workspacesRemove,

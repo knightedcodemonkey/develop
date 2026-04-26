@@ -1,8 +1,8 @@
+import { repositoryStarterSelectionIdPrefix } from '../../constants.js'
+
 const toSafeText = value => (typeof value === 'string' ? value.trim() : '')
 
-const normalizeQuery = value => toSafeText(value).toLowerCase()
 const localRepositoryFilterValue = '__local__'
-const createRepositoryStarterIdPrefix = '__create_repository_context__:'
 
 const toRepositoryStarterSelectionId = repositoryFullName => {
   const repository = toSafeText(repositoryFullName)
@@ -10,11 +10,11 @@ const toRepositoryStarterSelectionId = repositoryFullName => {
     return ''
   }
 
-  return `${createRepositoryStarterIdPrefix}${repository}`
+  return `${repositoryStarterSelectionIdPrefix}${repository}`
 }
 
 const isRepositoryStarterSelectionId = value =>
-  toSafeText(value).startsWith(createRepositoryStarterIdPrefix)
+  toSafeText(value).startsWith(repositoryStarterSelectionIdPrefix)
 
 const isLocalWorkspaceEntry = workspace => {
   const repository = toSafeText(workspace?.repo)
@@ -44,34 +44,12 @@ const toWorkspaceLabel = workspace => {
   return isLocalOnlyInactive ? `local:${fallbackLabel}` : fallbackLabel
 }
 
-const matchesQuery = (workspace, query) => {
-  if (!query) {
-    return true
-  }
-
-  const haystack = [
-    workspace?.id,
-    workspace?.repo,
-    workspace?.base,
-    workspace?.head,
-    workspace?.prTitle,
-    toWorkspaceLabel(workspace),
-  ]
-    .map(toSafeText)
-    .filter(Boolean)
-    .join(' ')
-    .toLowerCase()
-
-  return haystack.includes(query)
-}
-
 export const createWorkspacesDrawer = ({
   toggleButton,
   drawer,
   closeButton,
   statusNode,
   repositorySelect,
-  searchInput,
   selectInput,
   openButton,
   removeButton,
@@ -85,7 +63,6 @@ export const createWorkspacesDrawer = ({
 } = {}) => {
   let open = false
   let entries = []
-  let query = ''
   let selectedId = ''
   let selectedRepositoryFilter = localRepositoryFilterValue
   let hasUserSelectedRepositoryFilter = false
@@ -147,9 +124,7 @@ export const createWorkspacesDrawer = ({
     }
 
     const repositoryFilteredEntries = getFilteredEntriesByRepository()
-    const filteredEntries = repositoryFilteredEntries.filter(entry =>
-      matchesQuery(entry, normalizeQuery(query)),
-    )
+    const filteredEntries = repositoryFilteredEntries
     const normalizedRepositoryFilter = getNormalizedRepositoryFilter(
       selectedRepositoryFilter,
     )
@@ -168,9 +143,7 @@ export const createWorkspacesDrawer = ({
         ? hasStarterSelection
           ? 'Select to start a new local context'
           : 'No saved local contexts'
-        : filteredEntries.length > 0
-          ? 'Select a stored local context'
-          : 'No matching local contexts'
+        : 'Select a stored local context'
     placeholder.disabled = filteredEntries.length > 0 || hasStarterSelection
     placeholder.selected = !filteredEntries.some(entry => entry.id === selectedId)
     selectInput.append(placeholder)
@@ -189,10 +162,6 @@ export const createWorkspacesDrawer = ({
       option.textContent = toWorkspaceLabel(entry)
       option.selected = option.value === selectedId
       selectInput.append(option)
-    }
-
-    if (searchInput instanceof HTMLInputElement) {
-      searchInput.disabled = repositoryFilteredEntries.length === 0
     }
 
     const hasSelectedFilteredEntry = filteredEntries.some(
@@ -329,11 +298,6 @@ export const createWorkspacesDrawer = ({
       return
     }
 
-    if (searchInput instanceof HTMLInputElement && !searchInput.disabled) {
-      searchInput.focus()
-      return
-    }
-
     selectInput?.focus()
   }
 
@@ -345,22 +309,12 @@ export const createWorkspacesDrawer = ({
     void setOpen(false)
   })
 
-  searchInput?.addEventListener('input', () => {
-    query = searchInput.value
-    renderOptions()
-  })
-
   repositorySelect?.addEventListener('change', async () => {
     selectedRepositoryFilter = getNormalizedRepositoryFilter(repositorySelect.value)
     hasUserSelectedRepositoryFilter = true
-    query = ''
 
     if (typeof onRepositoryFilterChange === 'function') {
       await onRepositoryFilterChange(selectedRepositoryFilter)
-    }
-
-    if (searchInput instanceof HTMLInputElement) {
-      searchInput.value = ''
     }
 
     await refresh({ preserveSelection: false })
