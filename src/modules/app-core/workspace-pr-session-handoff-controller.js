@@ -37,7 +37,7 @@ export const createWorkspacePrSessionHandoffController = ({
   } = workspace
   const { getRenderRuntime, getUpdateRenderModeEditability } = runtime
   const { getCurrentSelectedRepositoryFullName } = selectors
-  const { toNonEmptyWorkspaceText } = utils
+  const { toNonEmptyWorkspaceText, createWorkspaceRecordId, toWorkspaceRecordKey } = utils
 
   let lastKnownPrContextMeta = null
 
@@ -70,10 +70,11 @@ export const createWorkspacePrSessionHandoffController = ({
 
   const startFreshLocalWorkspace = async ({ statusMessage } = {}) => {
     const now = Date.now()
-    const localWorkspaceId = `local_${now}`
-    const selectedRepository = toNonEmptyWorkspaceText(
-      getCurrentSelectedRepositoryFullName(),
-    )
+    const localWorkspaceId =
+      typeof createWorkspaceRecordId === 'function'
+        ? createWorkspaceRecordId()
+        : `ws_${now.toString(36)}-${Math.random().toString(36).slice(2, 10)}`
+    const selectedRepository = ''
     const freshLocalHeadBranch = createFreshLocalHeadBranch()
     let didPersistFreshWorkspace = false
 
@@ -133,6 +134,10 @@ export const createWorkspacePrSessionHandoffController = ({
       const saved = await workspaceStorage.upsertWorkspace({
         ...buildWorkspaceRecordSnapshot({ recordId: localWorkspaceId }),
         id: localWorkspaceId,
+        workspaceKey: toWorkspaceRecordKey({
+          repositoryFullName: selectedRepository,
+          headBranch: freshLocalHeadBranch,
+        }),
         repo: selectedRepository,
         base: '',
         head: freshLocalHeadBranch,
@@ -282,6 +287,11 @@ export const createWorkspacePrSessionHandoffController = ({
           prNumber: workspacePrNumber,
           lastModified: now,
         }
+
+        archiveSnapshot.workspaceKey = toWorkspaceRecordKey({
+          repositoryFullName: archiveSnapshot.repo,
+          headBranch: archiveSnapshot.head,
+        })
 
         const saved = await workspaceStorage.upsertWorkspace(archiveSnapshot)
 

@@ -17,60 +17,28 @@ const toWorkspaceIdentitySegment = value => {
   return normalized.replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '')
 }
 
-const toWorkspaceRecordId = ({ repositoryFullName, headBranch }) => {
-  const repoSegment = toWorkspaceIdentitySegment(repositoryFullName)
-  const headSegment = toWorkspaceIdentitySegment(headBranch) || 'draft'
+const createWorkspaceRecordId = () => {
+  const randomUuid =
+    globalThis?.crypto && typeof globalThis.crypto.randomUUID === 'function'
+      ? globalThis.crypto.randomUUID()
+      : `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`
 
-  if (repoSegment) {
-    return `repo_${repoSegment}_${headSegment}`
-  }
-
-  return `workspace_${headSegment}`
+  return `ws_${randomUuid}`
 }
 
-const resolveWorkspaceRecordIdentity = ({
-  repositoryFullName,
-  headBranch,
-  activeRecordId,
-  prContextState,
-} = {}) => {
-  const canonicalId = toWorkspaceRecordId({ repositoryFullName, headBranch })
+const toWorkspaceRecordKey = ({ repositoryFullName, headBranch } = {}) => {
+  const repoSegment = toWorkspaceIdentitySegment(repositoryFullName) || 'local'
+  const headSegment = toWorkspaceIdentitySegment(headBranch) || 'draft'
+  return `${repoSegment}::${headSegment}`
+}
+
+const resolveWorkspaceRecordIdentity = ({ activeRecordId } = {}) => {
   const currentId = toNonEmptyWorkspaceText(activeRecordId)
-  const normalizedPrContextState = toNonEmptyWorkspaceText(prContextState).toLowerCase()
-  const isActivePrContext = normalizedPrContextState === 'active'
 
   if (!currentId) {
     return {
-      id: canonicalId,
+      id: createWorkspaceRecordId(),
       supersededId: '',
-    }
-  }
-
-  if (currentId === canonicalId) {
-    return {
-      id: currentId,
-      supersededId: '',
-    }
-  }
-
-  const hasRepository = Boolean(toWorkspaceIdentitySegment(repositoryFullName))
-  const shouldPromoteLocalIdToRepository =
-    hasRepository && currentId.startsWith('workspace_')
-
-  if (shouldPromoteLocalIdToRepository) {
-    return {
-      id: canonicalId,
-      supersededId: currentId,
-    }
-  }
-
-  const shouldRekeyRepositoryIdentity =
-    hasRepository && isActivePrContext && currentId.startsWith('repo_')
-
-  if (shouldRekeyRepositoryIdentity) {
-    return {
-      id: canonicalId,
-      supersededId: currentId,
     }
   }
 
@@ -273,6 +241,7 @@ const resolveWorkspaceActiveTabId = ({ tabs, requestedActiveTabId }) => {
 }
 
 export {
+  createWorkspaceRecordId,
   defaultStyleTabLanguages,
   getDirtyStateForTabChange,
   getPathDirectory,
@@ -293,7 +262,7 @@ export {
   splitWorkspacePath,
   toNonEmptyWorkspaceText,
   toWorkspaceIdentitySegment,
-  toWorkspaceRecordId,
+  toWorkspaceRecordKey,
   toWorkspaceSyncSha,
   toWorkspaceSyncedContent,
   toWorkspaceSyncTimestamp,

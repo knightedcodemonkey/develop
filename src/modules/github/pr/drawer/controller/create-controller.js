@@ -50,7 +50,6 @@ export const createGitHubPrDrawer = ({
   getToken,
   getSelectedRepository,
   getWritableRepositories,
-  setSelectedRepository,
   getFileCommits,
   getEditorSyncTargets,
   getTopLevelDeclarations,
@@ -103,7 +102,7 @@ export const createGitHubPrDrawer = ({
     const prTitle = toSafeText(activeContext.prTitle)
     const pullRequestNumber = toPullRequestNumber(activeContext.pullRequestNumber)
 
-    if ((!headBranch && pullRequestNumber === null) || !prTitle) {
+    if (!headBranch && pullRequestNumber === null) {
       return null
     }
 
@@ -163,7 +162,6 @@ export const createGitHubPrDrawer = ({
       return null
     }
 
-    state.activePrContextByRepository.set(repositoryFullName, persistedContext)
     return persistedContext
   }
 
@@ -226,7 +224,6 @@ export const createGitHubPrDrawer = ({
     getDrawerSide,
     getToken,
     getWritableRepositories,
-    setSelectedRepository,
     getSelectedRepositoryObject,
     getRepositoryFullName,
     getCurrentActivePrContext,
@@ -285,7 +282,6 @@ export const createGitHubPrDrawer = ({
     state,
     toggleButton,
     closeButton,
-    repositorySelect,
     baseBranchInput,
     headBranchInput,
     prTitleInput,
@@ -294,15 +290,6 @@ export const createGitHubPrDrawer = ({
     setOpen: repositoryFormHandlers.setOpen,
     runSubmit,
     refreshContextUi: repositoryFormHandlers.refreshContextUi,
-    setSelectedRepository,
-    setSubmitButtonLabel: uiHandlers.setSubmitButtonLabel,
-    emitActivePrContextChange: uiHandlers.emitActivePrContextChange,
-    verifyActivePullRequestContext: contextHandlers.verifyActivePullRequestContext,
-    syncFormForRepository: repositoryFormHandlers.syncFormForRepository,
-    loadBaseBranchesForSelectedRepository:
-      repositoryFormHandlers.loadBaseBranchesForSelectedRepository,
-    getFormValues: uiHandlers.getFormValues,
-    toSafeText,
   })
 
   repositoryFormHandlers.syncRepositories()
@@ -335,15 +322,20 @@ export const createGitHubPrDrawer = ({
     toSafeText,
   })
 
-  const hydrateActivePrContext = activeContext => {
-    const repository = getSelectedRepositoryObject()
-    const repositoryFullName = getRepositoryFullName(repository)
-    if (!repositoryFullName) {
+  const hydrateActivePrContext = (activeContext, { repositoryFullName } = {}) => {
+    const explicitRepositoryFullName =
+      typeof repositoryFullName === 'string' ? repositoryFullName.trim() : ''
+    const selectedRepository = getSelectedRepositoryObject()
+    const selectedRepositoryFullName = getRepositoryFullName(selectedRepository)
+    const targetRepositoryFullName =
+      explicitRepositoryFullName || selectedRepositoryFullName
+
+    if (!targetRepositoryFullName) {
       return false
     }
 
     setRepositoryActivePrContext({
-      repositoryFullName,
+      repositoryFullName: targetRepositoryFullName,
       activeContext,
     })
     syncFormForRepository({ resetAll: true })
@@ -357,6 +349,7 @@ export const createGitHubPrDrawer = ({
     isOpen: () => state.open,
     getActivePrContext: () => getCurrentActivePrContext(),
     hydrateActivePrContext,
+    resetStatus: uiHandlers.resetStatus,
     ...publicActions,
     syncRepositories: repositoryFormHandlers.syncRepositories,
   }

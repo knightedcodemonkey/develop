@@ -6,6 +6,7 @@ const createWorkspaceSaveController = ({
   refreshLocalContextOptions,
   setStatus,
   getIsApplyingWorkspaceSnapshot,
+  getActiveWorkspaceRecordId,
   getActiveWorkspaceCreatedAt,
   setActiveWorkspaceRecordId,
   setActiveWorkspaceCreatedAt,
@@ -16,9 +17,9 @@ const createWorkspaceSaveController = ({
       const saved = await workspaceStorage.upsertWorkspace(payload)
 
       const normalizedSavedRepo = toNonEmptyWorkspaceText(saved.repo)
-      const normalizedSavedHead = toNonEmptyWorkspaceText(saved.head)
+      const normalizedSavedWorkspaceKey = toNonEmptyWorkspaceText(saved.workspaceKey)
 
-      if (normalizedSavedHead) {
+      if (normalizedSavedWorkspaceKey) {
         const siblingRecords = normalizedSavedRepo
           ? await workspaceStorage.listWorkspaces({ repo: normalizedSavedRepo })
           : await workspaceStorage.listWorkspaces()
@@ -37,8 +38,8 @@ const createWorkspaceSaveController = ({
               }
 
               return (
-                toNonEmptyWorkspaceText(record.repo) === normalizedSavedRepo &&
-                toNonEmptyWorkspaceText(record.head) === normalizedSavedHead
+                toNonEmptyWorkspaceText(record.workspaceKey) ===
+                normalizedSavedWorkspaceKey
               )
             })
             .map(record => toNonEmptyWorkspaceText(record.id))
@@ -90,8 +91,22 @@ const createWorkspaceSaveController = ({
         await workspaceStorage.removeWorkspace(supersededId)
       }
 
-      setActiveWorkspaceRecordId(saved.id)
-      setActiveWorkspaceCreatedAt(saved.createdAt ?? getActiveWorkspaceCreatedAt())
+      const currentActiveRecordId =
+        typeof getActiveWorkspaceRecordId === 'function'
+          ? toNonEmptyWorkspaceText(getActiveWorkspaceRecordId())
+          : ''
+      const payloadRecordId = toNonEmptyWorkspaceText(payload?.id)
+      const savedRecordId = toNonEmptyWorkspaceText(saved.id)
+      const shouldAdoptSavedAsActive =
+        !currentActiveRecordId ||
+        currentActiveRecordId === payloadRecordId ||
+        currentActiveRecordId === savedRecordId
+
+      if (shouldAdoptSavedAsActive) {
+        setActiveWorkspaceRecordId(saved.id)
+        setActiveWorkspaceCreatedAt(saved.createdAt ?? getActiveWorkspaceCreatedAt())
+      }
+
       await refreshLocalContextOptions()
       return saved
     },
@@ -102,7 +117,7 @@ const createWorkspaceSaveController = ({
     },
   })
 
-  const queueWorkspaceSave = () => {
+  const queueWorkspaceSave = ({ preserveRecordId = false } = {}) => {
     if (getIsApplyingWorkspaceSnapshot()) {
       return
     }
@@ -114,12 +129,18 @@ const createWorkspaceSaveController = ({
       return
     }
 
-    const snapshot = buildWorkspaceRecordSnapshot()
+    const activeRecordId =
+      preserveRecordId && typeof getActiveWorkspaceRecordId === 'function'
+        ? toNonEmptyWorkspaceText(getActiveWorkspaceRecordId())
+        : ''
+    const snapshot = activeRecordId
+      ? buildWorkspaceRecordSnapshot({ recordId: activeRecordId })
+      : buildWorkspaceRecordSnapshot()
     setActiveWorkspaceRecordId(snapshot.id)
     workspaceSaver.queue(snapshot)
   }
 
-  const flushWorkspaceSave = async () => {
+  const flushWorkspaceSave = async ({ preserveRecordId = false } = {}) => {
     if (getIsApplyingWorkspaceSnapshot()) {
       return
     }
@@ -131,28 +152,45 @@ const createWorkspaceSaveController = ({
       return
     }
 
-    const snapshot = buildWorkspaceRecordSnapshot()
+    const activeRecordId =
+      preserveRecordId && typeof getActiveWorkspaceRecordId === 'function'
+        ? toNonEmptyWorkspaceText(getActiveWorkspaceRecordId())
+        : ''
+    const snapshot = activeRecordId
+      ? buildWorkspaceRecordSnapshot({ recordId: activeRecordId })
+      : buildWorkspaceRecordSnapshot()
     setActiveWorkspaceRecordId(snapshot.id)
     await workspaceSaver.flushNow(snapshot)
   }
 
-  const bindWorkspaceMetadataPersistence = element => {
+  const bindWorkspaceMetadataPersistence = (
+    element,
+    {
+      preserveRecordIdOnInput = false,
+      preserveRecordIdOnChange = false,
+      rekeyOnBlur = true,
+    } = {},
+  ) => {
     if (!(element instanceof HTMLInputElement || element instanceof HTMLSelectElement)) {
       return
     }
 
     const queue = () => {
-      queueWorkspaceSave()
+      queueWorkspaceSave({ preserveRecordId: preserveRecordIdOnInput })
+    }
+
+    const queueFromChange = () => {
+      queueWorkspaceSave({ preserveRecordId: preserveRecordIdOnChange })
     }
 
     const flush = () => {
-      void flushWorkspaceSave().catch(() => {
+      void flushWorkspaceSave({ preserveRecordId: !rekeyOnBlur }).catch(() => {
         /* Save failures are already surfaced through saver onError. */
       })
     }
 
     element.addEventListener('input', queue)
-    element.addEventListener('change', queue)
+    element.addEventListener('change', queueFromChange)
     element.addEventListener('blur', flush)
   }
 

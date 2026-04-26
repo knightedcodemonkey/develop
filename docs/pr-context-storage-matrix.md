@@ -43,19 +43,22 @@ Use this matrix as the source of truth when debugging UI/storage mismatch.
 
 ## Current Workspace Selection On Load
 
-When the app loads or the selected repository changes, the app selects a workspace from IndexedDB using repository-scoped records only.
+When the app loads, workspace restore scope depends on whether a repository is selected.
+
+- If a repository is selected: use repository-scoped records only (`repo` match).
+- If no repository is selected: evaluate all stored workspace records.
 
 Selection order:
 
-1. Load records for the currently selected repository (`repo` match).
-2. Compute a preferred id from in-memory state:
+1. Load candidate records using the scope above.
+2. Compute preferred candidates from in-memory state:
 
-- Existing in-memory active record id when available.
-- Otherwise canonical id derived from current repository + head.
+- Preferred by id: existing in-memory active record id when available.
+- Preferred by workspace key: current repository + head (`workspaceKey`).
 
-3. If the preferred record exists and is `active`, select it.
-4. Otherwise select the first `active` record in that repository.
-5. Otherwise select the preferred record if present.
+3. If preferred-by-id or preferred-by-key exists and is `active`, select it.
+4. Otherwise select the first `active` record in candidates.
+5. Otherwise select preferred-by-id or preferred-by-key if present.
 6. Otherwise fall back to the first record returned by IDB ordering.
 
 Notes:

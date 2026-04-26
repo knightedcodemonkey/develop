@@ -26,25 +26,33 @@ const createWorkspaceContextController = ({
   getHasCompletedInitialWorkspaceBootstrap,
   maybeRender,
   setStatus,
-  toWorkspaceRecordId,
+  toWorkspaceRecordKey,
   getHeadBranchValue,
 }) => {
   const toWorkspacePrContextState = value =>
     typeof value === 'string' ? value.trim().toLowerCase() : ''
 
-  const listLocalContextRecords = async () => {
+  const listLocalContextRecords = async ({ includeAllRepositories = true } = {}) => {
+    if (includeAllRepositories) {
+      return workspaceStorage.listWorkspaces()
+    }
+
     const selectedRepository = getCurrentSelectedRepository()
     return workspaceStorage.listWorkspaces({
       repo: selectedRepository || '',
     })
   }
 
-  const refreshLocalContextOptions = async () => {
-    const options = await listLocalContextRecords()
+  const refreshLocalContextOptions = async ({ includeAllRepositories = true } = {}) => {
+    const options = await listLocalContextRecords({ includeAllRepositories })
     const workspacesDrawerController = getWorkspacesDrawerController()
 
     if (workspacesDrawerController) {
-      workspacesDrawerController.setSelectedId(getActiveWorkspaceRecordId())
+      const isDrawerOpen = workspacesDrawerController.isOpen?.() === true
+      if (!isDrawerOpen) {
+        workspacesDrawerController.setSelectedId(getActiveWorkspaceRecordId())
+      }
+
       await workspacesDrawerController.refresh()
     }
 
@@ -133,20 +141,34 @@ const createWorkspaceContextController = ({
   }
 
   const loadPreferredWorkspaceContext = async () => {
-    const options = await refreshLocalContextOptions()
+    const selectedRepository = getCurrentSelectedRepository()
+    const options = await listLocalContextRecords({
+      includeAllRepositories: !selectedRepository,
+    })
+
+    await refreshLocalContextOptions({ includeAllRepositories: true })
 
     if (!Array.isArray(options) || options.length === 0) {
       return
     }
 
-    const preferredId =
-      getActiveWorkspaceRecordId() ||
-      toWorkspaceRecordId({
-        repositoryFullName: getCurrentSelectedRepository(),
-        headBranch: getHeadBranchValue(),
-      })
+    const activeWorkspaceRecordId = getActiveWorkspaceRecordId()
+    const preferredById = activeWorkspaceRecordId
+      ? options.find(workspace => workspace.id === activeWorkspaceRecordId)
+      : null
 
-    const preferred = options.find(workspace => workspace.id === preferredId)
+    const preferredWorkspaceKey = toWorkspaceRecordKey({
+      repositoryFullName: getCurrentSelectedRepository(),
+      headBranch: getHeadBranchValue(),
+    })
+
+    const preferredByKey = options.find(workspace => {
+      const candidateKey =
+        typeof workspace?.workspaceKey === 'string' ? workspace.workspaceKey.trim() : ''
+      return candidateKey === preferredWorkspaceKey
+    })
+
+    const preferred = preferredById ?? preferredByKey
     const preferredIsActive =
       toWorkspacePrContextState(preferred?.prContextState) === 'active'
     const activeContextOption = options.find(

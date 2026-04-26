@@ -1,4 +1,5 @@
 import { cdnImports, importFromCdnWithFallback } from '../cdn.js'
+import { toWorkspaceRecordKey } from './workspace-tab-helpers.js'
 
 const workspaceDbName = 'knighted-develop-workspaces'
 const workspaceDbVersion = 1
@@ -71,11 +72,20 @@ const normalizeWorkspaceRecord = record => {
     ? record.tabs.map(normalizeTabRecord).filter(Boolean)
     : []
 
+  const normalizedRepo = typeof record.repo === 'string' ? record.repo : ''
+  const normalizedHead = typeof record.head === 'string' ? record.head : ''
+
+  const normalizedWorkspaceKey = toWorkspaceRecordKey({
+    repositoryFullName: normalizedRepo,
+    headBranch: normalizedHead,
+  })
+
   return {
     id: record.id,
-    repo: typeof record.repo === 'string' ? record.repo : '',
+    workspaceKey: normalizedWorkspaceKey,
+    repo: normalizedRepo,
     base: typeof record.base === 'string' ? record.base : '',
-    head: typeof record.head === 'string' ? record.head : '',
+    head: normalizedHead,
     prNumber:
       typeof record.prNumber === 'number' && Number.isFinite(record.prNumber)
         ? record.prNumber

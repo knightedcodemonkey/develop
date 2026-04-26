@@ -23,6 +23,26 @@ export const createPublicActions = ({
   clearRepositoryActivePrContext,
   toSafeText,
 }) => {
+  const clearSelectedRepositoryActivePrContext = ({ resetForm = false } = {}) => {
+    const repository = getSelectedRepositoryObject()
+    const repositoryFullName = getRepositoryFullName(repository)
+    if (!repositoryFullName) {
+      return false
+    }
+
+    clearRepositoryActivePrContext(repositoryFullName)
+    state.lastActiveContentSyncKey = ''
+    abortPendingActiveContentSyncRequest()
+
+    if (resetForm) {
+      syncFormForRepository({ resetAll: true, resetBranch: true })
+    }
+
+    setSubmitButtonLabel()
+    emitActivePrContextChange()
+    return true
+  }
+
   return {
     disconnectActivePrContext: () => {
       const repository = getSelectedRepositoryObject()
@@ -32,12 +52,7 @@ export const createPublicActions = ({
       }
 
       const activeContext = getCurrentActivePrContext()
-      clearRepositoryActivePrContext(repositoryFullName)
-
-      state.lastActiveContentSyncKey = ''
-      abortPendingActiveContentSyncRequest()
-      setSubmitButtonLabel()
-      emitActivePrContextChange()
+      clearSelectedRepositoryActivePrContext()
 
       return {
         reference: formatActivePrReference(activeContext),
@@ -49,19 +64,9 @@ export const createPublicActions = ({
       }
     },
     clearActivePrContext: () => {
-      const repository = getSelectedRepositoryObject()
-      const repositoryFullName = getRepositoryFullName(repository)
-      if (!repositoryFullName) {
-        return
-      }
-
-      clearRepositoryActivePrContext(repositoryFullName)
-      state.lastActiveContentSyncKey = ''
-      abortPendingActiveContentSyncRequest()
-      syncFormForRepository({ resetAll: true, resetBranch: true })
-      setSubmitButtonLabel()
-      emitActivePrContextChange()
+      clearSelectedRepositoryActivePrContext({ resetForm: true })
     },
+    clearSelectedRepositoryActivePrContext,
     closeActivePullRequestOnGitHub: async () => {
       const repository = getSelectedRepositoryObject()
       const repositoryFullName = getRepositoryFullName(repository)
@@ -90,10 +95,7 @@ export const createPublicActions = ({
         pullRequestNumber,
       })
 
-      clearRepositoryActivePrContext(repositoryFullName)
-      syncFormForRepository({ resetAll: true, resetBranch: true })
-      setSubmitButtonLabel()
-      emitActivePrContextChange()
+      clearSelectedRepositoryActivePrContext({ resetForm: true })
 
       const closedReference = formatActivePrReference({
         repositoryFullName,

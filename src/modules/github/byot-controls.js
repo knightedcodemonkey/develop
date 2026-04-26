@@ -6,32 +6,6 @@ import {
 } from './token-store.js'
 import { listWritableRepositories } from './api/repositories.js'
 
-const selectedRepositoryStorageKey = 'knighted:develop:github-repository'
-
-const loadSelectedRepository = () => {
-  try {
-    return localStorage.getItem(selectedRepositoryStorageKey)
-  } catch {
-    return null
-  }
-}
-
-const saveSelectedRepository = fullName => {
-  try {
-    localStorage.setItem(selectedRepositoryStorageKey, fullName)
-  } catch {
-    /* noop */
-  }
-}
-
-const clearSelectedRepository = () => {
-  try {
-    localStorage.removeItem(selectedRepositoryStorageKey)
-  } catch {
-    /* noop */
-  }
-}
-
 const createDefaultRepoOption = ({
   label,
   disabled = false,
@@ -64,7 +38,7 @@ export const createGitHubByotControls = ({
   let displayingMaskedToken = false
   let writableRepos = []
   let addButtonResetTimer = null
-  let lastSelectedRepository = loadSelectedRepository()
+  let lastSelectedRepository = null
 
   const tokenAddPlusIcon = `
     <svg viewBox="0 0 16 16" aria-hidden="true">
@@ -221,7 +195,6 @@ export const createGitHubByotControls = ({
 
   const selectPreferredRepository = repos => {
     if (!Array.isArray(repos) || repos.length === 0) {
-      clearSelectedRepository()
       lastSelectedRepository = null
       return null
     }
@@ -230,13 +203,12 @@ export const createGitHubByotControls = ({
       typeof lastSelectedRepository === 'string' &&
       repos.some(repo => repo.fullName === lastSelectedRepository)
 
-    const selectedRepositoryFullName = hasStoredSelection
-      ? lastSelectedRepository
-      : repos[0].fullName
+    if (!hasStoredSelection) {
+      lastSelectedRepository = null
+      return null
+    }
 
-    saveSelectedRepository(selectedRepositoryFullName)
-    lastSelectedRepository = selectedRepositoryFullName
-    return selectedRepositoryFullName
+    return lastSelectedRepository
   }
 
   const renderRepoOptions = repos => {
@@ -261,6 +233,13 @@ export const createGitHubByotControls = ({
       return
     }
 
+    const placeholderOption = createDefaultRepoOption({
+      label: 'Select repository from Workspaces',
+      disabled: false,
+      selected: !selectedRepositoryFullName,
+      value: '',
+    })
+
     const options = repos.map(repo => {
       const option = document.createElement('option')
       option.value = repo.fullName
@@ -273,9 +252,9 @@ export const createGitHubByotControls = ({
       return option
     })
 
-    repoSelect.replaceChildren(...options)
+    repoSelect.replaceChildren(placeholderOption, ...options)
     repoSelect.disabled = false
-    repoSelect.value = selectedRepositoryFullName
+    repoSelect.value = selectedRepositoryFullName || ''
     emitWritableRepositories()
   }
 
@@ -299,13 +278,11 @@ export const createGitHubByotControls = ({
     const selectedOption = repoSelect.selectedOptions[0]
     if (!selectedOption || !selectedOption.value) {
       onRepositoryChange(null)
-      clearSelectedRepository()
       lastSelectedRepository = null
       emitWritableRepositories()
       return
     }
 
-    saveSelectedRepository(selectedOption.value)
     lastSelectedRepository = selectedOption.value
 
     onRepositoryChange({
@@ -468,7 +445,6 @@ export const createGitHubByotControls = ({
     setTokenAddButtonState('idle')
     savedToken = null
     writableRepos = []
-    clearSelectedRepository()
     lastSelectedRepository = null
     clearGitHubToken()
     emitTokenChange()
@@ -512,6 +488,17 @@ export const createGitHubByotControls = ({
     })
   }
 
+  const clearSelectedRepositoryPreference = () => {
+    lastSelectedRepository = null
+
+    if (repoSelect instanceof HTMLSelectElement) {
+      repoSelect.value = ''
+    }
+
+    emitSelectedRepository()
+    return true
+  }
+
   return {
     getSelectedRepository: () => {
       return getSelectedRepositoryObject()
@@ -529,7 +516,6 @@ export const createGitHubByotControls = ({
       }
 
       lastSelectedRepository = repository.fullName
-      saveSelectedRepository(repository.fullName)
 
       if (repoSelect instanceof HTMLSelectElement) {
         repoSelect.value = repository.fullName
@@ -538,6 +524,7 @@ export const createGitHubByotControls = ({
       emitSelectedRepository()
       return true
     },
+    clearSelectedRepositoryPreference,
     getToken: () => savedToken,
   }
 }

@@ -263,6 +263,19 @@ export const runStylesLint = async (page: Page) => {
   await page.getByRole('button', { name: 'Styles lint' }).click()
 }
 
+export const waitForLintDiagnosticsIssues = async (page: Page) => {
+  const diagnosticsToggle = page.getByRole('button', { name: /^Diagnostics/ })
+
+  await expect(diagnosticsToggle).toHaveAttribute('aria-busy', 'false')
+  await expect(diagnosticsToggle).toHaveClass(/diagnostics-toggle--error/)
+  await expect(page.getByText(/Rendered \(Lint issues: [1-9]\d*\)/)).toBeVisible()
+
+  await ensureDiagnosticsDrawerOpen(page)
+  await expect(page.locator('#diagnostics-styles')).toContainText(
+    'Biome reported issues.',
+  )
+}
+
 export const getActiveStylesEditorLineNumber = async (page: Page) => {
   return page
     .locator('#editor-panel-styles .cm-activeLineGutter')
@@ -303,15 +316,33 @@ export const ensureDiagnosticsDrawerOpen = async (page: Page) => {
   const isExpanded = await toggle.getAttribute('aria-expanded')
 
   if (isExpanded !== 'true') {
-    try {
-      await toggle.click({ timeout: 2_000 })
-    } catch {
-      /* WebKit can report pointer interception from the drawer during transitions. */
-      await toggle.focus()
-      await page.keyboard.press('Enter')
+    const waitForExpanded = async () => {
+      await expect
+        .poll(async () => {
+          return toggle.getAttribute('aria-expanded')
+        })
+        .toBe('true')
     }
 
-    await expect(toggle).toHaveAttribute('aria-expanded', 'true')
+    try {
+      await toggle.click({ timeout: 2_000 })
+      await waitForExpanded()
+    } catch {
+      /* WebKit can report pointer interception from the drawer during transitions. */
+      try {
+        await toggle.focus()
+        await page.keyboard.press('Enter')
+        await waitForExpanded()
+      } catch {
+        /* Fallback for intermittent top-layer/actionability issues. */
+        await toggle.evaluate(element => {
+          if (element instanceof HTMLButtonElement) {
+            element.click()
+          }
+        })
+        await waitForExpanded()
+      }
+    }
   }
 
   await expect(page.getByRole('complementary', { name: 'Diagnostics' })).toBeVisible()
@@ -357,6 +388,32 @@ export const ensureOpenPrDrawerOpen = async (page: Page) => {
   ).toBeVisible()
 }
 
+export const ensureWorkspacesDrawerClosed = async (page: Page) => {
+  const toggle = page.locator('#workspaces-toggle')
+  await expect(toggle).toBeVisible()
+
+  const isExpanded = await toggle.getAttribute('aria-expanded')
+  if (isExpanded === 'true') {
+    const closeButton = page.locator('#workspaces-close')
+    if (await closeButton.isVisible()) {
+      await closeButton.evaluate(element => {
+        if (element instanceof HTMLButtonElement) {
+          element.click()
+        }
+      })
+    } else {
+      await toggle.evaluate(element => {
+        if (element instanceof HTMLButtonElement) {
+          element.click()
+        }
+      })
+    }
+  }
+
+  await expect(toggle).toHaveAttribute('aria-expanded', 'false')
+  await expect(page.getByRole('complementary', { name: 'Workspaces' })).toBeHidden()
+}
+
 export const mockRepositoryBranches = async (
   page: Page,
   branchesByRepo: BranchesByRepo = {},
@@ -379,7 +436,14 @@ export const mockRepositoryBranches = async (
   })
 }
 
-export const connectByotWithSingleRepo = async (page: Page) => {
+export const connectByotWithSingleRepo = async (
+  page: Page,
+  {
+    branchesByRepo,
+  }: {
+    branchesByRepo?: BranchesByRepo
+  } = {},
+) => {
   await page.route('https://api.github.com/user/repos**', async route => {
     await route.fulfill({
       status: 200,
@@ -397,17 +461,37 @@ export const connectByotWithSingleRepo = async (page: Page) => {
     })
   })
 
-  await mockRepositoryBranches(page, {
-    'knightedcodemonkey/develop': ['main', 'release'],
-  })
+  await mockRepositoryBranches(
+    page,
+    branchesByRepo ?? {
+      'knightedcodemonkey/develop': ['main', 'release'],
+    },
+  )
 
   await page
     .getByRole('textbox', { name: 'GitHub token' })
     .fill('github_pat_fake_chat_1234567890')
   await page.getByRole('button', { name: 'Add GitHub token' }).click()
 
+  const workspacesToggle = page.getByRole('button', { name: 'Workspaces' })
+  await expect(workspacesToggle).toBeVisible()
+  await workspacesToggle.click()
+
+  const workspacesRepositoryFilter = page.getByLabel('Workspace repository filter')
+  await expect(workspacesRepositoryFilter).toBeVisible()
+  await workspacesRepositoryFilter.selectOption('knightedcodemonkey/develop')
+  await expect(workspacesRepositoryFilter).toHaveValue('knightedcodemonkey/develop')
+
+  await ensureWorkspacesDrawerClosed(page)
+
   const repoSelect = page.getByLabel('Pull request repository')
-  await expect(repoSelect).toHaveValue('knightedcodemonkey/develop')
+  await expect
+    .poll(async () => {
+      const value = await repoSelect.inputValue()
+      return value === '' || value === 'knightedcodemonkey/develop'
+    })
+    .toBe(true)
+  await expect(repoSelect).toBeDisabled()
 
   await expect(
     page.getByRole('button', {

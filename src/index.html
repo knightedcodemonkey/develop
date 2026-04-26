@@ -808,20 +808,18 @@
           aria-label="Workspaces status"
           data-level="neutral"
         >
-          Manage local workspace contexts stored in this browser.
+          Choose a repository scope, then manage local workspace contexts.
         </p>
 
         <div class="workspaces-drawer__body" role="group" aria-label="Workspaces form">
-          <label class="github-pr-field github-pr-field--full" for="workspaces-search">
-            <span>Search local contexts</span>
-            <input
-              id="workspaces-search"
-              type="search"
-              autocomplete="off"
-              spellcheck="false"
-              placeholder="Search local contexts"
-              aria-label="Search stored local contexts"
-            />
+          <label
+            class="github-pr-field github-pr-field--full"
+            for="workspaces-repository"
+          >
+            <span>Repository</span>
+            <select id="workspaces-repository" aria-label="Workspace repository filter">
+              <option value="__local__" selected>Local</option>
+            </select>
           </label>
 
           <label class="github-pr-field github-pr-field--full" for="workspaces-select">
@@ -871,7 +869,8 @@
           aria-label="Open pull request status"
           data-level="neutral"
         >
-          Configure repository, branch details, and commit metadata.
+          Repository is selected from Workspaces. Configure branch details and commit
+          metadata.
         </p>
 
         <div class="github-pr-drawer__form-grid" role="group" aria-label="Open PR form">
