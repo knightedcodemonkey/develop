@@ -80,6 +80,7 @@ export const createGitHubPrDrawer = ({
     pendingContextVerifyRequestKey: '',
     pendingContextVerifyPromise: null,
     lastSyncedRepositoryFullName: '',
+    lastSyncedActivePrContextKey: '',
     lastActiveContentSyncKey: '',
     baseBranchesByRepository: new Map(),
     activePrContextByRepository: new Map(),
@@ -335,6 +336,9 @@ export const createGitHubPrDrawer = ({
     if (!targetRepositoryFullName) {
       return false
     }
+
+    contextHandlers.abortPendingContextVerifyRequest()
+    contextHandlers.abortPendingActiveContentSyncRequest()
 
     setRepositoryActivePrContext({
       repositoryFullName: targetRepositoryFullName,

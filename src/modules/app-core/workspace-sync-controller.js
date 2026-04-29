@@ -19,6 +19,15 @@ const createWorkspaceSyncController = ({
   getRenderModeValue,
   normalizeRenderMode,
 }) => {
+  const resolveCanonicalDirtyState = ({ tab, content }) => {
+    const syncedContent = toWorkspaceSyncedContent(tab?.syncedContent)
+    if (syncedContent !== null) {
+      return content !== syncedContent
+    }
+
+    return Boolean(tab?.isDirty)
+  }
+
   const buildWorkspaceTabsSnapshot = () => {
     const activeTabId = workspaceTabsState.getActiveTabId()
     return workspaceTabsState.getTabs().map(tab => {
@@ -35,12 +44,17 @@ const createWorkspaceSyncController = ({
 
       const normalizedPath = normalizeWorkspacePathValue(currentPath)
       const targetPrFilePath = normalizedPath || getTabTargetPrFilePath(tab) || null
+      const canonicalDirtyState = resolveCanonicalDirtyState({
+        tab,
+        content: currentContent,
+      })
 
       return {
         ...tab,
         path: currentPath,
         content: currentContent,
         syncedContent: toWorkspaceSyncedContent(tab?.syncedContent),
+        isDirty: canonicalDirtyState,
         targetPrFilePath,
         isActive: activeTabId === tab.id,
         lastModified: Date.now(),

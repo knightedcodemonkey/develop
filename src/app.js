@@ -1103,6 +1103,7 @@ const githubWorkflows = createGitHubWorkflowsSetup({
     getActiveWorkspaceRecordId: () => activeWorkspaceRecordId,
     setActiveWorkspaceRecordId,
     setActiveWorkspaceCreatedAt: value => (activeWorkspaceCreatedAt = value),
+    buildWorkspaceRecordSnapshot,
     listLocalContextRecords,
     refreshLocalContextOptions,
     applyWorkspaceRecord,

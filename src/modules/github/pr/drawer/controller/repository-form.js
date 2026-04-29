@@ -244,6 +244,22 @@ export const createRepositoryFormHandlers = ({
       Boolean(repositoryFullName) &&
       repositoryFullName !== state.lastSyncedRepositoryFullName
     const activeContext = getCurrentActivePrContext()
+    const activeContextSyncKey = activeContext
+      ? [
+          toSafeText(activeContext.baseBranch),
+          sanitizeBranchPart(activeContext.headBranch),
+          toSafeText(activeContext.prTitle),
+          String(
+            typeof activeContext.pullRequestNumber === 'number' &&
+              Number.isFinite(activeContext.pullRequestNumber)
+              ? activeContext.pullRequestNumber
+              : '',
+          ),
+          toSafeText(activeContext.pullRequestUrl),
+        ].join('|')
+      : ''
+    const activeContextChanged =
+      activeContextSyncKey !== state.lastSyncedActivePrContextKey
 
     const baseBranch =
       toSafeText(activeContext?.baseBranch) ||
@@ -257,7 +273,13 @@ export const createRepositoryFormHandlers = ({
       const currentHeadBranch = toSafeText(headBranchInput.value)
 
       if (activeHeadBranch) {
-        if (resetAll || resetBranch || repositoryChanged || !currentHeadBranch) {
+        if (
+          resetAll ||
+          resetBranch ||
+          repositoryChanged ||
+          activeContextChanged ||
+          !currentHeadBranch
+        ) {
           setElementValueAndPersist(headBranchInput, activeHeadBranch)
         }
       } else if (!currentHeadBranch) {
@@ -266,13 +288,23 @@ export const createRepositoryFormHandlers = ({
     }
 
     if (prTitleInput instanceof HTMLInputElement) {
-      if (resetAll || repositoryChanged || !toSafeText(prTitleInput.value)) {
+      if (
+        resetAll ||
+        repositoryChanged ||
+        activeContextChanged ||
+        !toSafeText(prTitleInput.value)
+      ) {
         setElementValueAndPersist(prTitleInput, toSafeText(activeContext?.prTitle))
       }
     }
 
     if (prBodyInput instanceof HTMLTextAreaElement) {
-      if (resetAll || repositoryChanged || !toSafeText(prBodyInput.value)) {
+      if (
+        resetAll ||
+        repositoryChanged ||
+        activeContextChanged ||
+        !toSafeText(prBodyInput.value)
+      ) {
         prBodyInput.value =
           typeof activeContext?.prBody === 'string' ? activeContext.prBody : ''
       }
@@ -289,6 +321,7 @@ export const createRepositoryFormHandlers = ({
     }
 
     state.lastSyncedRepositoryFullName = repositoryFullName
+    state.lastSyncedActivePrContextKey = activeContextSyncKey
   }
 
   const refreshContextUi = () => {

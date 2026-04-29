@@ -23,6 +23,28 @@ const createWorkspaceTabsRenderer = ({
   workspaceTabsShell,
   workspaceTabAddWrap,
 }) => {
+  const isTabEditedForDisplay = tab => {
+    if (!tab || typeof tab !== 'object' || tab.isDirty !== true) {
+      return false
+    }
+
+    const nextContent = typeof tab.content === 'string' ? tab.content : ''
+    const syncedContent = typeof tab.syncedContent === 'string' ? tab.syncedContent : null
+
+    if (syncedContent !== null) {
+      return nextContent !== syncedContent
+    }
+
+    const hasSyncTimestamp =
+      typeof tab.syncedAt === 'number' &&
+      Number.isFinite(tab.syncedAt) &&
+      tab.syncedAt > 0
+    const hasSyncSha =
+      typeof tab.lastSyncedRemoteSha === 'string' && tab.lastSyncedRemoteSha.trim()
+
+    return Boolean(hasSyncTimestamp || hasSyncSha)
+  }
+
   const clearWorkspaceTabDragState = () => {
     setDraggedWorkspaceTabId('')
     setDragOverWorkspaceTabId('')
@@ -53,7 +75,7 @@ const createWorkspaceTabsRenderer = ({
       for (const tab of tabs) {
         const isActive = tab.id === activeTabId
         const isRenaming = getWorkspaceTabRenameState().tabId === tab.id
-        const isEdited = shouldShowEditedDesign && tab.isDirty
+        const isEdited = shouldShowEditedDesign && isTabEditedForDisplay(tab)
         const editedSuffix = isEdited ? ' (Edited)' : ''
         const tabContainer = document.createElement('li')
         tabContainer.className = 'workspace-tab'
@@ -235,7 +257,7 @@ const createWorkspaceTabsRenderer = ({
           tabContainer.append(metaBadge)
         }
 
-        if (shouldShowEditedDesign && tab.isDirty) {
+        if (shouldShowEditedDesign && isTabEditedForDisplay(tab)) {
           const dirtyBadge = document.createElement('span')
           dirtyBadge.className = 'workspace-tab__dirty-indicator'
           dirtyBadge.setAttribute('aria-hidden', 'true')

@@ -49,6 +49,7 @@ const initializeGitHubWorkflows = ({
   getActiveWorkspaceRecordId,
   setActiveWorkspaceRecordId,
   setActiveWorkspaceCreatedAt,
+  buildWorkspaceRecordSnapshot,
   listLocalContextRecords,
   refreshLocalContextOptions,
   applyWorkspaceRecord,
@@ -153,6 +154,29 @@ const initializeGitHubWorkflows = ({
     return true
   }
 
+  const persistActiveWorkspaceSnapshot = async () => {
+    if (typeof buildWorkspaceRecordSnapshot !== 'function') {
+      return null
+    }
+
+    const activeWorkspaceRecordId =
+      typeof getActiveWorkspaceRecordId === 'function' ? getActiveWorkspaceRecordId() : ''
+
+    const snapshot =
+      typeof activeWorkspaceRecordId === 'string' && activeWorkspaceRecordId.trim()
+        ? buildWorkspaceRecordSnapshot({ recordId: activeWorkspaceRecordId })
+        : buildWorkspaceRecordSnapshot()
+
+    if (!snapshot || typeof snapshot !== 'object') {
+      return null
+    }
+
+    const savedWorkspaceRecord = await workspaceStorage.upsertWorkspace(snapshot)
+    setActiveWorkspaceRecordId(savedWorkspaceRecord.id)
+    setActiveWorkspaceCreatedAt(savedWorkspaceRecord.createdAt ?? null)
+    return savedWorkspaceRecord
+  }
+
   const prEditorSyncController = createGitHubPrEditorSyncController({
     shouldApplySyncResult: shouldApplyActivePrEditorSync,
   })
@@ -230,6 +254,28 @@ const initializeGitHubWorkflows = ({
         onPrContextStateChange(githubAiContextState.activePrContext)
       }
 
+      const activeContextSyncKey = getActivePrContextSyncKey(
+        githubAiContextState.activePrContext,
+      )
+      if (activeContextSyncKey && activeContextSyncKey === getActivePrEditorSyncKey()) {
+        prContextUi.markActivePrEditorContentSynced()
+      }
+
+      const message = url
+        ? `Pull request opened: ${url}`
+        : 'Pull request opened successfully.'
+      if (shouldReconcileWorkspaceUpdatesForRepository(repositoryFullName)) {
+        reconcileWorkspaceTabsWithPushUpdates(fileUpdates)
+      }
+
+      if (typeof flushWorkspaceSave === 'function') {
+        try {
+          await flushWorkspaceSave({ preserveRecordId: true })
+        } catch {
+          /* Save failures are already surfaced through saver onError. */
+        }
+      }
+
       const activeWorkspaceRecordId =
         typeof getActiveWorkspaceRecordId === 'function'
           ? getActiveWorkspaceRecordId()
@@ -264,29 +310,31 @@ const initializeGitHubWorkflows = ({
 
           setActiveWorkspaceRecordId(savedWorkspaceRecord.id)
           setActiveWorkspaceCreatedAt(savedWorkspaceRecord.createdAt ?? null)
-          await refreshLocalContextOptions()
         }
       }
 
-      const activeContextSyncKey = getActivePrContextSyncKey(
-        githubAiContextState.activePrContext,
-      )
-      if (activeContextSyncKey && activeContextSyncKey === getActivePrEditorSyncKey()) {
-        prContextUi.markActivePrEditorContentSynced()
-      }
-
-      const message = url
-        ? `Pull request opened: ${url}`
-        : 'Pull request opened successfully.'
-      if (shouldReconcileWorkspaceUpdatesForRepository(repositoryFullName)) {
-        reconcileWorkspaceTabsWithPushUpdates(fileUpdates)
-      }
+      await refreshLocalContextOptions()
       showAppToast(message)
     },
-    onPullRequestCommitPushed: ({ repositoryFullName, branch, fileUpdates }) => {
+    onPullRequestCommitPushed: async ({ repositoryFullName, branch, fileUpdates }) => {
       if (shouldReconcileWorkspaceUpdatesForRepository(repositoryFullName)) {
         reconcileWorkspaceTabsWithPushUpdates(fileUpdates)
       }
+
+      try {
+        await persistActiveWorkspaceSnapshot()
+      } catch {
+        /* Fall back to debounced saver flush below. */
+      }
+
+      if (typeof flushWorkspaceSave === 'function') {
+        try {
+          await flushWorkspaceSave({ preserveRecordId: true })
+        } catch {
+          /* Save failures are already surfaced through saver onError. */
+        }
+      }
+
       const fileCount = Array.isArray(fileUpdates) ? fileUpdates.length : 0
       const message =
         fileCount > 0
