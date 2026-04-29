@@ -7,6 +7,15 @@ const workspaceStoreName = 'prWorkspaces'
 const workspaceByRepoIndexName = 'byRepo'
 const workspaceByLastModifiedIndexName = 'byLastModified'
 
+const toWorkspaceScope = value => {
+  const normalized = typeof value === 'string' ? value.trim().toLowerCase() : ''
+  if (normalized === 'repository') {
+    return 'repository'
+  }
+
+  return 'local'
+}
+
 const toTabRole = value => {
   const normalized = typeof value === 'string' ? value.trim().toLowerCase() : ''
   return normalized === 'entry' ? 'entry' : 'module'
@@ -74,6 +83,12 @@ const normalizeWorkspaceRecord = record => {
 
   const normalizedRepo = typeof record.repo === 'string' ? record.repo : ''
   const normalizedHead = typeof record.head === 'string' ? record.head : ''
+  const normalizedWorkspaceScope =
+    typeof record.workspaceScope === 'string' && record.workspaceScope.trim().length > 0
+      ? toWorkspaceScope(record.workspaceScope)
+      : normalizedRepo
+        ? 'repository'
+        : 'local'
 
   const normalizedWorkspaceKey = toWorkspaceRecordKey({
     repositoryFullName: normalizedRepo,
@@ -82,6 +97,7 @@ const normalizeWorkspaceRecord = record => {
 
   return {
     id: record.id,
+    workspaceScope: normalizedWorkspaceScope,
     workspaceKey: normalizedWorkspaceKey,
     repo: normalizedRepo,
     base: typeof record.base === 'string' ? record.base : '',

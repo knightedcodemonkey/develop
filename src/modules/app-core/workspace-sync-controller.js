@@ -10,10 +10,10 @@ const createWorkspaceSyncController = ({
   hasTabCommittedSyncState,
   getJsxSource,
   getCssSource,
-  getWorkspaceTabByKind,
   queueWorkspaceSave,
   resolveWorkspaceRecordIdentity,
   getWorkspaceContextSnapshot,
+  getWorkspaceScopeMarker,
   getActiveWorkspaceRecordId,
   getActiveWorkspaceCreatedAt,
   getRenderModeValue,
@@ -23,7 +23,6 @@ const createWorkspaceSyncController = ({
     const activeTabId = workspaceTabsState.getActiveTabId()
     return workspaceTabsState.getTabs().map(tab => {
       const currentPath = toNonEmptyWorkspaceText(tab.path)
-      const isPrimaryEditorTab = tab?.id === 'component' || tab?.id === 'styles'
 
       const currentContent =
         tab.id === activeTabId
@@ -35,9 +34,7 @@ const createWorkspaceSyncController = ({
             : ''
 
       const normalizedPath = normalizeWorkspacePathValue(currentPath)
-      const targetPrFilePath = isPrimaryEditorTab
-        ? normalizedPath || null
-        : normalizedPath || getTabTargetPrFilePath(tab) || null
+      const targetPrFilePath = normalizedPath || getTabTargetPrFilePath(tab) || null
 
       return {
         ...tab,
@@ -75,11 +72,8 @@ const createWorkspaceSyncController = ({
     let updatedTabCount = 0
     const activeTabId = workspaceTabsState.getActiveTabId()
     const nextTabs = workspaceTabsState.getTabs().map(tab => {
-      const isPrimaryEditorTab = tab?.id === 'component' || tab?.id === 'styles'
       const normalizedPath = normalizeWorkspacePathValue(tab.path)
-      const candidatePaths = isPrimaryEditorTab
-        ? [normalizedPath, getTabTargetPrFilePath(tab)].filter(Boolean)
-        : [normalizedPath].filter(Boolean)
+      const candidatePaths = [normalizedPath, getTabTargetPrFilePath(tab)].filter(Boolean)
 
       const matchedPath = candidatePaths.find(path => updatesByPath.has(path))
       if (!matchedPath) {
@@ -91,7 +85,7 @@ const createWorkspaceSyncController = ({
 
       return {
         ...tab,
-        targetPrFilePath: normalizedPath || (isPrimaryEditorTab ? matchedPath : null),
+        targetPrFilePath: normalizedPath || matchedPath,
         syncedContent: typeof tab?.content === 'string' ? tab.content : '',
         isDirty: false,
         syncedAt: now,
@@ -121,12 +115,6 @@ const createWorkspaceSyncController = ({
     const currentPaths = new Set(
       snapshotTabs.map(tab => normalizeWorkspacePathValue(tab?.path)).filter(Boolean),
     )
-    const primaryTabPaths = new Set(
-      snapshotTabs
-        .filter(tab => tab?.id === 'component' || tab?.id === 'styles')
-        .map(tab => normalizeWorkspacePathValue(tab?.path))
-        .filter(Boolean),
-    )
 
     for (const tab of snapshotTabs) {
       const shouldCommitTab = includeAllWorkspaceFiles
@@ -136,14 +124,9 @@ const createWorkspaceSyncController = ({
         continue
       }
 
-      const isPrimaryEditorTab = tab?.id === 'component' || tab?.id === 'styles'
       const normalizedPath = normalizeWorkspacePathValue(tab?.path)
       const path = normalizedPath || getTabTargetPrFilePath(tab) || ''
       if (!path) {
-        continue
-      }
-
-      if (!isPrimaryEditorTab && primaryTabPaths.has(path)) {
         continue
       }
 
@@ -163,6 +146,7 @@ const createWorkspaceSyncController = ({
         previousPath !== normalizedPath
 
       if (
+        !includeAllWorkspaceFiles &&
         isCommittedRename &&
         !currentPaths.has(previousPath) &&
         !dedupedByPath.has(previousPath)
@@ -182,78 +166,69 @@ const createWorkspaceSyncController = ({
   }
 
   const getEditorSyncTargets = () => {
-    const tabTargets = []
-    const primaryTabIdByKind = {
-      component: 'component',
-      styles: 'styles',
-    }
+    const dedupedByPath = new Map()
+    const snapshotTabs = buildWorkspaceTabsSnapshot()
 
-    for (const kind of ['component', 'styles']) {
-      const primaryTabId = primaryTabIdByKind[kind]
-      const tab = workspaceTabsState.getTab(primaryTabId) ?? getWorkspaceTabByKind(kind)
+    for (const tab of snapshotTabs) {
       const path =
         normalizeWorkspacePathValue(tab?.path) || getTabTargetPrFilePath(tab) || ''
-
       if (!path) {
         continue
       }
 
-      tabTargets.push({ kind, path })
+      dedupedByPath.set(path, {
+        path,
+        kind: getTabKind(tab),
+        tabId: toNonEmptyWorkspaceText(tab?.id),
+      })
     }
+
+    const tabTargets = [...dedupedByPath.values()]
 
     return { tabTargets }
   }
 
   const reconcileWorkspaceTabsWithEditorSync = ({ tabTargets } = {}) => {
-    const targetsByKind = new Map()
+    const targetContentByPath = new Map()
     const normalizedTargets = Array.isArray(tabTargets) ? tabTargets : []
 
     for (const target of normalizedTargets) {
-      const kind = toNonEmptyWorkspaceText(target?.kind)
       const normalizedPath = normalizeWorkspacePathValue(target?.path)
-      if (!kind || !normalizedPath) {
+      const content = typeof target?.content === 'string' ? target.content : null
+      if (!normalizedPath || content === null) {
         continue
       }
 
-      targetsByKind.set(kind, normalizedPath)
+      targetContentByPath.set(normalizedPath, content)
     }
 
-    if (targetsByKind.size === 0) {
+    if (targetContentByPath.size === 0) {
       return 0
     }
 
     const now = Date.now()
     let updatedTabCount = 0
     const activeTabId = workspaceTabsState.getActiveTabId()
-    const componentSource = getJsxSource()
-    const stylesSource = getCssSource()
 
     const nextTabs = workspaceTabsState.getTabs().map(tab => {
-      const isPrimaryEditorTab = tab?.id === 'component' || tab?.id === 'styles'
-      if (!isPrimaryEditorTab) {
-        return tab
-      }
-
-      const tabKind = getTabKind(tab)
-      const expectedPath = targetsByKind.get(tabKind)
-      if (!expectedPath) {
-        return tab
-      }
-
       const candidatePaths = [
         normalizeWorkspacePathValue(tab.path),
         getTabTargetPrFilePath(tab),
       ].filter(Boolean)
-      const matchedPath = candidatePaths.find(path => path === expectedPath)
+      const matchedPath = candidatePaths.find(path => targetContentByPath.has(path))
       if (!matchedPath) {
         return tab
       }
 
-      const syncedContent = tabKind === 'styles' ? stylesSource : componentSource
+      const syncedContent = targetContentByPath.get(matchedPath)
+      if (typeof syncedContent !== 'string') {
+        return tab
+      }
+
       updatedTabCount += 1
       return {
         ...tab,
-        targetPrFilePath: expectedPath,
+        targetPrFilePath: matchedPath,
         content: syncedContent,
         syncedContent,
         isDirty: false,
@@ -292,9 +267,19 @@ const createWorkspaceSyncController = ({
         ? context.prContextState.trim()
         : 'inactive'
 
+    const requestedWorkspaceScope =
+      typeof getWorkspaceScopeMarker === 'function'
+        ? getWorkspaceScopeMarker()
+        : context.repositoryFullName
+          ? 'repository'
+          : 'local'
+    const normalizedWorkspaceScope =
+      requestedWorkspaceScope === 'repository' ? 'repository' : 'local'
+
     return {
       id: identity.id,
       supersededId: identity.supersededId,
+      workspaceScope: normalizedWorkspaceScope,
       workspaceKey: toWorkspaceRecordKey({
         repositoryFullName: context.repositoryFullName,
         headBranch: context.headBranch,

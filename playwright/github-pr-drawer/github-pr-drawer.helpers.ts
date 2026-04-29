@@ -151,23 +151,24 @@ export const getWorkspaceRecordId = (
 
 export const getWorkspacesRepositoryFilterForRecord = ({
   repo,
-  prContextState,
-  prNumber,
+  workspaceScope,
 }: {
   repo?: unknown
-  prContextState?: unknown
-  prNumber?: unknown
+  workspaceScope?: unknown
 }) => {
   const normalizedRepo = typeof repo === 'string' ? repo.trim() : ''
-  const normalizedState =
-    typeof prContextState === 'string' ? prContextState.trim().toLowerCase() : ''
-  const hasPrNumber = typeof prNumber === 'number' && Number.isFinite(prNumber)
+  const normalizedScope =
+    typeof workspaceScope === 'string' ? workspaceScope.trim().toLowerCase() : ''
 
-  if (!normalizedRepo) {
+  if (normalizedScope === 'local') {
     return '__local__'
   }
 
-  if (normalizedState === 'inactive' && !hasPrNumber) {
+  if (normalizedScope === 'repository') {
+    return normalizedRepo || '__local__'
+  }
+
+  if (!normalizedRepo) {
     return '__local__'
   }
 
@@ -429,6 +430,7 @@ export const seedLocalWorkspaceContexts = async (
   contexts: Array<{
     id: string
     repo: string
+    workspaceScope?: 'local' | 'repository'
     base?: string
     head: string
     prTitle: string
@@ -458,6 +460,12 @@ export const seedLocalWorkspaceContexts = async (
       for (const context of inputContexts) {
         const putRequest = store.put({
           id: context.id,
+          workspaceScope:
+            context.workspaceScope === 'repository' || context.workspaceScope === 'local'
+              ? context.workspaceScope
+              : context.repo && context.repo.trim()
+                ? 'repository'
+                : 'local',
           repo: context.repo,
           base: context.base ?? 'main',
           head: context.head,

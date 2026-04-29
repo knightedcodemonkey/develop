@@ -17,6 +17,7 @@ Each workspace record may include:
   - `id`
   - `createdAt`
   - `lastModified`
+  - `workspaceScope` (`local` | `repository`)
 - Repository and PR context:
   - `repo`
   - `base`
@@ -44,3 +45,9 @@ IDB supports that by storing:
 If a value is required to accurately restore PR/workspace behavior after reload, it must live in IDB records.
 
 `localStorage` should only mirror user preferences and lightweight bootstrap values.
+
+## Behavioral Spec
+
+For action-level drawer semantics and state machine behavior, see:
+
+- `docs/workspaces-behavior-algorithm.md`

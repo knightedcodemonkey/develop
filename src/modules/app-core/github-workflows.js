@@ -40,6 +40,7 @@ const initializeGitHubWorkflows = ({
   workspacesClose,
   workspacesStatus,
   workspacesRepository,
+  workspacesInitialize,
   workspacesNew,
   workspacesSelect,
   workspacesOpen,
@@ -52,6 +53,8 @@ const initializeGitHubWorkflows = ({
   refreshLocalContextOptions,
   applyWorkspaceRecord,
   syncActiveWorkspaceRepositoryScope,
+  forkWorkspaceFromCurrentState,
+  flushWorkspaceSave,
   getWorkspacePrFileCommits,
   getEditorSyncTargets,
   getRenderMode,
@@ -66,7 +69,6 @@ const initializeGitHubWorkflows = ({
   onPrContextVerifiedClosed,
   onPrContextClosed,
   getTokenForVisibility,
-  closeWorkspacesDrawer,
   getActivePrEditorSyncKey,
   syncFromActiveContext,
   applyRenderMode,
@@ -152,13 +154,6 @@ const initializeGitHubWorkflows = ({
   }
 
   const prEditorSyncController = createGitHubPrEditorSyncController({
-    setComponentSource: value => {
-      setComponentSource(value)
-    },
-    setStylesSource: value => {
-      setStylesSource(value)
-    },
-    scheduleRender,
     shouldApplySyncResult: shouldApplyActivePrEditorSync,
   })
 
@@ -209,6 +204,13 @@ const initializeGitHubWorkflows = ({
     setSelectedRepository: setCurrentSelectedRepository,
     getFileCommits: getWorkspacePrFileCommits,
     getEditorSyncTargets,
+    persistWorkspaceMetadataOnSubmit: async () => {
+      if (typeof flushWorkspaceSave !== 'function') {
+        return
+      }
+
+      await flushWorkspaceSave({ preserveRecordId: true })
+    },
     getTopLevelDeclarations,
     getRenderMode,
     getStyleMode,
@@ -218,7 +220,54 @@ const initializeGitHubWorkflows = ({
     confirmBeforeSubmit: options => {
       confirmAction(options)
     },
-    onPullRequestOpened: ({ url, fileUpdates, repositoryFullName }) => {
+    onPullRequestOpened: async ({
+      url,
+      fileUpdates,
+      repositoryFullName,
+      pullRequestNumber,
+    }) => {
+      if (typeof onPrContextStateChange === 'function') {
+        onPrContextStateChange(githubAiContextState.activePrContext)
+      }
+
+      const activeWorkspaceRecordId =
+        typeof getActiveWorkspaceRecordId === 'function'
+          ? getActiveWorkspaceRecordId()
+          : ''
+      if (activeWorkspaceRecordId) {
+        const activeWorkspaceRecord = await workspaceStorage.getWorkspaceById(
+          activeWorkspaceRecordId,
+        )
+        if (activeWorkspaceRecord && typeof activeWorkspaceRecord === 'object') {
+          const nextPrTitle =
+            typeof githubAiContextState.activePrContext?.prTitle === 'string' &&
+            githubAiContextState.activePrContext.prTitle.trim()
+              ? githubAiContextState.activePrContext.prTitle
+              : typeof activeWorkspaceRecord.prTitle === 'string'
+                ? activeWorkspaceRecord.prTitle
+                : ''
+          const nextPrNumber =
+            typeof pullRequestNumber === 'number' && Number.isFinite(pullRequestNumber)
+              ? pullRequestNumber
+              : typeof githubAiContextState.activePrContext?.pullRequestNumber ===
+                    'number' &&
+                  Number.isFinite(githubAiContextState.activePrContext.pullRequestNumber)
+                ? githubAiContextState.activePrContext.pullRequestNumber
+                : null
+
+          const savedWorkspaceRecord = await workspaceStorage.upsertWorkspace({
+            ...activeWorkspaceRecord,
+            prContextState: 'active',
+            prNumber: nextPrNumber,
+            prTitle: nextPrTitle,
+          })
+
+          setActiveWorkspaceRecordId(savedWorkspaceRecord.id)
+          setActiveWorkspaceCreatedAt(savedWorkspaceRecord.createdAt ?? null)
+          await refreshLocalContextOptions()
+        }
+      }
+
       const activeContextSyncKey = getActivePrContextSyncKey(
         githubAiContextState.activePrContext,
       )
@@ -248,10 +297,6 @@ const initializeGitHubWorkflows = ({
     onActivePrContextChange: activeContext => {
       prContextUi.setActivePrContext(activeContext)
       prContextUi.syncAiChatTokenVisibility(getTokenForVisibility())
-
-      if (activeContext) {
-        closeWorkspacesDrawer()
-      }
 
       if (typeof onPrContextStateChange === 'function') {
         onPrContextStateChange(activeContext)
@@ -300,6 +345,8 @@ const initializeGitHubWorkflows = ({
     closeButton: workspacesClose,
     statusNode: workspacesStatus,
     repositorySelect: workspacesRepository,
+    getActiveWorkspaceId: () => getActiveWorkspaceRecordId(),
+    initializeButton: workspacesInitialize,
     newButton: workspacesNew,
     selectInput: workspacesSelect,
     openButton: workspacesOpen,
@@ -320,13 +367,7 @@ const initializeGitHubWorkflows = ({
 
       return '__local__'
     },
-    onRepositoryFilterChange: async repositoryFilter => {
-      if (repositoryFilter === '__local__') {
-        clearCurrentSelectedRepository?.()
-      } else {
-        setCurrentSelectedRepository?.(repositoryFilter)
-      }
-
+    onRepositoryFilterChange: async () => {
       prDrawerController.resetStatus?.()
       prDrawerController.syncRepositories()
     },
@@ -334,6 +375,29 @@ const initializeGitHubWorkflows = ({
       return 'right'
     },
     onRefreshRequested: listLocalContextRecords,
+    onInitializeWorkspace: async repositoryFilter => {
+      const normalizedFilter =
+        typeof repositoryFilter === 'string' ? repositoryFilter.trim() : ''
+      if (!normalizedFilter || normalizedFilter === '__local__') {
+        return false
+      }
+
+      const repositoryFullName = normalizedFilter
+
+      try {
+        await syncActiveWorkspaceRepositoryScope?.(repositoryFullName, {
+          rekeyRecord: false,
+        })
+        setCurrentSelectedRepository?.(repositoryFullName)
+        await refreshLocalContextOptions()
+        prDrawerController.resetStatus?.()
+        prDrawerController.syncRepositories()
+        return true
+      } catch {
+        workspacesDrawerController?.setStatus('Could not initialize workspace.', 'error')
+        return false
+      }
+    },
     onCreateWorkspace: async repositoryFilter => {
       const normalizedFilter =
         typeof repositoryFilter === 'string' ? repositoryFilter.trim() : ''
@@ -341,15 +405,17 @@ const initializeGitHubWorkflows = ({
         normalizedFilter && normalizedFilter !== '__local__' ? normalizedFilter : ''
 
       try {
-        if (!repositoryFullName) {
-          clearCurrentSelectedRepository?.()
-        } else {
+        await forkWorkspaceFromCurrentState?.(repositoryFullName)
+        prDrawerController.clearSelectedRepositoryActivePrContext?.({
+          resetForm: false,
+        })
+
+        if (repositoryFullName) {
           setCurrentSelectedRepository?.(repositoryFullName)
+        } else {
+          clearCurrentSelectedRepository?.()
         }
 
-        await syncActiveWorkspaceRepositoryScope?.(repositoryFullName, {
-          rekeyRecord: true,
-        })
         await refreshLocalContextOptions()
         prDrawerController.resetStatus?.()
         prDrawerController.syncRepositories()

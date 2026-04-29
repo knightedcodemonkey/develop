@@ -1,5 +1,9 @@
 import { buildRepoApiUrl, requestGitHubJson } from './core.js'
-import { createBranchReference, getBranchReferenceSha } from './repository-files.js'
+import {
+  createBranchReference,
+  getBranchReferenceSha,
+  getRepositoryFileMetadata,
+} from './repository-files.js'
 import { createRepositoryPullRequest } from './pull-requests.js'
 
 const normalizeFileUpdatePath = value =>
@@ -138,6 +142,14 @@ const createRepositoryTree = async ({
   return treeSha
 }
 
+const isBadObjectStateError = error => {
+  if (!(error instanceof Error)) {
+    return false
+  }
+
+  return error.message.toLowerCase().includes('badobjectstate')
+}
+
 const createRepositoryCommit = async ({
   token,
   owner,
@@ -209,14 +221,75 @@ const commitFilesToExistingBranchWithGitDatabaseApi = async ({
     commitSha: headCommitSha,
     signal,
   })
-  const treeSha = await createRepositoryTree({
-    token,
-    owner,
-    repo,
-    baseTreeSha,
-    files: uniqueFiles,
-    signal,
-  })
+  const hasDeleteEntries = uniqueFiles.some(file => file.deleted === true)
+
+  let committedFiles = uniqueFiles
+  let treeSha
+
+  if (hasDeleteEntries) {
+    const deleteCandidates = committedFiles.filter(file => file.deleted === true)
+    const existingDeletePaths = new Set(
+      (
+        await Promise.all(
+          deleteCandidates.map(async file => {
+            const existingFile = await getRepositoryFileMetadata({
+              token,
+              owner,
+              repo,
+              path: file.path,
+              ref: branch,
+              signal,
+            })
+
+            return existingFile?.sha ? file.path : null
+          }),
+        )
+      ).filter(Boolean),
+    )
+
+    committedFiles = committedFiles.filter(file => {
+      if (file.deleted !== true) {
+        return true
+      }
+
+      return existingDeletePaths.has(file.path)
+    })
+
+    if (committedFiles.length === 0) {
+      return []
+    }
+  }
+
+  try {
+    treeSha = await createRepositoryTree({
+      token,
+      owner,
+      repo,
+      baseTreeSha,
+      files: committedFiles,
+      signal,
+    })
+  } catch (error) {
+    if (!hasDeleteEntries || !isBadObjectStateError(error)) {
+      throw error
+    }
+
+    const nonDeleteFiles = committedFiles.filter(file => file.deleted !== true)
+    if (nonDeleteFiles.length === 0) {
+      throw error
+    }
+
+    committedFiles = nonDeleteFiles
+    treeSha = await createRepositoryTree({
+      token,
+      owner,
+      repo,
+      baseTreeSha,
+      files: committedFiles,
+      signal,
+    })
+  }
+
   const commitSha = await createRepositoryCommit({
     token,
     owner,
@@ -235,7 +308,7 @@ const commitFilesToExistingBranchWithGitDatabaseApi = async ({
     signal,
   })
 
-  return uniqueFiles.map(file => ({
+  return committedFiles.map(file => ({
     path: file.path,
     commitSha,
     created: null,
@@ -260,43 +333,28 @@ const createUniqueBranchReference = async ({
   headBranch,
   baseSha,
   signal,
-  attempt = 0,
 }) => {
-  const candidateBranch = attempt === 0 ? headBranch : `${headBranch}-${attempt + 1}`
-
   try {
     await createBranchReference({
       token,
       owner,
       repo,
-      branch: candidateBranch,
+      branch: headBranch,
       sha: baseSha,
       signal,
     })
-    return candidateBranch
+    return headBranch
   } catch (error) {
     if (!isReferenceAlreadyExistsError(error)) {
       throw error
     }
 
-    if (attempt >= 4) {
-      throw new Error(
-        `Branch ${headBranch} already exists. Choose another branch name and retry.`,
-        {
-          cause: error,
-        },
-      )
-    }
-
-    return createUniqueBranchReference({
-      token,
-      owner,
-      repo,
-      headBranch,
-      baseSha,
-      signal,
-      attempt: attempt + 1,
-    })
+    throw new Error(
+      `Branch ${headBranch} already exists. Choose another branch name and retry.`,
+      {
+        cause: error,
+      },
+    )
   }
 }
 

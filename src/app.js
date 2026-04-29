@@ -34,6 +34,7 @@ import { createEditedIndicatorVisibilityController } from './modules/app-core/ed
 import { createPublishTrailingNewlineNormalizer } from './modules/app-core/publish-trailing-newline-normalizer.js'
 import { createLayoutDiagnosticsSetup } from './modules/app-core/layout-diagnostics-setup.js'
 import { createWorkspaceControllersSetup } from './modules/app-core/workspace-controllers-setup.js'
+import { createWorkspaceScopeForkActions } from './modules/app-core/workspace-scope-fork-actions.js'
 import { createGitHubWorkflowsSetup } from './modules/app-core/github-workflows-setup.js'
 import { defaultCss, defaultJsx } from './modules/app-core/defaults.js'
 import { createGitHubPrContextUiController } from './modules/app-core/github-pr-context-ui.js'
@@ -140,6 +141,7 @@ const workspacesDrawer = document.getElementById('workspaces-drawer')
 const workspacesClose = document.getElementById('workspaces-close')
 const workspacesStatus = document.getElementById('workspaces-status')
 const workspacesRepository = document.getElementById('workspaces-repository')
+const workspacesInitialize = document.getElementById('workspaces-initialize')
 const workspacesNew = document.getElementById('workspaces-new')
 const workspacesSelect = document.getElementById('workspaces-select')
 const workspacesOpen = document.getElementById('workspaces-open')
@@ -409,7 +411,14 @@ const githubAiContextState = {
 let workspacePrContextState = 'inactive'
 let workspacePrNumber = null
 let workspaceRepositoryFullName = ''
+let workspaceScopeMarker = 'local'
 let hasObservedActivePrContextInSession = false
+
+const toWorkspaceScopeMarker = value => (value === 'repository' ? 'repository' : 'local')
+
+const setWorkspaceScopeMarker = nextScope => {
+  workspaceScopeMarker = toWorkspaceScopeMarker(nextScope)
+}
 
 const toPullRequestNumber = value => {
   if (typeof value === 'number' && Number.isFinite(value) && value > 0) {
@@ -423,6 +432,7 @@ const setActiveWorkspaceRecordId = nextValue => {
   activeWorkspaceRecordId = toNonEmptyWorkspaceText(nextValue)
   if (!activeWorkspaceRecordId) {
     workspaceRepositoryFullName = ''
+    workspaceScopeMarker = 'local'
   }
 }
 
@@ -568,7 +578,9 @@ const getPersistedActivePrContext = createPersistedActivePrContextGetter({
 
 const getWorkspaceContextSnapshot = createWorkspaceContextSnapshotGetter({
   getCurrentSelectedRepository: () =>
-    workspaceRepositoryFullName || getCurrentSelectedRepositoryFullName(),
+    workspaceScopeMarker === 'repository'
+      ? workspaceRepositoryFullName || getCurrentSelectedRepositoryFullName()
+      : '',
   githubPrBaseBranch,
   githubPrHeadBranch,
   githubPrTitle,
@@ -629,9 +641,12 @@ const workspaceSyncController = createWorkspaceSyncController({
   getJsxSource: () => getJsxSource(),
   getCssSource: () => getCssSource(),
   getWorkspaceTabByKind,
+  getLoadedComponentTabId: () => loadedComponentTabId,
+  getLoadedStylesTabId: () => loadedStylesTabId,
   queueWorkspaceSave: () => queueWorkspaceSave(),
   resolveWorkspaceRecordIdentity,
   getWorkspaceContextSnapshot,
+  getWorkspaceScopeMarker: () => workspaceScopeMarker,
   getActiveWorkspaceRecordId: () => activeWorkspaceRecordId,
   getActiveWorkspaceCreatedAt: () => activeWorkspaceCreatedAt,
   getRenderModeValue: () => renderMode.value,
@@ -713,28 +728,6 @@ const getEditorSyncTargets = () => workspaceSyncController.getEditorSyncTargets(
 const reconcileWorkspaceTabsWithEditorSync = ({ tabTargets } = {}) =>
   workspaceSyncController.reconcileWorkspaceTabsWithEditorSync({ tabTargets })
 
-const syncActiveWorkspaceRepositoryScope = async (
-  repositoryFullName,
-  { rekeyRecord = false } = {},
-) => {
-  if (toNonEmptyWorkspaceText(workspacePrContextState).toLowerCase() !== 'inactive') {
-    return
-  }
-
-  if (!toNonEmptyWorkspaceText(activeWorkspaceRecordId)) {
-    return
-  }
-
-  if (rekeyRecord) {
-    await flushWorkspaceSave({ preserveRecordId: true })
-    setActiveWorkspaceRecordId('')
-    activeWorkspaceCreatedAt = null
-  }
-
-  workspaceRepositoryFullName = toNonEmptyWorkspaceText(repositoryFullName)
-  await flushWorkspaceSave({ preserveRecordId: !rekeyRecord })
-}
-
 const buildWorkspaceRecordSnapshot = ({ recordId } = {}) =>
   workspaceSyncController.buildWorkspaceRecordSnapshot({ recordId })
 
@@ -763,6 +756,7 @@ const {
   setActiveWorkspaceCreatedAt: value => (activeWorkspaceCreatedAt = value),
   setWorkspacePrContextState: value => (workspacePrContextState = value),
   setWorkspacePrNumber: value => (workspacePrNumber = toPullRequestNumber(value)),
+  setWorkspaceScopeMarker,
   getCurrentSelectedRepository: getCurrentSelectedRepositoryFullName,
   getActiveWorkspaceRecordId: () => activeWorkspaceRecordId,
   setIsApplyingWorkspaceSnapshot: value => (isApplyingWorkspaceSnapshot = value),
@@ -874,6 +868,42 @@ const {
   },
 })
 
+const { syncActiveWorkspaceRepositoryScope, forkWorkspaceFromCurrentState } =
+  createWorkspaceScopeForkActions({
+    toNonEmptyWorkspaceText,
+    workspaceStorage,
+    flushWorkspaceSave,
+    refreshLocalContextOptions,
+    createWorkspaceRecordId,
+    buildWorkspaceRecordSnapshot,
+    toWorkspaceRecordKey,
+    getWorkspacePrContextState: () => workspacePrContextState,
+    setWorkspacePrContextState: value => {
+      setWorkspacePrContextState(value)
+    },
+    setWorkspacePrNumber: value => {
+      setWorkspacePrNumber(value)
+    },
+    getActiveWorkspaceRecordId: () => activeWorkspaceRecordId,
+    setActiveWorkspaceRecordId,
+    setActiveWorkspaceCreatedAt: value => (activeWorkspaceCreatedAt = value),
+    getWorkspaceRepositoryFullName: () => workspaceRepositoryFullName,
+    setWorkspaceRepositoryFullName: value => {
+      workspaceRepositoryFullName = toNonEmptyWorkspaceText(value)
+    },
+    setWorkspaceScopeMarker,
+    setHeadBranchValue: value => {
+      if (githubPrHeadBranch) {
+        githubPrHeadBranch.value = value
+      }
+    },
+    setPrTitleValue: value => {
+      if (githubPrTitle) {
+        githubPrTitle.value = value
+      }
+    },
+  })
+
 editedIndicatorVisibilityController.setRefreshHandlers({
   syncHeaderLabels,
   renderWorkspaceTabs,
@@ -938,6 +968,7 @@ const workspacePrSessionHandoffController = createWorkspacePrSessionHandoffContr
     getWorkspacePrNumber: () => workspacePrNumber,
     setWorkspacePrContextState,
     setWorkspacePrNumber,
+    setWorkspaceScopeMarker,
     getActiveWorkspaceCreatedAt: () => activeWorkspaceCreatedAt,
     setActiveWorkspaceRecordId,
     setActiveWorkspaceCreatedAt: value => (activeWorkspaceCreatedAt = value),
@@ -1061,6 +1092,7 @@ const githubWorkflows = createGitHubWorkflowsSetup({
     workspacesClose,
     workspacesStatus,
     workspacesRepository,
+    workspacesInitialize,
     workspacesNew,
     workspacesSelect,
     workspacesOpen,
@@ -1075,6 +1107,8 @@ const githubWorkflows = createGitHubWorkflowsSetup({
     refreshLocalContextOptions,
     applyWorkspaceRecord,
     syncActiveWorkspaceRepositoryScope,
+    forkWorkspaceFromCurrentState,
+    flushWorkspaceSave,
     getWorkspacePrFileCommits,
     getEditorSyncTargets,
     reconcileWorkspaceTabsWithPushUpdates,
@@ -1122,9 +1156,6 @@ const githubWorkflows = createGitHubWorkflowsSetup({
     },
     getPersistedActivePrContext,
     getTokenForVisibility: () => githubAiContextState.token,
-    closeWorkspacesDrawer: () => {
-      void workspacesDrawerController?.setOpen(false)
-    },
     getActivePrEditorSyncKey: () => githubAiContextState.activePrEditorSyncKey,
     syncFromActiveContext: ({ tabTargets }) => {
       const activeTabIdBeforeSync = workspaceTabsState.getActiveTabId()

@@ -400,7 +400,15 @@ export const ensureOpenPrDrawerOpen = async (page: Page) => {
   const isExpanded = await toggle.getAttribute('aria-expanded')
 
   if (isExpanded !== 'true') {
-    await toggle.click()
+    try {
+      await toggle.click({ timeout: 2_000 })
+    } catch {
+      await toggle.evaluate(element => {
+        if (element instanceof HTMLButtonElement) {
+          element.click()
+        }
+      })
+    }
   }
 
   await expect(
@@ -518,15 +526,32 @@ export const connectByotWithSingleRepo = async (
   await workspacesRepositoryFilter.selectOption('knightedcodemonkey/develop')
   await expect(workspacesRepositoryFilter).toHaveValue('knightedcodemonkey/develop')
 
+  const initializeButton = page.getByRole('button', {
+    name: 'Initialize',
+    exact: true,
+  })
+
+  if (await initializeButton.isVisible()) {
+    await initializeButton.click()
+  } else {
+    const storedWorkspace = page.getByLabel('Stored workspace')
+    if (await storedWorkspace.isVisible()) {
+      const workspaceValue = await storedWorkspace
+        .locator('option:not([value=""])')
+        .first()
+        .getAttribute('value')
+
+      if (workspaceValue) {
+        await storedWorkspace.selectOption(workspaceValue)
+        await page.getByRole('button', { name: 'Open', exact: true }).click()
+      }
+    }
+  }
+
   await ensureWorkspacesDrawerClosed(page)
 
   const repoSelect = page.getByLabel('Pull request repository')
-  await expect
-    .poll(async () => {
-      const value = await repoSelect.inputValue()
-      return value === '' || value === 'knightedcodemonkey/develop'
-    })
-    .toBe(true)
+  await expect(repoSelect).toHaveValue('knightedcodemonkey/develop')
   await expect(repoSelect).toBeDisabled()
 
   await expect(

@@ -575,6 +575,12 @@
   align-items: end;
 }
 
+.workspaces-drawer__repository-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
 .workspaces-drawer__repository-row .github-pr-field--full {
   grid-column: auto;
 }

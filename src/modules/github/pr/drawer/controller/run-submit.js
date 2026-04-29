@@ -10,6 +10,7 @@ export const createRunSubmit = ({
   prTitleInput,
   includeAppWrapperToggle,
   getFileCommits,
+  persistWorkspaceMetadataOnSubmit,
   getTopLevelDeclarations,
   confirmBeforeSubmit,
   onPullRequestOpened,
@@ -188,7 +189,32 @@ export const createRunSubmit = ({
       }),
     )
 
-    const submitRequest = () => {
+    const submitRequest = async () => {
+      if (typeof persistWorkspaceMetadataOnSubmit === 'function') {
+        try {
+          await persistWorkspaceMetadataOnSubmit({
+            isPushCommitMode,
+            repository: repositoryLabel,
+            baseBranch: targetBaseBranch,
+            headBranch: targetHeadBranch,
+            prTitle: targetPrTitle,
+            prBody: targetPrBody,
+          })
+        } catch (error) {
+          const message =
+            error instanceof Error
+              ? error.message
+              : 'Could not persist workspace metadata before submit.'
+          setStatus(
+            isPushCommitMode
+              ? `Push commit blocked: ${message}`
+              : `Open PR blocked: ${message}`,
+            'error',
+          )
+          return
+        }
+      }
+
       state.pendingAbortController?.abort()
       const abortController = new AbortController()
       state.pendingAbortController = abortController

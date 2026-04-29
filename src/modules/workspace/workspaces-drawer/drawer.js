@@ -1,33 +1,47 @@
 const toSafeText = value => (typeof value === 'string' ? value.trim() : '')
 
 const localRepositoryFilterValue = '__local__'
+const localWorkspaceScopeValue = 'local'
+const repositoryWorkspaceScopeValue = 'repository'
 
-const isLocalWorkspaceEntry = workspace => {
-  const repository = toSafeText(workspace?.repo)
-  return !repository
+const drawerUiState = {
+  localEmpty: 'local-empty',
+  localWithWorkspaces: 'local-with-workspaces',
+  repositoryEmpty: 'repository-empty',
+  repositoryWithWorkspaces: 'repository-with-workspaces',
 }
 
-const isLocalOnlyInactiveWorkspace = workspace => {
-  const state = toSafeText(workspace?.prContextState).toLowerCase()
-  const hasPrNumber = Number.isFinite(workspace?.prNumber)
-  return state === 'inactive' && !hasPrNumber
+const toSafeWorkspaceScope = workspace => {
+  const scope = toSafeText(workspace?.workspaceScope).toLowerCase()
+  if (scope === repositoryWorkspaceScopeValue) {
+    return repositoryWorkspaceScopeValue
+  }
+
+  if (scope === localWorkspaceScopeValue) {
+    return localWorkspaceScopeValue
+  }
+
+  return toSafeText(workspace?.repo)
+    ? repositoryWorkspaceScopeValue
+    : localWorkspaceScopeValue
 }
 
-const toWorkspaceLabel = workspace => {
-  const isLocalOnlyInactive = isLocalOnlyInactiveWorkspace(workspace)
+const toWorkspaceLabel = (workspace, { forceLocalPrefix = false } = {}) => {
+  const isLocalScoped =
+    forceLocalPrefix || toSafeWorkspaceScope(workspace) === localWorkspaceScopeValue
 
   const hasTitle = toSafeText(workspace?.prTitle)
   if (hasTitle) {
-    return isLocalOnlyInactive ? `local:${hasTitle}` : hasTitle
+    return isLocalScoped ? `local:${hasTitle}` : hasTitle
   }
 
   const hasHead = toSafeText(workspace?.head)
   if (hasHead) {
-    return isLocalOnlyInactive ? `local:${hasHead}` : hasHead
+    return isLocalScoped ? `local:${hasHead}` : hasHead
   }
 
   const fallbackLabel = toSafeText(workspace?.id) || 'workspace'
-  return isLocalOnlyInactive ? `local:${fallbackLabel}` : fallbackLabel
+  return isLocalScoped ? `local:${fallbackLabel}` : fallbackLabel
 }
 
 export const createWorkspacesDrawer = ({
@@ -36,6 +50,8 @@ export const createWorkspacesDrawer = ({
   closeButton,
   statusNode,
   repositorySelect,
+  getActiveWorkspaceId,
+  initializeButton,
   newButton,
   selectInput,
   openButton,
@@ -45,6 +61,7 @@ export const createWorkspacesDrawer = ({
   getSelectedRepositoryFilter,
   onRepositoryFilterChange,
   onRefreshRequested,
+  onInitializeWorkspace,
   onCreateWorkspace,
   onOpenSelected,
   onRemoveSelected,
@@ -54,11 +71,34 @@ export const createWorkspacesDrawer = ({
   let selectedId = ''
   let selectedRepositoryFilter = localRepositoryFilterValue
   let hasUserSelectedRepositoryFilter = false
-  let hasStoredWorkspacesInScope = false
+  let currentUiState = drawerUiState.localEmpty
 
   const getNormalizedRepositoryFilter = value => {
     const normalized = toSafeText(value)
     return normalized || localRepositoryFilterValue
+  }
+
+  const isInactiveWithoutPrNumber = workspace => {
+    const state = toSafeText(workspace?.prContextState).toLowerCase()
+    const hasPrNumber =
+      typeof workspace?.prNumber === 'number' && Number.isFinite(workspace.prNumber)
+    return state === 'inactive' && !hasPrNumber
+  }
+
+  const shouldRenderAsLocalEntry = workspace => {
+    if (toSafeWorkspaceScope(workspace) === localWorkspaceScopeValue) {
+      return true
+    }
+
+    const activeWorkspaceId =
+      typeof getActiveWorkspaceId === 'function'
+        ? toSafeText(getActiveWorkspaceId())
+        : toSafeText(selectedId)
+
+    return (
+      toSafeText(workspace?.id) === activeWorkspaceId &&
+      isInactiveWithoutPrNumber(workspace)
+    )
   }
 
   const getFilteredEntriesByRepository = () => {
@@ -66,9 +106,7 @@ export const createWorkspacesDrawer = ({
       selectedRepositoryFilter,
     )
     if (normalizedRepositoryFilter === localRepositoryFilterValue) {
-      return entries.filter(
-        entry => isLocalWorkspaceEntry(entry) || isLocalOnlyInactiveWorkspace(entry),
-      )
+      return entries.filter(entry => shouldRenderAsLocalEntry(entry))
     }
 
     return entries.filter(entry => {
@@ -76,12 +114,25 @@ export const createWorkspacesDrawer = ({
         return false
       }
 
-      if (isLocalWorkspaceEntry(entry)) {
+      if (toSafeWorkspaceScope(entry) !== repositoryWorkspaceScopeValue) {
         return false
       }
 
-      return !isLocalOnlyInactiveWorkspace(entry)
+      return true
     })
+  }
+
+  const getUiState = ({ repositoryFilter, hasStoredWorkspaces }) => {
+    const isLocalScope = repositoryFilter === localRepositoryFilterValue
+    if (isLocalScope) {
+      return hasStoredWorkspaces
+        ? drawerUiState.localWithWorkspaces
+        : drawerUiState.localEmpty
+    }
+
+    return hasStoredWorkspaces
+      ? drawerUiState.repositoryWithWorkspaces
+      : drawerUiState.repositoryEmpty
   }
 
   const setStatus = (text, level = 'neutral') => {
@@ -94,22 +145,46 @@ export const createWorkspacesDrawer = ({
   }
 
   const updateActions = () => {
-    const normalizedSelectedId = toSafeText(selectedId)
+    const normalizedSelectedId =
+      selectInput instanceof HTMLSelectElement
+        ? toSafeText(selectInput.value)
+        : toSafeText(selectedId)
     const hasSelection = normalizedSelectedId.length > 0
+    const canCreateWorkspace = typeof onCreateWorkspace === 'function'
+    const canInitializeWorkspace = typeof onInitializeWorkspace === 'function'
+    const hasStoredWorkspaces =
+      currentUiState === drawerUiState.localWithWorkspaces ||
+      currentUiState === drawerUiState.repositoryWithWorkspaces
+    const showInitialize = currentUiState === drawerUiState.repositoryEmpty
+    const showNewWorkspace = !showInitialize
+
+    const workspaceField = selectInput?.closest('label')
+    if (workspaceField instanceof HTMLElement) {
+      workspaceField.toggleAttribute('hidden', !hasStoredWorkspaces)
+    }
+
+    const actionsRow =
+      openButton?.closest('.workspaces-drawer__actions') ??
+      removeButton?.closest('.workspaces-drawer__actions')
+    if (actionsRow instanceof HTMLElement) {
+      actionsRow.toggleAttribute('hidden', !hasStoredWorkspaces)
+    }
+
+    if (initializeButton instanceof HTMLButtonElement) {
+      initializeButton.toggleAttribute('hidden', !showInitialize)
+      initializeButton.disabled = !canInitializeWorkspace
+    }
 
     if (newButton instanceof HTMLButtonElement) {
-      newButton.disabled = typeof onCreateWorkspace !== 'function'
+      newButton.toggleAttribute('hidden', !showNewWorkspace)
+      newButton.disabled = !canCreateWorkspace
     }
 
     if (openButton instanceof HTMLButtonElement) {
-      openButton.toggleAttribute('hidden', !hasStoredWorkspacesInScope)
-      openButton.style.display = hasStoredWorkspacesInScope ? '' : 'none'
       openButton.disabled = !hasSelection
     }
 
     if (removeButton instanceof HTMLButtonElement) {
-      removeButton.toggleAttribute('hidden', !hasStoredWorkspacesInScope)
-      removeButton.style.display = hasStoredWorkspacesInScope ? '' : 'none'
       removeButton.disabled = !hasSelection
     }
   }
@@ -121,16 +196,17 @@ export const createWorkspacesDrawer = ({
 
     const repositoryFilteredEntries = getFilteredEntriesByRepository()
     const filteredEntries = repositoryFilteredEntries
-    const workspaceField = selectInput.closest('label')
     const hasStoredWorkspaces = filteredEntries.length > 0
-    hasStoredWorkspacesInScope = hasStoredWorkspaces
+    const normalizedRepositoryFilter = getNormalizedRepositoryFilter(
+      selectedRepositoryFilter,
+    )
 
-    if (workspaceField instanceof HTMLElement) {
-      workspaceField.toggleAttribute('hidden', !hasStoredWorkspaces)
-    }
+    currentUiState = getUiState({
+      repositoryFilter: normalizedRepositoryFilter,
+      hasStoredWorkspaces,
+    })
 
     if (!hasStoredWorkspaces) {
-      selectedId = ''
       updateActions()
       return
     }
@@ -147,7 +223,12 @@ export const createWorkspacesDrawer = ({
     for (const entry of filteredEntries) {
       const option = document.createElement('option')
       option.value = toSafeText(entry.id)
-      option.textContent = toWorkspaceLabel(entry)
+      const shouldPrefixAsLocal =
+        normalizedRepositoryFilter === localRepositoryFilterValue &&
+        shouldRenderAsLocalEntry(entry)
+      option.textContent = toWorkspaceLabel(entry, {
+        forceLocalPrefix: shouldPrefixAsLocal,
+      })
       option.selected = option.value === selectedId
       selectInput.append(option)
     }
@@ -157,8 +238,7 @@ export const createWorkspacesDrawer = ({
     )
 
     if (!hasSelectedFilteredEntry) {
-      selectedId = ''
-      selectInput.value = selectedId
+      selectInput.value = ''
     }
 
     updateActions()
@@ -284,13 +364,35 @@ export const createWorkspacesDrawer = ({
       return
     }
 
+    updateActions()
+
     const workspaceField = selectInput?.closest('label')
     if (workspaceField instanceof HTMLElement && !workspaceField.hasAttribute('hidden')) {
       selectInput?.focus()
       return
     }
 
+    if (
+      initializeButton instanceof HTMLButtonElement &&
+      !initializeButton.hasAttribute('hidden')
+    ) {
+      initializeButton.focus()
+      return
+    }
+
     newButton?.focus()
+  }
+
+  const closeDrawer = () => {
+    open = false
+
+    if (toggleButton instanceof HTMLButtonElement) {
+      toggleButton.setAttribute('aria-expanded', 'false')
+    }
+
+    if (drawer instanceof HTMLElement) {
+      drawer.toggleAttribute('hidden', true)
+    }
   }
 
   toggleButton?.addEventListener('click', () => {
@@ -317,6 +419,30 @@ export const createWorkspacesDrawer = ({
     updateActions()
   })
 
+  initializeButton?.addEventListener('click', async () => {
+    if (typeof onInitializeWorkspace !== 'function') {
+      return
+    }
+
+    let initialized = false
+    try {
+      initialized = await onInitializeWorkspace(
+        getNormalizedRepositoryFilter(selectedRepositoryFilter),
+      )
+    } catch {
+      setStatus('Could not initialize workspace.', 'error')
+      return
+    }
+
+    if (!initialized) {
+      return
+    }
+
+    closeDrawer()
+    selectedId = ''
+    setStatus('Initialized workspace.', 'neutral')
+  })
+
   newButton?.addEventListener('click', async () => {
     if (typeof onCreateWorkspace !== 'function') {
       return
@@ -336,9 +462,10 @@ export const createWorkspacesDrawer = ({
       return
     }
 
-    selectedId = ''
+    selectedId =
+      typeof getActiveWorkspaceId === 'function' ? toSafeText(getActiveWorkspaceId()) : ''
     setStatus('Created workspace.', 'neutral')
-    await refresh({ preserveSelection: false })
+    await refresh({ preserveSelection: Boolean(selectedId) })
   })
 
   openButton?.addEventListener('click', async () => {
@@ -361,8 +488,8 @@ export const createWorkspacesDrawer = ({
       return
     }
 
+    closeDrawer()
     setStatus('Loaded workspace.', 'neutral')
-    void refresh({ preserveSelection: true })
   })
 
   removeButton?.addEventListener('click', async () => {

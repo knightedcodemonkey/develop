@@ -32,3 +32,7 @@ Examples that must stay out of `localStorage`:
 If data is needed to restore workspace or pull request workflow state, it belongs in IndexedDB workspace records.
 
 Repository selection is derived from in-memory BYOT controls and IndexedDB-backed workspace records, not from a dedicated localStorage key.
+
+For the Workspaces drawer action/state algorithm, see:
+
+- `docs/workspaces-behavior-algorithm.md`
