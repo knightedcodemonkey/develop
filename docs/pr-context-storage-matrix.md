@@ -34,11 +34,12 @@ See the full storage ownership docs for non-PR keys:
 
 Use this matrix as the source of truth when debugging UI/storage mismatch.
 
-| Scenario                                  | IDB `prContextState` | IDB `prNumber`   | localStorage PR fields | Notes                                                |
-| ----------------------------------------- | -------------------- | ---------------- | ---------------------- | ---------------------------------------------------- |
-| A. Local workspace only, no PR context    | `inactive`           | `null`           | none                   | No connected PR context.                             |
-| B. Workspace is for an active, open PR    | `active`             | PR number        | none                   | Push mode in PR controls.                            |
-| C. Workspace is for a PR closed on GitHub | `closed`             | closed PR number | none                   | Historical context retained for debugging/reference. |
+| Scenario                                   | IDB `prContextState` | IDB `prNumber`   | localStorage PR fields | Notes                                                                                                           |
+| ------------------------------------------ | -------------------- | ---------------- | ---------------------- | --------------------------------------------------------------------------------------------------------------- |
+| A. Local workspace only, no PR context     | `inactive`           | `null`           | none                   | No connected PR context.                                                                                        |
+| B. Workspace is for an active, open PR     | `active`             | PR number        | none                   | Push mode in PR controls.                                                                                       |
+| C. Workspace is for a PR closed on GitHub  | `closed`             | closed PR number | none                   | Historical context retained for debugging/reference.                                                            |
+| D. Active PR immediately after push commit | `active`             | PR number        | none                   | Committed tabs persist clean baseline (`isDirty=false`, `syncedContent=content`) and remain clean after reload. |
 
 ## Current Workspace Selection On Load
 
@@ -80,6 +81,9 @@ When the UI does not match expected PR state:
    - `prContextState`
    - `prNumber`
    - `repo`, `head`, `prTitle`
+
+- committed tab fields: `isDirty`, `syncedContent`, `content`, `syncedAt`, `lastSyncedRemoteSha`
+
 2. Compare against the matrix above.
 3. If the PR is still open on GitHub, expect PR controls to return to Push mode and the workspace record to transition back to `active`.
 4. If the PR is no longer open, expect Open PR mode to remain and status messaging to explain verification results.
