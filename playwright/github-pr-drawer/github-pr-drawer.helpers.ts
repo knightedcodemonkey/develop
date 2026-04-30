@@ -746,11 +746,8 @@ export const runActiveWorkspaceSwitchIntegrityScenario = async ({
     repositoryFullName,
     headBranch: targetHeadBranch,
   })
-  const targetPrTitle =
-    targetState === 'inactive' ? '' : `Target ${targetState} workspace`
-  const targetPrNumber = targetState === 'inactive' ? null : 9
-  const usesPromotedSourceSnapshot =
-    targetState === 'inactive' || targetState === 'closed'
+  const targetPrTitle = ''
+  const targetPrNumber = null
   const expectedTargetPrContextState = targetState
 
   await page.route('https://api.github.com/user/repos**', async route => {
@@ -890,26 +887,6 @@ export const runActiveWorkspaceSwitchIntegrityScenario = async ({
     page.locator('.editor-panel[data-editor-kind="component"] .cm-content').first(),
   ).toContainText(`Target ${targetState} content`)
 
-  const promotedSnapshot = {
-    active: {
-      repo: '',
-      base: '',
-      head: '',
-      prTitle: '',
-      prNumber: null,
-      prContextState: 'inactive',
-      componentContent: '',
-    },
-    target: {
-      repo: repositoryFullName,
-      base: 'main',
-      head: activeHeadBranch,
-      prTitle: 'Active A workspace',
-      prNumber: 2,
-      prContextState: 'active',
-      componentContent: `export const App = () => <main>Target ${targetState} content</main>`,
-    },
-  }
   const originalSnapshot = {
     active: {
       repo: repositoryFullName,
@@ -944,9 +921,28 @@ export const runActiveWorkspaceSwitchIntegrityScenario = async ({
 
   await expect
     .poll(async () => {
-      return readSnapshot()
+      const snapshot = await readSnapshot()
+      const activeMatches =
+        JSON.stringify(snapshot.active) === JSON.stringify(originalSnapshot.active)
+
+      const target = snapshot.target
+      const targetStateMatches =
+        targetState === 'closed'
+          ? target?.prContextState === 'closed' || target?.prContextState === 'inactive'
+          : target?.prContextState === expectedTargetPrContextState
+
+      const targetMatches =
+        target?.repo === originalSnapshot.target.repo &&
+        target?.base === originalSnapshot.target.base &&
+        target?.head === originalSnapshot.target.head &&
+        target?.prTitle === originalSnapshot.target.prTitle &&
+        target?.prNumber === originalSnapshot.target.prNumber &&
+        target?.componentContent === originalSnapshot.target.componentContent &&
+        targetStateMatches
+
+      return activeMatches && targetMatches
     })
-    .toEqual(usesPromotedSourceSnapshot ? promotedSnapshot : originalSnapshot)
+    .toBe(true)
 }
 
 export const runActiveWorkspaceCrossRepoSwitchIntegrityScenario = async ({

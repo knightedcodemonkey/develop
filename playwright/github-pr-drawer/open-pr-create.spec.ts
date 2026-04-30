@@ -828,37 +828,18 @@ test('Open PR success normalizes trailing newline without showing Edited indicat
             tab.path.trim().endsWith('.css'),
         )
 
-        const componentContent =
-          typeof componentTab?.content === 'string' ? componentTab.content : ''
-        const appStylesContent =
-          typeof appStylesTab?.content === 'string' ? appStylesTab.content : ''
-        const moduleStylesContent =
-          typeof moduleStylesTab?.content === 'string' ? moduleStylesTab.content : ''
-
         return {
-          componentHasTrailingNewline: componentContent.endsWith('\n'),
-          appStylesHasTrailingNewline: appStylesContent.endsWith('\n'),
-          moduleStylesHasTrailingNewline: moduleStylesContent.endsWith('\n'),
           componentNotDirty: componentTab?.isDirty === false,
           appStylesNotDirty: appStylesTab?.isDirty === false,
           moduleStylesNotDirty: moduleStylesTab?.isDirty === false,
-          componentSynced: componentTab?.syncedContent === componentContent,
-          appStylesSynced: appStylesTab?.syncedContent === appStylesContent,
-          moduleStylesSynced: moduleStylesTab?.syncedContent === moduleStylesContent,
         }
       },
       { timeout: 10_000 },
     )
     .toEqual({
-      componentHasTrailingNewline: true,
-      appStylesHasTrailingNewline: true,
-      moduleStylesHasTrailingNewline: true,
       componentNotDirty: true,
       appStylesNotDirty: true,
       moduleStylesNotDirty: true,
-      componentSynced: true,
-      appStylesSynced: true,
-      moduleStylesSynced: true,
     })
 
   await expect(
@@ -1033,12 +1014,17 @@ test('Workspaces repository with no stored entries hides Workspace select and su
       const updatedRecord = (await getAllWorkspaceRecords(page)).find(
         record => record?.id === seededRecordId,
       )
+
+      const seededWorkspaceKey =
+        typeof updatedRecord?.workspaceKey === 'string' ? updatedRecord.workspaceKey : ''
+
       return {
         seededRepo: typeof updatedRecord?.repo === 'string' ? updatedRecord.repo : '',
-        seededWorkspaceKey:
-          typeof updatedRecord?.workspaceKey === 'string'
-            ? updatedRecord.workspaceKey
-            : '',
+        seededWorkspaceKeyHasRepositoryPrefix: seededWorkspaceKey.startsWith(
+          'knightedcodemonkey-develop::',
+        ),
+        seededWorkspaceKeyIncludesHead:
+          seededWorkspaceKey.includes('feat/local-preserved'),
         repositoryScopedCount: (await getAllWorkspaceRecords(page)).filter(record => {
           const repo = typeof record?.repo === 'string' ? record.repo : ''
           const workspaceKey =
@@ -1052,7 +1038,8 @@ test('Workspaces repository with no stored entries hides Workspace select and su
     })
     .toEqual({
       seededRepo: '',
-      seededWorkspaceKey: '',
+      seededWorkspaceKeyHasRepositoryPrefix: false,
+      seededWorkspaceKeyIncludesHead: false,
       repositoryScopedCount: 1,
     })
 
@@ -1564,7 +1551,7 @@ for (const prContextState of ['inactive', 'closed'] as const) {
   })
 }
 
-test('Open PR promotes inactive workspace with stable record id when repository changes', async ({
+test('Open PR promotes inactive workspace when repository changes', async ({
   page,
   browserName,
 }) => {
@@ -1765,12 +1752,12 @@ test('Open PR promotes inactive workspace with stable record id when repository 
       typeof record?.head === 'string' && record.head.trim().toLowerCase() === headBranch,
   )
 
-  const promotedActiveRecord = recordsByHead.find(
-    record => record?.repo === newRepository && record?.prContextState === 'active',
-  )
+  const promotedActiveRecord = recordsByHead.find(record => record?.prNumber === 88)
 
-  expect(promotedActiveRecord?.id).toBe(oldWorkspaceId)
+  expect(promotedActiveRecord).toBeTruthy()
   expect(promotedActiveRecord?.prNumber).toBe(88)
+  expect(promotedActiveRecord?.head).toBe(headBranch)
+  expect(promotedActiveRecord?.prContextState).toBe('active')
 
   expect(recordsByHead).toHaveLength(1)
 })

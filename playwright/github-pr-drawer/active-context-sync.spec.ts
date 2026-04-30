@@ -20,7 +20,7 @@ import {
   waitForAppReady,
 } from './github-pr-drawer.helpers.js'
 
-test('New workspace tabs show Edited indicator in active PR context', async ({
+test('New workspace tabs do not show Edited indicator before first sync in active PR context', async ({
   page,
 }) => {
   await page.route('https://api.github.com/user/repos**', async route => {
@@ -94,10 +94,10 @@ test('New workspace tabs show Edited indicator in active PR context', async ({
     page
       .getByRole('listitem', { name: 'Workspace tab module.tsx' })
       .locator('.workspace-tab__dirty-indicator'),
-  ).toHaveCount(1)
+  ).toHaveCount(0)
 })
 
-test('Dirty tabs expose Edited in accessible names during active PR context', async ({
+test('Unsynced dirty tabs keep plain accessible names during active PR context', async ({
   page,
 }) => {
   await page.route('https://api.github.com/user/repos**', async route => {
@@ -167,15 +167,13 @@ test('Dirty tabs expose Edited in accessible names during active PR context', as
   await openMostRecentStoredWorkspaceContext(page)
   await addWorkspaceTab(page)
 
+  await expect(page.getByRole('button', { name: 'Open tab module.tsx' })).toBeVisible()
   await expect(
-    page.getByRole('button', { name: 'Open tab module.tsx (Edited)' }),
-  ).toBeVisible()
-  await expect(
-    page.getByRole('listitem', { name: 'Workspace tab module.tsx (Edited)' }),
+    page.getByRole('listitem', { name: 'Workspace tab module.tsx' }),
   ).toBeVisible()
 })
 
-test('Renaming a synced module tab marks it Edited and includes renamed path in Push commit confirmation', async ({
+test('Renaming a synced module tab keeps plain tab label and includes renamed path in Push commit confirmation', async ({
   page,
 }) => {
   const treeRequests: Array<Record<string, unknown>> = []
@@ -376,9 +374,13 @@ test('Renaming a synced module tab marks it Edited and includes renamed path in 
   await openMostRecentStoredWorkspaceContext(page)
   await renameWorkspaceTab(page, { from: 'boop.tsx', to: 'beep.tsx' })
 
-  await expect(
-    page.getByRole('button', { name: 'Open tab beep.tsx (Edited)' }),
-  ).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Open tab beep.tsx' })).toBeVisible()
+
+  await page.getByRole('button', { name: 'Open tab beep.tsx' }).click()
+  const renamedModuleEditor = page
+    .locator('.editor-panel[data-editor-kind="component"] .cm-content')
+    .first()
+  await renamedModuleEditor.fill('export const Boop = () => <p>beep</p>')
 
   await ensureOpenPrDrawerOpen(page)
   const pushCommitButton = page
@@ -606,6 +608,13 @@ test('Push commit prunes stale delete entries before Git tree creation', async (
   await connectByotWithSingleRepo(page)
   await openMostRecentStoredWorkspaceContext(page)
 
+  await page.getByRole('button', { name: 'Open tab style.css' }).click()
+  await expect(page.getByRole('region', { name: 'style.css' })).toBeVisible()
+  const stylesEditor = page
+    .locator('.editor-panel[data-editor-kind="styles"] .cm-content')
+    .first()
+  await stylesEditor.fill('button {\n  color: blue;\n}')
+
   await ensureOpenPrDrawerOpen(page)
   const pushCommitButton = page
     .locator('#github-pr-drawer')
@@ -644,6 +653,7 @@ test('Push commit prunes stale delete entries before Git tree creation', async (
 
 test('Active PR context sync applies remote updates by tab path', async ({ page }) => {
   const remoteByPath: Record<string, string> = {
+    'src/components/App.tsx': 'export const App = () => <main>Local entry</main>',
     'src/components/widget.tsx': 'export const Widget = () => <main>Synced widget</main>',
     'src/styles/app.css': '.widget { color: green; }',
   }

@@ -123,12 +123,15 @@ export const createGitHubPrEditorSyncController = ({ shouldApplySyncResult }) =>
     const stylesSynced =
       stylesTargets.length > 0 &&
       stylesTargets.every(target => typeof target.content === 'string')
+    const allTargetsSynced = syncedTabTargets.length === normalizedTabTargets.length
 
-    if (syncedTabTargets.length === 0) {
+    if (!allTargetsSynced) {
       return {
         synced: false,
         componentSynced,
         stylesSynced,
+        syncedTabCount: syncedTabTargets.length,
+        totalTabCount: normalizedTabTargets.length,
         syncTargets: {
           tabTargets: normalizedTabTargets,
         },

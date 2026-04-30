@@ -115,10 +115,9 @@ export const createGitHubPrContextUiController = ({
       if (githubPrToggle instanceof HTMLElement) {
         githubPrToggle.hidden = false
       }
-      if (!contextState.activePrContext) {
-        if (workspacesToggle instanceof HTMLElement) {
-          workspacesToggle.hidden = false
-        }
+
+      if (workspacesToggle instanceof HTMLElement) {
+        workspacesToggle.hidden = false
       }
 
       if (contextState.activePrContext) {
