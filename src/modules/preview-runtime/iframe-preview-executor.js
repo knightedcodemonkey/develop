@@ -56,6 +56,11 @@ const createIframeShellDocument = ({ channelId, parentOrigin, importMap }) => {
         entrySpecifier: '',
         reactRoot: null,
         renderedNodes: [],
+        visualConfig: {
+          cssText: '',
+          hostPadding: '',
+          backgroundColor: '',
+        },
       }
 
       const __knightedRuntimeErrorFingerprints = new Set()
@@ -110,6 +115,12 @@ const createIframeShellDocument = ({ channelId, parentOrigin, importMap }) => {
       }
 
       const __knightedApplyVisualConfig = ({ cssText = '', hostPadding = '', backgroundColor = '' }) => {
+        __knightedState.visualConfig = {
+          cssText: typeof cssText === 'string' ? cssText : '',
+          hostPadding: typeof hostPadding === 'string' ? hostPadding : '',
+          backgroundColor: typeof backgroundColor === 'string' ? backgroundColor : '',
+        }
+
         let styleElement = document.getElementById('knighted-preview-styles')
         if (!(styleElement instanceof HTMLStyleElement)) {
           styleElement = document.createElement('style')
@@ -117,17 +128,24 @@ const createIframeShellDocument = ({ channelId, parentOrigin, importMap }) => {
           document.head.append(styleElement)
         }
 
-        styleElement.textContent = __knightedToBaseStyles(hostPadding) + '\\n' + String(cssText)
+        styleElement.textContent =
+          __knightedToBaseStyles(__knightedState.visualConfig.hostPadding) +
+          '\\n' +
+          String(__knightedState.visualConfig.cssText)
 
-        if (typeof hostPadding === 'string' && hostPadding.trim().length > 0) {
-          document.documentElement.style.setProperty('--preview-host-padding', hostPadding.trim())
+        if (__knightedState.visualConfig.hostPadding.trim().length > 0) {
+          document.documentElement.style.setProperty(
+            '--preview-host-padding',
+            __knightedState.visualConfig.hostPadding.trim(),
+          )
         } else {
           document.documentElement.style.removeProperty('--preview-host-padding')
         }
 
-        if (typeof backgroundColor === 'string' && backgroundColor.length > 0) {
-          document.documentElement.style.backgroundColor = backgroundColor
-          document.body.style.backgroundColor = backgroundColor
+        if (__knightedState.visualConfig.backgroundColor.length > 0) {
+          document.documentElement.style.backgroundColor =
+            __knightedState.visualConfig.backgroundColor
+          document.body.style.backgroundColor = __knightedState.visualConfig.backgroundColor
           return
         }
 
@@ -285,7 +303,16 @@ const createIframeShellDocument = ({ channelId, parentOrigin, importMap }) => {
         const data = event.data
 
         if (data.type === __knightedMessageTypes.configPatch) {
-          __knightedApplyVisualConfig(data)
+          const patch =
+            data && typeof data.payload === 'object' && data.payload !== null
+              ? data.payload
+              : data && typeof data === 'object'
+                ? data
+                : {}
+          __knightedApplyVisualConfig({
+            ...__knightedState.visualConfig,
+            ...patch,
+          })
           return
         }
 
