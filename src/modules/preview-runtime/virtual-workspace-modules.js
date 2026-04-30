@@ -1,6 +1,5 @@
 import {
   isRelativeSpecifier,
-  stripImportDeclarationsBy,
   toModuleSpecifierKey,
   toTabModuleKey,
 } from './workspace-hydration.js'
@@ -412,6 +411,16 @@ const rewriteImportSpecifiers = ({ source, imports, resolveSpecifier }) => {
 const toModuleDataUrl = code =>
   `data:text/javascript;charset=utf-8,${encodeURIComponent(code)}`
 
+const toStyleModuleDataUrl = ({ moduleKey, styleModuleExports }) => {
+  const safeModuleExports =
+    styleModuleExports && typeof styleModuleExports === 'object' ? styleModuleExports : {}
+
+  const sourceUrl = `//# sourceURL=knighted-workspace/${moduleKey || 'styles'}.style.mjs`
+  return toModuleDataUrl(
+    `const __knightedStyles = ${JSON.stringify(safeModuleExports)}\nexport default __knightedStyles\n${sourceUrl}`,
+  )
+}
+
 const runtimeSpecifierRewrites = runtimeSpecifiers => ({
   react: runtimeSpecifiers.react,
   'react-dom/client': runtimeSpecifiers.reactDomClient,
@@ -552,6 +561,7 @@ export const planWorkspaceVirtualModules = ({
   workspaceGraphCache,
   mode,
   runtimeSpecifiers,
+  styleModuleExportsByTabId = {},
 }) => {
   if (!entryTab || typeof entryTab.content !== 'string') {
     return null
@@ -681,6 +691,7 @@ export const planWorkspaceVirtualModules = ({
   }
 
   const moduleDataByTabId = new Map()
+  const styleModuleUrlByTabId = new Map()
 
   for (const tabId of moduleDependencyOrder) {
     const tab = byId.get(tabId)
@@ -704,6 +715,36 @@ export const planWorkspaceVirtualModules = ({
     })
   }
 
+  for (const tabId of styleDependencyOrder) {
+    const tab = byId.get(tabId)
+    if (!tab) {
+      continue
+    }
+
+    const moduleKey = toTabModuleKey(tab) || tab.id
+    const styleModuleExports =
+      styleModuleExportsByTabId && typeof styleModuleExportsByTabId === 'object'
+        ? styleModuleExportsByTabId[tabId]
+        : {}
+    const moduleCacheKey = [
+      'style-module',
+      moduleKey,
+      JSON.stringify(styleModuleExports ?? {}),
+    ].join('\u0000')
+    const cachedModuleUrl = getCachedValue(moduleDataUrlCache, moduleCacheKey)
+    const moduleUrl =
+      typeof cachedModuleUrl === 'string'
+        ? cachedModuleUrl
+        : toStyleModuleDataUrl({ moduleKey, styleModuleExports })
+
+    if (!cachedModuleUrl) {
+      moduleDataUrlCache.set(moduleCacheKey, moduleUrl)
+      trimCache(moduleDataUrlCache, maxModuleDataUrlCacheEntries)
+    }
+
+    styleModuleUrlByTabId.set(tabId, moduleUrl)
+  }
+
   const runtimeRewrites = runtimeSpecifierRewrites(runtimeSpecifiers)
   const moduleUrlByTabId = new Map()
 
@@ -715,35 +756,14 @@ export const planWorkspaceVirtualModules = ({
       continue
     }
 
-    const sourceWithoutStyleImports = stripImportDeclarationsBy(
-      moduleData.source,
-      moduleData.imports,
-      entry => {
-        if (
-          !isRelativeSpecifier(entry?.source) &&
-          !isStyleImportSpecifier(entry?.source)
-        ) {
-          return false
-        }
-
-        const target = resolveWorkspaceImport({
-          importerModuleKey: moduleData.moduleKey,
-          source: entry.source,
-          byModuleKey,
-        })
-
-        return isStyleTab(target)
-      },
-    )
-
     const importsForRewrite = parseImports({
-      source: sourceWithoutStyleImports,
+      source: moduleData.source,
       transformJsxSource,
       formatTransformDiagnosticsError,
     })
 
     const rewrittenCode = rewriteImportSpecifiers({
-      source: sourceWithoutStyleImports,
+      source: moduleData.source,
       imports: importsForRewrite,
       resolveSpecifier: sourceSpecifier => {
         if (
@@ -761,7 +781,7 @@ export const planWorkspaceVirtualModules = ({
           }
 
           if (isStyleTab(target)) {
-            return null
+            return styleModuleUrlByTabId.get(target.id) ?? null
           }
 
           return moduleUrlByTabId.get(target.id) ?? null

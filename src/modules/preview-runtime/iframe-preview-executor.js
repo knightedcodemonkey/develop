@@ -168,11 +168,32 @@ const createIframeShellDocument = ({ channelId, parentOrigin, importMap }) => {
       }
 
       const __knightedEmitRuntimeError = details => {
-        const isMissingReference =
-          typeof details.message === 'string' &&
-          details.message.toLowerCase().includes(' is not defined')
+        const missingReferenceName = (() => {
+          if (typeof details.message !== 'string') {
+            return ''
+          }
+
+          const normalizedMessage = details.message.trim()
+          const missingReferenceMatch = normalizedMessage.match(
+            /^([A-Za-z_$][\\w$]*) is not defined\\b/i,
+          )
+          if (missingReferenceMatch?.[1]) {
+            return missingReferenceMatch[1]
+          }
+
+          const missingVariableMatch = normalizedMessage.match(
+            /^can't find variable:\\s*([A-Za-z_$][\\w$]*)\\b/i,
+          )
+          return missingVariableMatch?.[1] ?? ''
+        })()
+
+        const isLikelyTransientReference =
+          missingReferenceName.length > 0 &&
+          missingReferenceName.length <= 3 &&
+          missingReferenceName === missingReferenceName.toLowerCase()
         const isTransientOrigin = details.origin === 'window-error' || details.origin === 'promise'
-        if (isMissingReference && isTransientOrigin) {
+
+        if (isLikelyTransientReference && isTransientOrigin) {
           return
         }
 

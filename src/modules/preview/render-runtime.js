@@ -406,7 +406,7 @@ export const createRenderRuntimeController = ({
 
     if (!entryTab) {
       clearStyleDiagnostics()
-      return { css: '', moduleExports: null }
+      return { css: '', styleModuleExportsByTabId: {} }
     }
 
     const runtimeSpecifiers = getWorkspaceRuntimeSpecifiers()
@@ -422,7 +422,7 @@ export const createRenderRuntimeController = ({
 
     if (!virtualModulePlan) {
       clearStyleDiagnostics()
-      return { css: '', moduleExports: null }
+      return { css: '', styleModuleExportsByTabId: {} }
     }
 
     const workspaceTabById = new Map(
@@ -476,7 +476,7 @@ export const createRenderRuntimeController = ({
 
     if (styleInputs.length === 0) {
       clearStyleDiagnostics()
-      const output = { css: '', moduleExports: null }
+      const output = { css: '', styleModuleExportsByTabId: {} }
       compiledStylesCache = {
         key: cacheKey,
         value: output,
@@ -499,10 +499,13 @@ export const createRenderRuntimeController = ({
         needsLightningCss ? ensureLightningCssWasm() : Promise.resolve(null),
       ])
 
-      const compiledCssParts = await Promise.all(
+      const compiledStyleParts = await Promise.all(
         styleInputs.map(async input => {
           if (input.dialect === 'css') {
-            return input.source
+            return {
+              css: input.source,
+              moduleExports: null,
+            }
           }
 
           const options = {
@@ -540,15 +543,53 @@ export const createRenderRuntimeController = ({
           }
 
           const moduleExports = result.exports ?? null
-          return input.dialect === 'module'
-            ? appendCssModuleLocalAliases(result.css, moduleExports)
-            : result.css
+          return {
+            css:
+              input.dialect === 'module'
+                ? appendCssModuleLocalAliases(result.css, moduleExports)
+                : result.css,
+            moduleExports,
+          }
         }),
       )
 
+      const styleModuleExportsByTabId = {}
+      const compiledCssParts = []
+
+      for (let index = 0; index < styleInputs.length; index += 1) {
+        const input = styleInputs[index]
+        const part = compiledStyleParts[index]
+
+        if (part && typeof part.css === 'string') {
+          compiledCssParts.push(part.css)
+        }
+
+        if (input?.dialect !== 'module' || !part?.moduleExports) {
+          continue
+        }
+
+        const normalizedModuleExports = {}
+        for (const [localClassName, exportedValue] of Object.entries(
+          part.moduleExports,
+        )) {
+          if (typeof localClassName !== 'string' || localClassName.length === 0) {
+            continue
+          }
+
+          const normalizedValue = normalizeCssModuleExport(exportedValue)
+          if (!normalizedValue) {
+            continue
+          }
+
+          normalizedModuleExports[localClassName] = normalizedValue
+        }
+
+        styleModuleExportsByTabId[input.id] = normalizedModuleExports
+      }
+
       const output = {
         css: compiledCssParts.join('\n\n'),
-        moduleExports: null,
+        styleModuleExportsByTabId,
       }
       if (styleWarningLines.length > 0) {
         setStyleDiagnosticsDetails({
@@ -656,7 +697,11 @@ export const createRenderRuntimeController = ({
     reactDomClient: getRuntimeSpecifier('reactDomClient'),
   })
 
-  const renderWorkspaceInIframe = async ({ mode, cssText }) => {
+  const renderWorkspaceInIframe = async ({
+    mode,
+    cssText,
+    styleModuleExportsByTabId = {},
+  }) => {
     const workspaceTabs = getWorkspaceTabsForPreview()
     const entryTab = resolveWorkspaceEntryTab(workspaceTabs)
 
@@ -686,6 +731,7 @@ export const createRenderRuntimeController = ({
       workspaceGraphCache,
       mode,
       runtimeSpecifiers,
+      styleModuleExportsByTabId,
     })
 
     if (!virtualModulePlan) {
@@ -755,6 +801,7 @@ export const createRenderRuntimeController = ({
     await renderWorkspaceInIframe({
       mode: 'dom',
       cssText: compiledStyles.css,
+      styleModuleExportsByTabId: compiledStyles.styleModuleExportsByTabId,
     })
   }
 
@@ -772,6 +819,7 @@ export const createRenderRuntimeController = ({
     await renderWorkspaceInIframe({
       mode: 'react',
       cssText: compiledStyles.css,
+      styleModuleExportsByTabId: compiledStyles.styleModuleExportsByTabId,
     })
   }
 

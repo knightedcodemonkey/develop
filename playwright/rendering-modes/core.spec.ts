@@ -13,6 +13,127 @@ import {
   waitForInitialRender,
 } from '../helpers/app-test-helpers.js'
 
+const renameWorkspaceTab = async (
+  page: import('@playwright/test').Page,
+  {
+    from,
+    to,
+  }: {
+    from: string
+    to: string
+  },
+) => {
+  await page.getByRole('button', { name: `Rename tab ${from}` }).click()
+  const renameInput = page.getByLabel(`Rename ${from}`)
+  await renameInput.fill(to)
+  await renameInput.press('Enter')
+}
+
+const renameWorkspaceTabFromCandidates = async (
+  page: import('@playwright/test').Page,
+  {
+    fromCandidates,
+    to,
+  }: {
+    fromCandidates: string[]
+    to: string
+  },
+) => {
+  for (const from of fromCandidates) {
+    const button = page.getByRole('button', { name: `Rename tab ${from}` })
+    if ((await button.count()) === 0) {
+      continue
+    }
+
+    await button.click()
+    const renameInput = page.getByLabel(`Rename ${from}`)
+    await renameInput.fill(to)
+    await renameInput.press('Enter')
+    return
+  }
+
+  throw new Error(
+    `Could not find a rename target from candidates: ${fromCandidates.join(', ')}`,
+  )
+}
+
+const readLatestWorkspaceSnapshot = async (page: import('@playwright/test').Page) => {
+  return page.evaluate(async () => {
+    const dbName = 'knighted-develop-workspaces'
+    const storeName = 'prWorkspaces'
+
+    const openDb = await new Promise<IDBDatabase | null>(resolve => {
+      try {
+        const request = indexedDB.open(dbName)
+        request.onsuccess = () => resolve(request.result)
+        request.onerror = () => resolve(null)
+      } catch {
+        resolve(null)
+      }
+    })
+
+    if (!openDb) {
+      return null
+    }
+
+    const records = await new Promise<Array<Record<string, unknown>>>(resolve => {
+      try {
+        const transaction = openDb.transaction(storeName, 'readonly')
+        const store = transaction.objectStore(storeName)
+        const request = store.getAll()
+        request.onsuccess = () => {
+          const value = Array.isArray(request.result) ? request.result : []
+          resolve(value as Array<Record<string, unknown>>)
+        }
+        request.onerror = () => resolve([])
+      } catch {
+        resolve([])
+      }
+    })
+
+    openDb.close()
+
+    if (!Array.isArray(records) || records.length === 0) {
+      return null
+    }
+
+    const sorted = [...records].sort((a, b) => {
+      const first =
+        typeof a.lastModified === 'number' && Number.isFinite(a.lastModified)
+          ? a.lastModified
+          : 0
+      const second =
+        typeof b.lastModified === 'number' && Number.isFinite(b.lastModified)
+          ? b.lastModified
+          : 0
+      return second - first
+    })
+
+    const latest = sorted[0] ?? {}
+    const tabs = Array.isArray(latest.tabs) ? latest.tabs : []
+    const primaryStylesTab = tabs.find(tab => {
+      if (!tab || typeof tab !== 'object') {
+        return false
+      }
+
+      const tabRecord = tab as Record<string, unknown>
+      const language = typeof tabRecord.language === 'string' ? tabRecord.language : ''
+      const path = typeof tabRecord.path === 'string' ? tabRecord.path : ''
+      const name = typeof tabRecord.name === 'string' ? tabRecord.name : ''
+      const isStyleLanguage = ['css', 'less', 'sass', 'module'].includes(language)
+      const styleIdentity = `${path} ${name}`.toLowerCase()
+      const looksLikeStyle = /\.(css|less|sass|scss)\b/.test(styleIdentity)
+      return isStyleLanguage && looksLikeStyle
+    }) as Record<string, unknown> | undefined
+
+    return {
+      renderMode: typeof latest.renderMode === 'string' ? latest.renderMode : '',
+      styleLanguage:
+        typeof primaryStylesTab?.language === 'string' ? primaryStylesTab.language : '',
+    }
+  })
+}
+
 test.beforeEach(async ({ page }) => {
   await resetWorkbenchStorage(page)
 })
@@ -29,6 +150,95 @@ test('renders in react mode with css modules', async ({ page }) => {
   await page.getByRole('combobox', { name: 'Style mode' }).selectOption('module')
   await expect(page.getByRole('status', { name: 'App status' })).toHaveText('Rendered')
   await expectPreviewHasRenderedContent(page)
+})
+
+test('css module imports expose class map for module tabs', async ({ page }) => {
+  await waitForInitialRender(page)
+
+  await ensurePanelToolsVisible(page, 'component')
+
+  await renameWorkspaceTab(page, {
+    from: 'app.css',
+    to: 'app.module.css',
+  })
+
+  await setWorkspaceTabSource(page, {
+    fileName: 'app.module.css',
+    kind: 'styles',
+    source: [
+      '.list {',
+      '  display: grid;',
+      '}',
+      '',
+      '.item {',
+      '  color: rgb(10, 20, 30);',
+      '}',
+    ].join('\n'),
+  })
+
+  await addWorkspaceTab(page, { type: 'script' })
+  await renameWorkspaceTab(page, {
+    from: 'module.tsx',
+    to: 'list.tsx',
+  })
+  await setWorkspaceTabSource(page, {
+    fileName: 'list.tsx',
+    source: [
+      "import styles from '../styles/app.module.css'",
+      "import { Item } from './item'",
+      '',
+      'type ListProps = {',
+      '  items: string[]',
+      '}',
+      '',
+      'export const List = ({ items }: ListProps) => (',
+      '  <ul className={styles.list}>',
+      '    {items.map(item => (',
+      '      <Item key={item} value={item} />',
+      '    ))}',
+      '  </ul>',
+      ')',
+    ].join('\n'),
+  })
+
+  await addWorkspaceTab(page, { type: 'script' })
+  await renameWorkspaceTabFromCandidates(page, {
+    fromCandidates: ['module-2.tsx', 'module.tsx', 'module-1.tsx'],
+    to: 'item.tsx',
+  })
+  await setWorkspaceTabSource(page, {
+    fileName: 'item.tsx',
+    source: [
+      "import styles from '../styles/app.module.css'",
+      '',
+      'type ItemProps = {',
+      '  value: string',
+      '}',
+      '',
+      'export const Item = ({ value }: ItemProps) => (',
+      '  <li className={styles.item}>{value}</li>',
+      ')',
+    ].join('\n'),
+  })
+
+  await setComponentEditorSource(
+    page,
+    [
+      "import { List } from './list'",
+      '',
+      "const items = ['one', 'two']",
+      '',
+      'const App = () => <List items={items} />',
+    ].join('\n'),
+  )
+
+  await expect(page.getByRole('status', { name: 'App status' })).toHaveText('Rendered')
+  await expect(page.locator('#preview-host pre')).toHaveCount(0)
+  await expect(getPreviewFrame(page).getByRole('listitem')).toHaveCount(2)
+  await expect(getPreviewFrame(page).getByRole('listitem').first()).toHaveCSS(
+    'color',
+    'rgb(10, 20, 30)',
+  )
 })
 
 test('preview styles require explicit import from entry graph', async ({ page }) => {
@@ -384,6 +594,29 @@ test('editing-transient missing reference runtime errors are suppressed', async 
   await expect(page.getByRole('status', { name: 'App status' })).not.toHaveText('Error')
 })
 
+test('missing component identifiers in App render as runtime errors', async ({
+  page,
+}) => {
+  await waitForInitialRender(page)
+  await ensurePanelToolsVisible(page, 'component')
+  await page.getByRole('combobox', { name: 'Render mode' }).selectOption('react')
+
+  await setComponentEditorSource(
+    page,
+    [
+      'const App = () => (',
+      '  <List>',
+      '    <Item value="one" />',
+      '  </List>',
+      ')',
+    ].join('\n'),
+  )
+
+  await expect(page.getByRole('status', { name: 'App status' })).toHaveText('Error')
+  await expect(page.locator('#preview-host pre')).toContainText('[runtime]')
+  await expect(page.locator('#preview-host pre')).toContainText('List is not defined')
+})
+
 test('preview iframe sandbox isolates parent origin access', async ({ page }) => {
   await waitForInitialRender(page)
 
@@ -706,6 +939,10 @@ test('persists render mode across reload', async ({ page }) => {
   await page.getByRole('combobox', { name: 'Render mode' }).selectOption('react')
   await expect(page.getByRole('status', { name: 'App status' })).toHaveText('Rendered')
 
+  await expect
+    .poll(async () => (await readLatestWorkspaceSnapshot(page))?.renderMode ?? '')
+    .toBe('react')
+
   await page.reload()
   await waitForInitialRender(page)
   await ensurePanelToolsVisible(page, 'component')
@@ -720,6 +957,10 @@ test('persists style mode across reload', async ({ page }) => {
   await page.getByRole('combobox', { name: 'Style mode' }).selectOption('sass')
   await expect(page.locator('#style-mode')).toHaveValue('sass')
   await expect(page.getByRole('status', { name: 'App status' })).toHaveText('Rendered')
+
+  await expect
+    .poll(async () => (await readLatestWorkspaceSnapshot(page))?.styleLanguage ?? '')
+    .toBe('sass')
 
   await page.reload()
   await waitForInitialRender(page)
