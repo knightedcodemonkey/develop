@@ -155,10 +155,10 @@ export const getPreviewFrame = (page: Page) => page.frameLocator('#preview-host 
 
 export const addWorkspaceTab = async (
   page: Page,
-  { kind = 'component' }: { kind?: 'component' | 'styles' } = {},
+  { type = 'script' }: { type?: 'script' | 'style' } = {},
 ) => {
   await page.getByRole('button', { name: 'Add workspace tab' }).click()
-  if (kind === 'styles') {
+  if (type === 'style') {
     await page.getByRole('button', { name: 'Add styles tab' }).click()
     return
   }

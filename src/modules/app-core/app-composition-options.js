@@ -32,7 +32,7 @@ const createRuntimeCoreOptions = ({
   lintStylesButton,
   autoRenderToggle,
   getActiveWorkspaceTab,
-  getTabKind,
+  isStyleWorkspaceTab,
   getRenderRuntime,
   getPreviewHost,
   previewBackground,
@@ -88,7 +88,7 @@ const createRuntimeCoreOptions = ({
     lintStylesButton,
     autoRenderToggle,
     getActiveWorkspaceTab,
-    getTabKind,
+    isStyleWorkspaceTab,
     getRenderRuntime,
   },
   renderRuntimeOptions: {
@@ -121,7 +121,7 @@ const createRuntimeCoreOptions = ({
   setSuppressEditorChangeSideEffects,
   getStyleEditorLanguage,
   getActiveWorkspaceTab,
-  getTabKind,
+  isStyleWorkspaceTab,
   workspaceTabsState,
   queueWorkspaceSave,
 })
@@ -136,7 +136,7 @@ const createEditorBootstrapOptions = ({
   styleMode,
   getSuppressEditorChangeSideEffects,
   getActiveWorkspaceTab,
-  getTabKind,
+  isStyleWorkspaceTab,
   getDirtyStateForTabChange,
   workspaceTabsState,
   toWorkspaceSyncedContent,
@@ -167,7 +167,7 @@ const createEditorBootstrapOptions = ({
   getStyleModeValue: () => styleMode.value,
   getSuppressEditorChangeSideEffects,
   getActiveWorkspaceTab,
-  getTabKind,
+  isStyleWorkspaceTab,
   getDirtyStateForTabChange,
   workspaceTabsState,
   toWorkspaceSyncedContent,
@@ -284,8 +284,6 @@ const createAppStartupBindingsOptions = ({
   getActiveWorkspaceTab,
   setActiveWorkspaceTab,
   workspaceTabsState,
-  getLoadedStylesTabId,
-  getWorkspaceTabByKind,
   setHasCompletedInitialWorkspaceBootstrap,
 }) => ({
   renderMode,
@@ -382,12 +380,6 @@ const createAppStartupBindingsOptions = ({
   getActiveWorkspaceTab,
   setActiveWorkspaceTab,
   workspaceTabsState,
-  loadedStylesTabIdRef: {
-    get value() {
-      return getLoadedStylesTabId()
-    },
-  },
-  getWorkspaceTabByKind,
   setHasCompletedInitialWorkspaceBootstrap,
 })
 

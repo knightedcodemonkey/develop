@@ -20,7 +20,7 @@ const createRuntimeCoreSetup = ({
   setSuppressEditorChangeSideEffects,
   getStyleEditorLanguage,
   getActiveWorkspaceTab,
-  getTabKind,
+  isStyleWorkspaceTab,
   workspaceTabsState,
   queueWorkspaceSave,
 }) => {
@@ -128,7 +128,7 @@ const createRuntimeCoreSetup = ({
     }
 
     const activeTab = getActiveWorkspaceTab()
-    if (activeTab && getTabKind(activeTab) === 'styles') {
+    if (activeTab && isStyleWorkspaceTab(activeTab)) {
       const nextLanguage =
         nextMode === 'less'
           ? 'less'

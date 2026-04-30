@@ -52,7 +52,7 @@ export const createWorkspacePrSessionHandoffController = ({
     const now = Date.now()
 
     return {
-      id: 'component',
+      id: 'entry',
       name: defaultComponentTabName,
       path: defaultComponentTabPath,
       language: 'javascript-jsx',
@@ -103,7 +103,7 @@ export const createWorkspacePrSessionHandoffController = ({
 
     workspaceTabsState.replaceTabs({
       tabs: [createFreshLocalEntryTab()],
-      activeTabId: 'component',
+      activeTabId: 'entry',
     })
 
     const activeTab = getActiveWorkspaceTab()

@@ -1,8 +1,8 @@
 const createDiagnosticsTabStateHelpers = ({
   getActiveWorkspaceTab,
-  getLoadedComponentWorkspaceTab,
-  getLoadedStylesWorkspaceTab,
-  getTabKind,
+  getEntryWorkspaceTab,
+  getPrimaryStyleWorkspaceTab,
+  isStyleWorkspaceTab,
   toNonEmptyWorkspaceText,
   diagnosticsComponentSection,
   diagnosticsStylesSection,
@@ -20,7 +20,7 @@ const createDiagnosticsTabStateHelpers = ({
 }) => {
   const syncDiagnosticsDrawerLayout = () => {
     const activeTab = getActiveWorkspaceTab()
-    const isStylesTab = getTabKind(activeTab) === 'styles'
+    const isStylesTab = isStyleWorkspaceTab(activeTab)
 
     if (diagnosticsComponentSection instanceof HTMLElement) {
       diagnosticsComponentSection.hidden = isStylesTab
@@ -78,9 +78,7 @@ const createDiagnosticsTabStateHelpers = ({
   const getComponentLintTarget = () => {
     const activeTab = getActiveWorkspaceTab()
     const tab =
-      activeTab && getTabKind(activeTab) === 'component'
-        ? activeTab
-        : getLoadedComponentWorkspaceTab()
+      activeTab && !isStyleWorkspaceTab(activeTab) ? activeTab : getEntryWorkspaceTab()
     if (!tab) {
       return null
     }
@@ -95,9 +93,9 @@ const createDiagnosticsTabStateHelpers = ({
   const getStylesLintTarget = () => {
     const activeTab = getActiveWorkspaceTab()
     const tab =
-      activeTab && getTabKind(activeTab) === 'styles'
+      activeTab && isStyleWorkspaceTab(activeTab)
         ? activeTab
-        : getLoadedStylesWorkspaceTab()
+        : getPrimaryStyleWorkspaceTab()
     if (!tab) {
       return null
     }

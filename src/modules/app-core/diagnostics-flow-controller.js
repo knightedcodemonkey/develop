@@ -30,7 +30,7 @@ const createDiagnosticsFlowController = ({
   lintStylesButton,
   autoRenderToggle,
   getActiveWorkspaceTab,
-  getTabKind,
+  isStyleWorkspaceTab,
   getRenderRuntime,
 }) => {
   let activeComponentLintAbortController = null
@@ -176,8 +176,8 @@ const createDiagnosticsFlowController = ({
 
     if (
       statusNode.textContent.startsWith('Rendered (Lint issues:') ||
-      statusNode.textContent.startsWith('Linting component with Biome...') ||
-      statusNode.textContent.startsWith('Linting styles with Biome...')
+      statusNode.textContent.startsWith('Linting ') ||
+      statusNode.textContent.startsWith('Lint failed')
     ) {
       setStatus('Rendered', 'neutral')
     }
@@ -398,7 +398,7 @@ const createDiagnosticsFlowController = ({
     }
 
     const activeTab = getActiveWorkspaceTab()
-    if (activeTab && getTabKind(activeTab) === 'component') {
+    if (activeTab && !isStyleWorkspaceTab(activeTab)) {
       const shouldRender = getRenderRuntime()?.shouldAutoRenderForTabChange(activeTab.id)
       if (!shouldRender) {
         return

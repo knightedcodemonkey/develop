@@ -784,7 +784,7 @@ test('Open PR success normalizes trailing newline without showing Edited indicat
 
   await setComponentEditorSource(page, 'const App = () => <button>tap me</button>')
   await setStylesEditorSource(page, '.button { color: red; }')
-  await addWorkspaceTab(page, { kind: 'styles' })
+  await addWorkspaceTab(page, { type: 'style' })
 
   const moduleStylesEditor = page
     .locator('.editor-panel[data-editor-kind="styles"] .cm-content')
@@ -816,7 +816,7 @@ test('Open PR success normalizes trailing newline without showing Edited indicat
           ? (workspaceRecord.tabs as Array<Record<string, unknown>>)
           : []
 
-        const componentTab = tabs.find(tab => tab?.id === 'component')
+        const componentTab = tabs.find(tab => tab?.role === 'entry')
         const appStylesTab = tabs.find(
           tab =>
             typeof tab?.path === 'string' && tab.path.trim() === 'src/styles/app.css',

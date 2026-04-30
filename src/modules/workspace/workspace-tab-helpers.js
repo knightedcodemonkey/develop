@@ -233,8 +233,14 @@ const resolveWorkspaceActiveTabId = ({ tabs, requestedActiveTabId }) => {
     return requestedId
   }
 
-  if (nextTabs.some(tab => tab?.id === 'component')) {
-    return 'component'
+  const activeTab = nextTabs.find(tab => tab?.isActive === true)
+  if (toNonEmptyWorkspaceText(activeTab?.id)) {
+    return toNonEmptyWorkspaceText(activeTab.id)
+  }
+
+  const entryTab = nextTabs.find(tab => tab?.role === 'entry')
+  if (toNonEmptyWorkspaceText(entryTab?.id)) {
+    return toNonEmptyWorkspaceText(entryTab.id)
   }
 
   return toNonEmptyWorkspaceText(nextTabs[0]?.id)

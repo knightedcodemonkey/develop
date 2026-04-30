@@ -73,8 +73,8 @@ test('preview styles require explicit import from entry graph', async ({ page })
 test('nested module imports can bring styles into preview graph', async ({ page }) => {
   await waitForInitialRender(page)
 
-  await addWorkspaceTab(page, { kind: 'component' })
-  await addWorkspaceTab(page, { kind: 'styles' })
+  await addWorkspaceTab(page, { type: 'script' })
+  await addWorkspaceTab(page, { type: 'style' })
 
   await setWorkspaceTabSource(page, {
     fileName: 'module.tsx',
