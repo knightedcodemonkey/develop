@@ -14,11 +14,9 @@ import {
 import { createDiagnosticsFlowController } from './modules/app-core/diagnostics-flow-controller.js'
 import { createEditorBootstrapController } from './modules/app-core/editor-bootstrap-controller.js'
 import {
-  getInitialRenderMode as getInitialRenderModeValue,
   getStyleEditorLanguage,
   normalizeRenderMode,
   normalizeStyleMode,
-  persistRenderMode as persistRenderModeValue,
   setCssSourceValue,
   setJsxSourceValue,
   updateRenderModeEditability as updateRenderModeEditabilityValue,
@@ -214,7 +212,6 @@ const defaultStylesTabPath = 'src/styles/app.css'
 const defaultComponentTabName = 'App.tsx'
 const defaultStylesTabName = 'app.css'
 const allowedEntryTabFileNames = new Set(['app.tsx', 'app.js'])
-const renderModeStorageKey = 'knighted-develop:render-mode'
 const editorKinds = ['component', 'styles']
 const editorPanelsByKind = {
   component: componentEditorPanel,
@@ -762,7 +759,6 @@ const {
   setRenderModeValue: value => {
     renderMode.value = value
   },
-  persistRenderMode: mode => persistRenderMode(mode),
   getActiveWorkspaceTab,
   onActiveWorkspaceTabChange: (_tab, { changed } = {}) => {
     syncDiagnosticsDrawerLayout()
@@ -1205,9 +1201,7 @@ chatDrawerController = githubWorkflows.chatDrawerController
 prDrawerController = githubWorkflows.prDrawerController
 workspacesDrawerController = githubWorkflows.workspacesDrawerController
 
-const persistRenderMode = mode => persistRenderModeValue(mode, { renderModeStorageKey })
-
-const getInitialRenderMode = () => getInitialRenderModeValue({ renderModeStorageKey })
+const getInitialRenderMode = () => 'dom'
 
 const updateRenderModeEditability = () =>
   updateRenderModeEditabilityValue({ renderMode, getActiveWorkspaceTab })
@@ -1295,7 +1289,6 @@ const runtimeCoreOptions = createRuntimeCoreOptions({
   setPendingClearAction: value => (pendingClearAction = value),
   normalizeRenderMode,
   normalizeStyleMode,
-  persistRenderMode,
   resetDiagnosticsFlow: () => diagnosticsFlowController.resetDiagnosticsFlow(),
   maybeRender: () => diagnosticsFlowController.maybeRender(),
   flushWorkspaceSave,

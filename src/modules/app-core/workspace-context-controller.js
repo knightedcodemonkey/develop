@@ -19,7 +19,6 @@ const createWorkspaceContextController = ({
   normalizeRenderMode,
   getRenderModeValue,
   setRenderModeValue,
-  persistRenderMode,
   onWorkspaceRecordApplied,
   getActiveWorkspaceTab,
   loadWorkspaceTabIntoEditor,
@@ -129,7 +128,6 @@ const createWorkspaceContextController = ({
       if (getRenderModeValue() !== nextRenderMode) {
         setRenderModeValue(nextRenderMode)
       }
-      persistRenderMode(nextRenderMode)
 
       const activeTab = getActiveWorkspaceTab()
       if (activeTab) {

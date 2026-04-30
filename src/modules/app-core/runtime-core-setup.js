@@ -10,7 +10,6 @@ const createRuntimeCoreSetup = ({
   setPendingClearAction,
   normalizeRenderMode,
   normalizeStyleMode,
-  persistRenderMode,
   resetDiagnosticsFlow,
   maybeRender,
   flushWorkspaceSave,
@@ -99,7 +98,7 @@ const createRuntimeCoreSetup = ({
       renderMode.value = nextMode
     }
 
-    persistRenderMode(nextMode)
+    queueWorkspaceSave()
     resetDiagnosticsFlow()
 
     maybeRender()
