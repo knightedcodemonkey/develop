@@ -496,9 +496,11 @@ const bindAppEventsAndStart = ({
       syncDiagnosticsDrawerLayout()
     }
 
-    const stylesTab = getPrimaryStyleWorkspaceTab()
-    if (stylesTab && typeof stylesTab.content === 'string') {
-      setCssSource(stylesTab.content)
+    if (!isStyleWorkspaceTab(activeTab)) {
+      const stylesTab = getPrimaryStyleWorkspaceTab()
+      if (stylesTab && typeof stylesTab.content === 'string') {
+        setCssSource(stylesTab.content)
+      }
     }
 
     setHasCompletedInitialWorkspaceBootstrap(true)

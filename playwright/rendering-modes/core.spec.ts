@@ -614,7 +614,9 @@ test('missing component identifiers in App render as runtime errors', async ({
 
   await expect(page.getByRole('status', { name: 'App status' })).toHaveText('Error')
   await expect(page.locator('#preview-host pre')).toContainText('[runtime]')
-  await expect(page.locator('#preview-host pre')).toContainText('List is not defined')
+  await expect(page.locator('#preview-host pre')).toContainText(
+    /List is not defined|Can't find variable:\s*List/,
+  )
 })
 
 test('preview iframe sandbox isolates parent origin access', async ({ page }) => {

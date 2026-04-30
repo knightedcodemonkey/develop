@@ -83,7 +83,8 @@ export const waitForAppReady = async (page: Page, path = appEntryPath) => {
       return (
         statusText === 'Rendered' ||
         statusText?.startsWith('Rendered (Type errors:') ||
-        statusText === 'Error'
+        statusText === 'Error' ||
+        statusText === 'Could not restore local workspace context.'
       )
     })
     .toBe(true)
