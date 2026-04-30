@@ -1719,10 +1719,13 @@ test('Active PR context push with no local changes shows neutral status', async 
       const tabs = Array.isArray(workspaceRecord?.tabs)
         ? (workspaceRecord.tabs as Array<Record<string, unknown>>)
         : []
-      const tabIds = new Set(
-        tabs.map(tab => (typeof tab?.id === 'string' ? tab.id : '')).filter(Boolean),
-      )
-      const hasPrimaryTabs = tabIds.has('component') && tabIds.has('styles')
+      const hasEntryTab = tabs.some(tab => tab?.role === 'entry')
+      const hasStyleTab = tabs.some(tab => {
+        const language =
+          typeof tab?.language === 'string' ? tab.language.trim().toLowerCase() : ''
+        return language === 'css' || language === 'less' || language === 'sass'
+      })
+      const hasPrimaryTabs = hasEntryTab && hasStyleTab
       return hasPrimaryTabs && tabs.every(tab => tab?.isDirty === false)
     })
     .toBe(true)
