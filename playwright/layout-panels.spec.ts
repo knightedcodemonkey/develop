@@ -3,6 +3,7 @@ import {
   expectCollapseButtonState,
   expectPreviewHasRenderedContent,
   getCollapseButton,
+  getPreviewFrame,
   getToolsButton,
   waitForInitialRender,
 } from './helpers/app-test-helpers.js'
@@ -59,6 +60,37 @@ test('dark theme defaults preview background to editor background', async ({ pag
     (value.match(/\d+/g) ?? []).slice(0, 3).map(entry => Number.parseInt(entry, 10))
 
   expect(toRgbChannels(colors.preview)).toEqual(toRgbChannels(colors.editor))
+})
+
+test('changing preview background keeps applied preview styles', async ({ page }) => {
+  await waitForInitialRender(page)
+
+  const previewFrameRoot = getPreviewFrame(page).locator('html')
+
+  await expect(previewFrameRoot).toHaveCount(1)
+  const hasComponentStylesBefore = await previewFrameRoot.evaluate(() => {
+    const styleElement = document.getElementById('knighted-preview-styles')
+    if (!(styleElement instanceof HTMLStyleElement)) {
+      return false
+    }
+
+    return styleElement.textContent?.includes('.counter-button') ?? false
+  })
+  expect(hasComponentStylesBefore).toBe(true)
+
+  await page.getByLabel('Background').fill('#b1aaaa')
+
+  const hasComponentStylesAfter = await previewFrameRoot.evaluate(() => {
+    const styleElement = document.getElementById('knighted-preview-styles')
+    if (!(styleElement instanceof HTMLStyleElement)) {
+      return false
+    }
+
+    return styleElement.textContent?.includes('.counter-button') ?? false
+  })
+  expect(hasComponentStylesAfter).toBe(true)
+
+  await expect(previewFrameRoot).toHaveCSS('background-color', 'rgb(177, 170, 170)')
 })
 
 test('fixed layout keeps preview panel height within editor stack height', async ({
