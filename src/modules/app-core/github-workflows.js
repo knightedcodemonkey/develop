@@ -1,5 +1,3 @@
-import { repositoryStarterSelectionIdPrefix } from '../constants.js'
-
 const initializeGitHubWorkflows = ({
   createGitHubPrEditorSyncController,
   createGitHubChatDrawer,
@@ -42,6 +40,8 @@ const initializeGitHubWorkflows = ({
   workspacesClose,
   workspacesStatus,
   workspacesRepository,
+  workspacesInitialize,
+  workspacesNew,
   workspacesSelect,
   workspacesOpen,
   workspacesRemove,
@@ -49,10 +49,13 @@ const initializeGitHubWorkflows = ({
   getActiveWorkspaceRecordId,
   setActiveWorkspaceRecordId,
   setActiveWorkspaceCreatedAt,
+  buildWorkspaceRecordSnapshot,
   listLocalContextRecords,
   refreshLocalContextOptions,
   applyWorkspaceRecord,
   syncActiveWorkspaceRepositoryScope,
+  forkWorkspaceFromCurrentState,
+  flushWorkspaceSave,
   getWorkspacePrFileCommits,
   getEditorSyncTargets,
   getRenderMode,
@@ -66,16 +69,13 @@ const initializeGitHubWorkflows = ({
   onPrContextStateChange,
   onPrContextVerifiedClosed,
   onPrContextClosed,
-  onPrContextDisconnected,
   getTokenForVisibility,
-  closeWorkspacesDrawer,
   getActivePrEditorSyncKey,
   syncFromActiveContext,
   applyRenderMode,
   applyStyleMode,
   formatActivePrReference,
   githubPrContextClose,
-  githubPrContextDisconnect,
   confirmAction,
   setStatus,
   showAppToast,
@@ -100,18 +100,6 @@ const initializeGitHubWorkflows = ({
       importFromCdnWithFallback,
     })
     return collectTopLevelDeclarations({ source, transformJsxSource })
-  }
-
-  const parseRepositoryStarterSelectionId = value => {
-    const normalizedValue = typeof value === 'string' ? value.trim() : ''
-    if (!normalizedValue.startsWith(repositoryStarterSelectionIdPrefix)) {
-      return ''
-    }
-
-    const repositoryFullName = normalizedValue.slice(
-      repositoryStarterSelectionIdPrefix.length,
-    )
-    return typeof repositoryFullName === 'string' ? repositoryFullName.trim() : ''
   }
 
   const shouldReconcileWorkspaceUpdatesForRepository = repositoryFullName => {
@@ -166,14 +154,30 @@ const initializeGitHubWorkflows = ({
     return true
   }
 
+  const persistActiveWorkspaceSnapshot = async () => {
+    if (typeof buildWorkspaceRecordSnapshot !== 'function') {
+      return null
+    }
+
+    const activeWorkspaceRecordId =
+      typeof getActiveWorkspaceRecordId === 'function' ? getActiveWorkspaceRecordId() : ''
+
+    const snapshot =
+      typeof activeWorkspaceRecordId === 'string' && activeWorkspaceRecordId.trim()
+        ? buildWorkspaceRecordSnapshot({ recordId: activeWorkspaceRecordId })
+        : buildWorkspaceRecordSnapshot()
+
+    if (!snapshot || typeof snapshot !== 'object') {
+      return null
+    }
+
+    const savedWorkspaceRecord = await workspaceStorage.upsertWorkspace(snapshot)
+    setActiveWorkspaceRecordId(savedWorkspaceRecord.id)
+    setActiveWorkspaceCreatedAt(savedWorkspaceRecord.createdAt ?? null)
+    return savedWorkspaceRecord
+  }
+
   const prEditorSyncController = createGitHubPrEditorSyncController({
-    setComponentSource: value => {
-      setComponentSource(value)
-    },
-    setStylesSource: value => {
-      setStylesSource(value)
-    },
-    scheduleRender,
     shouldApplySyncResult: shouldApplyActivePrEditorSync,
   })
 
@@ -224,6 +228,13 @@ const initializeGitHubWorkflows = ({
     setSelectedRepository: setCurrentSelectedRepository,
     getFileCommits: getWorkspacePrFileCommits,
     getEditorSyncTargets,
+    persistWorkspaceMetadataOnSubmit: async () => {
+      if (typeof flushWorkspaceSave !== 'function') {
+        return
+      }
+
+      await flushWorkspaceSave({ preserveRecordId: true })
+    },
     getTopLevelDeclarations,
     getRenderMode,
     getStyleMode,
@@ -233,7 +244,16 @@ const initializeGitHubWorkflows = ({
     confirmBeforeSubmit: options => {
       confirmAction(options)
     },
-    onPullRequestOpened: ({ url, fileUpdates, repositoryFullName }) => {
+    onPullRequestOpened: async ({
+      url,
+      fileUpdates,
+      repositoryFullName,
+      pullRequestNumber,
+    }) => {
+      if (typeof onPrContextStateChange === 'function') {
+        onPrContextStateChange(githubAiContextState.activePrContext)
+      }
+
       const activeContextSyncKey = getActivePrContextSyncKey(
         githubAiContextState.activePrContext,
       )
@@ -247,12 +267,74 @@ const initializeGitHubWorkflows = ({
       if (shouldReconcileWorkspaceUpdatesForRepository(repositoryFullName)) {
         reconcileWorkspaceTabsWithPushUpdates(fileUpdates)
       }
+
+      if (typeof flushWorkspaceSave === 'function') {
+        try {
+          await flushWorkspaceSave({ preserveRecordId: true })
+        } catch {
+          /* Save failures are already surfaced through saver onError. */
+        }
+      }
+
+      const activeWorkspaceRecordId =
+        typeof getActiveWorkspaceRecordId === 'function'
+          ? getActiveWorkspaceRecordId()
+          : ''
+      if (activeWorkspaceRecordId) {
+        const activeWorkspaceRecord = await workspaceStorage.getWorkspaceById(
+          activeWorkspaceRecordId,
+        )
+        if (activeWorkspaceRecord && typeof activeWorkspaceRecord === 'object') {
+          const nextPrTitle =
+            typeof githubAiContextState.activePrContext?.prTitle === 'string' &&
+            githubAiContextState.activePrContext.prTitle.trim()
+              ? githubAiContextState.activePrContext.prTitle
+              : typeof activeWorkspaceRecord.prTitle === 'string'
+                ? activeWorkspaceRecord.prTitle
+                : ''
+          const nextPrNumber =
+            typeof pullRequestNumber === 'number' && Number.isFinite(pullRequestNumber)
+              ? pullRequestNumber
+              : typeof githubAiContextState.activePrContext?.pullRequestNumber ===
+                    'number' &&
+                  Number.isFinite(githubAiContextState.activePrContext.pullRequestNumber)
+                ? githubAiContextState.activePrContext.pullRequestNumber
+                : null
+
+          const savedWorkspaceRecord = await workspaceStorage.upsertWorkspace({
+            ...activeWorkspaceRecord,
+            prContextState: 'active',
+            prNumber: nextPrNumber,
+            prTitle: nextPrTitle,
+          })
+
+          setActiveWorkspaceRecordId(savedWorkspaceRecord.id)
+          setActiveWorkspaceCreatedAt(savedWorkspaceRecord.createdAt ?? null)
+        }
+      }
+
+      await refreshLocalContextOptions()
       showAppToast(message)
     },
-    onPullRequestCommitPushed: ({ repositoryFullName, branch, fileUpdates }) => {
+    onPullRequestCommitPushed: async ({ repositoryFullName, branch, fileUpdates }) => {
       if (shouldReconcileWorkspaceUpdatesForRepository(repositoryFullName)) {
         reconcileWorkspaceTabsWithPushUpdates(fileUpdates)
       }
+
+      try {
+        await persistActiveWorkspaceSnapshot()
+      } catch {
+        /* Fall back to debounced saver flush below. */
+      }
+
+      if (typeof flushWorkspaceSave === 'function') {
+        try {
+          await flushWorkspaceSave({ preserveRecordId: true })
+        } catch {
+          /* Save failures are already surfaced through saver onError. */
+        }
+      }
+
       const fileCount = Array.isArray(fileUpdates) ? fileUpdates.length : 0
       const message =
         fileCount > 0
@@ -263,10 +345,6 @@ const initializeGitHubWorkflows = ({
     onActivePrContextChange: activeContext => {
       prContextUi.setActivePrContext(activeContext)
       prContextUi.syncAiChatTokenVisibility(getTokenForVisibility())
-
-      if (activeContext) {
-        closeWorkspacesDrawer()
-      }
 
       if (typeof onPrContextStateChange === 'function') {
         onPrContextStateChange(activeContext)
@@ -315,6 +393,9 @@ const initializeGitHubWorkflows = ({
     closeButton: workspacesClose,
     statusNode: workspacesStatus,
     repositorySelect: workspacesRepository,
+    getActiveWorkspaceId: () => getActiveWorkspaceRecordId(),
+    initializeButton: workspacesInitialize,
+    newButton: workspacesNew,
     selectInput: workspacesSelect,
     openButton: workspacesOpen,
     removeButton: workspacesRemove,
@@ -334,13 +415,7 @@ const initializeGitHubWorkflows = ({
 
       return '__local__'
     },
-    onRepositoryFilterChange: async repositoryFilter => {
-      if (repositoryFilter === '__local__') {
-        clearCurrentSelectedRepository?.()
-      } else {
-        setCurrentSelectedRepository?.(repositoryFilter)
-      }
-
+    onRepositoryFilterChange: async () => {
       prDrawerController.resetStatus?.()
       prDrawerController.syncRepositories()
     },
@@ -348,25 +423,63 @@ const initializeGitHubWorkflows = ({
       return 'right'
     },
     onRefreshRequested: listLocalContextRecords,
-    onOpenSelected: async workspaceId => {
+    onInitializeWorkspace: async repositoryFilter => {
+      const normalizedFilter =
+        typeof repositoryFilter === 'string' ? repositoryFilter.trim() : ''
+      if (!normalizedFilter || normalizedFilter === '__local__') {
+        return false
+      }
+
+      const repositoryFullName = normalizedFilter
+
       try {
-        const starterRepositoryFullName = parseRepositoryStarterSelectionId(workspaceId)
-        if (starterRepositoryFullName) {
-          setCurrentSelectedRepository?.(starterRepositoryFullName)
-          await syncActiveWorkspaceRepositoryScope?.(starterRepositoryFullName, {
-            rekeyRecord: true,
-          })
-          await refreshLocalContextOptions()
-          prDrawerController.resetStatus?.()
-          prDrawerController.syncRepositories()
-          return true
+        await syncActiveWorkspaceRepositoryScope?.(repositoryFullName, {
+          rekeyRecord: false,
+        })
+        setCurrentSelectedRepository?.(repositoryFullName)
+        await refreshLocalContextOptions()
+        prDrawerController.resetStatus?.()
+        prDrawerController.syncRepositories()
+        return true
+      } catch {
+        workspacesDrawerController?.setStatus('Could not initialize workspace.', 'error')
+        return false
+      }
+    },
+    onCreateWorkspace: async repositoryFilter => {
+      const normalizedFilter =
+        typeof repositoryFilter === 'string' ? repositoryFilter.trim() : ''
+      const repositoryFullName =
+        normalizedFilter && normalizedFilter !== '__local__' ? normalizedFilter : ''
+
+      try {
+        await forkWorkspaceFromCurrentState?.(repositoryFullName)
+        prDrawerController.clearSelectedRepositoryActivePrContext?.({
+          resetForm: false,
+        })
+
+        if (repositoryFullName) {
+          setCurrentSelectedRepository?.(repositoryFullName)
+        } else {
+          clearCurrentSelectedRepository?.()
         }
 
+        await refreshLocalContextOptions()
+        prDrawerController.resetStatus?.()
+        prDrawerController.syncRepositories()
+        return true
+      } catch {
+        workspacesDrawerController?.setStatus('Could not create workspace.', 'error')
+        return false
+      }
+    },
+    onOpenSelected: async workspaceId => {
+      try {
         const record = await workspaceStorage.getWorkspaceById(workspaceId)
         if (!record) {
           await refreshLocalContextOptions()
           workspacesDrawerController?.setStatus(
-            'Stored local context no longer exists.',
+            'Stored workspace no longer exists.',
             'error',
           )
           return false
@@ -381,7 +494,7 @@ const initializeGitHubWorkflows = ({
         return applied
       } catch {
         workspacesDrawerController?.setStatus(
-          'Could not load selected local context.',
+          'Could not load selected workspace.',
           'error',
         )
         return false
@@ -389,7 +502,7 @@ const initializeGitHubWorkflows = ({
     },
     onRemoveSelected: async workspaceId => {
       confirmAction({
-        title: 'Remove stored local context?',
+        title: 'Remove stored workspace?',
         copy: 'This removes only local workspace metadata and editor content from this browser.',
         confirmButtonText: 'Remove',
         onConfirm: () => {
@@ -403,13 +516,13 @@ const initializeGitHubWorkflows = ({
 
               await refreshLocalContextOptions()
               workspacesDrawerController?.setStatus(
-                'Removed stored local context.',
+                'Removed stored workspace.',
                 'neutral',
               )
             })
             .catch(() => {
               workspacesDrawerController?.setStatus(
-                'Could not remove stored local context.',
+                'Could not remove stored workspace.',
                 'error',
               )
             })
@@ -470,36 +583,6 @@ const initializeGitHubWorkflows = ({
             setStatus(`Close context failed: ${message}`, 'error')
             showAppToast(`Close context failed: ${message}`)
           })
-      },
-    })
-  })
-
-  githubPrContextDisconnect?.addEventListener('click', () => {
-    if (!githubAiContextState.activePrContext) {
-      return
-    }
-
-    const activePrReference = formatActivePrReference(
-      githubAiContextState.activePrContext,
-    )
-    const referenceLine = activePrReference ? `PR: ${activePrReference}\n` : ''
-
-    confirmAction({
-      title: 'Disconnect PR context?',
-      copy: `${referenceLine}This will disconnect the active pull request context in this app only.\nYour pull request will stay open on GitHub.\nYour GitHub token and selected repository will stay connected.`,
-      confirmButtonText: 'Disconnect',
-      onConfirm: () => {
-        const result = prDrawerController.disconnectActivePrContext()
-        const reference = result?.reference
-        setStatus(
-          reference
-            ? `Disconnected PR context (${reference}). Pull request remains open on GitHub.`
-            : 'Disconnected PR context. Pull request remains open on GitHub.',
-          'neutral',
-        )
-        if (typeof onPrContextDisconnected === 'function') {
-          onPrContextDisconnected(result)
-        }
       },
     })
   })

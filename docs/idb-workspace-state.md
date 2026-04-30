@@ -17,13 +17,14 @@ Each workspace record may include:
   - `id`
   - `createdAt`
   - `lastModified`
+  - `workspaceScope` (`local` | `repository`)
 - Repository and PR context:
   - `repo`
   - `base`
   - `head`
   - `prTitle`
   - `prNumber`
-  - `prContextState` (`inactive` | `active` | `disconnected` | `closed`)
+  - `prContextState` (`inactive` | `active` | `closed`)
 - Runtime/editor state:
   - `renderMode`
   - `activeTabId`
@@ -37,10 +38,34 @@ IDB supports that by storing:
 
 - Full workspace snapshots
 - Repo-scoped context records
-- Historical transitions such as disconnected or closed PR context
+- Historical transitions such as closed PR context
 
 ## Design Rule
 
 If a value is required to accurately restore PR/workspace behavior after reload, it must live in IDB records.
 
 `localStorage` should only mirror user preferences and lightweight bootstrap values.
+
+## Post-Push Baseline Invariant
+
+After a successful Push Commit action for an active PR workspace:
+
+- The active workspace record must persist immediately in IDB.
+- Any committed tab path returned by push updates must persist with:
+  - `isDirty = false`
+  - `syncedContent = content`
+  - `syncedAt` updated to the push/reconcile time
+  - `lastSyncedRemoteSha` set when a commit SHA is available
+- The same clean baseline must survive a full page reload.
+
+Dirty-state note:
+
+- When `syncedContent` is present for a tab, canonical dirty state is derived from
+  `content !== syncedContent`.
+- This prevents stale UI-only dirty flags from overriding persisted sync baseline truth.
+
+## Behavioral Spec
+
+For action-level drawer semantics and state machine behavior, see:
+
+- `docs/workspaces-behavior-algorithm.md`

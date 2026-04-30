@@ -52,6 +52,7 @@ export const createGitHubPrDrawer = ({
   getWritableRepositories,
   getFileCommits,
   getEditorSyncTargets,
+  persistWorkspaceMetadataOnSubmit,
   getTopLevelDeclarations,
   getRenderMode,
   getStyleMode,
@@ -79,6 +80,7 @@ export const createGitHubPrDrawer = ({
     pendingContextVerifyRequestKey: '',
     pendingContextVerifyPromise: null,
     lastSyncedRepositoryFullName: '',
+    lastSyncedActivePrContextKey: '',
     lastActiveContentSyncKey: '',
     baseBranchesByRepository: new Map(),
     activePrContextByRepository: new Map(),
@@ -254,6 +256,7 @@ export const createGitHubPrDrawer = ({
     prTitleInput,
     includeAppWrapperToggle,
     getFileCommits,
+    persistWorkspaceMetadataOnSubmit,
     getTopLevelDeclarations,
     confirmBeforeSubmit,
     onPullRequestOpened,
@@ -333,6 +336,9 @@ export const createGitHubPrDrawer = ({
     if (!targetRepositoryFullName) {
       return false
     }
+
+    contextHandlers.abortPendingContextVerifyRequest()
+    contextHandlers.abortPendingActiveContentSyncRequest()
 
     setRepositoryActivePrContext({
       repositoryFullName: targetRepositoryFullName,

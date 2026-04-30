@@ -51,24 +51,32 @@ export const createContextSyncHandlers = ({
     const tabSyncTargets = Array.isArray(syncTargets?.tabTargets)
       ? syncTargets.tabTargets
       : []
-    const componentSyncPath = toSafeText(
-      tabSyncTargets.find(target => toSafeText(target?.kind) === 'component')?.path,
-    )
-    const stylesSyncPath = toSafeText(
-      tabSyncTargets.find(target => toSafeText(target?.kind) === 'styles')?.path,
-    )
+    const dedupedByPath = new Map()
 
-    if (!componentSyncPath || !stylesSyncPath) {
+    for (const target of tabSyncTargets) {
+      const kind = toSafeText(target?.kind)
+      const path = toSafeText(target?.path)
+      if (!path) {
+        continue
+      }
+
+      dedupedByPath.set(path, { kind, path })
+    }
+
+    const normalizedTabSyncTargets = [...dedupedByPath.values()]
+
+    if (normalizedTabSyncTargets.length === 0) {
       state.lastActiveContentSyncKey = ''
       abortPendingActiveContentSyncRequest()
       return
     }
 
+    normalizedTabSyncTargets.sort((left, right) => left.path.localeCompare(right.path))
+
     const syncKey = [
       repositoryFullName,
       activeContext.headBranch,
-      componentSyncPath,
-      stylesSyncPath,
+      ...normalizedTabSyncTargets.map(target => target.path),
       String(activeContext.pullRequestNumber ?? ''),
     ].join('|')
 
@@ -94,10 +102,7 @@ export const createContextSyncHandlers = ({
         repository,
         activeContext,
         syncTargets: {
-          tabTargets: [
-            { kind: 'component', path: componentSyncPath },
-            { kind: 'styles', path: stylesSyncPath },
-          ],
+          tabTargets: normalizedTabSyncTargets,
         },
         signal: abortController.signal,
       })

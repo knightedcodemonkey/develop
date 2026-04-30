@@ -10,6 +10,7 @@ export const createRunSubmit = ({
   prTitleInput,
   includeAppWrapperToggle,
   getFileCommits,
+  persistWorkspaceMetadataOnSubmit,
   getTopLevelDeclarations,
   confirmBeforeSubmit,
   onPullRequestOpened,
@@ -188,7 +189,32 @@ export const createRunSubmit = ({
       }),
     )
 
-    const submitRequest = () => {
+    const submitRequest = async () => {
+      if (typeof persistWorkspaceMetadataOnSubmit === 'function') {
+        try {
+          await persistWorkspaceMetadataOnSubmit({
+            isPushCommitMode,
+            repository: repositoryLabel,
+            baseBranch: targetBaseBranch,
+            headBranch: targetHeadBranch,
+            prTitle: targetPrTitle,
+            prBody: targetPrBody,
+          })
+        } catch (error) {
+          const message =
+            error instanceof Error
+              ? error.message
+              : 'Could not persist workspace metadata before submit.'
+          setStatus(
+            isPushCommitMode
+              ? `Push commit blocked: ${message}`
+              : `Open PR blocked: ${message}`,
+            'error',
+          )
+          return
+        }
+      }
+
       state.pendingAbortController?.abort()
       const abortController = new AbortController()
       state.pendingAbortController = abortController
@@ -223,8 +249,25 @@ export const createRunSubmit = ({
           })
 
       void Promise.resolve(runRequest)
-        .then(result => {
+        .then(async result => {
           if (isPushCommitMode) {
+            const committedFileUpdates = Array.isArray(result) ? result : []
+            const attemptedNonDeleteUpdates = fileUpdates.filter(
+              update =>
+                typeof update?.path === 'string' &&
+                update.path.trim().length > 0 &&
+                update?.deleted !== true,
+            )
+
+            if (
+              attemptedNonDeleteUpdates.length > 0 &&
+              committedFileUpdates.length === 0
+            ) {
+              throw new Error(
+                'Push did not return committed file updates. Workspace sync baseline was not updated.',
+              )
+            }
+
             const compactPullRequestReference = formatActivePrReference(activeContext)
             const pullRequestUrl = toSafeText(activeContext?.pullRequestUrl)
             const pullRequestTitle = toSafeText(activeContext?.prTitle)
@@ -239,11 +282,13 @@ export const createRunSubmit = ({
                 : `Commit pushed to ${targetHeadBranch}.`,
               'ok',
             )
-            onPullRequestCommitPushed?.({
-              repositoryFullName: repositoryLabel,
-              branch: targetHeadBranch,
-              fileUpdates: Array.isArray(result) ? result : [],
-            })
+            if (typeof onPullRequestCommitPushed === 'function') {
+              await onPullRequestCommitPushed({
+                repositoryFullName: repositoryLabel,
+                branch: targetHeadBranch,
+                fileUpdates: committedFileUpdates,
+              })
+            }
             setOpen(false)
             return
           }
@@ -270,13 +315,15 @@ export const createRunSubmit = ({
             url ? `Pull request opened: ${url}` : 'Pull request opened successfully.',
             'ok',
           )
-          onPullRequestOpened?.({
-            repositoryFullName: repositoryLabel,
-            url,
-            pullRequestNumber: result.pullRequest.number,
-            branch: targetHeadBranch,
-            fileUpdates: Array.isArray(result.fileUpdates) ? result.fileUpdates : [],
-          })
+          if (typeof onPullRequestOpened === 'function') {
+            await onPullRequestOpened({
+              repositoryFullName: repositoryLabel,
+              url,
+              pullRequestNumber: result.pullRequest.number,
+              branch: targetHeadBranch,
+              fileUpdates: Array.isArray(result.fileUpdates) ? result.fileUpdates : [],
+            })
+          }
           setOpen(false)
         })
         .catch(error => {

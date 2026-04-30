@@ -140,24 +140,6 @@
           </div>
 
           <button
-            class="diagnostics-toggle github-pr-toggle"
-            id="github-pr-toggle"
-            type="button"
-            aria-expanded="false"
-            aria-controls="github-pr-drawer"
-            title="Open pull request"
-            disabled
-          >
-            <svg id="github-pr-toggle-icon" viewBox="0 0 16 16" aria-hidden="true">
-              <path
-                id="github-pr-toggle-icon-path"
-                d="M1.5 3.25a2.25 2.25 0 1 1 3 2.122v5.256a2.251 2.251 0 1 1-1.5 0V5.372A2.25 2.25 0 0 1 1.5 3.25Zm5.677-.177L9.573.677A.25.25 0 0 1 10 .854V2.5h1A2.5 2.5 0 0 1 13.5 5v5.628a2.251 2.251 0 1 1-1.5 0V5a1 1 0 0 0-1-1h-1v1.646a.25.25 0 0 1-.427.177L7.177 3.427a.25.25 0 0 1 0-.354ZM3.75 2.5a.75.75 0 1 0 0 1.5.75.75 0 0 0 0-1.5Zm0 9.5a.75.75 0 1 0 0 1.5.75.75 0 0 0 0-1.5Zm8.25.75a.75.75 0 1 0 1.5 0 .75.75 0 0 0-1.5 0Z"
-              ></path>
-            </svg>
-            <span id="github-pr-toggle-label">Open PR</span>
-          </button>
-
-          <button
             class="diagnostics-toggle workspaces-toggle"
             id="workspaces-toggle"
             type="button"
@@ -173,6 +155,24 @@
               ></path>
             </svg>
             <span>Workspaces</span>
+          </button>
+
+          <button
+            class="diagnostics-toggle github-pr-toggle"
+            id="github-pr-toggle"
+            type="button"
+            aria-expanded="false"
+            aria-controls="github-pr-drawer"
+            title="Open pull request"
+            disabled
+          >
+            <svg id="github-pr-toggle-icon" viewBox="0 0 16 16" aria-hidden="true">
+              <path
+                id="github-pr-toggle-icon-path"
+                d="M1.5 3.25a2.25 2.25 0 1 1 3 2.122v5.256a2.251 2.251 0 1 1-1.5 0V5.372A2.25 2.25 0 0 1 1.5 3.25Zm5.677-.177L9.573.677A.25.25 0 0 1 10 .854V2.5h1A2.5 2.5 0 0 1 13.5 5v5.628a2.251 2.251 0 1 1-1.5 0V5a1 1 0 0 0-1-1h-1v1.646a.25.25 0 0 1-.427.177L7.177 3.427a.25.25 0 0 1 0-.354ZM3.75 2.5a.75.75 0 1 0 0 1.5.75.75 0 0 0 0-1.5Zm0 9.5a.75.75 0 1 0 0 1.5.75.75 0 0 0 0-1.5Zm8.25.75a.75.75 0 1 0 1.5 0 .75.75 0 0 0-1.5 0Z"
+              ></path>
+            </svg>
+            <span id="github-pr-toggle-label">Open PR</span>
           </button>
 
           <button
@@ -193,30 +193,6 @@
               ></path>
             </svg>
             <span class="github-pr-context-close__label">Close</span>
-          </button>
-
-          <button
-            class="diagnostics-toggle github-pr-context-disconnect"
-            id="github-pr-context-disconnect"
-            type="button"
-            aria-label="Disconnect active pull request context"
-            title="Disconnect active pull request context"
-            hidden
-          >
-            <svg
-              class="github-pr-context-disconnect__icon"
-              xmlns="http://www.w3.org/2000/svg"
-              viewBox="0 0 24 24"
-              aria-hidden="true"
-            >
-              <path
-                d="M9.036 7.976a.75.75 0 0 0-1.06 1.06L10.939 12l-2.963 2.963a.75.75 0 1 0 1.06 1.06L12 13.06l2.963 2.964a.75.75 0 0 0 1.061-1.06L13.061 12l2.963-2.964a.75.75 0 1 0-1.06-1.06L12 10.939 9.036 7.976Z"
-              ></path>
-              <path
-                d="M12 1c6.075 0 11 4.925 11 11s-4.925 11-11 11S1 18.075 1 12 5.925 1 12 1ZM2.5 12a9.5 9.5 0 0 0 9.5 9.5 9.5 9.5 0 0 0 9.5-9.5A9.5 9.5 0 0 0 12 2.5 9.5 9.5 0 0 0 2.5 12Z"
-              ></path>
-            </svg>
-            <span class="github-pr-context-disconnect__label">Disconnect</span>
           </button>
 
           <button
@@ -808,24 +784,39 @@
           aria-label="Workspaces status"
           data-level="neutral"
         >
-          Choose a repository scope, then manage local workspace contexts.
+          Choose a repository scope, then manage local workspaces.
         </p>
 
         <div class="workspaces-drawer__body" role="group" aria-label="Workspaces form">
-          <label
-            class="github-pr-field github-pr-field--full"
-            for="workspaces-repository"
-          >
-            <span>Repository</span>
-            <select id="workspaces-repository" aria-label="Workspace repository filter">
-              <option value="__local__" selected>Local</option>
-            </select>
-          </label>
+          <div class="workspaces-drawer__repository-row">
+            <label
+              class="github-pr-field github-pr-field--full"
+              for="workspaces-repository"
+            >
+              <span>Repository</span>
+              <select id="workspaces-repository" aria-label="Workspace repository filter">
+                <option value="__local__" selected>Local</option>
+              </select>
+            </label>
+            <div class="workspaces-drawer__repository-actions">
+              <button
+                class="render-button"
+                id="workspaces-initialize"
+                type="button"
+                hidden
+              >
+                Initialize
+              </button>
+              <button class="render-button" id="workspaces-new" type="button">
+                New workspace
+              </button>
+            </div>
+          </div>
 
           <label class="github-pr-field github-pr-field--full" for="workspaces-select">
-            <span>Stored contexts</span>
-            <select id="workspaces-select" aria-label="Stored local editor contexts">
-              <option value="" selected>No saved local contexts</option>
+            <span>Workspace</span>
+            <select id="workspaces-select" aria-label="Stored workspace">
+              <option value="" selected>No saved workspaces</option>
             </select>
           </label>
 

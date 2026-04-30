@@ -2,7 +2,7 @@ const defaultCommitMessage = 'chore: sync editor updates from @knighted/develop'
 
 const supportedRenderModes = new Set(['dom', 'react'])
 const supportedStyleModes = new Set(['css', 'module', 'less', 'sass'])
-const supportedPrContextStates = new Set(['inactive', 'active', 'disconnected', 'closed'])
+const supportedPrContextStates = new Set(['inactive', 'active', 'closed'])
 
 const toSafeText = value => (typeof value === 'string' ? value.trim() : '')
 
@@ -26,6 +26,10 @@ const normalizeStyleMode = value => {
 
 const normalizePrContextState = value => {
   const state = toSafeText(value).toLowerCase()
+  if (state === 'disconnected') {
+    return 'inactive'
+  }
+
   return supportedPrContextStates.has(state) ? state : 'inactive'
 }
 

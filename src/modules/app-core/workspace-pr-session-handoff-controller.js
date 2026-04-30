@@ -12,6 +12,7 @@ export const createWorkspacePrSessionHandoffController = ({
     getWorkspacePrNumber,
     setWorkspacePrContextState,
     setWorkspacePrNumber,
+    setWorkspaceScopeMarker,
     getActiveWorkspaceCreatedAt,
     setActiveWorkspaceRecordId,
     setActiveWorkspaceCreatedAt,
@@ -80,6 +81,9 @@ export const createWorkspacePrSessionHandoffController = ({
 
     setWorkspacePrContextState('inactive')
     setWorkspacePrNumber(null)
+    if (typeof setWorkspaceScopeMarker === 'function') {
+      setWorkspaceScopeMarker('local')
+    }
     lastKnownPrContextMeta = null
 
     if (githubPrHeadBranch) {
@@ -134,6 +138,7 @@ export const createWorkspacePrSessionHandoffController = ({
       const saved = await workspaceStorage.upsertWorkspace({
         ...buildWorkspaceRecordSnapshot({ recordId: localWorkspaceId }),
         id: localWorkspaceId,
+        workspaceScope: 'local',
         workspaceKey: toWorkspaceRecordKey({
           repositoryFullName: selectedRepository,
           headBranch: freshLocalHeadBranch,
@@ -287,6 +292,8 @@ export const createWorkspacePrSessionHandoffController = ({
           prNumber: workspacePrNumber,
           lastModified: now,
         }
+
+        archiveSnapshot.workspaceScope = archiveSnapshot.repo ? 'repository' : 'local'
 
         archiveSnapshot.workspaceKey = toWorkspaceRecordKey({
           repositoryFullName: archiveSnapshot.repo,

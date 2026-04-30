@@ -19,7 +19,7 @@ Do not store pull request context in `localStorage`.
 Examples that must stay out of `localStorage`:
 
 - Selected repository preference (`owner/repo`)
-- PR context state (`active`, `disconnected`, `closed`, `inactive`)
+- PR context state (`active`, `closed`, `inactive`)
 - PR number and URL
 - PR base/head/title/body
 - PR drawer repository-scoped workflow state
@@ -32,3 +32,7 @@ Examples that must stay out of `localStorage`:
 If data is needed to restore workspace or pull request workflow state, it belongs in IndexedDB workspace records.
 
 Repository selection is derived from in-memory BYOT controls and IndexedDB-backed workspace records, not from a dedicated localStorage key.
+
+For the Workspaces drawer action/state algorithm, see:
+
+- `docs/workspaces-behavior-algorithm.md`

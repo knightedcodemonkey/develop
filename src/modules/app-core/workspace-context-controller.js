@@ -7,6 +7,8 @@ const createWorkspaceContextController = ({
   setActiveWorkspaceCreatedAt,
   setWorkspacePrContextState,
   setWorkspacePrNumber,
+  setWorkspaceScopeMarker,
+  cancelPendingWorkspaceSave,
   setIsApplyingWorkspaceSnapshot,
   ensureWorkspaceTabsShape,
   githubPrBaseBranch,
@@ -27,6 +29,7 @@ const createWorkspaceContextController = ({
   maybeRender,
   setStatus,
   toWorkspaceRecordKey,
+  beginWorkspaceLoadTransaction,
   getHeadBranchValue,
 }) => {
   const toWorkspacePrContextState = value =>
@@ -64,12 +67,15 @@ const createWorkspaceContextController = ({
       return false
     }
 
+    if (typeof beginWorkspaceLoadTransaction === 'function') {
+      beginWorkspaceLoadTransaction()
+    }
     setIsApplyingWorkspaceSnapshot(true)
+    if (typeof cancelPendingWorkspaceSave === 'function') {
+      cancelPendingWorkspaceSave()
+    }
 
     try {
-      setActiveWorkspaceRecordId(workspace.id)
-      setActiveWorkspaceCreatedAt(workspace.createdAt ?? null)
-
       if (typeof setWorkspacePrContextState === 'function') {
         const nextPrContextState =
           typeof workspace.prContextState === 'string' && workspace.prContextState.trim()
@@ -86,6 +92,15 @@ const createWorkspaceContextController = ({
         setWorkspacePrNumber(nextPrNumber)
       }
 
+      if (typeof setWorkspaceScopeMarker === 'function') {
+        const nextScope =
+          typeof workspace.workspaceScope === 'string' &&
+          workspace.workspaceScope.trim().toLowerCase() === 'repository'
+            ? 'repository'
+            : 'local'
+        setWorkspaceScopeMarker(nextScope)
+      }
+
       const nextTabs = ensureWorkspaceTabsShape(workspace.tabs)
       if (typeof workspace.base === 'string' && githubPrBaseBranch) {
         githubPrBaseBranch.value = workspace.base
@@ -98,6 +113,9 @@ const createWorkspaceContextController = ({
       if (typeof workspace.prTitle === 'string' && githubPrTitle) {
         githubPrTitle.value = workspace.prTitle
       }
+
+      setActiveWorkspaceRecordId(workspace.id)
+      setActiveWorkspaceCreatedAt(workspace.createdAt ?? null)
 
       workspaceTabsState.replaceTabs({
         tabs: nextTabs,
@@ -136,15 +154,22 @@ const createWorkspaceContextController = ({
 
       return true
     } finally {
+      await new Promise(resolve => {
+        setTimeout(resolve, 0)
+      })
       setIsApplyingWorkspaceSnapshot(false)
     }
   }
 
   const loadPreferredWorkspaceContext = async () => {
     const selectedRepository = getCurrentSelectedRepository()
-    const options = await listLocalContextRecords({
+    let options = await listLocalContextRecords({
       includeAllRepositories: !selectedRepository,
     })
+
+    if (selectedRepository && (!Array.isArray(options) || options.length === 0)) {
+      options = await listLocalContextRecords({ includeAllRepositories: true })
+    }
 
     await refreshLocalContextOptions({ includeAllRepositories: true })
 

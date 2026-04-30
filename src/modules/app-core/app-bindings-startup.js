@@ -68,10 +68,6 @@ const bindAppEventsAndStart = ({
     setCdnLoading,
   } = sourceActions
   const {
-    githubPrRepoSelect,
-    githubPrBaseBranch,
-    githubPrHeadBranch,
-    githubPrTitle,
     workspaceTabAddMenuUi,
     workspaceTabAddButton,
     workspaceTabAddModule,
@@ -89,7 +85,6 @@ const bindAppEventsAndStart = ({
     getWorkspaceTabByKind,
     workspaceSaveController,
     workspaceStorage,
-    bindWorkspaceMetadataPersistence,
     syncDiagnosticsDrawerLayout,
     setHasCompletedInitialWorkspaceBootstrap,
   } = workspaceUi
@@ -340,15 +335,6 @@ const bindAppEventsAndStart = ({
       /* Save failures are already surfaced through saver onError. */
     })
   })
-
-  bindWorkspaceMetadataPersistence(githubPrRepoSelect)
-  bindWorkspaceMetadataPersistence(githubPrBaseBranch)
-  bindWorkspaceMetadataPersistence(githubPrHeadBranch, {
-    preserveRecordIdOnInput: true,
-    preserveRecordIdOnChange: true,
-    rekeyOnBlur: false,
-  })
-  bindWorkspaceMetadataPersistence(githubPrTitle)
 
   for (const button of appThemeButtons) {
     button.addEventListener('click', () => {

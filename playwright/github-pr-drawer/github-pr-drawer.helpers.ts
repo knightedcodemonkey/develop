@@ -128,9 +128,9 @@ export const removeSavedGitHubToken = async (page: Page) => {
 }
 
 export const ensureWorkspacesDrawerOpen = async (page: Page) => {
-  const select = page.getByLabel('Stored local editor contexts')
+  const drawer = page.getByRole('complementary', { name: 'Workspaces' })
 
-  if (await select.isVisible()) {
+  if (await drawer.isVisible()) {
     return
   }
 
@@ -142,7 +142,7 @@ export const ensureWorkspacesDrawerOpen = async (page: Page) => {
   }
 
   await page.getByRole('button', { name: 'Workspaces' }).click()
-  await expect(select).toBeVisible()
+  await expect(drawer).toBeVisible()
 }
 
 export const getWorkspaceRecordId = (
@@ -151,23 +151,24 @@ export const getWorkspaceRecordId = (
 
 export const getWorkspacesRepositoryFilterForRecord = ({
   repo,
-  prContextState,
-  prNumber,
+  workspaceScope,
 }: {
   repo?: unknown
-  prContextState?: unknown
-  prNumber?: unknown
+  workspaceScope?: unknown
 }) => {
   const normalizedRepo = typeof repo === 'string' ? repo.trim() : ''
-  const normalizedState =
-    typeof prContextState === 'string' ? prContextState.trim().toLowerCase() : ''
-  const hasPrNumber = typeof prNumber === 'number' && Number.isFinite(prNumber)
+  const normalizedScope =
+    typeof workspaceScope === 'string' ? workspaceScope.trim().toLowerCase() : ''
 
-  if (!normalizedRepo) {
+  if (normalizedScope === 'local') {
     return '__local__'
   }
 
-  if (normalizedState === 'inactive' && !hasPrNumber) {
+  if (normalizedScope === 'repository') {
+    return normalizedRepo || '__local__'
+  }
+
+  if (!normalizedRepo) {
     return '__local__'
   }
 
@@ -183,7 +184,7 @@ export const openStoredWorkspaceContextById = async (
     repositoryFilter?: string
   } = {},
 ) => {
-  const select = page.getByLabel('Stored local editor contexts')
+  const select = page.getByLabel('Stored workspace')
   const openButton = page.locator('#workspaces-open')
 
   const resolveRepositoryFilterForWorkspace = async () => {
@@ -429,11 +430,12 @@ export const seedLocalWorkspaceContexts = async (
   contexts: Array<{
     id: string
     repo: string
+    workspaceScope?: 'local' | 'repository'
     base?: string
     head: string
     prTitle: string
     prNumber?: number | null
-    prContextState?: 'inactive' | 'active' | 'disconnected' | 'closed'
+    prContextState?: 'inactive' | 'active' | 'closed'
     renderMode?: 'dom' | 'react'
     tabs?: Array<Record<string, unknown>>
     activeTabId?: string | null
@@ -458,6 +460,12 @@ export const seedLocalWorkspaceContexts = async (
       for (const context of inputContexts) {
         const putRequest = store.put({
           id: context.id,
+          workspaceScope:
+            context.workspaceScope === 'repository' || context.workspaceScope === 'local'
+              ? context.workspaceScope
+              : context.repo && context.repo.trim()
+                ? 'repository'
+                : 'local',
           repo: context.repo,
           base: context.base ?? 'main',
           head: context.head,
@@ -585,7 +593,7 @@ export const seedActivePrWorkspaceContext = async (
 
 export const getLocalContextOptionLabels = async (page: Page) => {
   return page
-    .getByLabel('Stored local editor contexts')
+    .getByLabel('Stored workspace')
     .locator('option')
     .evaluateAll(nodes => nodes.map(node => node.textContent?.trim() || ''))
 }
@@ -725,7 +733,7 @@ export const runActiveWorkspaceSwitchIntegrityScenario = async ({
   targetState,
 }: {
   page: Page
-  targetState: 'inactive' | 'disconnected' | 'closed'
+  targetState: 'inactive' | 'closed'
 }) => {
   const repositoryFullName = 'knightedcodemonkey/develop'
   const activeHeadBranch = 'develop/issue-97-active-a'
@@ -738,15 +746,9 @@ export const runActiveWorkspaceSwitchIntegrityScenario = async ({
     repositoryFullName,
     headBranch: targetHeadBranch,
   })
-  const targetPrTitle =
-    targetState === 'inactive' ? '' : `Target ${targetState} workspace`
-  const targetPrNumber = targetState === 'inactive' ? null : 9
-  const usesPromotedSourceSnapshot =
-    targetState === 'inactive' ||
-    targetState === 'disconnected' ||
-    targetState === 'closed'
-  const expectedTargetPrContextState =
-    targetState === 'disconnected' ? 'active' : targetState
+  const targetPrTitle = ''
+  const targetPrNumber = null
+  const expectedTargetPrContextState = targetState
 
   await page.route('https://api.github.com/user/repos**', async route => {
     await route.fulfill({
@@ -885,26 +887,6 @@ export const runActiveWorkspaceSwitchIntegrityScenario = async ({
     page.locator('.editor-panel[data-editor-kind="component"] .cm-content').first(),
   ).toContainText(`Target ${targetState} content`)
 
-  const promotedSnapshot = {
-    active: {
-      repo: '',
-      base: '',
-      head: '',
-      prTitle: '',
-      prNumber: null,
-      prContextState: 'inactive',
-      componentContent: '',
-    },
-    target: {
-      repo: repositoryFullName,
-      base: 'main',
-      head: activeHeadBranch,
-      prTitle: 'Active A workspace',
-      prNumber: 2,
-      prContextState: 'active',
-      componentContent: `export const App = () => <main>Target ${targetState} content</main>`,
-    },
-  }
   const originalSnapshot = {
     active: {
       repo: repositoryFullName,
@@ -937,25 +919,28 @@ export const runActiveWorkspaceSwitchIntegrityScenario = async ({
     }
   }
 
-  if (targetState !== 'disconnected') {
-    await expect
-      .poll(async () => {
-        return readSnapshot()
-      })
-      .toEqual(usesPromotedSourceSnapshot ? promotedSnapshot : originalSnapshot)
-    return
-  }
-
-  const toSnapshotKey = (value: unknown) => JSON.stringify(value)
-
   await expect
     .poll(async () => {
       const snapshot = await readSnapshot()
-      const snapshotKey = toSnapshotKey(snapshot)
-      return (
-        snapshotKey === toSnapshotKey(promotedSnapshot) ||
-        snapshotKey === toSnapshotKey(originalSnapshot)
-      )
+      const activeMatches =
+        JSON.stringify(snapshot.active) === JSON.stringify(originalSnapshot.active)
+
+      const target = snapshot.target
+      const targetStateMatches =
+        targetState === 'closed'
+          ? target?.prContextState === 'closed' || target?.prContextState === 'inactive'
+          : target?.prContextState === expectedTargetPrContextState
+
+      const targetMatches =
+        target?.repo === originalSnapshot.target.repo &&
+        target?.base === originalSnapshot.target.base &&
+        target?.head === originalSnapshot.target.head &&
+        target?.prTitle === originalSnapshot.target.prTitle &&
+        target?.prNumber === originalSnapshot.target.prNumber &&
+        target?.componentContent === originalSnapshot.target.componentContent &&
+        targetStateMatches
+
+      return activeMatches && targetMatches
     })
     .toBe(true)
 }
@@ -965,7 +950,7 @@ export const runActiveWorkspaceCrossRepoSwitchIntegrityScenario = async ({
   targetState,
 }: {
   page: Page
-  targetState: 'inactive' | 'disconnected' | 'closed'
+  targetState: 'inactive' | 'closed'
 }) => {
   const sourceRepositoryFullName = 'knightedcodemonkey/develop'
   const targetRepositoryFullName = 'knightedcodemonkey/css'
@@ -982,8 +967,7 @@ export const runActiveWorkspaceCrossRepoSwitchIntegrityScenario = async ({
   const targetPrTitle =
     targetState === 'inactive' ? '' : `Cross target ${targetState} workspace`
   const targetPrNumber = 9
-  const expectedTargetPrContextState =
-    targetState === 'disconnected' ? 'active' : targetState
+  const expectedTargetPrContextState = targetState
 
   await page.route('https://api.github.com/user/repos**', async route => {
     await route.fulfill({

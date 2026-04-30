@@ -1,3 +1,5 @@
+import { isTabEditedForDisplay } from './workspace-tab-edited-display.js'
+
 const createWorkspaceTabsRenderer = ({
   workspaceTabsStrip,
   workspaceTabsState,
@@ -53,7 +55,7 @@ const createWorkspaceTabsRenderer = ({
       for (const tab of tabs) {
         const isActive = tab.id === activeTabId
         const isRenaming = getWorkspaceTabRenameState().tabId === tab.id
-        const isEdited = shouldShowEditedDesign && tab.isDirty
+        const isEdited = shouldShowEditedDesign && isTabEditedForDisplay(tab)
         const editedSuffix = isEdited ? ' (Edited)' : ''
         const tabContainer = document.createElement('li')
         tabContainer.className = 'workspace-tab'
@@ -235,7 +237,7 @@ const createWorkspaceTabsRenderer = ({
           tabContainer.append(metaBadge)
         }
 
-        if (shouldShowEditedDesign && tab.isDirty) {
+        if (shouldShowEditedDesign && isTabEditedForDisplay(tab)) {
           const dirtyBadge = document.createElement('span')
           dirtyBadge.className = 'workspace-tab__dirty-indicator'
           dirtyBadge.setAttribute('aria-hidden', 'true')

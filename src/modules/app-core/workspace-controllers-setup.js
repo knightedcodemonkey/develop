@@ -17,6 +17,7 @@ const createWorkspaceControllersSetup = ({
   setActiveWorkspaceCreatedAt,
   setWorkspacePrContextState,
   setWorkspacePrNumber,
+  setWorkspaceScopeMarker,
   getCurrentSelectedRepository,
   getActiveWorkspaceRecordId,
   setIsApplyingWorkspaceSnapshot,
@@ -76,6 +77,14 @@ const createWorkspaceControllersSetup = ({
 }) => {
   let workspaceTabsRenderer = null
   let workspaceTabMutationsController = null
+  let activeWorkspaceLoadTransactionId = 0
+
+  const beginWorkspaceLoadTransaction = () => {
+    activeWorkspaceLoadTransactionId += 1
+    return activeWorkspaceLoadTransactionId
+  }
+
+  const getActiveWorkspaceLoadTransactionId = () => activeWorkspaceLoadTransactionId
 
   const renderWorkspaceTabs = () => workspaceTabsRenderer.renderWorkspaceTabs()
 
@@ -95,6 +104,7 @@ const createWorkspaceControllersSetup = ({
     setActiveWorkspaceRecordId,
     setActiveWorkspaceCreatedAt,
     getHasCompletedInitialWorkspaceBootstrap,
+    getActiveWorkspaceLoadTransactionId,
   })
 
   const queueWorkspaceSave = options =>
@@ -102,6 +112,9 @@ const createWorkspaceControllersSetup = ({
 
   const flushWorkspaceSave = async options =>
     workspaceSaveController.flushWorkspaceSave(options)
+
+  const cancelPendingWorkspaceSave = () =>
+    workspaceSaveController.cancelPendingWorkspaceSave()
 
   const workspaceTabSelectionController = createWorkspaceTabSelectionController({
     toNonEmptyWorkspaceText,
@@ -201,6 +214,8 @@ const createWorkspaceControllersSetup = ({
     setActiveWorkspaceCreatedAt,
     setWorkspacePrContextState,
     setWorkspacePrNumber,
+    setWorkspaceScopeMarker,
+    cancelPendingWorkspaceSave,
     setIsApplyingWorkspaceSnapshot,
     ensureWorkspaceTabsShape,
     githubPrBaseBranch,
@@ -221,6 +236,7 @@ const createWorkspaceControllersSetup = ({
     maybeRender: () => maybeRender(),
     setStatus,
     toWorkspaceRecordKey,
+    beginWorkspaceLoadTransaction,
     getHeadBranchValue: () =>
       typeof githubPrHeadBranch?.value === 'string'
         ? githubPrHeadBranch.value.trim()
@@ -248,6 +264,7 @@ const createWorkspaceControllersSetup = ({
     applyWorkspaceRecord,
     queueWorkspaceSave,
     flushWorkspaceSave,
+    cancelPendingWorkspaceSave,
     setActiveWorkspaceTab,
     addWorkspaceTab,
     renderWorkspaceTabs,
