@@ -1,6 +1,6 @@
 const createWorkspaceSyncController = ({
   workspaceTabsState,
-  getTabKind,
+  isStyleWorkspaceTab,
   getTabTargetPrFilePath,
   normalizeWorkspacePathValue,
   toWorkspaceSyncedContent,
@@ -35,7 +35,7 @@ const createWorkspaceSyncController = ({
 
       const currentContent =
         tab.id === activeTabId
-          ? getTabKind(tab) === 'styles'
+          ? isStyleWorkspaceTab(tab)
             ? getCssSource()
             : getJsxSource()
           : typeof tab.content === 'string'
@@ -192,7 +192,7 @@ const createWorkspaceSyncController = ({
 
       dedupedByPath.set(path, {
         path,
-        kind: getTabKind(tab),
+        kind: isStyleWorkspaceTab(tab) ? 'styles' : 'component',
         tabId: toNonEmptyWorkspaceText(tab?.id),
       })
     }

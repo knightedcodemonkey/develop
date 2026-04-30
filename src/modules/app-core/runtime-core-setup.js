@@ -10,7 +10,6 @@ const createRuntimeCoreSetup = ({
   setPendingClearAction,
   normalizeRenderMode,
   normalizeStyleMode,
-  persistRenderMode,
   resetDiagnosticsFlow,
   maybeRender,
   flushWorkspaceSave,
@@ -20,7 +19,7 @@ const createRuntimeCoreSetup = ({
   setSuppressEditorChangeSideEffects,
   getStyleEditorLanguage,
   getActiveWorkspaceTab,
-  getTabKind,
+  isStyleWorkspaceTab,
   workspaceTabsState,
   queueWorkspaceSave,
 }) => {
@@ -99,7 +98,7 @@ const createRuntimeCoreSetup = ({
       renderMode.value = nextMode
     }
 
-    persistRenderMode(nextMode)
+    queueWorkspaceSave()
     resetDiagnosticsFlow()
 
     maybeRender()
@@ -128,7 +127,7 @@ const createRuntimeCoreSetup = ({
     }
 
     const activeTab = getActiveWorkspaceTab()
-    if (activeTab && getTabKind(activeTab) === 'styles') {
+    if (activeTab && isStyleWorkspaceTab(activeTab)) {
       const nextLanguage =
         nextMode === 'less'
           ? 'less'

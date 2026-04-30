@@ -6,27 +6,6 @@ const getStyleEditorLanguage = mode => {
 
 const normalizeRenderMode = mode => (mode === 'react' ? 'react' : 'dom')
 
-const persistRenderMode = (mode, { renderModeStorageKey }) => {
-  const normalizedMode = normalizeRenderMode(mode)
-
-  try {
-    localStorage.setItem(renderModeStorageKey, normalizedMode)
-  } catch {
-    /* Ignore storage write errors in restricted browsing modes. */
-  }
-}
-
-const getInitialRenderMode = ({ renderModeStorageKey }) => {
-  try {
-    const value = localStorage.getItem(renderModeStorageKey)
-    return normalizeRenderMode(value)
-  } catch {
-    /* Ignore storage read errors in restricted browsing modes. */
-  }
-
-  return 'dom'
-}
-
 const updateRenderModeEditability = ({ renderMode, getActiveWorkspaceTab }) => {
   if (!(renderMode instanceof HTMLSelectElement)) {
     return
@@ -79,11 +58,9 @@ const setCssSourceValue = ({
 }
 
 export {
-  getInitialRenderMode,
   getStyleEditorLanguage,
   normalizeRenderMode,
   normalizeStyleMode,
-  persistRenderMode,
   setCssSourceValue,
   setJsxSourceValue,
   updateRenderModeEditability,

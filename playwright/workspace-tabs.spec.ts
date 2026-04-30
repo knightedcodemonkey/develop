@@ -68,7 +68,7 @@ const seedSyncedComponentTab = async (page: import('@playwright/test').Page) => 
             return tab
           }
 
-          if ((tab as { id?: unknown }).id !== 'component') {
+          if ((tab as { role?: unknown }).role !== 'entry') {
             return tab
           }
 
@@ -572,7 +572,7 @@ test('add menu can create styles tab while component tab is active', async ({ pa
   await waitForInitialRender(page)
 
   await page.getByRole('button', { name: 'Open tab App.tsx' }).click()
-  await addWorkspaceTab(page, { kind: 'styles' })
+  await addWorkspaceTab(page, { type: 'style' })
 
   await expect(page.getByRole('button', { name: 'Open tab module.css' })).toHaveAttribute(
     'aria-current',

@@ -357,10 +357,13 @@ const initializeGitHubWorkflows = ({
     },
     onSyncActivePrEditorContent: async args => {
       if (!shouldApplyActivePrEditorSync(args ?? {})) {
+        const tabTargets = Array.isArray(args?.syncTargets?.tabTargets)
+          ? args.syncTargets.tabTargets
+          : []
         return {
           synced: false,
-          componentSynced: false,
-          stylesSynced: false,
+          syncedTabCount: 0,
+          totalTabCount: tabTargets.length,
         }
       }
 

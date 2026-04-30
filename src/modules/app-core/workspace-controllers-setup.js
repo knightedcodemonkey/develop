@@ -30,7 +30,6 @@ const createWorkspaceControllersSetup = ({
   normalizeRenderMode,
   getRenderModeValue,
   setRenderModeValue,
-  persistRenderMode,
   onWorkspaceRecordApplied,
   getActiveWorkspaceTab,
   onActiveWorkspaceTabChange,
@@ -66,11 +65,8 @@ const createWorkspaceControllersSetup = ({
   syncHeaderLabels,
   setWorkspaceTabAddMenuOpen,
   confirmAction,
-  getTabKind,
-  getLoadedComponentTabId,
-  setLoadedComponentTabId,
-  getLoadedStylesTabId,
-  setLoadedStylesTabId,
+  isStyleWorkspaceTab,
+  clearTrackedWorkspaceTab,
   getWorkspaceTabByKind,
   makeUniqueTabPath,
   createWorkspaceTabId,
@@ -151,12 +147,9 @@ const createWorkspaceControllersSetup = ({
     maybeRender: () => maybeRender(),
     setWorkspaceTabAddMenuOpen,
     confirmAction,
-    getTabKind,
+    isStyleWorkspaceTab,
     persistActiveTabEditorContent,
-    getLoadedComponentTabId,
-    setLoadedComponentTabId,
-    getLoadedStylesTabId,
-    setLoadedStylesTabId,
+    clearTrackedWorkspaceTab,
     getActiveWorkspaceTab,
     loadWorkspaceTabIntoEditor,
     getWorkspaceTabByKind,
@@ -226,7 +219,6 @@ const createWorkspaceControllersSetup = ({
     normalizeRenderMode,
     getRenderModeValue,
     setRenderModeValue,
-    persistRenderMode,
     onWorkspaceRecordApplied,
     getActiveWorkspaceTab,
     loadWorkspaceTabIntoEditor,
@@ -249,7 +241,8 @@ const createWorkspaceControllersSetup = ({
   const applyWorkspaceRecord = async (workspace, { silent = false } = {}) =>
     workspaceContextController.applyWorkspaceRecord(workspace, { silent })
 
-  const addWorkspaceTab = kind => workspaceTabMutationsController.addWorkspaceTab(kind)
+  const addWorkspaceTab = request =>
+    workspaceTabMutationsController.addWorkspaceTab(request)
 
   const loadPreferredWorkspaceContext = async () =>
     workspaceContextController.loadPreferredWorkspaceContext()

@@ -40,8 +40,8 @@ export const createGitHubPrEditorSyncController = ({ shouldApplySyncResult }) =>
     if (!token || !owner || !repo || !branch || normalizedTabTargets.length === 0) {
       return {
         synced: false,
-        componentSynced: false,
-        stylesSynced: false,
+        syncedTabCount: 0,
+        totalTabCount: normalizedTabTargets.length,
       }
     }
 
@@ -56,8 +56,8 @@ export const createGitHubPrEditorSyncController = ({ shouldApplySyncResult }) =>
     ) {
       return {
         synced: false,
-        componentSynced: false,
-        stylesSynced: false,
+        syncedTabCount: 0,
+        totalTabCount: normalizedTabTargets.length,
       }
     }
 
@@ -84,8 +84,8 @@ export const createGitHubPrEditorSyncController = ({ shouldApplySyncResult }) =>
     if (signal?.aborted) {
       return {
         synced: false,
-        componentSynced: false,
-        stylesSynced: false,
+        syncedTabCount: 0,
+        totalTabCount: normalizedTabTargets.length,
       }
     }
 
@@ -100,8 +100,8 @@ export const createGitHubPrEditorSyncController = ({ shouldApplySyncResult }) =>
     ) {
       return {
         synced: false,
-        componentSynced: false,
-        stylesSynced: false,
+        syncedTabCount: 0,
+        totalTabCount: normalizedTabTargets.length,
       }
     }
 
@@ -113,23 +113,11 @@ export const createGitHubPrEditorSyncController = ({ shouldApplySyncResult }) =>
         content: target.content,
       }))
 
-    const componentTargets = requestedTargets.filter(
-      target => target.kind === 'component',
-    )
-    const stylesTargets = requestedTargets.filter(target => target.kind === 'styles')
-    const componentSynced =
-      componentTargets.length > 0 &&
-      componentTargets.every(target => typeof target.content === 'string')
-    const stylesSynced =
-      stylesTargets.length > 0 &&
-      stylesTargets.every(target => typeof target.content === 'string')
     const allTargetsSynced = syncedTabTargets.length === normalizedTabTargets.length
 
     if (!allTargetsSynced) {
       return {
         synced: false,
-        componentSynced,
-        stylesSynced,
         syncedTabCount: syncedTabTargets.length,
         totalTabCount: normalizedTabTargets.length,
         syncTargets: {
@@ -140,8 +128,6 @@ export const createGitHubPrEditorSyncController = ({ shouldApplySyncResult }) =>
 
     return {
       synced: true,
-      componentSynced,
-      stylesSynced,
       syncedTabCount: syncedTabTargets.length,
       totalTabCount: normalizedTabTargets.length,
       syncTargets: {

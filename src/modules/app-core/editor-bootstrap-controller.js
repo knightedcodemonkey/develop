@@ -8,7 +8,7 @@ const createEditorBootstrapController = ({
   getStyleModeValue,
   getSuppressEditorChangeSideEffects,
   getActiveWorkspaceTab,
-  getTabKind,
+  isStyleWorkspaceTab,
   getDirtyStateForTabChange,
   workspaceTabsState,
   toWorkspaceSyncedContent,
@@ -59,7 +59,7 @@ const createEditorBootstrapController = ({
               return
             }
             const activeTab = getActiveWorkspaceTab()
-            if (activeTab && getTabKind(activeTab) === 'component') {
+            if (activeTab && !isStyleWorkspaceTab(activeTab)) {
               const nextContent = getJsxSource()
               const nextDirtyState = getDirtyStateForTabChange(activeTab, nextContent)
               workspaceTabsState.upsertTab(
@@ -97,7 +97,7 @@ const createEditorBootstrapController = ({
               return
             }
             const activeTab = getActiveWorkspaceTab()
-            if (activeTab && getTabKind(activeTab) === 'styles') {
+            if (activeTab && isStyleWorkspaceTab(activeTab)) {
               const nextContent = getCssSource()
               const nextDirtyState = getDirtyStateForTabChange(activeTab, nextContent)
               workspaceTabsState.upsertTab(

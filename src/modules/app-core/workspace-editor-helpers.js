@@ -2,7 +2,7 @@ import { isTabEditedForDisplay } from './workspace-tab-edited-display.js'
 
 const createWorkspaceEditorHelpers = ({
   workspaceTabsState,
-  getTabKind,
+  isStyleWorkspaceTab,
   editorKinds,
   editorPanelsByKind,
   editorHeaderLabelByKind,
@@ -10,10 +10,8 @@ const createWorkspaceEditorHelpers = ({
   getShouldShowEditedDesign,
   defaultTabNameByKind,
   toNonEmptyWorkspaceText,
-  getLoadedStylesTabId,
-  getLoadedComponentTabId,
-  setLoadedStylesTabId,
-  setLoadedComponentTabId,
+  getEntryWorkspaceTab,
+  getPrimaryStyleWorkspaceTab,
   getCssSource,
   getJsxSource,
   getDirtyStateForTabChange,
@@ -26,28 +24,56 @@ const createWorkspaceEditorHelpers = ({
   setSuppressEditorChangeSideEffects,
   editorPool,
 }) => {
+  const trackedTabIdByKind = {
+    component: toNonEmptyWorkspaceText(getEntryWorkspaceTab()?.id),
+    styles: toNonEmptyWorkspaceText(getPrimaryStyleWorkspaceTab()?.id),
+  }
+
+  const resolveTabForKind = kind => {
+    if (kind !== 'styles' && kind !== 'component') {
+      return null
+    }
+
+    const isStyleKind = kind === 'styles'
+
+    const activeTab = workspaceTabsState.getTab(workspaceTabsState.getActiveTabId())
+    if (activeTab && isStyleWorkspaceTab(activeTab) === isStyleKind) {
+      return activeTab
+    }
+
+    const trackedTabId = toNonEmptyWorkspaceText(trackedTabIdByKind[kind])
+    const trackedTab = trackedTabId ? workspaceTabsState.getTab(trackedTabId) : null
+    if (trackedTab && isStyleWorkspaceTab(trackedTab) === isStyleKind) {
+      return trackedTab
+    }
+
+    return kind === 'styles' ? getPrimaryStyleWorkspaceTab() : getEntryWorkspaceTab()
+  }
+
   const getWorkspaceTabByKind = kind => {
-    const tabs = workspaceTabsState.getTabs()
-    const normalizedKind = kind === 'styles' ? 'styles' : 'component'
-    return (
-      tabs.find(
-        tab =>
-          getTabKind(tab) === normalizedKind &&
-          tab.id === workspaceTabsState.getActiveTabId(),
-      ) ??
-      tabs.find(tab => getTabKind(tab) === normalizedKind) ??
-      null
-    )
+    return resolveTabForKind(kind)
+  }
+
+  const clearTrackedWorkspaceTab = tabId => {
+    const normalizedTabId = toNonEmptyWorkspaceText(tabId)
+    if (!normalizedTabId) {
+      return
+    }
+
+    if (trackedTabIdByKind.component === normalizedTabId) {
+      trackedTabIdByKind.component = toNonEmptyWorkspaceText(getEntryWorkspaceTab()?.id)
+    }
+
+    if (trackedTabIdByKind.styles === normalizedTabId) {
+      trackedTabIdByKind.styles = toNonEmptyWorkspaceText(
+        getPrimaryStyleWorkspaceTab()?.id,
+      )
+    }
   }
 
   const syncHeaderLabels = () => {
     for (const editorKind of editorKinds) {
-      const tab =
-        editorKind === 'styles'
-          ? (workspaceTabsState.getTab(getLoadedStylesTabId()) ??
-            getWorkspaceTabByKind('styles'))
-          : (workspaceTabsState.getTab(getLoadedComponentTabId()) ??
-            getWorkspaceTabByKind('component'))
+      const tab = resolveTabForKind(editorKind)
       const headerLabel = editorHeaderLabelByKind[editorKind]
       const dirtyStatusLabel = editorHeaderDirtyStatusByKind[editorKind]
 
@@ -79,26 +105,19 @@ const createWorkspaceEditorHelpers = ({
       return
     }
 
-    const activeTabKind = getTabKind(activeTab)
-    const loadedTabId =
-      activeTabKind === 'styles' ? getLoadedStylesTabId() : getLoadedComponentTabId()
-    const loadedTab = loadedTabId ? workspaceTabsState.getTab(loadedTabId) : null
-    const targetTab =
-      loadedTab && getTabKind(loadedTab) === activeTabKind ? loadedTab : activeTab
+    const nextContent = isStyleWorkspaceTab(activeTab) ? getCssSource() : getJsxSource()
 
-    const nextContent = activeTabKind === 'styles' ? getCssSource() : getJsxSource()
-
-    if (nextContent === targetTab.content) {
+    if (nextContent === activeTab.content) {
       return
     }
 
     workspaceTabsState.upsertTab(
       {
-        ...targetTab,
+        ...activeTab,
         content: nextContent,
-        isDirty: getDirtyStateForTabChange(targetTab, nextContent),
+        isDirty: getDirtyStateForTabChange(activeTab, nextContent),
         lastModified: Date.now(),
-        isActive: targetTab.id === activeTab.id,
+        isActive: true,
       },
       { emitReason: 'tabContentSync' },
     )
@@ -149,8 +168,8 @@ const createWorkspaceEditorHelpers = ({
       }
     }
 
-    if (getTabKind(tab) === 'styles') {
-      setLoadedStylesTabId(tab.id)
+    if (isStyleWorkspaceTab(tab)) {
+      trackedTabIdByKind.styles = tab.id
       setSuppressEditorChangeSideEffects(true)
       try {
         setCssSource(nextContent)
@@ -161,14 +180,12 @@ const createWorkspaceEditorHelpers = ({
       setVisibleEditorPanelForKind('styles')
       editorPool.activate('styles')
     } else {
-      setLoadedComponentTabId(tab.id)
+      trackedTabIdByKind.component = tab.id
       setSuppressEditorChangeSideEffects(true)
       try {
         setJsxSource(nextContent)
 
-        const stylesTab =
-          workspaceTabsState.getTab(getLoadedStylesTabId()) ??
-          getWorkspaceTabByKind('styles')
+        const stylesTab = resolveTabForKind('styles')
         if (stylesTab) {
           applyStyleLanguage(stylesTab.language)
         }
@@ -184,6 +201,7 @@ const createWorkspaceEditorHelpers = ({
   }
 
   return {
+    clearTrackedWorkspaceTab,
     getWorkspaceTabByKind,
     syncHeaderLabels,
     persistActiveTabEditorContent,

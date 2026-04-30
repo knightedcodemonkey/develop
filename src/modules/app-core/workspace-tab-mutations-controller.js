@@ -16,12 +16,9 @@ const createWorkspaceTabMutationsController = ({
   maybeRender,
   setWorkspaceTabAddMenuOpen,
   confirmAction,
-  getTabKind,
+  isStyleWorkspaceTab,
   persistActiveTabEditorContent,
-  getLoadedComponentTabId,
-  setLoadedComponentTabId,
-  getLoadedStylesTabId,
-  setLoadedStylesTabId,
+  clearTrackedWorkspaceTab,
   getActiveWorkspaceTab,
   loadWorkspaceTabIntoEditor,
   getWorkspaceTabByKind,
@@ -30,6 +27,38 @@ const createWorkspaceTabMutationsController = ({
   createWorkspaceTabId,
   getShouldShowEditedDesign,
 }) => {
+  const moduleTabTemplates = {
+    script: {
+      basePath: 'src/components/module.tsx',
+      language: 'javascript-jsx',
+      idPrefix: 'module',
+      defaultName: 'script-tab',
+      statusMessage: 'Added JavaScript tab.',
+    },
+    style: {
+      basePath: 'src/styles/module.css',
+      language: 'css',
+      idPrefix: 'style',
+      defaultName: 'style-tab',
+      statusMessage: 'Added style tab.',
+    },
+  }
+
+  const resolveModuleTabTemplate = request => {
+    if (request && typeof request === 'object') {
+      const type = toNonEmptyWorkspaceText(request.type).toLowerCase()
+      if (type === 'style') {
+        return moduleTabTemplates.style
+      }
+
+      if (type === 'script') {
+        return moduleTabTemplates.script
+      }
+    }
+
+    return null
+  }
+
   const beginWorkspaceTabRename = tabId => {
     setWorkspaceTabAddMenuOpen(false)
     setWorkspaceTabRenameState({
@@ -142,25 +171,15 @@ const createWorkspaceTabMutationsController = ({
       copy: 'This removes the tab and its local source content from this workspace context.',
       confirmButtonText: 'Remove tab',
       onConfirm: () => {
-        const removedKind = getTabKind(tab)
+        const removedKind = isStyleWorkspaceTab(tab) ? 'styles' : 'component'
         persistActiveTabEditorContent()
         const removed = workspaceTabsState.removeTab(tab.id)
         if (!removed) {
           return
         }
 
-        if (getLoadedComponentTabId() === tab.id) {
-          setLoadedComponentTabId(
-            workspaceTabsState.getTabs().find(entry => getTabKind(entry) === 'component')
-              ?.id || 'component',
-          )
-        }
-
-        if (getLoadedStylesTabId() === tab.id) {
-          setLoadedStylesTabId(
-            workspaceTabsState.getTabs().find(entry => getTabKind(entry) === 'styles')
-              ?.id || 'styles',
-          )
+        if (typeof clearTrackedWorkspaceTab === 'function') {
+          clearTrackedWorkspaceTab(tab.id)
         }
 
         const activeTab = getActiveWorkspaceTab()
@@ -168,9 +187,7 @@ const createWorkspaceTabMutationsController = ({
           loadWorkspaceTabIntoEditor(activeTab)
         } else {
           const fallbackTab =
-            getWorkspaceTabByKind(removedKind === 'styles' ? 'component' : 'styles') ||
-            workspaceTabsState.getTabs()[0] ||
-            null
+            getWorkspaceTabByKind(removedKind) || workspaceTabsState.getTabs()[0] || null
           if (fallbackTab) {
             setActiveWorkspaceTab(fallbackTab.id)
           }
@@ -189,20 +206,16 @@ const createWorkspaceTabMutationsController = ({
     })
   }
 
-  const addWorkspaceTab = kind => {
-    const normalizedKind =
-      kind === 'styles' ? 'styles' : kind === 'component' ? 'component' : ''
-    if (!normalizedKind) {
-      setStatus('Choose a tab type before adding a tab.', 'neutral')
+  const addWorkspaceTab = request => {
+    const template = resolveModuleTabTemplate(request)
+    if (!template) {
+      setStatus('Choose a tab template before adding a tab.', 'neutral')
       return
     }
 
-    const basePath =
-      normalizedKind === 'styles' ? 'src/styles/module.css' : 'src/components/module.tsx'
-    const language = normalizedKind === 'styles' ? 'css' : 'javascript-jsx'
-    const path = makeUniqueTabPath({ basePath })
-    const tabId = createWorkspaceTabId(normalizedKind === 'styles' ? 'style' : 'module')
-    const name = getPathFileName(path) || `${normalizedKind}-tab`
+    const path = makeUniqueTabPath({ basePath: template.basePath })
+    const tabId = createWorkspaceTabId(template.idPrefix)
+    const name = getPathFileName(path) || template.defaultName
     const shouldMarkNewTabEdited =
       typeof getShouldShowEditedDesign === 'function'
         ? Boolean(getShouldShowEditedDesign())
@@ -214,7 +227,7 @@ const createWorkspaceTabMutationsController = ({
       id: tabId,
       name,
       path,
-      language,
+      language: template.language,
       role: 'module',
       isActive: false,
       content: '',
@@ -224,12 +237,7 @@ const createWorkspaceTabMutationsController = ({
 
     setWorkspaceTabAddMenuOpen(false)
     setActiveWorkspaceTab(tabId)
-
-    if (normalizedKind === 'styles') {
-      setStatus('Added style tab.', 'neutral')
-    } else {
-      setStatus('Added JavaScript tab.', 'neutral')
-    }
+    setStatus(template.statusMessage, 'neutral')
   }
 
   return {

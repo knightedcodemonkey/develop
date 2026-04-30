@@ -108,7 +108,12 @@ export const createWorkspaceTabsState = ({ tabs = [], activeTabId, onChange } = 
     }
 
     if (orderedIds.length === 0) {
-      const fallback = normalizeTab({ id: 'component', name: 'Component' })
+      const fallback = normalizeTab({
+        id: 'entry',
+        name: 'Entry',
+        role: 'entry',
+        language: 'javascript-jsx',
+      })
       tabsById.set(fallback.id, fallback)
       orderedIds.push(fallback.id)
     }

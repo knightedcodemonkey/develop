@@ -78,11 +78,9 @@ const bindAppEventsAndStart = ({
     updateRenderModeEditability,
     loadPreferredWorkspaceContext,
     getActiveWorkspaceTab,
-    getTabKind,
+    isStyleWorkspaceTab,
     setActiveWorkspaceTab,
-    workspaceTabsState,
-    loadedStylesTabIdRef,
-    getWorkspaceTabByKind,
+    getPrimaryStyleWorkspaceTab,
     workspaceSaveController,
     workspaceStorage,
     syncDiagnosticsDrawerLayout,
@@ -239,11 +237,11 @@ const bindAppEventsAndStart = ({
     typecheckButton.addEventListener('click', () => {
       const { activeTab, tabsSnapshot } = syncAndCaptureDiagnosticsSnapshot()
       const source =
-        getTabKind(activeTab) === 'component' && typeof activeTab?.content === 'string'
+        !isStyleWorkspaceTab(activeTab) && typeof activeTab?.content === 'string'
           ? activeTab.content
           : getJsxSource()
       const sourcePath =
-        getTabKind(activeTab) === 'component' && typeof activeTab?.path === 'string'
+        !isStyleWorkspaceTab(activeTab) && typeof activeTab?.path === 'string'
           ? activeTab.path
           : getTypecheckSourcePath()
 
@@ -259,7 +257,7 @@ const bindAppEventsAndStart = ({
     lintComponentButton.addEventListener('click', () => {
       const { activeTab } = syncAndCaptureDiagnosticsSnapshot()
       const source =
-        getTabKind(activeTab) === 'component' && typeof activeTab?.content === 'string'
+        !isStyleWorkspaceTab(activeTab) && typeof activeTab?.content === 'string'
           ? activeTab.content
           : getJsxSource()
 
@@ -273,7 +271,7 @@ const bindAppEventsAndStart = ({
     lintStylesButton.addEventListener('click', () => {
       const { activeTab } = syncAndCaptureDiagnosticsSnapshot()
       const source =
-        getTabKind(activeTab) === 'styles' && typeof activeTab?.content === 'string'
+        isStyleWorkspaceTab(activeTab) && typeof activeTab?.content === 'string'
           ? activeTab.content
           : getCssSource()
 
@@ -457,14 +455,14 @@ const bindAppEventsAndStart = ({
   if (workspaceTabAddModule instanceof HTMLButtonElement) {
     workspaceTabAddModule.addEventListener('click', event => {
       event.stopPropagation()
-      addWorkspaceTab('component')
+      addWorkspaceTab({ type: 'script' })
     })
   }
 
   if (workspaceTabAddStyles instanceof HTMLButtonElement) {
     workspaceTabAddStyles.addEventListener('click', event => {
       event.stopPropagation()
-      addWorkspaceTab('styles')
+      addWorkspaceTab({ type: 'style' })
     })
   }
 
@@ -498,11 +496,11 @@ const bindAppEventsAndStart = ({
       syncDiagnosticsDrawerLayout()
     }
 
-    const stylesTab =
-      workspaceTabsState.getTab(loadedStylesTabIdRef.value) ??
-      getWorkspaceTabByKind('styles')
-    if (stylesTab && typeof stylesTab.content === 'string') {
-      setCssSource(stylesTab.content)
+    if (!isStyleWorkspaceTab(activeTab)) {
+      const stylesTab = getPrimaryStyleWorkspaceTab()
+      if (stylesTab && typeof stylesTab.content === 'string') {
+        setCssSource(stylesTab.content)
+      }
     }
 
     setHasCompletedInitialWorkspaceBootstrap(true)

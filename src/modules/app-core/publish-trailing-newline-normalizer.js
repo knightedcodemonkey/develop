@@ -10,12 +10,9 @@ const createPublishTrailingNewlineNormalizer = ({
   workspaceTabsState,
   getTabPublishPath,
   normalizePublishPath,
-  getLoadedComponentTabId,
-  getLoadedStylesTabId,
-  getJsxSource,
-  getCssSource,
-  setJsxSource,
-  setCssSource,
+  getActiveTabId,
+  getCurrentEditorSource,
+  setCurrentEditorSource,
   setSuppressEditorChangeSideEffects,
   queueWorkspaceSave,
 }) => {
@@ -37,7 +34,7 @@ const createPublishTrailingNewlineNormalizer = ({
     }
 
     const tabs = workspaceTabsState.getTabs()
-    const activeTabId = workspaceTabsState.getActiveTabId()
+    const activeTabIdBeforeUpdate = workspaceTabsState.getActiveTabId()
     const now = Date.now()
     let didUpdateTabs = false
     const updatedContentByTabId = new Map()
@@ -67,32 +64,31 @@ const createPublishTrailingNewlineNormalizer = ({
     })
 
     if (didUpdateTabs) {
-      workspaceTabsState.replaceTabs({ tabs: nextTabs, activeTabId })
+      workspaceTabsState.replaceTabs({
+        tabs: nextTabs,
+        activeTabId: activeTabIdBeforeUpdate,
+      })
     }
 
-    const loadedComponentTabId =
-      typeof getLoadedComponentTabId === 'function' ? getLoadedComponentTabId() : ''
-    const nextJsxSource = loadedComponentTabId
-      ? updatedContentByTabId.get(loadedComponentTabId)
+    const resolvedActiveTabId =
+      typeof getActiveTabId === 'function'
+        ? getActiveTabId()
+        : workspaceTabsState.getActiveTabId() || activeTabIdBeforeUpdate
+    const nextActiveEditorSource = resolvedActiveTabId
+      ? updatedContentByTabId.get(resolvedActiveTabId)
       : null
-    if (typeof nextJsxSource === 'string' && nextJsxSource !== getJsxSource()) {
-      setSuppressEditorChangeSideEffects(true)
-      try {
-        setJsxSource(nextJsxSource)
-      } finally {
-        setSuppressEditorChangeSideEffects(false)
-      }
-    }
+    const currentEditorSource =
+      typeof getCurrentEditorSource === 'function' ? getCurrentEditorSource() : null
 
-    const loadedStylesTabId =
-      typeof getLoadedStylesTabId === 'function' ? getLoadedStylesTabId() : ''
-    const nextCssSource = loadedStylesTabId
-      ? updatedContentByTabId.get(loadedStylesTabId)
-      : null
-    if (typeof nextCssSource === 'string' && nextCssSource !== getCssSource()) {
+    if (
+      typeof nextActiveEditorSource === 'string' &&
+      typeof currentEditorSource === 'string' &&
+      nextActiveEditorSource !== currentEditorSource &&
+      typeof setCurrentEditorSource === 'function'
+    ) {
       setSuppressEditorChangeSideEffects(true)
       try {
-        setCssSource(nextCssSource)
+        setCurrentEditorSource(nextActiveEditorSource)
       } finally {
         setSuppressEditorChangeSideEffects(false)
       }

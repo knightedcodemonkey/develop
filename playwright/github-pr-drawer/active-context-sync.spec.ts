@@ -1045,10 +1045,13 @@ test('Active PR context push commit uses Git Database API atomic path by default
         const tabs = Array.isArray(workspaceRecord?.tabs)
           ? (workspaceRecord.tabs as Array<Record<string, unknown>>)
           : []
-        const tabIds = new Set(
-          tabs.map(tab => (typeof tab?.id === 'string' ? tab.id : '')).filter(Boolean),
-        )
-        const hasPrimaryTabs = tabIds.has('component') && tabIds.has('styles')
+        const hasEntryTab = tabs.some(tab => tab?.role === 'entry')
+        const hasStyleTab = tabs.some(tab => {
+          const language =
+            typeof tab?.language === 'string' ? tab.language.trim().toLowerCase() : ''
+          return language === 'css' || language === 'less' || language === 'sass'
+        })
+        const hasPrimaryTabs = hasEntryTab && hasStyleTab
         return hasPrimaryTabs && tabs.every(tab => tab?.isDirty === false)
       },
       { timeout: 10_000 },
@@ -2186,8 +2189,11 @@ test('Reloaded active PR context does not apply partial sync when one primary fi
           ? (workspaceRecord.tabs as Array<Record<string, unknown>>)
           : []
 
-        const entryTab = tabs.find(tab => tab?.id === 'component')
-        const stylesTab = tabs.find(tab => tab?.id === 'styles')
+        const entryTab = tabs.find(tab => tab?.role === 'entry')
+        const stylesTab = tabs.find(
+          tab =>
+            typeof tab?.path === 'string' && tab.path.trim() === 'src/styles/app.css',
+        )
 
         return {
           entryContent: typeof entryTab?.content === 'string' ? entryTab.content : '',
@@ -2377,7 +2383,7 @@ test('Reloaded active PR context sync does not overwrite non-primary module tabs
           ? (workspaceRecord.tabs as Array<Record<string, unknown>>)
           : []
 
-        const entryTab = tabs.find(tab => tab?.id === 'component')
+        const entryTab = tabs.find(tab => tab?.role === 'entry')
         const boopTab = tabs.find(tab => tab?.id === 'module-boop')
         const beepTab = tabs.find(tab => tab?.id === 'module-beep')
 
@@ -2590,7 +2596,7 @@ test('Reloaded active PR context sync does not overwrite non-primary tabs with s
           ? (workspaceRecord.tabs as Array<Record<string, unknown>>)
           : []
 
-        const entryTab = tabs.find(tab => tab?.id === 'component')
+        const entryTab = tabs.find(tab => tab?.role === 'entry')
         const boopTab = tabs.find(tab => tab?.id === 'module-boop')
         const beepTab = tabs.find(tab => tab?.id === 'module-beep')
 

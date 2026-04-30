@@ -566,7 +566,7 @@ export const seedActivePrWorkspaceContext = async (
       renderMode,
       tabs: [
         {
-          id: 'component',
+          id: 'entry',
           name: 'App.tsx',
           path: 'src/components/App.tsx',
           language: 'javascript-jsx',
@@ -575,7 +575,7 @@ export const seedActivePrWorkspaceContext = async (
           content: 'export const App = () => <main>Hello from Knighted</main>',
         },
         {
-          id: 'styles',
+          id: 'style',
           name: 'app.css',
           path: 'src/styles/app.css',
           language: safeStyleLanguage,
@@ -584,7 +584,7 @@ export const seedActivePrWorkspaceContext = async (
           content: 'main { color: #111; }',
         },
       ],
-      activeTabId: 'component',
+      activeTabId: 'entry',
       createdAt: Date.now() + 60_000,
       lastModified: Date.now() + 60_000,
     },
@@ -706,7 +706,7 @@ export const getWorkspaceComponentContent = (record: Record<string, unknown> | n
       return false
     }
 
-    return (tab as { id?: unknown }).id === 'component'
+    return (tab as { role?: unknown }).role === 'entry'
   }) as { content?: unknown } | undefined
 
   return typeof componentTab?.content === 'string' ? componentTab.content : ''
@@ -829,7 +829,7 @@ export const runActiveWorkspaceSwitchIntegrityScenario = async ({
       renderMode: 'react',
       tabs: [
         {
-          id: 'component',
+          id: 'entry',
           name: 'App.tsx',
           path: 'src/components/App.tsx',
           language: 'javascript-jsx',
@@ -838,7 +838,7 @@ export const runActiveWorkspaceSwitchIntegrityScenario = async ({
           content: 'export const App = () => <main>Active A content</main>',
         },
       ],
-      activeTabId: 'component',
+      activeTabId: 'entry',
       createdAt: Date.now() - 60_000,
       lastModified: Date.now() - 60_000,
     },
@@ -853,7 +853,7 @@ export const runActiveWorkspaceSwitchIntegrityScenario = async ({
       renderMode: 'dom',
       tabs: [
         {
-          id: 'component',
+          id: 'entry',
           name: 'App.tsx',
           path: 'src/components/App.tsx',
           language: 'javascript-jsx',
@@ -862,7 +862,7 @@ export const runActiveWorkspaceSwitchIntegrityScenario = async ({
           content: `export const App = () => <main>Target ${targetState} content</main>`,
         },
       ],
-      activeTabId: 'component',
+      activeTabId: 'entry',
       createdAt: Date.now() - 120_000,
       lastModified: Date.now() - 120_000,
     },
@@ -1077,7 +1077,7 @@ export const runActiveWorkspaceCrossRepoSwitchIntegrityScenario = async ({
       renderMode: 'react',
       tabs: [
         {
-          id: 'component',
+          id: 'entry',
           name: 'App.tsx',
           path: 'src/components/App.tsx',
           language: 'javascript-jsx',
@@ -1086,7 +1086,7 @@ export const runActiveWorkspaceCrossRepoSwitchIntegrityScenario = async ({
           content: 'export const App = () => <main>Cross source active content</main>',
         },
       ],
-      activeTabId: 'component',
+      activeTabId: 'entry',
       createdAt: Date.now() - 60_000,
       lastModified: Date.now() - 60_000,
     },
@@ -1101,7 +1101,7 @@ export const runActiveWorkspaceCrossRepoSwitchIntegrityScenario = async ({
       renderMode: 'dom',
       tabs: [
         {
-          id: 'component',
+          id: 'entry',
           name: 'App.tsx',
           path: 'src/components/App.tsx',
           language: 'javascript-jsx',
@@ -1110,7 +1110,7 @@ export const runActiveWorkspaceCrossRepoSwitchIntegrityScenario = async ({
           content: `export const App = () => <main>Cross target ${targetState} content</main>`,
         },
       ],
-      activeTabId: 'component',
+      activeTabId: 'entry',
       createdAt: Date.now() - 120_000,
       lastModified: Date.now() - 120_000,
     },

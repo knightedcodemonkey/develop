@@ -14,11 +14,9 @@ import {
 import { createDiagnosticsFlowController } from './modules/app-core/diagnostics-flow-controller.js'
 import { createEditorBootstrapController } from './modules/app-core/editor-bootstrap-controller.js'
 import {
-  getInitialRenderMode as getInitialRenderModeValue,
   getStyleEditorLanguage,
   normalizeRenderMode,
   normalizeStyleMode,
-  persistRenderMode as persistRenderModeValue,
   setCssSourceValue,
   setJsxSourceValue,
   updateRenderModeEditability as updateRenderModeEditabilityValue,
@@ -28,6 +26,7 @@ import {
   createWorkspaceContextSnapshotGetter,
   toStyleModeForTabLanguage,
 } from './modules/app-core/workspace-local-helpers.js'
+import { createWorkspaceTabSelectors } from './modules/app-core/workspace-tab-selectors.js'
 import { createDiagnosticsTabStateHelpers } from './modules/app-core/diagnostics-tab-state-helpers.js'
 import { createWorkspaceEditorHelpers } from './modules/app-core/workspace-editor-helpers.js'
 import { createEditedIndicatorVisibilityController } from './modules/app-core/edited-indicator-visibility-controller.js'
@@ -213,7 +212,6 @@ const defaultStylesTabPath = 'src/styles/app.css'
 const defaultComponentTabName = 'App.tsx'
 const defaultStylesTabName = 'app.css'
 const allowedEntryTabFileNames = new Set(['app.tsx', 'app.js'])
-const renderModeStorageKey = 'knighted-develop:render-mode'
 const editorKinds = ['component', 'styles']
 const editorPanelsByKind = {
   component: componentEditorPanel,
@@ -254,7 +252,7 @@ let hasCompletedInitialWorkspaceBootstrap = false
 const workspaceTabsState = createWorkspaceTabsState({
   tabs: [
     {
-      id: 'component',
+      id: 'entry',
       name: defaultComponentTabName,
       path: defaultComponentTabPath,
       language: 'javascript-jsx',
@@ -272,7 +270,7 @@ const workspaceTabsState = createWorkspaceTabsState({
       content: defaultCss,
     },
   ],
-  activeTabId: 'component',
+  activeTabId: 'entry',
 })
 const editorPool = createEditorPoolManager({ maxMounted: 2 })
 let workspaceTabRenameState = {
@@ -589,20 +587,23 @@ const getWorkspaceContextSnapshot = createWorkspaceContextSnapshotGetter({
   getPrNumber: () => workspacePrNumber,
 })
 
-let loadedComponentTabId = 'component'
-let loadedStylesTabId = 'styles'
-
-const getActiveWorkspaceTab = () =>
-  workspaceTabsState.getTab(workspaceTabsState.getActiveTabId())
+const { getActiveWorkspaceTab, getEntryWorkspaceTab, getPrimaryStyleWorkspaceTab } =
+  createWorkspaceTabSelectors({
+    workspaceTabsState,
+    getTabKind,
+    toNonEmptyWorkspaceText,
+  })
+const isStyleWorkspaceTab = tab => isStyleTabLanguage(tab?.language)
 
 const {
+  clearTrackedWorkspaceTab,
   getWorkspaceTabByKind,
   syncHeaderLabels,
   persistActiveTabEditorContent,
   loadWorkspaceTabIntoEditor,
 } = createWorkspaceEditorHelpers({
   workspaceTabsState,
-  getTabKind,
+  isStyleWorkspaceTab,
   editorKinds,
   editorPanelsByKind,
   editorHeaderLabelByKind,
@@ -611,10 +612,8 @@ const {
     editedIndicatorVisibilityController.getShouldShowEditedDesign,
   defaultTabNameByKind,
   toNonEmptyWorkspaceText,
-  getLoadedStylesTabId: () => loadedStylesTabId,
-  getLoadedComponentTabId: () => loadedComponentTabId,
-  setLoadedStylesTabId: value => (loadedStylesTabId = value),
-  setLoadedComponentTabId: value => (loadedComponentTabId = value),
+  getEntryWorkspaceTab,
+  getPrimaryStyleWorkspaceTab,
   getCssSource: () => getCssSource(),
   getJsxSource: () => getJsxSource(),
   getDirtyStateForTabChange,
@@ -630,7 +629,7 @@ const {
 
 const workspaceSyncController = createWorkspaceSyncController({
   workspaceTabsState,
-  getTabKind,
+  isStyleWorkspaceTab,
   getTabTargetPrFilePath,
   normalizeWorkspacePathValue,
   toWorkspaceSyncedContent,
@@ -640,9 +639,6 @@ const workspaceSyncController = createWorkspaceSyncController({
   hasTabCommittedSyncState,
   getJsxSource: () => getJsxSource(),
   getCssSource: () => getCssSource(),
-  getWorkspaceTabByKind,
-  getLoadedComponentTabId: () => loadedComponentTabId,
-  getLoadedStylesTabId: () => loadedStylesTabId,
   queueWorkspaceSave: () => queueWorkspaceSave(),
   resolveWorkspaceRecordIdentity,
   getWorkspaceContextSnapshot,
@@ -653,16 +649,8 @@ const workspaceSyncController = createWorkspaceSyncController({
   normalizeRenderMode: mode => normalizeRenderMode(mode),
 })
 
-const getLoadedComponentWorkspaceTab = () =>
-  workspaceTabsState.getTab(loadedComponentTabId) ?? getWorkspaceTabByKind('component')
-
-const getLoadedStylesWorkspaceTab = () =>
-  workspaceTabsState.getTab(loadedStylesTabId) ?? getWorkspaceTabByKind('styles')
-
-const getTypecheckSourcePath = () => {
-  const loadedComponentTab = getLoadedComponentWorkspaceTab()
-  return toNonEmptyWorkspaceText(loadedComponentTab?.path) || defaultComponentTabPath
-}
+const getTypecheckSourcePath = () =>
+  toNonEmptyWorkspaceText(getEntryWorkspaceTab()?.path) || defaultComponentTabPath
 
 const {
   clearDiagnosticsOnTabSwitch,
@@ -671,9 +659,9 @@ const {
   syncDiagnosticsDrawerLayout,
 } = createDiagnosticsTabStateHelpers({
   getActiveWorkspaceTab,
-  getLoadedComponentWorkspaceTab,
-  getLoadedStylesWorkspaceTab,
-  getTabKind,
+  getEntryWorkspaceTab,
+  getPrimaryStyleWorkspaceTab,
+  isStyleWorkspaceTab,
   toNonEmptyWorkspaceText,
   diagnosticsComponentSection,
   diagnosticsStylesSection,
@@ -771,7 +759,6 @@ const {
   setRenderModeValue: value => {
     renderMode.value = value
   },
-  persistRenderMode: mode => persistRenderMode(mode),
   getActiveWorkspaceTab,
   onActiveWorkspaceTabChange: (_tab, { changed } = {}) => {
     syncDiagnosticsDrawerLayout()
@@ -815,11 +802,8 @@ const {
     workspaceTabAddMenuUi.setOpen(isOpen)
   },
   confirmAction: options => confirmAction(options),
-  getTabKind,
-  getLoadedComponentTabId: () => loadedComponentTabId,
-  setLoadedComponentTabId: value => (loadedComponentTabId = value),
-  getLoadedStylesTabId: () => loadedStylesTabId,
-  setLoadedStylesTabId: value => (loadedStylesTabId = value),
+  isStyleWorkspaceTab,
+  clearTrackedWorkspaceTab,
   getWorkspaceTabByKind,
   makeUniqueTabPath,
   createWorkspaceTabId,
@@ -915,12 +899,20 @@ const normalizeWorkspaceEditorsTrailingNewlineAfterPublish =
     getTabPublishPath: tab =>
       getTabTargetPrFilePath(tab) || normalizeWorkspacePathValue(tab?.path) || '',
     normalizePublishPath: path => normalizeWorkspacePathValue(path),
-    getLoadedComponentTabId: () => loadedComponentTabId,
-    getLoadedStylesTabId: () => loadedStylesTabId,
-    getJsxSource: () => getJsxSource(),
-    getCssSource: () => getCssSource(),
-    setJsxSource,
-    setCssSource,
+    getActiveTabId: () => workspaceTabsState.getActiveTabId(),
+    getCurrentEditorSource: () => {
+      const activeTab = getActiveWorkspaceTab()
+      return isStyleWorkspaceTab(activeTab) ? getCssSource() : getJsxSource()
+    },
+    setCurrentEditorSource: value => {
+      const activeTab = getActiveWorkspaceTab()
+      if (isStyleWorkspaceTab(activeTab)) {
+        setCssSource(value)
+        return
+      }
+
+      setJsxSource(value)
+    },
     setSuppressEditorChangeSideEffects: value => {
       suppressEditorChangeSideEffects = value
     },
@@ -1209,9 +1201,7 @@ chatDrawerController = githubWorkflows.chatDrawerController
 prDrawerController = githubWorkflows.prDrawerController
 workspacesDrawerController = githubWorkflows.workspacesDrawerController
 
-const persistRenderMode = mode => persistRenderModeValue(mode, { renderModeStorageKey })
-
-const getInitialRenderMode = () => getInitialRenderModeValue({ renderModeStorageKey })
+const getInitialRenderMode = () => 'dom'
 
 const updateRenderModeEditability = () =>
   updateRenderModeEditabilityValue({ renderMode, getActiveWorkspaceTab })
@@ -1226,7 +1216,7 @@ const editorBootstrapOptions = createEditorBootstrapOptions({
   styleMode,
   getSuppressEditorChangeSideEffects: () => suppressEditorChangeSideEffects,
   getActiveWorkspaceTab,
-  getTabKind,
+  isStyleWorkspaceTab,
   getDirtyStateForTabChange,
   workspaceTabsState,
   toWorkspaceSyncedContent,
@@ -1287,7 +1277,7 @@ const runtimeCoreOptions = createRuntimeCoreOptions({
   lintStylesButton,
   autoRenderToggle,
   getActiveWorkspaceTab,
-  getTabKind,
+  isStyleWorkspaceTab,
   getRenderRuntime: () => renderRuntime,
   getPreviewHost: () => previewHost,
   previewBackground,
@@ -1299,7 +1289,6 @@ const runtimeCoreOptions = createRuntimeCoreOptions({
   setPendingClearAction: value => (pendingClearAction = value),
   normalizeRenderMode,
   normalizeStyleMode,
-  persistRenderMode,
   resetDiagnosticsFlow: () => diagnosticsFlowController.resetDiagnosticsFlow(),
   maybeRender: () => diagnosticsFlowController.maybeRender(),
   flushWorkspaceSave,
@@ -1436,15 +1425,10 @@ bindAppEventsAndStart({
     updateRenderModeEditability,
     loadPreferredWorkspaceContext,
     getActiveWorkspaceTab,
-    getTabKind,
+    isStyleWorkspaceTab,
     setActiveWorkspaceTab,
     workspaceTabsState,
-    loadedStylesTabIdRef: {
-      get value() {
-        return loadedStylesTabId
-      },
-    },
-    getWorkspaceTabByKind,
+    getPrimaryStyleWorkspaceTab,
     syncDiagnosticsDrawerLayout,
     workspaceSaveController,
     workspaceStorage,
