@@ -152,6 +152,37 @@ test('renders in react mode with css modules', async ({ page }) => {
   await expectPreviewHasRenderedContent(page)
 })
 
+test('react mode keeps App.ts entry but surfaces rename guidance until compatible', async ({
+  page,
+}) => {
+  await waitForInitialRender(page)
+  await ensurePanelToolsVisible(page, 'component')
+
+  await renameWorkspaceTab(page, {
+    from: 'App.tsx',
+    to: 'App.ts',
+  })
+
+  await page.getByRole('combobox', { name: 'Render mode' }).selectOption('react')
+
+  const expectedMessage =
+    'React mode requires the entry tab to end in .tsx, .jsx, or .js.'
+  await expect(page.getByRole('status', { name: 'App status' })).toContainText(
+    expectedMessage,
+  )
+  await expect(page.locator('#preview-host pre.preview-runtime-error')).toContainText(
+    expectedMessage,
+  )
+
+  await renameWorkspaceTab(page, {
+    from: 'App.ts',
+    to: 'App.jsx',
+  })
+
+  await expect(page.getByRole('status', { name: 'App status' })).toHaveText('Rendered')
+  await expectPreviewHasRenderedContent(page)
+})
+
 test('css module imports expose class map for module tabs', async ({ page }) => {
   await waitForInitialRender(page)
 

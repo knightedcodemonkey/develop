@@ -8,8 +8,10 @@ const createRuntimeCoreSetup = ({
   clearConfirmCopy,
   clearConfirmButton,
   setPendingClearAction,
+  setStatus,
   normalizeRenderMode,
   normalizeStyleMode,
+  getRenderModeCompatibilityError = () => null,
   resetDiagnosticsFlow,
   maybeRender,
   flushWorkspaceSave,
@@ -100,6 +102,11 @@ const createRuntimeCoreSetup = ({
 
     queueWorkspaceSave()
     resetDiagnosticsFlow()
+
+    const compatibilityError = getRenderModeCompatibilityError(nextMode)
+    if (compatibilityError instanceof Error) {
+      setStatus(compatibilityError.message, 'error')
+    }
 
     maybeRender()
     void flushWorkspaceSave().catch(() => {

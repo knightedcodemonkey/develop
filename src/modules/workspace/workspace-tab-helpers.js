@@ -2,7 +2,16 @@ const defaultStyleTabLanguages = new Set(['css', 'less', 'sass', 'module'])
 const defaultComponentTabPath = 'src/components/App.tsx'
 const defaultComponentTabName = 'App.tsx'
 const defaultEntryTabDirectory = 'src/components'
-const defaultAllowedEntryTabFileNames = new Set(['app.tsx', 'app.js'])
+const domAllowedEntryTabFileNames = new Set(['app.ts', 'app.tsx', 'app.js'])
+const reactAllowedEntryTabFileNames = new Set(['app.tsx', 'app.jsx', 'app.js'])
+const defaultAllowedEntryTabFileNames = domAllowedEntryTabFileNames
+
+const getAllowedEntryTabFileNames = ({ renderMode } = {}) => {
+  const normalizedMode = toNonEmptyWorkspaceText(renderMode).toLowerCase()
+  return normalizedMode === 'react'
+    ? reactAllowedEntryTabFileNames
+    : domAllowedEntryTabFileNames
+}
 
 const toNonEmptyWorkspaceText = value =>
   typeof value === 'string' && value.trim().length > 0 ? value.trim() : ''
@@ -250,6 +259,7 @@ export {
   createWorkspaceRecordId,
   defaultStyleTabLanguages,
   getDirtyStateForTabChange,
+  getAllowedEntryTabFileNames,
   getPathDirectory,
   getPathFileName,
   getTabKind,

@@ -46,6 +46,7 @@ Repository structure:
 - Preserve progressive loading behavior (lazy-load optional compilers/runtime pieces where possible).
 - Do not introduce bundler-only assumptions into src/ runtime code.
 - Prefer async/await over promise chains.
+- Prefer const-assigned function expressions over function declarations, unless hoisting is explicitly required.
 - Do not use IIFE, find another pattern instead.
 - In Playwright tests, prefer accessible selectors first: `getByRole`, `getByLabel`, `getByText`, and explicit accessible names.
 - Avoid `locator()` for interactive controls when a semantic selector is available.

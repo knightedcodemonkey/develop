@@ -21,6 +21,7 @@ import {
   setJsxSourceValue,
   updateRenderModeEditability as updateRenderModeEditabilityValue,
 } from './modules/app-core/runtime-editor-utils.js'
+import { createSourceSetters } from './modules/app-core/source-setters.js'
 import { createRuntimeCoreSetup } from './modules/app-core/runtime-core-setup.js'
 import {
   createWorkspaceContextSnapshotGetter,
@@ -61,6 +62,7 @@ import { createGitHubPrDrawer } from './modules/github/pr/drawer/controller/crea
 import { createLayoutThemeController } from './modules/ui/layout-theme.js'
 import { createLintDiagnosticsController } from './modules/diagnostics/lint-diagnostics.js'
 import { createPreviewBackgroundController } from './modules/preview/preview-background.js'
+import { getReactEntryTabCompatibilityError } from './modules/preview/preview-entry-resolver.js'
 import { createRenderRuntimeController } from './modules/preview/render-runtime.js'
 import { createTypeDiagnosticsController } from './modules/diagnostics/type-diagnostics.js'
 import { collectTopLevelDeclarations } from './modules/preview/jsx-top-level-declarations.js'
@@ -80,6 +82,7 @@ import { createEnsureWorkspaceTabsShape } from './modules/workspace/workspace-ta
 import {
   createWorkspaceRecordId,
   getDirtyStateForTabChange,
+  getAllowedEntryTabFileNames,
   getPathFileName,
   getTabKind,
   getTabTargetPrFilePath,
@@ -211,7 +214,6 @@ const defaultComponentTabPath = 'src/components/App.tsx'
 const defaultStylesTabPath = 'src/styles/app.css'
 const defaultComponentTabName = 'App.tsx'
 const defaultStylesTabName = 'app.css'
-const allowedEntryTabFileNames = new Set(['app.tsx', 'app.js'])
 const editorKinds = ['component', 'styles']
 const editorPanelsByKind = {
   component: componentEditorPanel,
@@ -237,6 +239,7 @@ let previewHost = document.getElementById('preview-host')
 let jsxCodeEditor = null
 let cssCodeEditor = null
 let diagnosticsFlowController = null
+let runtimeCore = null
 let getJsxSource = () => jsxEditor.value
 let getCssSource = () => cssEditor.value
 let renderRuntime = null
@@ -282,6 +285,16 @@ let draggedWorkspaceTabId = ''
 let dragOverWorkspaceTabId = ''
 let suppressWorkspaceTabClick = false
 const clipboardSupported = Boolean(navigator.clipboard?.writeText)
+const { setJsxSource, setCssSource } = createSourceSetters({
+  setJsxSourceValue,
+  setCssSourceValue,
+  getJsxCodeEditor: () => jsxCodeEditor,
+  getCssCodeEditor: () => cssCodeEditor,
+  setSuppressEditorChangeSideEffects: nextValue =>
+    (suppressEditorChangeSideEffects = nextValue),
+  jsxEditor,
+  cssEditor,
+})
 
 const showAppToast = message => {
   if (!(appToast instanceof HTMLElement)) {
@@ -695,6 +708,7 @@ const ensureWorkspaceTabsShape = createEnsureWorkspaceTabsShape({
   defaultStylesTabPath,
   defaultJsx,
   normalizeEntryTabPath,
+  getAllowedEntryTabFileNames,
   getPathFileName,
   getTabTargetPrFilePath,
   normalizeWorkspacePathValue,
@@ -791,7 +805,7 @@ const {
   workspaceTabsShell,
   workspaceTabAddWrap,
   setWorkspaceTabRenameState: value => (workspaceTabRenameState = value),
-  allowedEntryTabFileNames,
+  getAllowedEntryTabFileNames,
   getPathFileName,
   normalizeEntryTabPath,
   normalizeModuleTabPathForRename,
@@ -1191,8 +1205,8 @@ const githubWorkflows = createGitHubWorkflowsSetup({
     githubPrContextClose,
   },
   actions: {
-    applyRenderMode,
-    applyStyleMode,
+    applyRenderMode: options => runtimeCore?.applyRenderMode(options),
+    applyStyleMode: options => runtimeCore?.applyStyleMode(options),
     confirmAction: options => confirmAction(options),
     setStatus,
     showAppToast,
@@ -1325,8 +1339,12 @@ const runtimeCoreOptions = createRuntimeCoreOptions({
   getStyleEditorLanguage,
   workspaceTabsState,
   queueWorkspaceSave,
+  getRenderModeCompatibilityError: mode =>
+    normalizeRenderMode(mode) === 'react'
+      ? getReactEntryTabCompatibilityError(getEntryWorkspaceTab())
+      : null,
 })
-const runtimeCore = createRuntimeCoreSetup(runtimeCoreOptions)
+runtimeCore = createRuntimeCoreSetup(runtimeCoreOptions)
 
 diagnosticsFlowController = runtimeCore.diagnosticsFlowController
 renderRuntime = runtimeCore.renderRuntime
@@ -1349,35 +1367,7 @@ const maybeRender = () => diagnosticsFlowController.maybeRender()
 const maybeRenderFromComponentEditorChange = () =>
   diagnosticsFlowController.maybeRenderFromComponentEditorChange()
 
-function setJsxSource(value) {
-  setJsxSourceValue({
-    value,
-    jsxCodeEditor,
-    setSuppressEditorChangeSideEffects: nextValue =>
-      (suppressEditorChangeSideEffects = nextValue),
-    jsxEditor,
-  })
-}
-
-function setCssSource(value) {
-  setCssSourceValue({
-    value,
-    cssCodeEditor,
-    setSuppressEditorChangeSideEffects: nextValue =>
-      (suppressEditorChangeSideEffects = nextValue),
-    cssEditor,
-  })
-}
-
 const confirmAction = options => runtimeCore.confirmAction(options)
-
-function applyRenderMode({ mode, fromActivePrContext: _fromActivePrContext = false }) {
-  runtimeCore.applyRenderMode({ mode, fromActivePrContext: _fromActivePrContext })
-}
-
-function applyStyleMode({ mode }) {
-  runtimeCore.applyStyleMode({ mode })
-}
 
 bindAppEventsAndStart({
   editorUi: {
@@ -1405,8 +1395,8 @@ bindAppEventsAndStart({
     statusNode,
   },
   sourceActions: {
-    applyRenderMode,
-    applyStyleMode,
+    applyRenderMode: options => runtimeCore.applyRenderMode(options),
+    applyStyleMode: options => runtimeCore.applyStyleMode(options),
     updateRenderButtonVisibility: () => (renderButton.hidden = autoRenderToggle.checked),
     clearDiagnosticsScope,
     clearComponentLintDiagnosticsState,

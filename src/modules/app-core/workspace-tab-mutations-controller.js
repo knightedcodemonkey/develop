@@ -4,7 +4,8 @@ const createWorkspaceTabMutationsController = ({
   setWorkspaceTabRenameState,
   renderWorkspaceTabs,
   setStatus,
-  allowedEntryTabFileNames,
+  getAllowedEntryTabFileNames,
+  getRenderModeValue,
   getPathFileName,
   normalizeEntryTabPath,
   normalizeModuleTabPathForRename,
@@ -27,6 +28,41 @@ const createWorkspaceTabMutationsController = ({
   createWorkspaceTabId,
   getShouldShowEditedDesign,
 }) => {
+  const defaultAllowedEntryTabFileNames = new Set(['app.tsx', 'app.js'])
+
+  const formatAllowedEntryTabNames = allowedEntryTabFileNames => {
+    const displayNames = [...allowedEntryTabFileNames].map(fileName =>
+      fileName.toLowerCase().startsWith('app.')
+        ? `App.${fileName.slice('app.'.length)}`
+        : fileName,
+    )
+
+    if (displayNames.length <= 1) {
+      return displayNames[0] || 'App.tsx'
+    }
+
+    if (displayNames.length === 2) {
+      return `${displayNames[0]} or ${displayNames[1]}`
+    }
+
+    const leading = displayNames.slice(0, -1).join(', ')
+    return `${leading}, or ${displayNames[displayNames.length - 1]}`
+  }
+
+  const resolveAllowedEntryTabFileNames = () => {
+    if (typeof getAllowedEntryTabFileNames !== 'function') {
+      return defaultAllowedEntryTabFileNames
+    }
+
+    const resolved = getAllowedEntryTabFileNames({
+      renderMode:
+        typeof getRenderModeValue === 'function' ? getRenderModeValue() : undefined,
+    })
+    return resolved instanceof Set && resolved.size > 0
+      ? resolved
+      : defaultAllowedEntryTabFileNames
+  }
+
   const moduleTabTemplates = {
     script: {
       basePath: 'src/components/module.tsx',
@@ -87,12 +123,16 @@ const createWorkspaceTabMutationsController = ({
 
     const includesDirectory = /[\\/]/.test(normalizedNameInput)
     const nextFileName = getPathFileName(normalizedNameInput) || normalizedNameInput
+    const allowedEntryTabFileNames = resolveAllowedEntryTabFileNames()
 
     if (
       tab.role === 'entry' &&
       !allowedEntryTabFileNames.has(nextFileName.toLowerCase())
     ) {
-      setStatus('Entry tab name must be App.tsx or App.js.', 'error')
+      setStatus(
+        `Entry tab name must be ${formatAllowedEntryTabNames(allowedEntryTabFileNames)}.`,
+        'error',
+      )
       renderWorkspaceTabs()
       return
     }
@@ -103,6 +143,7 @@ const createWorkspaceTabMutationsController = ({
             preferredFileName: includesDirectory
               ? getPathFileName(normalizedNameInput)
               : normalizedNameInput,
+            allowedEntryTabFileNames,
           })
         : normalizeModuleTabPathForRename(tab.path, normalizedNameInput)
 
