@@ -44,11 +44,19 @@ const persistClosedPrContextRecords = async ({
     recordsForContext.map(record => {
       const preservedTitle =
         toNonEmptyWorkspaceText(record.prTitle) || normalizedFallbackTitle
+      const preservedPrNumber =
+        typeof record.prNumber === 'number' && Number.isFinite(record.prNumber)
+          ? record.prNumber
+          : null
+      const nextPersistedPrNumber =
+        typeof nextPrNumber === 'number' && Number.isFinite(nextPrNumber)
+          ? nextPrNumber
+          : preservedPrNumber
 
       return workspaceStorage.upsertWorkspace({
         ...record,
         prContextState: 'closed',
-        prNumber: nextPrNumber,
+        prNumber: nextPersistedPrNumber,
         prTitle: preservedTitle,
         lastModified: now,
       })

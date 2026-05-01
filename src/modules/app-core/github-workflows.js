@@ -1,3 +1,5 @@
+import { toWorkspaceRecordKey } from '../workspace/workspace-tab-helpers.js'
+
 const initializeGitHubWorkflows = ({
   createGitHubPrEditorSyncController,
   createGitHubChatDrawer,
@@ -119,22 +121,6 @@ const initializeGitHubWorkflows = ({
 
   const toSafeRepositoryFullName = value =>
     typeof value === 'string' ? value.trim() : ''
-
-  const toWorkspaceIdentitySegment = value => {
-    const normalized = typeof value === 'string' ? value.trim().toLowerCase() : ''
-
-    if (!normalized) {
-      return ''
-    }
-
-    return normalized.replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '')
-  }
-
-  const toWorkspaceRecordKey = ({ repositoryFullName, headBranch } = {}) => {
-    const repoSegment = toWorkspaceIdentitySegment(repositoryFullName) || 'local'
-    const headSegment = toWorkspaceIdentitySegment(headBranch) || 'draft'
-    return `${repoSegment}::${headSegment}`
-  }
 
   const shouldApplyActivePrEditorSync = ({ repository, activeContext }) => {
     const syncedContextKey = getActivePrContextSyncKey(activeContext)
@@ -258,6 +244,7 @@ const initializeGitHubWorkflows = ({
       fileUpdates,
       repositoryFullName,
       pullRequestNumber,
+      branch,
     }) => {
       if (typeof onPrContextStateChange === 'function') {
         onPrContextStateChange(githubAiContextState.activePrContext)
