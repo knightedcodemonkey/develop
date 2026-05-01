@@ -1,7 +1,3 @@
-const isValidationLoadingPlaceholder = placeholderLabel =>
-  typeof placeholderLabel === 'string' &&
-  placeholderLabel.trim().toLowerCase() === 'loading writable repositories...'
-
 const hasTokenValue = token => typeof token === 'string' && token.trim().length > 0
 
 const createWorkspaceContextStatusController = ({
@@ -15,6 +11,7 @@ const createWorkspaceContextStatusController = ({
   getSelectedRepositoryFullName,
 }) => {
   let hasValidatedGitHubPat = false
+  let hasCompletedRepositoryLoad = false
   const appGrid =
     statusNode instanceof HTMLElement ? statusNode.closest('.app-grid') : null
 
@@ -69,13 +66,20 @@ const createWorkspaceContextStatusController = ({
   const syncTokenState = token => {
     if (!hasTokenValue(token)) {
       hasValidatedGitHubPat = false
+      hasCompletedRepositoryLoad = false
+    } else if (hasCompletedRepositoryLoad) {
+      hasValidatedGitHubPat = true
     }
 
     render()
   }
 
-  const syncWritableRepositoriesState = ({ token, placeholderLabel }) => {
-    if (hasTokenValue(token) && !isValidationLoadingPlaceholder(placeholderLabel)) {
+  const syncWritableRepositoriesState = ({ token, isLoadingRepositories = false }) => {
+    if (!isLoadingRepositories) {
+      hasCompletedRepositoryLoad = true
+    }
+
+    if (hasTokenValue(token) && !isLoadingRepositories) {
       hasValidatedGitHubPat = true
     }
 

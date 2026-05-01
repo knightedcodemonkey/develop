@@ -435,10 +435,10 @@ let workspaceContextStatusController = {
 }
 
 const toWorkspaceScopeMarker = value => (value === 'repository' ? 'repository' : 'local')
-const setWorkspaceScopeMarker = nextScope => (
-  (workspaceScopeMarker = toWorkspaceScopeMarker(nextScope)),
+const setWorkspaceScopeMarker = nextScope => {
+  workspaceScopeMarker = toWorkspaceScopeMarker(nextScope)
   workspaceContextStatusController.render()
-)
+}
 
 const toPullRequestNumber = value => {
   if (typeof value === 'number' && Number.isFinite(value) && value > 0) {
@@ -524,7 +524,7 @@ const byotControls = createGitHubByotControls({
   onWritableRepositoriesChange: ({
     repositories,
     selectedRepository,
-    placeholderLabel,
+    isLoadingRepositories,
   }) => {
     githubAiContextState.writableRepositories = Array.isArray(repositories)
       ? [...repositories]
@@ -532,7 +532,7 @@ const byotControls = createGitHubByotControls({
 
     workspaceContextStatusController.syncWritableRepositoriesState({
       token: githubAiContextState.token,
-      placeholderLabel,
+      isLoadingRepositories,
     })
 
     if (selectedRepository || githubAiContextState.selectedRepository) {
