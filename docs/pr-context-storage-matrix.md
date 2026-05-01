@@ -48,6 +48,9 @@ When the app loads, workspace restore scope depends on whether a repository is s
 - If a repository is selected: use repository-scoped records only (`repo` match).
 - If no repository is selected: evaluate all stored workspace records.
 
+If a repository is selected and no repository-scoped records are found, restore falls back
+to evaluating all stored workspace records.
+
 Selection order:
 
 1. Load candidate records using the scope above.
@@ -59,13 +62,32 @@ Selection order:
 3. If preferred-by-id or preferred-by-key exists and is `active`, select it.
 4. Otherwise select the first `active` record in candidates.
 5. Otherwise select preferred-by-id or preferred-by-key if present.
-6. Otherwise fall back to the first record returned by IDB ordering.
+6. Otherwise fall back to the first candidate by recency (`lastModified` descending).
 
 Notes:
 
 - No `active workspace` pointer is stored in `localStorage`.
 - Restore behavior is intentionally derived from IDB workspace records + in-memory runtime state.
 - This avoids cross-storage drift between `localStorage` and IndexedDB.
+
+## PR Drawer Persistence Boundary
+
+PR drawer field edits are treated as draft input.
+
+- Editing PR base/head/title in the drawer does not persist workspace record metadata by itself.
+- Workspace PR metadata is committed by explicit successful workflow outcomes (for example:
+  successful Open PR, successful Push Commit, or successful Close PR/verified closed updates).
+
+This keeps workspace records aligned to verified workflow outcomes instead of intermediate
+form state.
+
+## Active Record Model
+
+Multiple `active` PR workspaces may exist for the same repository.
+
+- The model does not enforce a single-active-record-per-repository invariant.
+- Restore selection still follows the algorithm above and picks one workspace to load into
+  the current runtime.
 
 ## Why PR Context Lives In IDB Only
 
@@ -101,14 +123,10 @@ indexedDB.open('knighted-develop-workspaces').onsuccess = event => {
 }
 ```
 
-## End-Of-Session Behavior
+## Close Behavior
 
-`Close` is the end-of-session action for PR-linked workspaces.
+`Close` archives PR-linked context in IDB and clears active PR context in runtime.
 
-When close is confirmed:
-
-1. The current workspace is archived as historical (`closed`).
-2. The app immediately switches to a fresh local workspace (`inactive`) with a single empty entry tab.
-3. Status messaging guides the user to continue locally or reopen a stored workspace from Workspaces.
-
-In the Workspaces drawer, inactive local-only workspace options are prefixed with `local:`.
+- Matching workspace records for that PR context are persisted as `closed`.
+- Close does not force an automatic fresh-local-workspace handoff.
+- Workspace switching remains an explicit Workspaces action.

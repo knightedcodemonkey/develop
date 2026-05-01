@@ -7,7 +7,8 @@ export const createWorkspacePrSessionHandoffController = ({
   selectors,
   utils,
 }) => {
-  const { defaultComponentTabName, defaultComponentTabPath } = defaults
+  const { defaultComponentTabName, defaultComponentTabPath, defaultComponentTabContent } =
+    defaults
   const {
     getWorkspacePrNumber,
     setWorkspacePrContextState,
@@ -50,6 +51,8 @@ export const createWorkspacePrSessionHandoffController = ({
 
   const createFreshLocalEntryTab = () => {
     const now = Date.now()
+    const normalizedDefaultComponentTabContent =
+      typeof defaultComponentTabContent === 'string' ? defaultComponentTabContent : ''
 
     return {
       id: 'entry',
@@ -59,7 +62,7 @@ export const createWorkspacePrSessionHandoffController = ({
       role: 'entry',
       isActive: true,
       scroll: 0,
-      content: '',
+      content: normalizedDefaultComponentTabContent,
       targetPrFilePath: null,
       isDirty: false,
       syncedAt: null,
@@ -300,19 +303,7 @@ export const createWorkspacePrSessionHandoffController = ({
           headBranch: archiveSnapshot.head,
         })
 
-        const saved = await workspaceStorage.upsertWorkspace(archiveSnapshot)
-
-        const staleActiveRecordIds = activeRecordsForContext
-          .map(record => toNonEmptyWorkspaceText(record.id))
-          .filter(recordId => recordId && recordId !== toNonEmptyWorkspaceText(saved?.id))
-
-        if (staleActiveRecordIds.length > 0) {
-          await Promise.all(
-            staleActiveRecordIds.map(recordId =>
-              workspaceStorage.removeWorkspace(recordId),
-            ),
-          )
-        }
+        await workspaceStorage.upsertWorkspace(archiveSnapshot)
 
         await refreshLocalContextOptions()
       } catch (error) {

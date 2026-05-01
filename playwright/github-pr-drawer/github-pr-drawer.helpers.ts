@@ -926,10 +926,7 @@ export const runActiveWorkspaceSwitchIntegrityScenario = async ({
         JSON.stringify(snapshot.active) === JSON.stringify(originalSnapshot.active)
 
       const target = snapshot.target
-      const targetStateMatches =
-        targetState === 'closed'
-          ? target?.prContextState === 'closed' || target?.prContextState === 'inactive'
-          : target?.prContextState === expectedTargetPrContextState
+      const targetStateMatches = target?.prContextState === expectedTargetPrContextState
 
       const targetMatches =
         target?.repo === originalSnapshot.target.repo &&

@@ -1,6 +1,5 @@
 import {
   hasClosedPrVerificationStatus,
-  hasIncompletePrMetadataInputs,
   hasSelectedRepositoryMismatch,
   hasWorkspaceRepositoryMismatch,
 } from './pr-context-state.js'
@@ -11,10 +10,7 @@ const resolvePrContextTransition = ({
   selectedRepositoryFullName,
   workspaceRepositoryFullName,
   workspacePrContextState,
-  hasObservedActivePrContextInSession,
   statusText,
-  headBranchValue,
-  prTitleValue,
 }) => {
   if (hasActiveContextPayload) {
     if (
@@ -47,16 +43,6 @@ const resolvePrContextTransition = ({
 
   if (hasClosedPrVerificationStatus(statusText)) {
     return { kind: 'mark-closed' }
-  }
-
-  if (
-    hasObservedActivePrContextInSession &&
-    hasIncompletePrMetadataInputs({
-      headBranchValue,
-      prTitleValue,
-    })
-  ) {
-    return { kind: 'mark-inactive' }
   }
 
   return { kind: 'noop' }
