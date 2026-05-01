@@ -53,7 +53,10 @@ export const createWorkspaceScopeForkActions = ({
     setWorkspaceScopeMarker(
       toWorkspaceScopeMarker(normalizedRepositoryFullName ? 'repository' : 'local'),
     )
-    await flushWorkspaceSave({ preserveRecordId: !rekeyRecord })
+    await flushWorkspaceSave({
+      preserveRecordId: !rekeyRecord,
+      allowIdentityMutation: true,
+    })
   }
 
   const setActiveWorkspaceScopeMarker = async nextScope => {

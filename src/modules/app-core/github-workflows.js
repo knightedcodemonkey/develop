@@ -244,13 +244,6 @@ const initializeGitHubWorkflows = ({
     setSelectedRepository: setCurrentSelectedRepository,
     getFileCommits: getWorkspacePrFileCommits,
     getEditorSyncTargets,
-    persistWorkspaceMetadataOnSubmit: async () => {
-      if (typeof flushWorkspaceSave !== 'function') {
-        return
-      }
-
-      await flushWorkspaceSave({ preserveRecordId: true })
-    },
     getTopLevelDeclarations,
     getRenderMode,
     getStyleMode,

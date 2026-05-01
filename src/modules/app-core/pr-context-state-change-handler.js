@@ -9,11 +9,8 @@ const createPrContextStateChangeHandler = ({
   getWorkspaceRepositoryFullName,
   setWorkspaceRepositoryFullName,
   getWorkspacePrContextState,
-  getHasObservedActivePrContextInSession,
   setHasObservedActivePrContextInSession,
   githubPrStatus,
-  githubPrHeadBranch,
-  githubPrTitle,
   workspacePrSessionHandoffController,
   setWorkspacePrNumber,
   persistWorkspacePrContextState,
@@ -38,12 +35,8 @@ const createPrContextStateChangeHandler = ({
       ),
       workspaceRepositoryFullName: getWorkspaceRepositoryFullName(),
       workspacePrContextState: getWorkspacePrContextState(),
-      hasObservedActivePrContextInSession: getHasObservedActivePrContextInSession(),
       statusText:
         typeof githubPrStatus?.textContent === 'string' ? githubPrStatus.textContent : '',
-      headBranchValue:
-        typeof githubPrHeadBranch?.value === 'string' ? githubPrHeadBranch.value : '',
-      prTitleValue: typeof githubPrTitle?.value === 'string' ? githubPrTitle.value : '',
     })
 
     if (transition.kind === 'ignore') {
@@ -72,10 +65,6 @@ const createPrContextStateChangeHandler = ({
     } else if (transition.kind === 'mark-closed') {
       setHasObservedActivePrContextInSession(false)
       persistWorkspacePrContextState('closed')
-    } else if (transition.kind === 'mark-inactive') {
-      setHasObservedActivePrContextInSession(false)
-      setWorkspacePrNumber(null)
-      persistWorkspacePrContextState('inactive')
     }
 
     editedIndicatorVisibilityController.refreshIndicators()

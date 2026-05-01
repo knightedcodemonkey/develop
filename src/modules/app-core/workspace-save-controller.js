@@ -72,6 +72,8 @@ const createWorkspaceSaveController = ({
   const buildSaveSnapshot = ({
     preserveRecordId = false,
     allowDuplicateWorkspaceKey = false,
+    allowIdentityMutation = false,
+    allowWorkspacePrune = false,
   } = {}) => {
     const activeRecordId =
       preserveRecordId && typeof getActiveWorkspaceRecordId === 'function'
@@ -85,6 +87,14 @@ const createWorkspaceSaveController = ({
       snapshot.allowDuplicateWorkspaceKey = true
     }
 
+    if (allowIdentityMutation) {
+      snapshot.allowIdentityMutation = true
+    }
+
+    if (allowWorkspacePrune) {
+      snapshot.allowWorkspacePrune = true
+    }
+
     snapshot.loadTransactionId = getCurrentWorkspaceLoadTransactionId()
     return snapshot
   }
@@ -96,40 +106,41 @@ const createWorkspaceSaveController = ({
       }
 
       const payloadRecordId = toNonEmptyWorkspaceText(payload?.id)
+      let existingRecord = null
       if (payloadRecordId) {
-        const existingRecord = await workspaceStorage.getWorkspaceById(payloadRecordId)
-        if (existingRecord && typeof existingRecord === 'object') {
-          const existingWorkspaceKey = toNonEmptyWorkspaceText(
-            existingRecord.workspaceKey,
-          )
-          const payloadWorkspaceKey = toNonEmptyWorkspaceText(payload?.workspaceKey)
-          if (
-            existingWorkspaceKey &&
-            payloadWorkspaceKey &&
-            existingWorkspaceKey !== payloadWorkspaceKey
-          ) {
-            const existingWorkspaceScope =
-              toNonEmptyWorkspaceText(existingRecord.workspaceScope).toLowerCase() ||
-              'local'
-            const payloadWorkspaceScope =
-              toNonEmptyWorkspaceText(payload?.workspaceScope).toLowerCase() || 'local'
-            const existingRepository = toNonEmptyWorkspaceText(existingRecord.repo)
-            const payloadRepository = toNonEmptyWorkspaceText(payload?.repo)
-
-            const isLocalToRepositoryRekey =
-              existingWorkspaceScope === 'local' &&
-              payloadWorkspaceScope === 'repository' &&
-              !existingRepository &&
-              Boolean(payloadRepository)
-
-            if (!isLocalToRepositoryRekey) {
-              return null
-            }
-          }
-        }
+        existingRecord = await workspaceStorage.getWorkspaceById(payloadRecordId)
       }
 
-      const { loadTransactionId: _loadTransactionId, ...persistablePayload } = payload
+      const {
+        loadTransactionId: _loadTransactionId,
+        allowIdentityMutation: _allowIdentityMutation,
+        allowWorkspacePrune: _allowWorkspacePrune,
+        ...persistablePayload
+      } = payload
+
+      const allowIdentityMutation =
+        payload && typeof payload === 'object'
+          ? payload.allowIdentityMutation === true
+          : false
+      const allowWorkspacePrune =
+        payload && typeof payload === 'object'
+          ? payload.allowWorkspacePrune === true
+          : false
+
+      if (
+        !allowIdentityMutation &&
+        existingRecord &&
+        typeof existingRecord === 'object'
+      ) {
+        persistablePayload.workspaceScope = toNonEmptyWorkspaceText(
+          existingRecord.workspaceScope,
+        )
+        persistablePayload.workspaceKey = toNonEmptyWorkspaceText(
+          existingRecord.workspaceKey,
+        )
+        persistablePayload.repo = toNonEmptyWorkspaceText(existingRecord.repo)
+        persistablePayload.head = toNonEmptyWorkspaceText(existingRecord.head)
+      }
 
       const allowDuplicateWorkspaceKey =
         persistablePayload && typeof persistablePayload === 'object'
@@ -148,6 +159,7 @@ const createWorkspaceSaveController = ({
 
       if (
         normalizedSavedWorkspaceKey &&
+        allowWorkspacePrune &&
         !allowDuplicateWorkspaceKey &&
         !isSavedInactiveWithoutPrNumber
       ) {
@@ -252,12 +264,19 @@ const createWorkspaceSaveController = ({
   const queueWorkspaceSave = ({
     preserveRecordId = false,
     allowDuplicateWorkspaceKey = false,
+    allowIdentityMutation = false,
+    allowWorkspacePrune = false,
   } = {}) => {
     if (!canPersistWorkspaceState()) {
       return
     }
 
-    const snapshot = buildSaveSnapshot({ preserveRecordId, allowDuplicateWorkspaceKey })
+    const snapshot = buildSaveSnapshot({
+      preserveRecordId,
+      allowDuplicateWorkspaceKey,
+      allowIdentityMutation,
+      allowWorkspacePrune,
+    })
     setActiveWorkspaceRecordId(snapshot.id)
     workspaceSaver.queue(snapshot)
   }
@@ -265,12 +284,19 @@ const createWorkspaceSaveController = ({
   const flushWorkspaceSave = async ({
     preserveRecordId = false,
     allowDuplicateWorkspaceKey = false,
+    allowIdentityMutation = false,
+    allowWorkspacePrune = false,
   } = {}) => {
     if (!canPersistWorkspaceState()) {
       return
     }
 
-    const snapshot = buildSaveSnapshot({ preserveRecordId, allowDuplicateWorkspaceKey })
+    const snapshot = buildSaveSnapshot({
+      preserveRecordId,
+      allowDuplicateWorkspaceKey,
+      allowIdentityMutation,
+      allowWorkspacePrune,
+    })
     setActiveWorkspaceRecordId(snapshot.id)
     await workspaceSaver.flushNow(snapshot)
   }
@@ -281,6 +307,9 @@ const createWorkspaceSaveController = ({
       preserveRecordIdOnInput = false,
       preserveRecordIdOnChange = false,
       rekeyOnBlur = true,
+      allowIdentityMutationOnInput = false,
+      allowIdentityMutationOnChange = false,
+      allowIdentityMutationOnBlur = rekeyOnBlur,
     } = {},
   ) => {
     if (!(element instanceof HTMLInputElement || element instanceof HTMLSelectElement)) {
@@ -288,15 +317,24 @@ const createWorkspaceSaveController = ({
     }
 
     const queue = () => {
-      queueWorkspaceSave({ preserveRecordId: preserveRecordIdOnInput })
+      queueWorkspaceSave({
+        preserveRecordId: preserveRecordIdOnInput,
+        allowIdentityMutation: allowIdentityMutationOnInput,
+      })
     }
 
     const queueFromChange = () => {
-      queueWorkspaceSave({ preserveRecordId: preserveRecordIdOnChange })
+      queueWorkspaceSave({
+        preserveRecordId: preserveRecordIdOnChange,
+        allowIdentityMutation: allowIdentityMutationOnChange,
+      })
     }
 
     const flush = () => {
-      void flushWorkspaceSave({ preserveRecordId: !rekeyOnBlur }).catch(() => {
+      void flushWorkspaceSave({
+        preserveRecordId: !rekeyOnBlur,
+        allowIdentityMutation: allowIdentityMutationOnBlur,
+      }).catch(() => {
         /* Save failures are already surfaced through saver onError. */
       })
     }

@@ -303,19 +303,7 @@ export const createWorkspacePrSessionHandoffController = ({
           headBranch: archiveSnapshot.head,
         })
 
-        const saved = await workspaceStorage.upsertWorkspace(archiveSnapshot)
-
-        const staleActiveRecordIds = activeRecordsForContext
-          .map(record => toNonEmptyWorkspaceText(record.id))
-          .filter(recordId => recordId && recordId !== toNonEmptyWorkspaceText(saved?.id))
-
-        if (staleActiveRecordIds.length > 0) {
-          await Promise.all(
-            staleActiveRecordIds.map(recordId =>
-              workspaceStorage.removeWorkspace(recordId),
-            ),
-          )
-        }
+        await workspaceStorage.upsertWorkspace(archiveSnapshot)
 
         await refreshLocalContextOptions()
       } catch (error) {
