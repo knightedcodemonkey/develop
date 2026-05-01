@@ -120,6 +120,22 @@ const initializeGitHubWorkflows = ({
   const toSafeRepositoryFullName = value =>
     typeof value === 'string' ? value.trim() : ''
 
+  const toWorkspaceIdentitySegment = value => {
+    const normalized = typeof value === 'string' ? value.trim().toLowerCase() : ''
+
+    if (!normalized) {
+      return ''
+    }
+
+    return normalized.replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '')
+  }
+
+  const toWorkspaceRecordKey = ({ repositoryFullName, headBranch } = {}) => {
+    const repoSegment = toWorkspaceIdentitySegment(repositoryFullName) || 'local'
+    const headSegment = toWorkspaceIdentitySegment(headBranch) || 'draft'
+    return `${repoSegment}::${headSegment}`
+  }
+
   const shouldApplyActivePrEditorSync = ({ repository, activeContext }) => {
     const syncedContextKey = getActivePrContextSyncKey(activeContext)
     const currentSyncKey = getActivePrEditorSyncKey()
@@ -285,6 +301,28 @@ const initializeGitHubWorkflows = ({
           activeWorkspaceRecordId,
         )
         if (activeWorkspaceRecord && typeof activeWorkspaceRecord === 'object') {
+          const nextHeadBranch =
+            typeof githubAiContextState.activePrContext?.headBranch === 'string' &&
+            githubAiContextState.activePrContext.headBranch.trim()
+              ? githubAiContextState.activePrContext.headBranch.trim()
+              : typeof branch === 'string' && branch.trim()
+                ? branch.trim()
+                : typeof activeWorkspaceRecord.head === 'string'
+                  ? activeWorkspaceRecord.head
+                  : ''
+          const nextBaseBranch =
+            typeof githubAiContextState.activePrContext?.baseBranch === 'string' &&
+            githubAiContextState.activePrContext.baseBranch.trim()
+              ? githubAiContextState.activePrContext.baseBranch.trim()
+              : typeof activeWorkspaceRecord.base === 'string'
+                ? activeWorkspaceRecord.base
+                : ''
+          const nextRepositoryFullName =
+            toSafeRepositoryFullName(repositoryFullName) ||
+            toSafeRepositoryFullName(
+              githubAiContextState.activePrContext?.repositoryFullName,
+            ) ||
+            toSafeRepositoryFullName(activeWorkspaceRecord.repo)
           const nextPrTitle =
             typeof githubAiContextState.activePrContext?.prTitle === 'string' &&
             githubAiContextState.activePrContext.prTitle.trim()
@@ -303,6 +341,14 @@ const initializeGitHubWorkflows = ({
 
           const savedWorkspaceRecord = await workspaceStorage.upsertWorkspace({
             ...activeWorkspaceRecord,
+            workspaceScope: nextRepositoryFullName ? 'repository' : 'local',
+            workspaceKey: toWorkspaceRecordKey({
+              repositoryFullName: nextRepositoryFullName,
+              headBranch: nextHeadBranch,
+            }),
+            repo: nextRepositoryFullName,
+            base: nextBaseBranch,
+            head: nextHeadBranch,
             prContextState: 'active',
             prNumber: nextPrNumber,
             prTitle: nextPrTitle,
@@ -544,8 +590,10 @@ const initializeGitHubWorkflows = ({
     onPrContextStateChange(prDrawerController.getActivePrContext())
   }
 
+  let isClosingActivePullRequest = false
+
   githubPrContextClose?.addEventListener('click', () => {
-    if (!githubAiContextState.activePrContext) {
+    if (!githubAiContextState.activePrContext || isClosingActivePullRequest) {
       return
     }
 
@@ -559,6 +607,15 @@ const initializeGitHubWorkflows = ({
       copy: `${referenceLine}PR title: ${githubAiContextState.activePrContext.prTitle}\nHead branch: ${githubAiContextState.activePrContext.headBranch}\n\nThis will close the pull request on GitHub and clear the active pull request context for the selected repository.`,
       confirmButtonText: 'Close PR on GitHub',
       onConfirm: () => {
+        if (isClosingActivePullRequest) {
+          return
+        }
+
+        isClosingActivePullRequest = true
+        if (githubPrContextClose instanceof HTMLButtonElement) {
+          githubPrContextClose.disabled = true
+        }
+
         void prDrawerController
           .closeActivePullRequestOnGitHub()
           .then(result => {
@@ -585,6 +642,12 @@ const initializeGitHubWorkflows = ({
                 : 'Could not close pull request context on GitHub.'
             setStatus(`Close context failed: ${message}`, 'error')
             showAppToast(`Close context failed: ${message}`)
+          })
+          .finally(() => {
+            isClosingActivePullRequest = false
+            if (githubPrContextClose instanceof HTMLButtonElement) {
+              githubPrContextClose.disabled = false
+            }
           })
       },
     })

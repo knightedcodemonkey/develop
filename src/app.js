@@ -812,14 +812,14 @@ const {
       return
     }
 
+    prDrawerController.clearSelectedRepositoryActivePrContext({ resetForm: false })
+
     const nextWorkspaceRepositoryFullName =
       typeof workspace.repo === 'string' ? workspace.repo.trim() : ''
     if (nextWorkspaceRepositoryFullName) {
       workspaceRepositoryFullName = nextWorkspaceRepositoryFullName
       byotControls.setSelectedRepository(nextWorkspaceRepositoryFullName)
     }
-
-    prDrawerController.clearSelectedRepositoryActivePrContext({ resetForm: false })
 
     const state =
       typeof workspace.prContextState === 'string'
@@ -955,6 +955,7 @@ const workspacePrSessionHandoffController = createWorkspacePrSessionHandoffContr
   defaults: {
     defaultComponentTabName,
     defaultComponentTabPath,
+    defaultComponentTabContent: defaultJsx,
   },
   state: {
     getWorkspacePrNumber: () => workspacePrNumber,
@@ -997,17 +998,6 @@ const workspacePrSessionHandoffController = createWorkspacePrSessionHandoffContr
     toWorkspaceRecordKey,
   },
 })
-
-const archivePrSessionAndStartFreshLocal = ({ result, archivedState, statusMessage }) => {
-  hasObservedActivePrContextInSession = false
-  setWorkspacePrNumber(result?.pullRequestNumber)
-  byotControls.clearSelectedRepositoryPreference()
-  workspaceRepositoryFullName = ''
-  workspacePrSessionHandoffController.archivePrWorkspaceAndStartFreshLocal({
-    archivedState,
-    statusMessage,
-  })
-}
 
 const onPrContextStateChange = createPrContextStateChangeHandler({
   toNonEmptyWorkspaceText,
@@ -1120,9 +1110,17 @@ const githubWorkflows = createGitHubWorkflowsSetup({
       if (nextPrNumber !== null) {
         setWorkspacePrNumber(nextPrNumber)
       }
-      persistWorkspacePrContextState('closed')
+      setWorkspacePrContextState('closed')
 
       const persistClosedRecords = async () => {
+        const activeWorkspaceId = toNonEmptyWorkspaceText(activeWorkspaceRecordId)
+        const activeWorkspaceRecord = activeWorkspaceId
+          ? await workspaceStorage.getWorkspaceById(activeWorkspaceId)
+          : null
+        const preservedPrTitle =
+          toNonEmptyWorkspaceText(activeWorkspaceRecord?.prTitle) ||
+          toNonEmptyWorkspaceText(githubPrTitle?.value)
+
         await persistClosedPrContextRecords({
           workspaceStorage,
           selectedRepository: toNonEmptyWorkspaceText(
@@ -1130,6 +1128,7 @@ const githubWorkflows = createGitHubWorkflowsSetup({
           ),
           nextPrNumber,
           normalizedHead: toNonEmptyWorkspaceText(githubPrHeadBranch?.value),
+          fallbackPrTitle: preservedPrTitle,
           toNonEmptyWorkspaceText,
           refreshLocalContextOptions,
         })
@@ -1140,11 +1139,40 @@ const githubWorkflows = createGitHubWorkflowsSetup({
       })
     },
     onPrContextClosed: result => {
-      archivePrSessionAndStartFreshLocal({
-        result,
-        archivedState: 'closed',
-        statusMessage:
-          'PR context closed. Open Workspaces to load a saved workspace or continue with this local workspace.',
+      hasObservedActivePrContextInSession = false
+      const nextPrNumber =
+        toPullRequestNumber(result?.pullRequestNumber) ??
+        parsePullRequestNumberFromUrl(result?.pullRequestUrl)
+      if (nextPrNumber !== null) {
+        setWorkspacePrNumber(nextPrNumber)
+      }
+      setWorkspacePrContextState('closed')
+
+      const persistClosedRecords = async () => {
+        const activeWorkspaceId = toNonEmptyWorkspaceText(activeWorkspaceRecordId)
+        const activeWorkspaceRecord = activeWorkspaceId
+          ? await workspaceStorage.getWorkspaceById(activeWorkspaceId)
+          : null
+        const preservedPrTitle =
+          toNonEmptyWorkspaceText(result?.prTitle) ||
+          toNonEmptyWorkspaceText(activeWorkspaceRecord?.prTitle) ||
+          toNonEmptyWorkspaceText(githubPrTitle?.value)
+
+        await persistClosedPrContextRecords({
+          workspaceStorage,
+          selectedRepository: toNonEmptyWorkspaceText(
+            getCurrentSelectedRepositoryFullName(),
+          ),
+          nextPrNumber,
+          normalizedHead: toNonEmptyWorkspaceText(githubPrHeadBranch?.value),
+          fallbackPrTitle: preservedPrTitle,
+          toNonEmptyWorkspaceText,
+          refreshLocalContextOptions,
+        })
+      }
+
+      void persistClosedRecords().catch(() => {
+        /* Save failures are already surfaced through saver onError. */
       })
     },
     getPersistedActivePrContext,

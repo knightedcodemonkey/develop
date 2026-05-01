@@ -7,7 +7,8 @@ export const createWorkspacePrSessionHandoffController = ({
   selectors,
   utils,
 }) => {
-  const { defaultComponentTabName, defaultComponentTabPath } = defaults
+  const { defaultComponentTabName, defaultComponentTabPath, defaultComponentTabContent } =
+    defaults
   const {
     getWorkspacePrNumber,
     setWorkspacePrContextState,
@@ -50,6 +51,8 @@ export const createWorkspacePrSessionHandoffController = ({
 
   const createFreshLocalEntryTab = () => {
     const now = Date.now()
+    const normalizedDefaultComponentTabContent =
+      typeof defaultComponentTabContent === 'string' ? defaultComponentTabContent : ''
 
     return {
       id: 'entry',
@@ -59,7 +62,7 @@ export const createWorkspacePrSessionHandoffController = ({
       role: 'entry',
       isActive: true,
       scroll: 0,
-      content: '',
+      content: normalizedDefaultComponentTabContent,
       targetPrFilePath: null,
       isDirty: false,
       syncedAt: null,

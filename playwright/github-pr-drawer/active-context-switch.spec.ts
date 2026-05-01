@@ -37,6 +37,12 @@ test('Switching active workspace to closed preserves switched-from record integr
     page,
     targetState: 'closed',
   })
+
+  await expect(page.getByRole('button', { name: 'Open pull request' })).toBeVisible()
+  await expect(
+    page.getByRole('button', { name: 'Close active pull request context' }),
+  ).toBeHidden()
+
   await expect(page.getByRole('status', { name: 'App status' })).toContainText('Rendered')
 })
 
@@ -274,6 +280,26 @@ test('Switching active workspaces with different module sync paths keeps remote 
   await expect
     .poll(async () => {
       const records = await getAllWorkspaceRecords(page)
+
+      await expect
+        .poll(async () => {
+          const records = await getAllWorkspaceRecords(page)
+          const closedRecord = records.find(
+            record =>
+              record?.repo === 'knightedcodemonkey/develop' &&
+              record?.prContextState === 'closed' &&
+              record?.prNumber === 2,
+          )
+
+          return {
+            prContextState: closedRecord?.prContextState,
+            prNumber: closedRecord?.prNumber,
+          }
+        })
+        .toEqual({
+          prContextState: 'closed',
+          prNumber: 2,
+        })
       const alphaRecord = records.find(record => {
         const recordId = typeof record?.id === 'string' ? record.id.trim() : ''
         const recordHead = typeof record?.head === 'string' ? record.head.trim() : ''
@@ -925,8 +951,7 @@ test('Active PR context updates controls and can be closed from AI controls', as
   ).toBeVisible()
   await expect(
     page.getByRole('list', { name: 'Workspace editor tabs' }).getByRole('listitem'),
-  ).toHaveCount(1)
-  await expect(page.locator('#preview-host iframe')).toHaveCount(0)
+  ).toHaveCount(2)
 
   await expect
     .poll(async () => {
@@ -941,12 +966,15 @@ test('Active PR context updates controls and can be closed from AI controls', as
       return {
         prContextState: closedRecord?.prContextState,
         prNumber: closedRecord?.prNumber,
+        prTitle: closedRecord?.prTitle,
       }
     })
     .toEqual({
       prContextState: 'closed',
       prNumber: 2,
+      prTitle: 'Existing PR context from storage',
     })
+
   expect(closePullRequestRequestCount).toBe(1)
 })
 

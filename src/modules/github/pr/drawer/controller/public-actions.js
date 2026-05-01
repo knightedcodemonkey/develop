@@ -32,6 +32,7 @@ export const createPublicActions = ({
 
     clearRepositoryActivePrContext(repositoryFullName)
     state.lastActiveContentSyncKey = ''
+    abortPendingContextVerifyRequest()
     abortPendingActiveContentSyncRequest()
 
     if (resetForm) {
@@ -45,7 +46,7 @@ export const createPublicActions = ({
 
   return {
     clearActivePrContext: () => {
-      clearSelectedRepositoryActivePrContext({ resetForm: true })
+      clearSelectedRepositoryActivePrContext({ resetForm: false })
     },
     clearSelectedRepositoryActivePrContext,
     closeActivePullRequestOnGitHub: async () => {
@@ -69,7 +70,7 @@ export const createPublicActions = ({
 
       setStatus('Closing pull request on GitHub...', 'pending')
 
-      await closeRepositoryPullRequest({
+      const closedPullRequest = await closeRepositoryPullRequest({
         token,
         owner: repository.owner,
         repo: repository.name,
@@ -89,7 +90,12 @@ export const createPublicActions = ({
         'ok',
       )
 
-      return { pullRequestNumber, reference: closedReference }
+      return {
+        pullRequestNumber,
+        reference: closedReference,
+        prTitle:
+          toSafeText(closedPullRequest?.title) || toSafeText(activeContext?.prTitle),
+      }
     },
     setToken: token => {
       const hasToken = typeof token === 'string' && token.trim().length > 0

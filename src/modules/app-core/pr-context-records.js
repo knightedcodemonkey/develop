@@ -3,6 +3,7 @@ const persistClosedPrContextRecords = async ({
   selectedRepository,
   nextPrNumber,
   normalizedHead,
+  fallbackPrTitle,
   toNonEmptyWorkspaceText,
   refreshLocalContextOptions,
 }) => {
@@ -10,12 +11,13 @@ const persistClosedPrContextRecords = async ({
     ? await workspaceStorage.listWorkspaces({ repo: selectedRepository })
     : await workspaceStorage.listWorkspaces()
 
-  const activeRecordsForContext = siblingRecords.filter(record => {
+  const recordsForContext = siblingRecords.filter(record => {
     if (!record || typeof record !== 'object') {
       return false
     }
 
-    if (toNonEmptyWorkspaceText(record.prContextState).toLowerCase() !== 'active') {
+    const normalizedState = toNonEmptyWorkspaceText(record.prContextState).toLowerCase()
+    if (normalizedState !== 'active' && normalizedState !== 'closed') {
       return false
     }
 
@@ -32,20 +34,25 @@ const persistClosedPrContextRecords = async ({
     return hasMatchingPrNumber || hasMatchingHead
   })
 
-  if (activeRecordsForContext.length === 0) {
+  if (recordsForContext.length === 0) {
     return
   }
 
+  const normalizedFallbackTitle = toNonEmptyWorkspaceText(fallbackPrTitle)
   const now = Date.now()
   await Promise.all(
-    activeRecordsForContext.map(record =>
-      workspaceStorage.upsertWorkspace({
+    recordsForContext.map(record => {
+      const preservedTitle =
+        toNonEmptyWorkspaceText(record.prTitle) || normalizedFallbackTitle
+
+      return workspaceStorage.upsertWorkspace({
         ...record,
         prContextState: 'closed',
         prNumber: nextPrNumber,
+        prTitle: preservedTitle,
         lastModified: now,
-      }),
-    ),
+      })
+    }),
   )
 
   await refreshLocalContextOptions()
