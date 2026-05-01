@@ -46,6 +46,12 @@ If a value is required to accurately restore PR/workspace behavior after reload,
 
 `localStorage` should only mirror user preferences and lightweight bootstrap values.
 
+PR metadata boundary:
+
+- PR drawer form edits are draft-only input.
+- Persisted PR metadata in workspace records is updated on successful workflow outcomes
+  (Open PR, Push Commit, Close/verified closed updates), not on each form edit.
+
 ## Post-Push Baseline Invariant
 
 After a successful Push Commit action for an active PR workspace:
