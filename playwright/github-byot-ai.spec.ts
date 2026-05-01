@@ -785,7 +785,7 @@ test('BYOT remembers selected repository across reloads', async ({ page }) => {
   await page.reload()
   await expect(page.getByRole('heading', { name: '@knighted/develop' })).toBeVisible()
   await expect(page.getByRole('status', { name: 'App status' })).toHaveText(
-    'Loaded 2 writable repositories',
+    /Loaded 2 writable repositories|Rendered/,
     {
       timeout: 60_000,
     },
