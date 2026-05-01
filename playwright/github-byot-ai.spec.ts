@@ -48,6 +48,16 @@ test('chat becomes available after token connect', async ({ page }) => {
   await expect(page.getByRole('button', { name: 'Chat' })).toBeVisible()
 })
 
+test('workspace context status is visible only after PAT connect', async ({ page }) => {
+  await waitForAppReady(page)
+
+  const workspaceContextStatus = page.locator('#workspace-context-status')
+  await expect(workspaceContextStatus).toBeHidden()
+
+  await connectByotWithSingleRepo(page)
+  await expect(workspaceContextStatus).toBeVisible()
+})
+
 test('BYOT controls render with default app entry', async ({ page }) => {
   await waitForAppReady(page, appEntryPath)
 
