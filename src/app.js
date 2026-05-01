@@ -49,6 +49,8 @@ import { createPersistedActivePrContextGetter } from './modules/app-core/persist
 import { createWorkspacePrSessionHandoffController } from './modules/app-core/workspace-pr-session-handoff-controller.js'
 import { persistClosedPrContextRecords } from './modules/app-core/pr-context-records.js'
 import { createPrContextStateChangeHandler } from './modules/app-core/pr-context-state-change-handler.js'
+import { createWorkspaceContextStatusController } from './modules/app-core/workspace-context-status-controller.js'
+import { createWorkspaceRecordAppliedHandler } from './modules/app-core/workspace-record-applied-handler.js'
 import { createDiagnosticsUiController } from './modules/diagnostics/diagnostics-ui.js'
 import { createGitHubChatDrawer } from './modules/github/chat-drawer/drawer.js'
 import { createGitHubByotControls } from './modules/github/byot-controls.js'
@@ -165,6 +167,7 @@ const appThemeButtons = document.querySelectorAll('[data-app-theme]')
 const workspaceTabsShell = document.getElementById('workspace-tabs-shell')
 const workspaceTabsStrip = document.getElementById('workspace-tabs-strip')
 const workspaceTabAddWrap = document.getElementById('workspace-tab-add-wrap')
+const workspaceContextStatus = document.getElementById('workspace-context-status')
 const workspaceTabAddButton = document.getElementById('workspace-tab-add')
 const workspaceTabAddMenu = document.getElementById('workspace-tab-add-menu')
 const workspaceTabAddModule = document.getElementById('workspace-tab-add-module')
@@ -424,11 +427,17 @@ let workspacePrNumber = null
 let workspaceRepositoryFullName = ''
 let workspaceScopeMarker = 'local'
 let hasObservedActivePrContextInSession = false
+let workspaceContextStatusController = {
+  render: () => {},
+  renderForRepositoryChange: () => {},
+  syncTokenState: () => {},
+  syncWritableRepositoriesState: () => {},
+}
 
 const toWorkspaceScopeMarker = value => (value === 'repository' ? 'repository' : 'local')
-
 const setWorkspaceScopeMarker = nextScope => {
   workspaceScopeMarker = toWorkspaceScopeMarker(nextScope)
+  workspaceContextStatusController.render()
 }
 
 const toPullRequestNumber = value => {
@@ -445,6 +454,7 @@ const setActiveWorkspaceRecordId = nextValue => {
     workspaceRepositoryFullName = ''
     workspaceScopeMarker = 'local'
   }
+  workspaceContextStatusController.render()
 }
 
 let chatDrawerController = {
@@ -509,17 +519,28 @@ const byotControls = createGitHubByotControls({
     prDrawerController.setSelectedRepository(repository)
     hasObservedActivePrContextInSession = false
     prDrawerController.syncRepositories()
+    workspaceContextStatusController.renderForRepositoryChange()
   },
-  onWritableRepositoriesChange: ({ repositories, selectedRepository }) => {
+  onWritableRepositoriesChange: ({
+    repositories,
+    selectedRepository,
+    isLoadingRepositories,
+  }) => {
     githubAiContextState.writableRepositories = Array.isArray(repositories)
       ? [...repositories]
       : []
+
+    workspaceContextStatusController.syncWritableRepositoriesState({
+      token: githubAiContextState.token,
+      isLoadingRepositories,
+    })
 
     if (selectedRepository || githubAiContextState.selectedRepository) {
       githubAiContextState.selectedRepository = selectedRepository ?? null
       chatDrawerController.setSelectedRepository(selectedRepository)
       prDrawerController.setSelectedRepository(selectedRepository)
       prDrawerController.syncRepositories()
+      workspaceContextStatusController.renderForRepositoryChange()
       return
     }
 
@@ -535,6 +556,8 @@ const byotControls = createGitHubByotControls({
       prDrawerController.setSelectedRepository(synchronizedRepository)
       prDrawerController.syncRepositories()
     }
+
+    workspaceContextStatusController.renderForRepositoryChange()
   },
   onTokenDeleteRequest: onConfirm => {
     confirmAction({
@@ -546,6 +569,7 @@ const byotControls = createGitHubByotControls({
   },
   onTokenChange: token => {
     githubAiContextState.token = token
+    workspaceContextStatusController.syncTokenState(token)
     prContextUi.syncAiChatTokenVisibility(token)
     chatDrawerController.setToken(token)
     prDrawerController.setToken(token)
@@ -574,6 +598,19 @@ const getCurrentSelectedRepositoryFullName = () => {
 
   return ''
 }
+
+workspaceContextStatusController = createWorkspaceContextStatusController({
+  statusNode: workspaceContextStatus,
+  toNonEmptyWorkspaceText,
+  getWorkspacePrTitle: () => githubPrTitle?.value,
+  getWorkspaceHeadBranch: () => githubPrHeadBranch?.value,
+  getWorkspaceScopeMarker: () => workspaceScopeMarker,
+  getActiveWorkspaceRecordId: () => activeWorkspaceRecordId,
+  getWorkspaceRepositoryFullName: () => workspaceRepositoryFullName,
+  getSelectedRepositoryFullName: getCurrentSelectedRepositoryFullName,
+})
+
+workspaceContextStatusController.render()
 
 const getPersistedActivePrContext = createPersistedActivePrContextGetter({
   getCurrentSelectedRepositoryFullName,
@@ -733,6 +770,20 @@ const reconcileWorkspaceTabsWithEditorSync = ({ tabTargets } = {}) =>
 const buildWorkspaceRecordSnapshot = ({ recordId } = {}) =>
   workspaceSyncController.buildWorkspaceRecordSnapshot({ recordId })
 
+const setWorkspaceRepositoryFullName = value => {
+  workspaceRepositoryFullName = toNonEmptyWorkspaceText(value)
+  workspaceContextStatusController.render()
+}
+const onWorkspaceRecordApplied = createWorkspaceRecordAppliedHandler({
+  getPrDrawerController: () => prDrawerController,
+  setWorkspaceRepositoryFullName,
+  byotControls,
+  getGithubPrBodyValue: () =>
+    typeof githubPrBody?.value === 'string' ? githubPrBody.value : '',
+  normalizeRenderMode,
+  getStyleModeValue: () => styleMode.value,
+})
+
 const {
   workspaceSaveController,
   listLocalContextRecords,
@@ -821,49 +872,7 @@ const {
   getWorkspaceTabByKind,
   makeUniqueTabPath,
   createWorkspaceTabId,
-  onWorkspaceRecordApplied: workspace => {
-    if (!workspace || typeof workspace !== 'object') {
-      return
-    }
-
-    prDrawerController.clearSelectedRepositoryActivePrContext({ resetForm: false })
-
-    const nextWorkspaceRepositoryFullName =
-      typeof workspace.repo === 'string' ? workspace.repo.trim() : ''
-    if (nextWorkspaceRepositoryFullName) {
-      workspaceRepositoryFullName = nextWorkspaceRepositoryFullName
-      byotControls.setSelectedRepository(nextWorkspaceRepositoryFullName)
-    }
-
-    const state =
-      typeof workspace.prContextState === 'string'
-        ? workspace.prContextState.trim().toLowerCase()
-        : ''
-    const shouldHydratePrContext = state === 'active'
-    if (!shouldHydratePrContext) {
-      return
-    }
-
-    prDrawerController.hydrateActivePrContext(
-      {
-        baseBranch: typeof workspace.base === 'string' ? workspace.base : '',
-        headBranch: typeof workspace.head === 'string' ? workspace.head : '',
-        prTitle: typeof workspace.prTitle === 'string' ? workspace.prTitle : '',
-        prBody: typeof githubPrBody?.value === 'string' ? githubPrBody.value : '',
-        pullRequestNumber:
-          typeof workspace.prNumber === 'number' && Number.isFinite(workspace.prNumber)
-            ? workspace.prNumber
-            : null,
-        pullRequestUrl: '',
-        renderMode: normalizeRenderMode(workspace.renderMode),
-        styleMode: styleMode.value,
-      },
-      {
-        repositoryFullName:
-          typeof workspace.repo === 'string' ? workspace.repo.trim() : '',
-      },
-    )
-  },
+  onWorkspaceRecordApplied,
 })
 
 const { syncActiveWorkspaceRepositoryScope, forkWorkspaceFromCurrentState } =
@@ -886,9 +895,7 @@ const { syncActiveWorkspaceRepositoryScope, forkWorkspaceFromCurrentState } =
     setActiveWorkspaceRecordId,
     setActiveWorkspaceCreatedAt: value => (activeWorkspaceCreatedAt = value),
     getWorkspaceRepositoryFullName: () => workspaceRepositoryFullName,
-    setWorkspaceRepositoryFullName: value => {
-      workspaceRepositoryFullName = toNonEmptyWorkspaceText(value)
-    },
+    setWorkspaceRepositoryFullName,
     setWorkspaceScopeMarker,
     setHeadBranchValue: value => {
       if (githubPrHeadBranch) {
@@ -949,14 +956,13 @@ const setWorkspacePrContextState = nextState => {
   if (typeof nextState !== 'string' || !nextState.trim()) {
     return
   }
-
   workspacePrContextState = nextState.trim()
+  workspaceContextStatusController.render()
 }
 
 const setWorkspacePrNumber = nextValue => {
   workspacePrNumber = toPullRequestNumber(nextValue)
 }
-
 const persistWorkspacePrContextState = nextState => {
   setWorkspacePrContextState(nextState)
   queueWorkspaceSave({ preserveRecordId: true })
@@ -1019,7 +1025,7 @@ const onPrContextStateChange = createPrContextStateChangeHandler({
   parsePullRequestNumberFromUrl,
   getCurrentSelectedRepositoryFullName,
   getWorkspaceRepositoryFullName: () => workspaceRepositoryFullName,
-  setWorkspaceRepositoryFullName: value => (workspaceRepositoryFullName = value),
+  setWorkspaceRepositoryFullName,
   getWorkspacePrContextState: () => workspacePrContextState,
   getHasObservedActivePrContextInSession: () => hasObservedActivePrContextInSession,
   setHasObservedActivePrContextInSession: value =>

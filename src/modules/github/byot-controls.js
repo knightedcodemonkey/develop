@@ -153,7 +153,7 @@ export const createGitHubByotControls = ({
     updateTokenAddButtonState()
   }
 
-  const clearRepoOptions = placeholderLabel => {
+  const clearRepoOptions = (placeholderLabel, { isLoadingRepositories = false } = {}) => {
     if (repoSelect instanceof HTMLSelectElement) {
       repoSelect.replaceChildren(
         createDefaultRepoOption({
@@ -169,6 +169,7 @@ export const createGitHubByotControls = ({
         repositories: [],
         selectedRepository: null,
         placeholderLabel,
+        isLoadingRepositories,
       })
     }
   }
@@ -181,7 +182,10 @@ export const createGitHubByotControls = ({
     return writableRepos.find(repo => repo.fullName === lastSelectedRepository) ?? null
   }
 
-  const emitWritableRepositories = ({ placeholderLabel = '' } = {}) => {
+  const emitWritableRepositories = ({
+    placeholderLabel = '',
+    isLoadingRepositories = false,
+  } = {}) => {
     if (typeof onWritableRepositoriesChange !== 'function') {
       return
     }
@@ -190,6 +194,7 @@ export const createGitHubByotControls = ({
       repositories: [...writableRepos],
       selectedRepository: getSelectedRepositoryObject(),
       placeholderLabel,
+      isLoadingRepositories,
     })
   }
 
@@ -302,7 +307,9 @@ export const createGitHubByotControls = ({
     clearAddButtonResetTimer()
     setTokenAddButtonState('loading')
 
-    clearRepoOptions('Loading writable repositories...')
+    clearRepoOptions('Loading writable repositories...', {
+      isLoadingRepositories: true,
+    })
     setStatus('Loading writable repositories from GitHub...', 'pending')
 
     try {
@@ -373,7 +380,9 @@ export const createGitHubByotControls = ({
     tokenInput.setAttribute('aria-label', 'GitHub token')
     setTokenFieldLockState(false)
     updateTokenActionVisibility()
-    clearRepoOptions('Connect a token to load repositories')
+    clearRepoOptions('Connect a token to load repositories', {
+      isLoadingRepositories: false,
+    })
     updateTokenAddButtonState()
   }
 
