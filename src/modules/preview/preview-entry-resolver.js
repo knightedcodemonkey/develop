@@ -1,4 +1,8 @@
 const previewEntryNamePattern = /(?:^|\/)(?:app|main)\.[jt]sx?$/i
+const reactCompatibleEntryNamePattern = /(?:^|\/)[^/]+\.(?:tsx|jsx|js)$/i
+const reactEntryTabCompatibilityErrorName = 'ReactEntryTabCompatibilityError'
+const reactEntryTabCompatibilityErrorMessage =
+  'React mode requires the entry tab to end in .tsx, .jsx, or .js.'
 
 const normalizeTabIdentity = tab => {
   if (!tab || typeof tab !== 'object') {
@@ -42,3 +46,16 @@ export const canRenderPreview = ({ tabs, fallbackSource = '' } = {}) => {
 
   return typeof fallbackSource === 'string' && fallbackSource.trim().length > 0
 }
+
+export const getReactEntryTabCompatibilityError = tab => {
+  const identity = normalizeTabIdentity(tab)
+  if (!identity || reactCompatibleEntryNamePattern.test(identity)) {
+    return null
+  }
+
+  const error = new Error(reactEntryTabCompatibilityErrorMessage)
+  error.name = reactEntryTabCompatibilityErrorName
+  return error
+}
+
+export { reactEntryTabCompatibilityErrorMessage, reactEntryTabCompatibilityErrorName }

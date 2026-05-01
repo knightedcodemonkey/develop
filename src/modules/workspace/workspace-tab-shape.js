@@ -4,6 +4,7 @@ const createEnsureWorkspaceTabsShape =
     defaultComponentTabPath,
     defaultJsx,
     normalizeEntryTabPath,
+    getAllowedEntryTabFileNames,
     getPathFileName,
     getTabTargetPrFilePath,
     normalizeWorkspacePathValue,
@@ -13,10 +14,14 @@ const createEnsureWorkspaceTabsShape =
     toNonEmptyWorkspaceText,
     isStyleTabLanguage,
   }) =>
-  tabs => {
+  (tabs, { renderMode } = {}) => {
     const inputTabs = Array.isArray(tabs) ? tabs : []
     const hasEntryTab = inputTabs.some(tab => tab?.role === 'entry')
     const nextTabs = [...inputTabs]
+    const allowedEntryTabFileNames =
+      typeof getAllowedEntryTabFileNames === 'function'
+        ? getAllowedEntryTabFileNames({ renderMode })
+        : undefined
 
     if (!hasEntryTab) {
       nextTabs.unshift({
@@ -34,6 +39,7 @@ const createEnsureWorkspaceTabsShape =
       if (tab?.role === 'entry') {
         const normalizedEntryPath = normalizeEntryTabPath(tab.path, {
           preferredFileName: tab.name,
+          allowedEntryTabFileNames,
         })
         const normalizedEntryTargetPath = normalizeWorkspacePathValue(normalizedEntryPath)
         return {

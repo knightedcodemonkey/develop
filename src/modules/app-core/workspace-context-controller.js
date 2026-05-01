@@ -100,7 +100,10 @@ const createWorkspaceContextController = ({
         setWorkspaceScopeMarker(nextScope)
       }
 
-      const nextTabs = ensureWorkspaceTabsShape(workspace.tabs)
+      const nextRenderMode = normalizeRenderMode(workspace.renderMode)
+      const nextTabs = ensureWorkspaceTabsShape(workspace.tabs, {
+        renderMode: nextRenderMode,
+      })
       if (typeof workspace.base === 'string' && githubPrBaseBranch) {
         githubPrBaseBranch.value = workspace.base
       }
@@ -124,7 +127,6 @@ const createWorkspaceContextController = ({
         }),
       })
 
-      const nextRenderMode = normalizeRenderMode(workspace.renderMode)
       if (getRenderModeValue() !== nextRenderMode) {
         setRenderModeValue(nextRenderMode)
       }

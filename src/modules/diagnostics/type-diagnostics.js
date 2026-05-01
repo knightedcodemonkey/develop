@@ -837,7 +837,10 @@ export const createTypeDiagnosticsController = ({
         : ''
     const sourceFileName =
       normalizedSourcePathOverride || resolvedEntryTab?.path || 'component.tsx'
-    const typecheckSourceFileName = sourceFileName.replace(/\.(jsx?|mjs|cjs)$/i, '.tsx')
+    const typecheckSourceFileName = sourceFileName.replace(
+      /\.(jsx?|tsx?|mjs|cjs|mts|cts)$/i,
+      '.tsx',
+    )
     const jsxTypesFileName = 'knighted-jsx-runtime.d.ts'
     const styleImportTypesFileName = 'knighted-style-imports.d.ts'
     const renderMode = getRenderMode()

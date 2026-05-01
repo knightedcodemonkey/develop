@@ -1,4 +1,9 @@
-import { canRenderPreview, resolvePreviewEntryTab } from './preview-entry-resolver.js'
+import {
+  canRenderPreview,
+  getReactEntryTabCompatibilityError,
+  reactEntryTabCompatibilityErrorName,
+  resolvePreviewEntryTab,
+} from './preview-entry-resolver.js'
 import { createWorkspaceIframePreviewBridge } from '../preview-runtime/iframe-preview-executor.js'
 import { planWorkspaceVirtualModules } from '../preview-runtime/virtual-workspace-modules.js'
 import { createPreviewWorkspaceGraphCache } from './preview-workspace-graph.js'
@@ -670,7 +675,9 @@ export const createRenderRuntimeController = ({
   const renderPreviewError = error => {
     disposeWorkspaceModules()
     disposeIframeBridge()
-    setStatus('Error', 'error')
+    const shouldSurfaceSpecificStatus =
+      error instanceof Error && error.name === reactEntryTabCompatibilityErrorName
+    setStatus(shouldSurfaceSpecificStatus ? error.message : 'Error', 'error')
 
     const target = getRenderTarget()
     clearTarget(target)
@@ -707,6 +714,13 @@ export const createRenderRuntimeController = ({
 
     if (!entryTab) {
       throw new Error('Unable to resolve workspace preview entry tab.')
+    }
+
+    if (mode === 'react') {
+      const compatibilityError = getReactEntryTabCompatibilityError(entryTab)
+      if (compatibilityError) {
+        throw compatibilityError
+      }
     }
 
     const { transformJsxSource } = await ensureCoreRuntime()
