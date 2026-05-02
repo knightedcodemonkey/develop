@@ -269,6 +269,11 @@
   border-top-color: var(--border-control);
 }
 
+.workspace-tab:has(.workspace-tab__name-input) {
+  position: relative;
+  z-index: 3;
+}
+
 .workspace-tabs-strip:has(> .workspace-tab:nth-child(n + 7)) > .workspace-tab {
   min-width: 148px;
 }
@@ -329,9 +334,9 @@
 
 .workspace-tab__name-input {
   width: min(320px, 52vw);
-  border: 1px solid var(--border-control);
+  border: 1px solid var(--border-strong);
   border-radius: 8px;
-  background: var(--surface-select);
+  background: var(--surface-select-option);
   color: var(--select-text);
   padding: 3px 8px;
   font: inherit;
@@ -588,5 +593,12 @@ textarea:focus {
 
   .editor-panel {
     min-height: min(360px, var(--mobile-editor-max-height));
+  }
+}
+
+@media (width <= 640px) {
+  .workspace-tab {
+    flex: 0 0 auto;
+    min-width: 148px;
   }
 }
