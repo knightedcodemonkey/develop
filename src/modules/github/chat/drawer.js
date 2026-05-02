@@ -20,7 +20,7 @@ import {
 } from './active-tab-context.js'
 import { buildOutboundMessages as buildPayloadMessages } from './payload.js'
 import { editorProposalTools, toMessageEditorProposals } from './proposals.js'
-import { resolveWorkspaceTabTarget, toTargetKey } from './tab-target-resolver.js'
+import { resolveWorkspaceTabTarget } from './tab-target-resolver.js'
 import { createTabScopedUndoState } from './tab-scoped-undo-state.js'
 
 const svgNamespace = 'http://www.w3.org/2000/svg'
@@ -387,35 +387,8 @@ export const createGitHubChatDrawer = ({
       body.textContent = message.content
       item.append(body)
 
-      const proposals =
-        message.role === 'assistant'
-          ? toMessageEditorProposals(message, {
-              fallbackTarget: getFallbackProposalTarget(),
-            })
-          : []
-      const workspaceTabs = getWorkspaceTabs()
-      const activeTabId = getActiveTabContext()?.id || ''
-      const resolvedProposals = proposals
-        .map(proposal => {
-          const resolvedTab = resolveWorkspaceTabTarget({
-            target: proposal.target,
-            language: proposal.language,
-            tabs: workspaceTabs,
-            activeTabId,
-          })
-
-          if (!resolvedTab) {
-            return null
-          }
-
-          const appliedKey = toTargetKey(proposal.target)
-          return {
-            ...proposal,
-            appliedKey,
-            resolvedTab,
-          }
-        })
-        .filter(Boolean)
+      const resolvedProposals =
+        message.role === 'assistant' ? resolveMessageProposals(message) : []
       const hasProposal = resolvedProposals.length > 0
       const appliedTargets =
         message && typeof message.appliedTargets === 'object' && message.appliedTargets
@@ -427,13 +400,13 @@ export const createGitHubChatDrawer = ({
         actions.className = 'ai-chat-message__actions'
         actions.dataset.messageIndex = String(index)
 
-        const buildApplyButton = ({ proposal, proposalIndex }) => {
+        const buildApplyButton = ({ proposal }) => {
           const button = document.createElement('button')
           button.type = 'button'
           button.className = 'render-button render-button--small ai-chat-message__action'
           button.dataset.action = 'request-apply'
           button.dataset.messageIndex = String(index)
-          button.dataset.proposalIndex = String(proposalIndex)
+          button.dataset.proposalOriginalIndex = String(proposal.proposalOriginalIndex)
           const tabLabel =
             proposal.resolvedTab.name ||
             proposal.resolvedTab.path ||
@@ -446,15 +419,22 @@ export const createGitHubChatDrawer = ({
           return button
         }
 
-        for (const [proposalIndex, proposal] of resolvedProposals.entries()) {
+        const renderedApplyKeys = new Set()
+
+        for (const proposal of resolvedProposals) {
           if (!proposal?.appliedKey || appliedTargets[proposal.appliedKey] === true) {
             continue
           }
 
+          if (renderedApplyKeys.has(proposal.appliedKey)) {
+            continue
+          }
+
+          renderedApplyKeys.add(proposal.appliedKey)
+
           actions.append(
             buildApplyButton({
               proposal,
-              proposalIndex,
             }),
           )
         }
@@ -529,7 +509,37 @@ export const createGitHubChatDrawer = ({
     return `${nextValue}\n`
   }
 
-  const applyProposalToTab = ({ messageIndex, proposalIndex }) => {
+  const resolveMessageProposals = message => {
+    const proposals = toMessageEditorProposals(message, {
+      fallbackTarget: getFallbackProposalTarget(),
+    })
+    const workspaceTabs = getWorkspaceTabs()
+    const activeTabId = getActiveTabContext()?.id || ''
+
+    return proposals
+      .map((proposal, proposalOriginalIndex) => {
+        const resolvedTab = resolveWorkspaceTabTarget({
+          target: proposal.target,
+          language: proposal.language,
+          tabs: workspaceTabs,
+          activeTabId,
+        })
+
+        if (!resolvedTab) {
+          return null
+        }
+
+        return {
+          ...proposal,
+          proposalOriginalIndex,
+          appliedKey: resolvedTab.id,
+          resolvedTab,
+        }
+      })
+      .filter(Boolean)
+  }
+
+  const applyProposalToTab = ({ messageIndex, proposalOriginalIndex }) => {
     const message = messages[messageIndex]
     if (!message || message.role !== 'assistant') {
       return null
@@ -538,7 +548,7 @@ export const createGitHubChatDrawer = ({
     const proposals = toMessageEditorProposals(message, {
       fallbackTarget: getFallbackProposalTarget(),
     })
-    const proposal = proposals[proposalIndex]
+    const proposal = proposals[proposalOriginalIndex]
     if (!proposal) {
       return null
     }
@@ -583,7 +593,7 @@ export const createGitHubChatDrawer = ({
     const tabLabel = resolvedTab.name || resolvedTab.path || resolvedTab.id
     setChatStatus(`Applied assistant proposal to ${tabLabel}.`, 'ok')
     return {
-      appliedKey: toTargetKey(proposal.target),
+      appliedKey: resolvedTab.id,
       tabId: resolvedTab.id,
     }
   }
@@ -946,14 +956,14 @@ export const createGitHubChatDrawer = ({
     }
 
     if (action === 'request-apply') {
-      const proposalIndex = Number(button.dataset.proposalIndex)
-      if (!Number.isFinite(proposalIndex) || proposalIndex < 0) {
+      const proposalOriginalIndex = Number(button.dataset.proposalOriginalIndex)
+      if (!Number.isFinite(proposalOriginalIndex) || proposalOriginalIndex < 0) {
         return
       }
 
       const applied = applyProposalToTab({
         messageIndex,
-        proposalIndex,
+        proposalOriginalIndex,
       })
 
       if (!applied) {

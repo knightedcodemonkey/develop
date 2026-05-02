@@ -556,6 +556,149 @@ test('AI chat apply actions resolve dynamic tab targets', async ({ page }) => {
   ).toBeVisible()
 })
 
+test('AI chat applies the correct proposal when unresolved targets are filtered out', async ({
+  page,
+}) => {
+  await page.route('https://models.github.ai/inference/chat/completions', async route => {
+    const body = route.request().postDataJSON() as ChatRequestBody | null
+
+    if (body?.stream) {
+      await route.fulfill({
+        status: 502,
+        contentType: 'application/json',
+        body: JSON.stringify({ message: 'stream intentionally disabled in this test' }),
+      })
+      return
+    }
+
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        choices: [
+          {
+            message: {
+              role: 'assistant',
+              content: 'Prepared updates for App tab.',
+              tool_calls: [
+                {
+                  id: 'call_unresolved',
+                  type: 'function',
+                  function: {
+                    name: 'propose_editor_update',
+                    arguments: JSON.stringify({
+                      target: 'src/components/missing.tsx',
+                      content: 'const Missing = () => null',
+                    }),
+                  },
+                },
+                {
+                  id: 'call_component',
+                  type: 'function',
+                  function: {
+                    name: 'propose_editor_update',
+                    arguments: JSON.stringify({
+                      target: 'src/components/App.tsx',
+                      content: 'const App = () => <p>Resolved update</p>',
+                    }),
+                  },
+                },
+              ],
+            },
+          },
+        ],
+      }),
+    })
+  })
+
+  await waitForAppReady(page, `${appEntryPath}`)
+  await connectByotWithSingleRepo(page)
+  await setComponentEditorSource(page, 'const App = () => <p>Before</p>')
+  await openWorkspaceTab(page, 'App.tsx')
+  await ensureAiChatDrawerOpen(page)
+
+  await page.getByLabel('Ask AI assistant').fill('Update App tab only.')
+  await page.getByRole('button', { name: 'Send' }).click()
+
+  await expect(
+    page.getByRole('button', { name: 'Apply update to App.tsx' }),
+  ).toBeVisible()
+  await page.getByRole('button', { name: 'Apply update to App.tsx' }).click()
+
+  await expect(
+    page.locator('.editor-panel[data-editor-kind="component"] .cm-content').first(),
+  ).toContainText('Resolved update')
+})
+
+test('AI chat renders a single apply action for multiple targets resolving to the same tab', async ({
+  page,
+}) => {
+  await page.route('https://models.github.ai/inference/chat/completions', async route => {
+    const body = route.request().postDataJSON() as ChatRequestBody | null
+
+    if (body?.stream) {
+      await route.fulfill({
+        status: 502,
+        contentType: 'application/json',
+        body: JSON.stringify({ message: 'stream intentionally disabled in this test' }),
+      })
+      return
+    }
+
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        choices: [
+          {
+            message: {
+              role: 'assistant',
+              content: 'Prepared updates for App tab.',
+              tool_calls: [
+                {
+                  id: 'call_component_id',
+                  type: 'function',
+                  function: {
+                    name: 'propose_editor_update',
+                    arguments: JSON.stringify({
+                      target: 'component',
+                      content: 'const App = () => <p>By id</p>',
+                    }),
+                  },
+                },
+                {
+                  id: 'call_component_path',
+                  type: 'function',
+                  function: {
+                    name: 'propose_editor_update',
+                    arguments: JSON.stringify({
+                      target: 'src/components/App.tsx',
+                      content: 'const App = () => <p>By path</p>',
+                    }),
+                  },
+                },
+              ],
+            },
+          },
+        ],
+      }),
+    })
+  })
+
+  await waitForAppReady(page, `${appEntryPath}`)
+  await connectByotWithSingleRepo(page)
+  await setComponentEditorSource(page, 'const App = () => <p>Before</p>')
+  await openWorkspaceTab(page, 'App.tsx')
+  await ensureAiChatDrawerOpen(page)
+
+  await page.getByLabel('Ask AI assistant').fill('Update App tab once.')
+  await page.getByRole('button', { name: 'Send' }).click()
+
+  await expect(page.getByRole('button', { name: 'Apply update to App.tsx' })).toHaveCount(
+    1,
+  )
+})
+
 test('AI chat sends the currently active tab when context is enabled', async ({
   page,
 }) => {
