@@ -51,8 +51,9 @@ import { persistClosedPrContextRecords } from './modules/app-core/pr-context-rec
 import { createPrContextStateChangeHandler } from './modules/app-core/pr-context-state-change-handler.js'
 import { createWorkspaceContextStatusController } from './modules/app-core/workspace-context-status-controller.js'
 import { createWorkspaceRecordAppliedHandler } from './modules/app-core/workspace-record-applied-handler.js'
+import { createGitHubChatWorkspaceActions } from './modules/app-core/github-chat-workspace-actions.js'
 import { createDiagnosticsUiController } from './modules/diagnostics/diagnostics-ui.js'
-import { createGitHubChatDrawer } from './modules/github/chat-drawer/drawer.js'
+import { createGitHubChatDrawer } from './modules/github/chat/drawer.js'
 import { createGitHubByotControls } from './modules/github/byot-controls.js'
 import {
   formatActivePrReference,
@@ -460,6 +461,7 @@ const setActiveWorkspaceRecordId = nextValue => {
 let chatDrawerController = {
   setOpen: () => {},
   setSelectedRepository: () => {},
+  onActiveWorkspaceTabChange: () => {},
   setToken: () => {},
   dispose: () => {},
 }
@@ -827,6 +829,7 @@ const {
   getActiveWorkspaceTab,
   onActiveWorkspaceTabChange: (_tab, { changed } = {}) => {
     syncDiagnosticsDrawerLayout()
+    chatDrawerController.onActiveWorkspaceTabChange()
 
     if (changed) {
       clearDiagnosticsOnTabSwitch()
@@ -1039,6 +1042,18 @@ const onPrContextStateChange = createPrContextStateChangeHandler({
   editedIndicatorVisibilityController,
 })
 
+const githubChatWorkspaceActions = createGitHubChatWorkspaceActions({
+  getActiveWorkspaceTab,
+  isStyleWorkspaceTab,
+  getCssSource: () => getCssSource(),
+  getJsxSource: () => getJsxSource(),
+  workspaceTabsState,
+  getDirtyStateForTabChange,
+  loadWorkspaceTabIntoEditor,
+  renderWorkspaceTabs,
+  queueWorkspaceSave: () => queueWorkspaceSave(),
+})
+
 const githubWorkflows = createGitHubWorkflowsSetup({
   factories: {
     createGitHubPrEditorSyncController,
@@ -1216,24 +1231,7 @@ const githubWorkflows = createGitHubWorkflowsSetup({
     confirmAction: options => confirmAction(options),
     setStatus,
     showAppToast,
-    setComponentSource: value => {
-      suppressEditorChangeSideEffects = true
-      try {
-        setJsxSource(value)
-      } finally {
-        suppressEditorChangeSideEffects = false
-      }
-    },
-    setStylesSource: value => {
-      suppressEditorChangeSideEffects = true
-      try {
-        setCssSource(value)
-      } finally {
-        suppressEditorChangeSideEffects = false
-      }
-    },
-    getComponentSource: () => getJsxSource(),
-    getStylesSource: () => getCssSource(),
+    ...githubChatWorkspaceActions,
     scheduleRender: () => {
       if (
         autoRenderToggle?.checked &&

@@ -1,4 +1,4 @@
-import { toChatText } from './chat-utils.js'
+import { toChatText } from './utils.js'
 
 const chatByteBudget = 120_000
 const chatMaxSummaryChars = 3_600
@@ -75,6 +75,7 @@ const collectModePolicyContext = ({ renderMode, styleMode }) => {
     'Mode-aware policy:',
     `- Render mode: ${renderModeText}`,
     `- Style mode: ${styleModeText}`,
+    '- Preserve the selected style dialect and avoid cross-dialect rewrites unless the user explicitly asks for conversion.',
   ]
 
   if (renderModeKey === 'dom') {
@@ -82,7 +83,13 @@ const collectModePolicyContext = ({ renderMode, styleMode }) => {
       '- In DOM mode, avoid React hook/state guidance unless the user explicitly asks for React migration.',
     )
     policyLines.push(
+      '- In DOM mode, JSX is compiled for @knighted/jsx DOM runtime and should not be treated as a React application by default.',
+    )
+    policyLines.push(
       '- Prefer native DOM APIs, event listeners, and direct browser-compatible patterns.',
+    )
+    policyLines.push(
+      '- Do not suggest React imports, hooks, or React-only runtime APIs unless the user explicitly requests React mode or migration.',
     )
   }
 
@@ -93,6 +100,27 @@ const collectModePolicyContext = ({ renderMode, styleMode }) => {
   if (styleModeKey === 'css') {
     policyLines.push(
       '- Keep style advice compatible with plain CSS unless user asks for a preprocessor.',
+    )
+  }
+
+  if (styleModeKey === 'module') {
+    policyLines.push(
+      '- In CSS modules mode, keep class names module-scoped and preserve CSS module semantics.',
+    )
+    policyLines.push(
+      '- Avoid converting CSS modules files to global CSS unless the user explicitly asks.',
+    )
+  }
+
+  if (styleModeKey === 'less') {
+    policyLines.push(
+      '- In Less mode, prefer Less-compatible syntax and avoid Sass-specific directives/features.',
+    )
+  }
+
+  if (styleModeKey === 'sass') {
+    policyLines.push(
+      '- In Sass mode, prefer Sass/SCSS-compatible syntax and avoid Less-specific directives/features.',
     )
   }
 

@@ -7,6 +7,7 @@ import {
   ensureAiChatDrawerOpen,
   ensureOpenPrDrawerOpen,
   mockRepositoryBranches,
+  openWorkspaceTab,
   setComponentEditorSource,
   setStylesEditorSource,
   waitForAppReady,
@@ -241,6 +242,15 @@ test('AI chat prefers streaming responses when available', async ({ page }) => {
   expect(streamRequestBody?.messages?.[0]?.content).toContain(
     'expert software development assistant focused on CSS dialects and JSX syntax',
   )
+  expect(streamRequestBody?.messages?.[0]?.content).toContain(
+    'JSX is compiled for @knighted/jsx DOM runtime',
+  )
+  expect(streamRequestBody?.messages?.[0]?.content).toContain(
+    'Do not suggest React imports, hooks, or React-only runtime APIs',
+  )
+  expect(streamRequestBody?.messages?.[0]?.content).toContain(
+    'Preserve the selected style dialect and avoid cross-dialect rewrites',
+  )
   const systemMessages = streamRequestBody?.messages?.filter(
     (message: ChatRequestMessage) => message.role === 'system',
   )
@@ -256,6 +266,23 @@ test('AI chat prefers streaming responses when available', async ({ page }) => {
   expect(
     systemMessages?.some((message: ChatRequestMessage) =>
       message.content?.includes('Editor context:'),
+    ),
+  ).toBe(true)
+  expect(
+    systemMessages?.some(
+      (message: ChatRequestMessage) =>
+        message.content?.includes('- Active tab:') &&
+        message.content?.includes('App.tsx'),
+    ),
+  ).toBe(true)
+  expect(
+    systemMessages?.some((message: ChatRequestMessage) =>
+      message.content?.includes('Available tab targets (id and path):'),
+    ),
+  ).toBe(true)
+  expect(
+    systemMessages?.some((message: ChatRequestMessage) =>
+      message.content?.includes('Active tab source:'),
     ),
   ).toBe(true)
 })
@@ -282,7 +309,7 @@ test('AI chat can disable editor context payload via checkbox', async ({ page })
   await connectByotWithSingleRepo(page)
   await ensureAiChatDrawerOpen(page)
 
-  const includeEditorsToggle = page.getByLabel('Send JSX + CSS editor context')
+  const includeEditorsToggle = page.getByLabel('Send tab content')
   await expect(includeEditorsToggle).toBeChecked()
   await includeEditorsToggle.uncheck()
 
@@ -316,7 +343,7 @@ test('AI chat can disable editor context payload via checkbox', async ({ page })
   ).toBe(false)
 })
 
-test('AI chat proposals can be confirmed, applied, and undone for component and styles editors', async ({
+test('AI chat proposals can be confirmed, applied, and undone per active tab', async ({
   page,
 }) => {
   await page.route('https://models.github.ai/inference/chat/completions', async route => {
@@ -347,7 +374,7 @@ test('AI chat proposals can be confirmed, applied, and undone for component and 
                   function: {
                     name: 'propose_editor_update',
                     arguments: JSON.stringify({
-                      target: 'component',
+                      target: 'src/components/App.tsx',
                       content: 'const App = () => <button type="button">Updated</button>',
                       rationale: 'Use explicit App component output.',
                     }),
@@ -359,7 +386,7 @@ test('AI chat proposals can be confirmed, applied, and undone for component and 
                   function: {
                     name: 'propose_editor_update',
                     arguments: JSON.stringify({
-                      target: 'styles',
+                      target: 'src/styles/app.css',
                       content: '.button { color: rgb(10 20 30); }',
                       rationale: 'Provide deterministic button styling.',
                     }),
@@ -377,6 +404,7 @@ test('AI chat proposals can be confirmed, applied, and undone for component and 
   await connectByotWithSingleRepo(page)
   await setComponentEditorSource(page, 'const App = () => <button>Before</button>')
   await setStylesEditorSource(page, '.button { color: red; }')
+  await openWorkspaceTab(page, 'App.tsx')
   await ensureAiChatDrawerOpen(page)
 
   await page.getByLabel('Ask AI assistant').fill('Suggest updates for both editors.')
@@ -386,55 +414,65 @@ test('AI chat proposals can be confirmed, applied, and undone for component and 
     page.getByText('Prepared updates for both editors.', { exact: true }),
   ).toBeVisible()
 
-  const assistantResponseMessage = page
-    .locator('.ai-chat-message--assistant')
-    .filter({ hasText: 'Prepared updates for both editors.' })
-    .first()
+  await expect(
+    page.getByRole('button', { name: 'Apply update to App.tsx' }),
+  ).toBeVisible()
+  await expect(
+    page.getByRole('button', { name: 'Apply update to app.css' }),
+  ).toBeVisible()
 
+  await page.getByRole('button', { name: 'Apply update to App.tsx' }).click()
+
+  await expect(page.getByRole('button', { name: 'Apply update to App.tsx' })).toBeHidden()
   await expect(
-    page.getByRole('button', { name: 'Apply update to both editors' }),
+    page.getByRole('button', { name: 'Undo last apply for App.tsx' }),
   ).toBeVisible()
-  await page.getByRole('button', { name: 'Apply update to both editors' }).click()
   await expect(
-    page.getByRole('button', { name: 'Apply update to both editors' }),
+    page.getByRole('button', { name: 'Undo last apply for app.css' }),
   ).toBeHidden()
-  await expect(
-    page.getByRole('button', { name: 'Apply update to Component editor' }),
-  ).toBeHidden()
-  await expect(
-    page.getByRole('button', { name: 'Apply update to Styles editor' }),
-  ).toBeHidden()
-  await expect(
-    assistantResponseMessage.getByRole('button', { name: 'Undo last Component apply' }),
-  ).toHaveCount(0)
-  await expect(
-    assistantResponseMessage.getByRole('button', { name: 'Undo last Styles apply' }),
-  ).toHaveCount(0)
-  await expect(
-    page.getByRole('button', { name: 'Undo last Component apply' }),
-  ).toBeVisible()
-  await expect(page.getByRole('button', { name: 'Undo last Styles apply' })).toBeVisible()
   await expect(
     page.locator('.editor-panel[data-editor-kind="component"] .cm-content').first(),
   ).toContainText('Updated')
+
+  await openWorkspaceTab(page, 'app.css')
+  await expect(
+    page.getByRole('button', { name: 'Undo last apply for App.tsx' }),
+  ).toBeHidden()
+  await expect(
+    page.getByRole('button', { name: 'Apply update to app.css' }),
+  ).toBeVisible()
+  await page.getByRole('button', { name: 'Apply update to app.css' }).click()
+
   await expect(
     page.locator('.editor-panel[data-editor-kind="styles"] .cm-content').first(),
   ).toContainText('rgb(10 20 30)')
-
-  await page.getByRole('button', { name: 'Undo last Component apply' }).click()
   await expect(
-    page.locator('.editor-panel[data-editor-kind="component"] .cm-content').first(),
-  ).toContainText('Before')
+    page.getByRole('button', { name: 'Undo last apply for app.css' }),
+  ).toBeVisible()
+  await expect(
+    page.getByRole('button', { name: 'Undo last apply for App.tsx' }),
+  ).toBeHidden()
 
-  await page.getByRole('button', { name: 'Undo last Styles apply' }).click()
+  await page.getByRole('button', { name: 'Undo last apply for app.css' }).click()
   await expect(
     page.locator('.editor-panel[data-editor-kind="styles"] .cm-content').first(),
   ).toContainText('red')
+
+  await openWorkspaceTab(page, 'App.tsx')
+  await expect(
+    page.getByRole('button', { name: 'Undo last apply for App.tsx' }),
+  ).toBeVisible()
+  await expect(
+    page.getByRole('button', { name: 'Undo last apply for app.css' }),
+  ).toBeHidden()
+
+  await page.getByRole('button', { name: 'Undo last apply for App.tsx' }).click()
+  await expect(
+    page.locator('.editor-panel[data-editor-kind="component"] .cm-content').first(),
+  ).toContainText('Before')
 })
 
-test('AI chat shows a single apply action when both editor proposals are available', async ({
-  page,
-}) => {
+test('AI chat apply actions resolve dynamic tab targets', async ({ page }) => {
   await page.route('https://models.github.ai/inference/chat/completions', async route => {
     const body = route.request().postDataJSON() as ChatRequestBody | null
 
@@ -463,7 +501,7 @@ test('AI chat shows a single apply action when both editor proposals are availab
                   function: {
                     name: 'propose_editor_update',
                     arguments: JSON.stringify({
-                      target: 'component',
+                      target: 'src/components/App.tsx',
                       content: 'const App = () => <button type="button">Updated</button>',
                     }),
                   },
@@ -474,7 +512,7 @@ test('AI chat shows a single apply action when both editor proposals are availab
                   function: {
                     name: 'propose_editor_update',
                     arguments: JSON.stringify({
-                      target: 'styles',
+                      target: 'src/styles/app.css',
                       content: '.button { color: rgb(10 20 30); }',
                     }),
                   },
@@ -491,6 +529,7 @@ test('AI chat shows a single apply action when both editor proposals are availab
   await connectByotWithSingleRepo(page)
   await setComponentEditorSource(page, 'const App = () => <button>Before</button>')
   await setStylesEditorSource(page, '.button { color: red; }')
+  await openWorkspaceTab(page, 'App.tsx')
   await ensureAiChatDrawerOpen(page)
 
   await page.getByLabel('Ask AI assistant').fill('Suggest updates for both editors.')
@@ -501,14 +540,216 @@ test('AI chat shows a single apply action when both editor proposals are availab
   ).toBeVisible()
 
   await expect(
-    page.getByRole('button', { name: 'Apply update to both editors' }),
+    page.getByRole('button', { name: 'Apply update to App.tsx' }),
   ).toBeVisible()
   await expect(
-    page.getByRole('button', { name: 'Apply update to Component editor' }),
-  ).toBeHidden()
+    page.getByRole('button', { name: 'Apply update to app.css' }),
+  ).toBeVisible()
+
+  await openWorkspaceTab(page, 'app.css')
+
   await expect(
-    page.getByRole('button', { name: 'Apply update to Styles editor' }),
-  ).toBeHidden()
+    page.getByRole('button', { name: 'Apply update to App.tsx' }),
+  ).toBeVisible()
+  await expect(
+    page.getByRole('button', { name: 'Apply update to app.css' }),
+  ).toBeVisible()
+})
+
+test('AI chat applies the correct proposal when unresolved targets are filtered out', async ({
+  page,
+}) => {
+  await page.route('https://models.github.ai/inference/chat/completions', async route => {
+    const body = route.request().postDataJSON() as ChatRequestBody | null
+
+    if (body?.stream) {
+      await route.fulfill({
+        status: 502,
+        contentType: 'application/json',
+        body: JSON.stringify({ message: 'stream intentionally disabled in this test' }),
+      })
+      return
+    }
+
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        choices: [
+          {
+            message: {
+              role: 'assistant',
+              content: 'Prepared updates for App tab.',
+              tool_calls: [
+                {
+                  id: 'call_unresolved',
+                  type: 'function',
+                  function: {
+                    name: 'propose_editor_update',
+                    arguments: JSON.stringify({
+                      target: 'src/components/missing.tsx',
+                      content: 'const Missing = () => null',
+                    }),
+                  },
+                },
+                {
+                  id: 'call_component',
+                  type: 'function',
+                  function: {
+                    name: 'propose_editor_update',
+                    arguments: JSON.stringify({
+                      target: 'src/components/App.tsx',
+                      content: 'const App = () => <p>Resolved update</p>',
+                    }),
+                  },
+                },
+              ],
+            },
+          },
+        ],
+      }),
+    })
+  })
+
+  await waitForAppReady(page, `${appEntryPath}`)
+  await connectByotWithSingleRepo(page)
+  await setComponentEditorSource(page, 'const App = () => <p>Before</p>')
+  await openWorkspaceTab(page, 'App.tsx')
+  await ensureAiChatDrawerOpen(page)
+
+  await page.getByLabel('Ask AI assistant').fill('Update App tab only.')
+  await page.getByRole('button', { name: 'Send' }).click()
+
+  await expect(
+    page.getByRole('button', { name: 'Apply update to App.tsx' }),
+  ).toBeVisible()
+  await page.getByRole('button', { name: 'Apply update to App.tsx' }).click()
+
+  await expect(
+    page.locator('.editor-panel[data-editor-kind="component"] .cm-content').first(),
+  ).toContainText('Resolved update')
+})
+
+test('AI chat renders a single apply action for multiple targets resolving to the same tab', async ({
+  page,
+}) => {
+  await page.route('https://models.github.ai/inference/chat/completions', async route => {
+    const body = route.request().postDataJSON() as ChatRequestBody | null
+
+    if (body?.stream) {
+      await route.fulfill({
+        status: 502,
+        contentType: 'application/json',
+        body: JSON.stringify({ message: 'stream intentionally disabled in this test' }),
+      })
+      return
+    }
+
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        choices: [
+          {
+            message: {
+              role: 'assistant',
+              content: 'Prepared updates for App tab.',
+              tool_calls: [
+                {
+                  id: 'call_component_id',
+                  type: 'function',
+                  function: {
+                    name: 'propose_editor_update',
+                    arguments: JSON.stringify({
+                      target: 'component',
+                      content: 'const App = () => <p>By id</p>',
+                    }),
+                  },
+                },
+                {
+                  id: 'call_component_path',
+                  type: 'function',
+                  function: {
+                    name: 'propose_editor_update',
+                    arguments: JSON.stringify({
+                      target: 'src/components/App.tsx',
+                      content: 'const App = () => <p>By path</p>',
+                    }),
+                  },
+                },
+              ],
+            },
+          },
+        ],
+      }),
+    })
+  })
+
+  await waitForAppReady(page, `${appEntryPath}`)
+  await connectByotWithSingleRepo(page)
+  await setComponentEditorSource(page, 'const App = () => <p>Before</p>')
+  await openWorkspaceTab(page, 'App.tsx')
+  await ensureAiChatDrawerOpen(page)
+
+  await page.getByLabel('Ask AI assistant').fill('Update App tab once.')
+  await page.getByRole('button', { name: 'Send' }).click()
+
+  await expect(page.getByRole('button', { name: 'Apply update to App.tsx' })).toHaveCount(
+    1,
+  )
+})
+
+test('AI chat sends the currently active tab when context is enabled', async ({
+  page,
+}) => {
+  let streamRequestBody: ChatRequestBody | undefined
+
+  await page.route('https://models.github.ai/inference/chat/completions', async route => {
+    streamRequestBody = route.request().postDataJSON() as ChatRequestBody
+
+    await route.fulfill({
+      status: 200,
+      contentType: 'text/event-stream',
+      body: [
+        'data: {"choices":[{"delta":{"content":"ok"}}]}',
+        '',
+        'data: [DONE]',
+        '',
+      ].join('\n'),
+    })
+  })
+
+  await waitForAppReady(page, `${appEntryPath}`)
+  await connectByotWithSingleRepo(page)
+  await setStylesEditorSource(page, '.button { color: red; }')
+  await ensureAiChatDrawerOpen(page)
+
+  await page.getByLabel('Ask AI assistant').fill('Use active tab context only.')
+  await page.getByRole('button', { name: 'Send' }).click()
+  await expect(
+    page.getByText('Response streamed from GitHub.', { exact: true }),
+  ).toHaveText('Response streamed from GitHub.')
+
+  const systemMessages = streamRequestBody?.messages?.filter(
+    (message: ChatRequestMessage) => message.role === 'system',
+  )
+  expect(
+    systemMessages?.some(
+      (message: ChatRequestMessage) =>
+        message.content?.includes('- Active tab:') &&
+        message.content?.includes('app.css'),
+    ),
+  ).toBe(true)
+  expect(
+    systemMessages?.some((message: ChatRequestMessage) =>
+      message.content?.includes('Active tab source:'),
+    ),
+  ).toBe(true)
+  expect(
+    systemMessages?.some((message: ChatRequestMessage) =>
+      message.content?.includes('Available tab targets (id and path):'),
+    ),
+  ).toBe(true)
 })
 
 test('AI chat streaming text still updates while latest undo actions are visible', async ({
@@ -546,7 +787,7 @@ test('AI chat streaming text still updates while latest undo actions are visible
                     function: {
                       name: 'propose_editor_update',
                       arguments: JSON.stringify({
-                        target: 'styles',
+                        target: 'src/styles/app.css',
                         content: '.button { color: rgb(10 20 30); }',
                       }),
                     },
@@ -596,8 +837,10 @@ test('AI chat streaming text still updates while latest undo actions are visible
   await expect(
     page.getByText('Prepared updates for styles editor.', { exact: true }),
   ).toBeVisible()
-  await page.getByRole('button', { name: 'Apply update to Styles editor' }).click()
-  await expect(page.getByRole('button', { name: 'Undo last Styles apply' })).toBeVisible()
+  await page.getByRole('button', { name: 'Apply update to app.css' }).click()
+  await expect(
+    page.getByRole('button', { name: 'Undo last apply for app.css' }),
+  ).toBeVisible()
 
   await page
     .getByLabel('Ask AI assistant')
