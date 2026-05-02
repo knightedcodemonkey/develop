@@ -87,7 +87,7 @@
   outline-offset: 1px;
 }
 
-@media (max-width: 900px) {
+@media (width <= 900px) {
   .panel-header-main-actions .controls,
   .controls--actions {
     justify-content: flex-start;
@@ -128,7 +128,7 @@
   transform: translateY(0);
 }
 
-@media (max-width: 900px) {
+@media (width <= 900px) {
   .app-toast {
     left: 12px;
     right: 12px;

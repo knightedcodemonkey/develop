@@ -168,7 +168,7 @@
   stroke-linejoin: round;
 }
 
-@media (max-width: 480px) {
+@media (width <= 480px) {
   .preview-bg-label {
     position: absolute;
     width: 1px;

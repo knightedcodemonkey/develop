@@ -580,7 +580,7 @@ textarea:focus {
   display: none;
 }
 
-@media (max-width: 900px) {
+@media (width <= 900px) {
   .panel-collapse-toggle {
     width: 32px;
     height: 32px;

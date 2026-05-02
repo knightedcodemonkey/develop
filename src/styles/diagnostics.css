@@ -217,7 +217,7 @@
   }
 }
 
-@media (max-width: 900px) {
+@media (width <= 900px) {
   .diagnostics-drawer {
     top: auto;
     right: 24px;

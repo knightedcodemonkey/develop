@@ -200,7 +200,7 @@ body {
   color: var(--shell-text);
 }
 
-@media (max-width: 900px) {
+@media (width <= 900px) {
   body {
     height: auto;
     min-height: 100dvh;
