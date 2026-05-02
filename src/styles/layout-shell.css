@@ -353,11 +353,6 @@
   min-height: var(--expanded-panel-min-height);
 }
 
-.editor-panel.panel--collapsed-horizontal,
-.editor-panel.panel--collapsed-vertical {
-  min-height: 0;
-}
-
 .preview-panel {
   grid-area: preview;
   position: relative;
@@ -438,11 +433,7 @@
     overflow: auto;
   }
 
-  .app-grid
-    :is(.editor-panel, .preview-panel):is(
-      .panel--collapsed-horizontal,
-      .panel--collapsed-vertical
-    ) {
+  .app-grid .preview-panel:is(.panel--collapsed-horizontal, .panel--collapsed-vertical) {
     min-height: 0;
   }
 

@@ -414,8 +414,6 @@ test('active tab remains source of truth for visible editor panel', async ({ pag
   ).toHaveAttribute('aria-current', 'true')
   await expect(componentPanel).not.toHaveAttribute('hidden', '')
   await expect(stylesPanel).toHaveAttribute('hidden', '')
-
-  await page.locator('#collapse-component').click()
   await page.getByRole('button', { name: 'Open tab app.css' }).click()
 
   await expect(page.getByRole('button', { name: 'Open tab app.css' })).toHaveAttribute(

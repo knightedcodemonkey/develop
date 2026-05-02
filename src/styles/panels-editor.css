@@ -523,33 +523,17 @@ textarea:focus {
   min-height: auto;
 }
 
-.editor-panel.panel--collapsed-vertical {
-  align-self: start;
-}
-
 .panel.preview.panel--collapsed-vertical {
   min-height: 0;
 }
 
-.editor-panel.panel--collapsed-vertical .editor-host,
-.editor-panel.panel--collapsed-vertical textarea,
 .preview-panel.panel--collapsed-vertical .preview-host,
-.editor-panel.panel--collapsed-vertical .panel-content,
 .preview-panel.panel--collapsed-vertical .panel-content {
   display: none;
 }
 
-.editor-panel.panel--collapsed-vertical .panel-header-main-actions,
-.editor-panel.panel--collapsed-vertical .panel-header .icon-button,
 .preview-panel.panel--collapsed-vertical .controls label {
   display: none;
-}
-
-.editor-panel.panel--collapsed-vertical .panel-header--grid {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
 }
 
 .preview-panel.panel--collapsed-vertical .panel-header .controls {
@@ -594,46 +578,6 @@ textarea:focus {
 
 .preview-panel.panel--collapsed-horizontal .panel-collapse-toggle__label {
   display: none;
-}
-
-.editor-panel.panel--collapsed-horizontal {
-  min-height: auto;
-}
-
-.editor-panel.panel--collapsed-horizontal .editor-host,
-.editor-panel.panel--collapsed-horizontal textarea,
-.editor-panel.panel--collapsed-horizontal .panel-content,
-.editor-panel.panel--collapsed-horizontal .panel-header-main-actions,
-.editor-panel.panel--collapsed-horizontal .panel-header .icon-button {
-  display: none;
-}
-
-.editor-panel.panel--collapsed-horizontal .panel-header {
-  height: 100%;
-  padding: 12px 8px;
-  border-bottom: none;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-}
-
-.editor-panel.panel--collapsed-horizontal .panel-header h2 {
-  writing-mode: vertical-rl;
-  transform: rotate(180deg);
-  font-size: 0.8rem;
-}
-
-.editor-panel.panel--collapsed-horizontal .panel-header-quick-actions {
-  width: 100%;
-  justify-content: center;
-}
-
-.editor-panel.panel--collapsed-horizontal .panel-collapse-toggle {
-  width: 32px;
-  min-width: 32px;
-  height: 32px;
 }
 
 @media (max-width: 900px) {
