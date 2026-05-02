@@ -69,6 +69,11 @@ export const cdnImportSpecs = {
     esm: 'react@19.2.4',
     jspmGa: 'npm:react@19.2.4/index.js',
   },
+  reactDom: {
+    importMap: 'react-dom',
+    esm: 'react-dom@19.2.4',
+    jspmGa: 'npm:react-dom@19.2.4/index.js',
+  },
   reactDomClient: {
     importMap: 'react-dom/client',
     esm: 'react-dom@19.2.4/client',

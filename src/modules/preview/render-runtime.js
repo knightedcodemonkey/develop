@@ -701,6 +701,7 @@ export const createRenderRuntimeController = ({
     jsxDom: getRuntimeSpecifier('jsxDom'),
     jsxReact: getRuntimeSpecifier('jsxReact'),
     react: getRuntimeSpecifier('react'),
+    reactDom: getRuntimeSpecifier('reactDom'),
     reactDomClient: getRuntimeSpecifier('reactDomClient'),
   })
 

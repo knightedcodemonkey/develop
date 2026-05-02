@@ -423,6 +423,7 @@ const toStyleModuleDataUrl = ({ moduleKey, styleModuleExports }) => {
 
 const runtimeSpecifierRewrites = runtimeSpecifiers => ({
   react: runtimeSpecifiers.react,
+  'react-dom': runtimeSpecifiers.reactDom,
   'react-dom/client': runtimeSpecifiers.reactDomClient,
   '@knighted/jsx/dom': runtimeSpecifiers.jsxDom,
   '@knighted/jsx/react': runtimeSpecifiers.jsxReact,
