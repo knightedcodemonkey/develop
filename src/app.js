@@ -460,6 +460,7 @@ const setActiveWorkspaceRecordId = nextValue => {
 let chatDrawerController = {
   setOpen: () => {},
   setSelectedRepository: () => {},
+  onActiveWorkspaceTabChange: () => {},
   setToken: () => {},
   dispose: () => {},
 }
@@ -827,6 +828,7 @@ const {
   getActiveWorkspaceTab,
   onActiveWorkspaceTabChange: (_tab, { changed } = {}) => {
     syncDiagnosticsDrawerLayout()
+    chatDrawerController.onActiveWorkspaceTabChange()
 
     if (changed) {
       clearDiagnosticsOnTabSwitch()
@@ -1216,24 +1218,71 @@ const githubWorkflows = createGitHubWorkflowsSetup({
     confirmAction: options => confirmAction(options),
     setStatus,
     showAppToast,
-    setComponentSource: value => {
-      suppressEditorChangeSideEffects = true
-      try {
-        setJsxSource(value)
-      } finally {
-        suppressEditorChangeSideEffects = false
+    getActiveWorkspaceTabContext: () => {
+      const activeTab = getActiveWorkspaceTab()
+      if (!activeTab) {
+        return null
+      }
+
+      const isStylesTab = isStyleWorkspaceTab(activeTab)
+
+      return {
+        id: activeTab.id,
+        name: activeTab.name,
+        path: activeTab.path,
+        language: activeTab.language,
+        content: isStylesTab ? getCssSource() : getJsxSource(),
+        isActive: true,
       }
     },
-    setStylesSource: value => {
-      suppressEditorChangeSideEffects = true
-      try {
-        setCssSource(value)
-      } finally {
-        suppressEditorChangeSideEffects = false
-      }
+    getWorkspaceTabContexts: () => {
+      const activeTabId = workspaceTabsState.getActiveTabId()
+      return workspaceTabsState.getTabs().map(tab => {
+        const isActive = tab.id === activeTabId
+        const isStylesTab = isStyleWorkspaceTab(tab)
+        return {
+          id: tab.id,
+          name: tab.name,
+          path: tab.path,
+          language: tab.language,
+          isActive,
+          content: isActive
+            ? isStylesTab
+              ? getCssSource()
+              : getJsxSource()
+            : tab.content,
+        }
+      })
     },
-    getComponentSource: () => getJsxSource(),
-    getStylesSource: () => getCssSource(),
+    applyWorkspaceTabContent: ({ tabId, content }) => {
+      const tab = workspaceTabsState.getTab(tabId)
+      if (!tab || typeof content !== 'string') {
+        return null
+      }
+
+      const updatedTab = workspaceTabsState.upsertTab(
+        {
+          ...tab,
+          content,
+          isDirty: getDirtyStateForTabChange(tab, content),
+          lastModified: Date.now(),
+          isActive: tab.isActive,
+        },
+        { emitReason: 'chatApplyTabContent' },
+      )
+
+      if (!updatedTab) {
+        return null
+      }
+
+      if (updatedTab.isActive) {
+        loadWorkspaceTabIntoEditor(updatedTab)
+      }
+
+      renderWorkspaceTabs()
+      queueWorkspaceSave()
+      return updatedTab
+    },
     scheduleRender: () => {
       if (
         autoRenderToggle?.checked &&

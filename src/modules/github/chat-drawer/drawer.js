@@ -13,8 +13,15 @@ import {
   toRepositoryLabel,
   toRepositoryUrl,
 } from './chat-utils.js'
+import {
+  buildActiveTabEditorContext,
+  normalizeWorkspaceTabContext,
+  normalizeWorkspaceTabContexts,
+} from './active-tab-context.js'
 import { buildOutboundMessages as buildPayloadMessages } from './payload.js'
 import { editorProposalTools, toMessageEditorProposals } from './proposals.js'
+import { resolveWorkspaceTabTarget, toTargetKey } from './tab-target-resolver.js'
+import { createTabScopedUndoState } from './tab-scoped-undo-state.js'
 
 const svgNamespace = 'http://www.w3.org/2000/svg'
 
@@ -55,14 +62,13 @@ export const createGitHubChatDrawer = ({
   includeEditorsContextToggle,
   getToken,
   getSelectedRepository,
-  getComponentSource,
-  setComponentSource,
-  getStylesSource,
-  setStylesSource,
+  getWorkspaceTabContexts,
+  applyWorkspaceTabContent,
   scheduleRender,
   getRenderMode,
   getStyleMode,
   getDrawerSide,
+  getActiveWorkspaceTabContext,
 }) => {
   let open = false
   let pendingAbortController = null
@@ -76,15 +82,36 @@ export const createGitHubChatDrawer = ({
     user: null,
     assistant: null,
   }
-  const lastAppliedEditorSnapshot = {
-    component: null,
-    styles: null,
+  const tabScopedUndoState = createTabScopedUndoState()
+
+  const getActiveTabContext = () => {
+    if (typeof getActiveWorkspaceTabContext !== 'function') {
+      return null
+    }
+
+    return normalizeWorkspaceTabContext(getActiveWorkspaceTabContext())
+  }
+
+  const getWorkspaceTabs = () => {
+    if (typeof getWorkspaceTabContexts !== 'function') {
+      return []
+    }
+
+    return normalizeWorkspaceTabContexts(getWorkspaceTabContexts())
+  }
+
+  const getFallbackProposalTarget = () => {
+    const activeTabContext = getActiveTabContext()
+    if (!activeTabContext) {
+      return ''
+    }
+
+    return activeTabContext.path || activeTabContext.id
   }
 
   const resetChatContextState = () => {
     compactedConversationSummary = ''
-    lastAppliedEditorSnapshot.component = null
-    lastAppliedEditorSnapshot.styles = null
+    tabScopedUndoState.clearAll()
 
     for (const message of messages) {
       if (!message || typeof message !== 'object') {
@@ -287,10 +314,13 @@ export const createGitHubChatDrawer = ({
 
     undoNode.replaceChildren()
 
-    const hasComponentUndo = Boolean(lastAppliedEditorSnapshot.component)
-    const hasStylesUndo = Boolean(lastAppliedEditorSnapshot.styles)
+    const activeTabContext = getActiveTabContext()
+    const activeTabId = activeTabContext?.id
+    const activeTabUndoSnapshot = activeTabId
+      ? tabScopedUndoState.getSnapshot(activeTabId)
+      : null
 
-    if (!hasComponentUndo && !hasStylesUndo) {
+    if (!activeTabUndoSnapshot) {
       undoNode.setAttribute('hidden', '')
       return
     }
@@ -300,27 +330,14 @@ export const createGitHubChatDrawer = ({
     label.textContent = 'Latest applied changes'
     undoNode.append(label)
 
-    if (hasComponentUndo) {
-      const undoComponentButton = document.createElement('button')
-      undoComponentButton.type = 'button'
-      undoComponentButton.className =
-        'render-button render-button--small ai-chat-drawer__undo-action'
-      undoComponentButton.dataset.action = 'undo-editor-apply'
-      undoComponentButton.dataset.targetEditor = 'component'
-      undoComponentButton.textContent = 'Undo last Component apply'
-      undoNode.append(undoComponentButton)
-    }
-
-    if (hasStylesUndo) {
-      const undoStylesButton = document.createElement('button')
-      undoStylesButton.type = 'button'
-      undoStylesButton.className =
-        'render-button render-button--small ai-chat-drawer__undo-action'
-      undoStylesButton.dataset.action = 'undo-editor-apply'
-      undoStylesButton.dataset.targetEditor = 'styles'
-      undoStylesButton.textContent = 'Undo last Styles apply'
-      undoNode.append(undoStylesButton)
-    }
+    const undoButton = document.createElement('button')
+    undoButton.type = 'button'
+    undoButton.className =
+      'render-button render-button--small ai-chat-drawer__undo-action'
+    undoButton.dataset.action = 'undo-tab-apply'
+    const tabName = activeTabContext?.name || activeTabUndoSnapshot.tabName || 'tab'
+    undoButton.textContent = `Undo last apply for ${tabName}`
+    undoNode.append(undoButton)
 
     undoNode.removeAttribute('hidden')
   }
@@ -371,73 +388,80 @@ export const createGitHubChatDrawer = ({
       item.append(body)
 
       const proposals =
-        message.role === 'assistant' ? toMessageEditorProposals(message) : null
-      const componentProposal = proposals?.component
-      const stylesProposal = proposals?.styles
-      const hasProposal = Boolean(componentProposal || stylesProposal)
+        message.role === 'assistant'
+          ? toMessageEditorProposals(message, {
+              fallbackTarget: getFallbackProposalTarget(),
+            })
+          : []
+      const workspaceTabs = getWorkspaceTabs()
+      const activeTabId = getActiveTabContext()?.id || ''
+      const resolvedProposals = proposals
+        .map(proposal => {
+          const resolvedTab = resolveWorkspaceTabTarget({
+            target: proposal.target,
+            language: proposal.language,
+            tabs: workspaceTabs,
+            activeTabId,
+          })
+
+          if (!resolvedTab) {
+            return null
+          }
+
+          const appliedKey = toTargetKey(proposal.target)
+          return {
+            ...proposal,
+            appliedKey,
+            resolvedTab,
+          }
+        })
+        .filter(Boolean)
+      const hasProposal = resolvedProposals.length > 0
       const appliedTargets =
         message && typeof message.appliedTargets === 'object' && message.appliedTargets
           ? message.appliedTargets
           : {}
-      const showCombinedApply =
-        componentProposal &&
-        stylesProposal &&
-        appliedTargets.component !== true &&
-        appliedTargets.styles !== true
 
       if (hasProposal) {
         const actions = document.createElement('div')
         actions.className = 'ai-chat-message__actions'
         actions.dataset.messageIndex = String(index)
 
-        const buildApplyButton = ({ target, text }) => {
+        const buildApplyButton = ({ proposal, proposalIndex }) => {
           const button = document.createElement('button')
           button.type = 'button'
           button.className = 'render-button render-button--small ai-chat-message__action'
           button.dataset.action = 'request-apply'
-          button.dataset.targetEditor = target
           button.dataset.messageIndex = String(index)
-          button.textContent = text
-          button.setAttribute(
-            'aria-label',
-            target === 'styles'
-              ? 'Apply update to Styles editor'
-              : 'Apply update to Component editor',
-          )
+          button.dataset.proposalIndex = String(proposalIndex)
+          const tabLabel =
+            proposal.resolvedTab.name ||
+            proposal.resolvedTab.path ||
+            proposal.resolvedTab.id
+          button.textContent = `Apply update to ${tabLabel}`
+          button.setAttribute('aria-label', `Apply update to ${tabLabel}`)
           if (pendingAbortController) {
             button.disabled = true
           }
           return button
         }
 
-        if (
-          componentProposal &&
-          appliedTargets.component !== true &&
-          !showCombinedApply
-        ) {
-          actions.append(buildApplyButton({ target: 'component', text: 'Apply update' }))
-        }
-
-        if (stylesProposal && appliedTargets.styles !== true && !showCombinedApply) {
-          actions.append(buildApplyButton({ target: 'styles', text: 'Apply update' }))
-        }
-
-        if (showCombinedApply) {
-          const applyBothButton = document.createElement('button')
-          applyBothButton.type = 'button'
-          applyBothButton.className =
-            'render-button render-button--small ai-chat-message__action'
-          applyBothButton.dataset.action = 'apply-both'
-          applyBothButton.dataset.messageIndex = String(index)
-          applyBothButton.textContent = 'Apply update'
-          applyBothButton.setAttribute('aria-label', 'Apply update to both editors')
-          if (pendingAbortController) {
-            applyBothButton.disabled = true
+        for (const [proposalIndex, proposal] of resolvedProposals.entries()) {
+          if (!proposal?.appliedKey || appliedTargets[proposal.appliedKey] === true) {
+            continue
           }
-          actions.append(applyBothButton)
+
+          actions.append(
+            buildApplyButton({
+              proposal,
+              proposalIndex,
+            }),
+          )
         }
 
-        item.append(actions)
+        if (actions.childElementCount > 0) {
+          item.append(actions)
+        }
       }
 
       if (message.role === 'assistant' && index === messages.length - 1) {
@@ -505,81 +529,89 @@ export const createGitHubChatDrawer = ({
     return `${nextValue}\n`
   }
 
-  const applyProposalToEditor = ({ messageIndex, target }) => {
+  const applyProposalToTab = ({ messageIndex, proposalIndex }) => {
     const message = messages[messageIndex]
     if (!message || message.role !== 'assistant') {
-      return false
+      return null
     }
 
-    const proposals = toMessageEditorProposals(message)
-    const proposal = target === 'styles' ? proposals.styles : proposals.component
+    const proposals = toMessageEditorProposals(message, {
+      fallbackTarget: getFallbackProposalTarget(),
+    })
+    const proposal = proposals[proposalIndex]
     if (!proposal) {
-      return false
+      return null
     }
 
-    if (target === 'component') {
-      if (
-        typeof setComponentSource !== 'function' ||
-        typeof getComponentSource !== 'function'
-      ) {
-        return false
-      }
+    const activeTabContext = getActiveTabContext()
+    const workspaceTabs = getWorkspaceTabs()
+    const resolvedTab = resolveWorkspaceTabTarget({
+      target: proposal.target,
+      language: proposal.language,
+      tabs: workspaceTabs,
+      activeTabId: activeTabContext?.id || '',
+    })
 
-      const previousValue = getComponentSource()
-      const nextValue = preserveTrailingNewlineIfNeeded({
-        previousValue,
-        nextValue: proposal.content,
-      })
-      setComponentSource(nextValue)
-      lastAppliedEditorSnapshot.component = {
-        previousValue,
-      }
-      scheduleRenderAfterEditorUpdate()
-      setChatStatus('Applied assistant proposal to Component editor.', 'ok')
-      return true
+    if (!resolvedTab || typeof applyWorkspaceTabContent !== 'function') {
+      return null
     }
 
-    if (typeof setStylesSource !== 'function' || typeof getStylesSource !== 'function') {
-      return false
-    }
-
-    const previousValue = getStylesSource()
+    const previousValue =
+      typeof resolvedTab.content === 'string' ? resolvedTab.content : ''
     const nextValue = preserveTrailingNewlineIfNeeded({
       previousValue,
       nextValue: proposal.content,
     })
-    setStylesSource(nextValue)
-    lastAppliedEditorSnapshot.styles = {
-      previousValue,
+
+    const updatedTab = applyWorkspaceTabContent({
+      tabId: resolvedTab.id,
+      content: nextValue,
+    })
+    if (!updatedTab) {
+      return null
     }
+
+    tabScopedUndoState.setSnapshot({
+      tabId: resolvedTab.id,
+      snapshot: {
+        previousValue,
+        tabName: resolvedTab.name,
+      },
+    })
+
     scheduleRenderAfterEditorUpdate()
-    setChatStatus('Applied assistant proposal to Styles editor.', 'ok')
-    return true
+    const tabLabel = resolvedTab.name || resolvedTab.path || resolvedTab.id
+    setChatStatus(`Applied assistant proposal to ${tabLabel}.`, 'ok')
+    return {
+      appliedKey: toTargetKey(proposal.target),
+      tabId: resolvedTab.id,
+    }
   }
 
-  const undoEditorApply = target => {
-    if (target === 'component') {
-      const snapshot = lastAppliedEditorSnapshot.component
-      if (!snapshot || typeof setComponentSource !== 'function') {
-        return false
-      }
-
-      setComponentSource(snapshot.previousValue)
-      lastAppliedEditorSnapshot.component = null
-      scheduleRenderAfterEditorUpdate()
-      setChatStatus('Reverted last Component editor apply.', 'neutral')
-      return true
-    }
-
-    const snapshot = lastAppliedEditorSnapshot.styles
-    if (!snapshot || typeof setStylesSource !== 'function') {
+  const undoActiveTabApply = () => {
+    const activeTabContext = getActiveTabContext()
+    const activeTabId = activeTabContext?.id
+    if (!activeTabId || typeof applyWorkspaceTabContent !== 'function') {
       return false
     }
 
-    setStylesSource(snapshot.previousValue)
-    lastAppliedEditorSnapshot.styles = null
+    const snapshot = tabScopedUndoState.getSnapshot(activeTabId)
+    if (!snapshot) {
+      return false
+    }
+
+    const restored = applyWorkspaceTabContent({
+      tabId: activeTabId,
+      content: snapshot.previousValue,
+    })
+    if (!restored) {
+      return false
+    }
+
+    tabScopedUndoState.clearSnapshot(activeTabId)
     scheduleRenderAfterEditorUpdate()
-    setChatStatus('Reverted last Styles editor apply.', 'neutral')
+    const tabLabel = activeTabContext?.name || snapshot.tabName || 'active tab'
+    setChatStatus(`Reverted last apply for ${tabLabel}.`, 'neutral')
     return true
   }
 
@@ -613,35 +645,26 @@ export const createGitHubChatDrawer = ({
       return null
     }
 
-    const componentSource =
-      typeof getComponentSource === 'function' ? toChatText(getComponentSource()) : ''
-    const stylesSource =
-      typeof getStylesSource === 'function' ? toChatText(getStylesSource()) : ''
-
-    if (!componentSource && !stylesSource) {
+    const activeTabContext = getActiveTabContext()
+    if (!activeTabContext) {
       return null
     }
+
+    const workspaceTabs = getWorkspaceTabs()
 
     const renderMode =
       typeof getRenderMode === 'function' ? toChatText(getRenderMode()) : ''
     const styleMode = typeof getStyleMode === 'function' ? toChatText(getStyleMode()) : ''
 
-    return [
-      'Editor context:',
-      `- Render mode: ${renderMode || 'unknown'}`,
-      `- Style mode: ${styleMode || 'unknown'}`,
-      '- If proposing concrete editor changes, prefer tool calls over plain text.',
-      '',
-      'Component editor source (JSX/TSX):',
-      '```jsx',
-      componentSource || '(empty)',
-      '```',
-      '',
-      'Styles editor source:',
-      '```css',
-      stylesSource || '(empty)',
-      '```',
-    ].join('\n')
+    return buildActiveTabEditorContext({
+      activeTabContext: {
+        ...activeTabContext,
+        content: toChatText(activeTabContext.content),
+      },
+      workspaceTabContexts: workspaceTabs,
+      renderMode,
+      styleMode,
+    })
   }
 
   const setPendingState = isPending => {
@@ -680,7 +703,7 @@ export const createGitHubChatDrawer = ({
     lastMessage.content =
       hasContent || normalizedToolCalls.length === 0
         ? normalizedContent
-        : 'Proposed editor update is ready. Review and apply below.'
+        : 'Proposed editor update is ready. Apply below.'
     lastMessage.toolCalls = normalizedToolCalls
 
     if (typeof model === 'string' && model.trim()) {
@@ -897,12 +920,11 @@ export const createGitHubChatDrawer = ({
     }
 
     const action = button.dataset.action
-    const targetEditor = button.dataset.targetEditor === 'styles' ? 'styles' : 'component'
 
-    if (action === 'undo-editor-apply') {
-      const undone = undoEditorApply(targetEditor)
+    if (action === 'undo-tab-apply') {
+      const undone = undoActiveTabApply()
       if (!undone) {
-        setChatStatus('No editor apply action is available to undo.', 'error')
+        setChatStatus('No tab apply action is available to undo.', 'error')
       }
       renderMessages()
       return
@@ -924,66 +946,26 @@ export const createGitHubChatDrawer = ({
     }
 
     if (action === 'request-apply') {
-      const applied = applyProposalToEditor({
+      const proposalIndex = Number(button.dataset.proposalIndex)
+      if (!Number.isFinite(proposalIndex) || proposalIndex < 0) {
+        return
+      }
+
+      const applied = applyProposalToTab({
         messageIndex,
-        target: targetEditor,
+        proposalIndex,
       })
 
       if (!applied) {
-        setChatStatus('Could not apply proposal to editor.', 'error')
+        setChatStatus('Could not apply proposal to tab.', 'error')
       } else {
         message.appliedTargets = {
           ...(message.appliedTargets && typeof message.appliedTargets === 'object'
             ? message.appliedTargets
             : {}),
-          [targetEditor]: true,
+          [applied.appliedKey]: true,
         }
       }
-      renderMessages()
-      return
-    }
-
-    if (action === 'apply-both') {
-      const appliedComponent = applyProposalToEditor({
-        messageIndex,
-        target: 'component',
-      })
-      const appliedStyles = applyProposalToEditor({
-        messageIndex,
-        target: 'styles',
-      })
-
-      if (!appliedComponent && !appliedStyles) {
-        setChatStatus('Could not apply proposals to either editor.', 'error')
-        renderMessages()
-        return
-      }
-
-      if (appliedComponent) {
-        message.appliedTargets = {
-          ...(message.appliedTargets && typeof message.appliedTargets === 'object'
-            ? message.appliedTargets
-            : {}),
-          component: true,
-        }
-      }
-
-      if (appliedStyles) {
-        message.appliedTargets = {
-          ...(message.appliedTargets && typeof message.appliedTargets === 'object'
-            ? message.appliedTargets
-            : {}),
-          styles: true,
-        }
-      }
-
-      if (appliedComponent && appliedStyles) {
-        setChatStatus(
-          'Applied assistant proposals to Component and Styles editors.',
-          'ok',
-        )
-      }
-
       renderMessages()
       return
     }
@@ -1021,6 +1003,9 @@ export const createGitHubChatDrawer = ({
     isOpen: () => open,
     setSelectedRepository: () => {
       syncRepositoryLabel()
+    },
+    onActiveWorkspaceTabChange: () => {
+      renderMessages()
     },
     setToken: token => {
       syncModelSelectionForToken(token)

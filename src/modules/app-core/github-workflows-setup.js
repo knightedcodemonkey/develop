@@ -53,10 +53,9 @@ const createGitHubWorkflowsSetup = ({
     confirmAction: actions.confirmAction,
     setStatus: actions.setStatus,
     showAppToast: actions.showAppToast,
-    setComponentSource: actions.setComponentSource,
-    setStylesSource: actions.setStylesSource,
-    getComponentSource: actions.getComponentSource,
-    getStylesSource: actions.getStylesSource,
+    getActiveWorkspaceTabContext: actions.getActiveWorkspaceTabContext,
+    getWorkspaceTabContexts: actions.getWorkspaceTabContexts,
+    applyWorkspaceTabContent: actions.applyWorkspaceTabContent,
     scheduleRender: actions.scheduleRender,
   })
 

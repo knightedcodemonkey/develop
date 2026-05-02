@@ -6,17 +6,21 @@ export const editorProposalTools = [
     function: {
       name: 'propose_editor_update',
       description:
-        'Propose a single editor update for component or styles with full replacement content.',
+        'Propose a single tab update with full replacement content for a target tab id or path.',
       parameters: {
         type: 'object',
         properties: {
           target: {
             type: 'string',
-            enum: ['component', 'styles'],
+            description: 'Target tab id or tab path from the available tab list.',
           },
           content: {
             type: 'string',
-            description: 'Full replacement text for the target editor.',
+            description: 'Full replacement text for the target tab.',
+          },
+          language: {
+            type: 'string',
+            description: 'Optional tab language hint such as javascript-jsx or css.',
           },
           rationale: {
             type: 'string',
@@ -42,14 +46,21 @@ const parseJsonSafe = value => {
   }
 }
 
-const extractEditorProposalsFromToolCalls = toolCalls => {
-  const proposals = {
-    component: null,
-    styles: null,
+const toTargetValue = value => {
+  if (typeof value !== 'string') {
+    return ''
   }
 
+  return value.trim()
+}
+
+const toProposalKey = value => toTargetValue(value).toLowerCase()
+
+const extractEditorProposalsFromToolCalls = toolCalls => {
+  const proposalsByKey = new Map()
+
   if (!Array.isArray(toolCalls)) {
-    return proposals
+    return []
   }
 
   for (const toolCall of toolCalls) {
@@ -62,74 +73,70 @@ const extractEditorProposalsFromToolCalls = toolCalls => {
       continue
     }
 
-    const target =
-      payload.target === 'component' || payload.target === 'styles'
-        ? payload.target
-        : null
+    const target = toTargetValue(payload.target)
     const content = toChatText(payload.content)
+    const language = toChatText(payload.language)
     const rationale = toChatText(payload.rationale)
+    const proposalKey = toProposalKey(target)
 
-    if (!target || !content) {
+    if (!proposalKey || !content) {
       continue
     }
 
-    proposals[target] = {
+    proposalsByKey.set(proposalKey, {
+      target,
       source: 'tool',
       content,
+      language,
       rationale,
-    }
+    })
   }
 
-  return proposals
+  return Array.from(proposalsByKey.values())
 }
 
-const extractEditorProposalsFromMarkdown = content => {
-  const proposals = {
-    component: null,
-    styles: null,
+const extractEditorProposalsFromMarkdown = ({ content, fallbackTarget }) => {
+  const target = toTargetValue(fallbackTarget)
+  if (!target) {
+    return []
   }
 
   if (typeof content !== 'string' || !content.trim()) {
-    return proposals
+    return []
   }
 
-  const blockRegex = /```(jsx|tsx|css)\n([\s\S]*?)```/gi
-  let match = blockRegex.exec(content)
-
-  while (match) {
-    const language = match[1]?.toLowerCase()
-    const blockContent = toChatText(match[2])
-
-    if (blockContent) {
-      if ((language === 'jsx' || language === 'tsx') && !proposals.component) {
-        proposals.component = {
-          source: 'markdown',
-          content: blockContent,
-          rationale: '',
-        }
-      }
-
-      if (language === 'css' && !proposals.styles) {
-        proposals.styles = {
-          source: 'markdown',
-          content: blockContent,
-          rationale: '',
-        }
-      }
-    }
-
-    match = blockRegex.exec(content)
+  const blockRegex = /```([a-zA-Z0-9_-]+)?\n([\s\S]*?)```/g
+  const match = blockRegex.exec(content)
+  if (!match) {
+    return []
   }
 
-  return proposals
+  const language = toChatText(match[1]).toLowerCase()
+  const blockContent = toChatText(match[2])
+  if (!blockContent) {
+    return []
+  }
+
+  return [
+    {
+      target,
+      source: 'markdown',
+      content: blockContent,
+      language,
+      rationale: '',
+    },
+  ]
 }
 
-export const toMessageEditorProposals = message => {
+export const toMessageEditorProposals = (message, { fallbackTarget = '' } = {}) => {
   const fromToolCalls = extractEditorProposalsFromToolCalls(message?.toolCalls)
 
-  if (fromToolCalls.component || fromToolCalls.styles) {
+  if (fromToolCalls.length > 0) {
     return fromToolCalls
   }
 
-  return extractEditorProposalsFromMarkdown(message?.content)
+  return extractEditorProposalsFromMarkdown({
+    content: message?.content,
+    fallbackTarget,
+  })
 }
