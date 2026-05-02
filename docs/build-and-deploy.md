@@ -114,6 +114,7 @@ This command forces `KNIGHTED_PRIMARY_CDN=esm` and runs `npm run build` first, t
 Related docs:
 
 - `docs/code-mirror.md` for CodeMirror CDN integration rules, fallback behavior, and validation checklist.
+- `docs/dual-build-gh-pages-strategy.md` for the clean two-URL stable and next deployment model during UI migration.
 
 - `src/modules/cdn.js` is the source of truth for CDN-managed runtime libraries (including fallback candidates). Add/update CDN specs there instead of hardcoding module URLs inside feature modules.
 

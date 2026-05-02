@@ -1,0 +1,621 @@
+import { expect, test } from '@playwright/test'
+import {
+  addWorkspaceTab,
+  ensurePanelToolsVisible,
+  reorderWorkspaceTabBefore,
+  setWorkspaceTabSource,
+  waitForAppReady,
+  waitForInitialRender,
+} from './helpers/app-test-helpers.js'
+
+const confirmRemoveDialog = async (page: import('@playwright/test').Page) => {
+  const dialog = page.locator('#clear-confirm-dialog')
+  await expect(dialog).toBeVisible()
+
+  await dialog.locator('button[value="confirm"]').evaluate(element => {
+    if (element instanceof HTMLButtonElement) {
+      element.click()
+    }
+  })
+}
+
+const renameWorkspaceTab = async (
+  page: import('@playwright/test').Page,
+  {
+    from,
+    to,
+  }: {
+    from: string
+    to: string
+  },
+) => {
+  await page.getByRole('button', { name: `Rename tab ${from}` }).click()
+  const renameInput = page.getByLabel(`Rename ${from}`)
+  await renameInput.fill(to)
+  await renameInput.press('Enter')
+}
+
+const seedSyncedComponentTab = async (page: import('@playwright/test').Page) => {
+  await page.evaluate(async () => {
+    const request = indexedDB.open('knighted-develop-workspaces')
+
+    const db = await new Promise<IDBDatabase>((resolve, reject) => {
+      request.onsuccess = () => resolve(request.result)
+      request.onerror = () => reject(request.error)
+      request.onblocked = () => reject(new Error('Could not open IndexedDB.'))
+    })
+
+    try {
+      const tx = db.transaction('prWorkspaces', 'readwrite')
+      const store = tx.objectStore('prWorkspaces')
+      const getAllRequest = store.getAll()
+
+      const records = await new Promise<Array<Record<string, unknown>>>(
+        (resolve, reject) => {
+          getAllRequest.onsuccess = () => {
+            const value = Array.isArray(getAllRequest.result) ? getAllRequest.result : []
+            resolve(value as Array<Record<string, unknown>>)
+          }
+          getAllRequest.onerror = () => reject(getAllRequest.error)
+        },
+      )
+
+      const now = Date.now()
+      for (const record of records) {
+        const tabs = Array.isArray(record.tabs) ? record.tabs : []
+        const nextTabs = tabs.map(tab => {
+          if (!tab || typeof tab !== 'object') {
+            return tab
+          }
+
+          if ((tab as { role?: unknown }).role !== 'entry') {
+            return tab
+          }
+
+          const pathValue =
+            typeof (tab as { path?: unknown }).path === 'string'
+              ? ((tab as { path: string }).path ?? '')
+              : ''
+
+          return {
+            ...(tab as Record<string, unknown>),
+            targetPrFilePath: pathValue,
+            syncedAt: now,
+            isDirty: false,
+          }
+        })
+
+        const putRequest = store.put({
+          ...record,
+          tabs: nextTabs,
+          lastModified: now,
+        })
+
+        await new Promise<void>((resolve, reject) => {
+          putRequest.onsuccess = () => resolve()
+          putRequest.onerror = () => reject(putRequest.error)
+        })
+      }
+
+      await new Promise<void>((resolve, reject) => {
+        tx.oncomplete = () => resolve()
+        tx.onerror = () => reject(tx.error)
+        tx.onabort = () => reject(tx.error)
+      })
+    } finally {
+      db.close()
+    }
+  })
+}
+
+const waitForWorkspaceTabOrderPersistence = async (
+  page: import('@playwright/test').Page,
+  expectedLeadingTabNames: string[],
+) => {
+  await expect
+    .poll(async () => {
+      return page.evaluate(async expectedTabNames => {
+        const request = indexedDB.open('knighted-develop-workspaces')
+
+        const db = await new Promise<IDBDatabase>((resolve, reject) => {
+          request.onsuccess = () => resolve(request.result)
+          request.onerror = () => reject(request.error)
+          request.onblocked = () => reject(new Error('Could not open IndexedDB.'))
+        })
+
+        try {
+          const tx = db.transaction('prWorkspaces', 'readonly')
+          const store = tx.objectStore('prWorkspaces')
+          const getAllRequest = store.getAll()
+
+          const records = await new Promise<Array<Record<string, unknown>>>(
+            (resolve, reject) => {
+              getAllRequest.onsuccess = () => {
+                const value = Array.isArray(getAllRequest.result)
+                  ? getAllRequest.result
+                  : []
+                resolve(value as Array<Record<string, unknown>>)
+              }
+              getAllRequest.onerror = () => reject(getAllRequest.error)
+            },
+          )
+
+          return records.some(record => {
+            const tabs = Array.isArray(record.tabs) ? record.tabs : []
+            const tabNames = tabs
+              .map(tab => {
+                if (!tab || typeof tab !== 'object') {
+                  return ''
+                }
+
+                return typeof (tab as { name?: unknown }).name === 'string'
+                  ? ((tab as { name: string }).name ?? '')
+                  : ''
+              })
+              .filter(name => name.length > 0)
+
+            return expectedTabNames.every((name, index) => tabNames[index] === name)
+          })
+        } finally {
+          db.close()
+        }
+      }, expectedLeadingTabNames)
+    })
+    .toBe(true)
+}
+
+test('removing active tab selects deterministic adjacent tab', async ({ page }) => {
+  await waitForInitialRender(page)
+
+  await addWorkspaceTab(page)
+  await addWorkspaceTab(page)
+  await addWorkspaceTab(page)
+
+  await page.getByRole('button', { name: 'Open tab module-2.tsx' }).click()
+  await expect(
+    page.getByRole('button', { name: 'Open tab module-2.tsx' }),
+  ).toHaveAttribute('aria-current', 'true')
+
+  await page.getByRole('button', { name: 'Remove tab module-2.tsx' }).click()
+  await confirmRemoveDialog(page)
+
+  await expect(page.getByRole('button', { name: 'Open tab module-2.tsx' })).toHaveCount(0)
+  await expect(
+    page.getByRole('button', { name: 'Open tab module-3.tsx' }),
+  ).toHaveAttribute('aria-current', 'true')
+})
+
+test('removing non-active tab does not change active tab', async ({ page }) => {
+  await waitForInitialRender(page)
+
+  await addWorkspaceTab(page)
+  await addWorkspaceTab(page)
+  await addWorkspaceTab(page)
+
+  await page.getByRole('button', { name: 'Open tab module-3.tsx' }).click()
+  await expect(
+    page.getByRole('button', { name: 'Open tab module-3.tsx' }),
+  ).toHaveAttribute('aria-current', 'true')
+
+  await page.getByRole('button', { name: 'Remove tab module-2.tsx' }).click()
+  await confirmRemoveDialog(page)
+
+  await expect(page.getByRole('button', { name: 'Open tab module-2.tsx' })).toHaveCount(0)
+  await expect(
+    page.getByRole('button', { name: 'Open tab module-3.tsx' }),
+  ).toHaveAttribute('aria-current', 'true')
+})
+
+test('renaming module tab keeps name and path synchronized', async ({ page }) => {
+  await waitForInitialRender(page)
+
+  await addWorkspaceTab(page)
+  await renameWorkspaceTab(page, {
+    from: 'module.tsx',
+    to: 'card-item.tsx',
+  })
+
+  const tab = page.getByRole('button', { name: 'Open tab card-item.tsx' })
+  await expect(tab).toHaveAttribute('title', 'src/components/card-item.tsx')
+  await expect(page.getByRole('button', { name: 'Open tab module.tsx' })).toHaveCount(0)
+})
+
+test('renaming module tab input starts with full path and supports directory changes', async ({
+  page,
+}) => {
+  await waitForInitialRender(page)
+
+  await addWorkspaceTab(page)
+  await page.getByRole('button', { name: 'Rename tab module.tsx' }).click()
+
+  const renameInput = page.getByLabel('Rename module.tsx')
+  await expect(renameInput).toHaveValue('src/components/module.tsx')
+  await renameInput.fill('src/ui/cards/card-item.tsx')
+  await renameInput.press('Enter')
+
+  const tab = page.getByRole('button', { name: 'Open tab card-item.tsx' })
+  await expect(tab).toHaveAttribute('title', 'src/ui/cards/card-item.tsx')
+  await expect(page.getByRole('button', { name: 'Open tab module.tsx' })).toHaveCount(0)
+})
+
+test('renaming module tab ignores invalid path-style input', async ({ page }) => {
+  await waitForInitialRender(page)
+
+  await addWorkspaceTab(page)
+
+  const invalidPathInputs = [
+    'src/ui/cards/',
+    '/src/ui/cards/card-item.tsx',
+    '../card-item.tsx',
+    'src/ui/../card-item.tsx',
+    'src/ui/card item.tsx',
+  ]
+
+  for (const input of invalidPathInputs) {
+    await renameWorkspaceTab(page, {
+      from: 'module.tsx',
+      to: input,
+    })
+
+    const moduleTab = page.getByRole('button', { name: 'Open tab module.tsx' })
+    await expect(moduleTab).toHaveAttribute('title', 'src/components/module.tsx')
+    await expect(
+      page.getByRole('button', { name: 'Open tab card-item.tsx' }),
+    ).toHaveCount(0)
+  }
+})
+
+test('renaming module tab rejects path collisions with existing tabs', async ({
+  page,
+}) => {
+  await waitForInitialRender(page)
+
+  await addWorkspaceTab(page)
+  await addWorkspaceTab(page)
+
+  await renameWorkspaceTab(page, {
+    from: 'module-2.tsx',
+    to: 'module.tsx',
+  })
+
+  await expect(page.getByRole('button', { name: 'Open tab module.tsx' })).toHaveCount(1)
+  await expect(page.getByRole('button', { name: 'Open tab module-2.tsx' })).toHaveCount(1)
+  await expect(page.getByRole('button', { name: 'Open tab module.tsx' })).toHaveAttribute(
+    'title',
+    'src/components/module.tsx',
+  )
+  await expect(
+    page.getByRole('button', { name: 'Open tab module-2.tsx' }),
+  ).toHaveAttribute('title', 'src/components/module-2.tsx')
+  await expect(page.getByRole('status', { name: 'App status' })).toContainText(
+    'A tab with that file path already exists.',
+  )
+})
+
+test('renaming module tab preserves source content', async ({ page }) => {
+  await waitForInitialRender(page)
+
+  await addWorkspaceTab(page)
+  await setWorkspaceTabSource(page, {
+    fileName: 'module.tsx',
+    source: 'export const Value = () => <p>Kept</p>',
+    kind: 'component',
+  })
+
+  await renameWorkspaceTab(page, {
+    from: 'module.tsx',
+    to: 'value-card.tsx',
+  })
+
+  await page.getByRole('button', { name: 'Open tab App.tsx' }).click()
+  await page.getByRole('button', { name: 'Open tab value-card.tsx' }).click()
+
+  const editorContent = page
+    .locator('.editor-panel[data-editor-kind="component"] .cm-content')
+    .first()
+  await expect(editorContent).toContainText('export const Value = () => <p>Kept</p>')
+})
+
+test('rapid tab churn keeps module content isolated from entry content', async ({
+  page,
+}) => {
+  await waitForInitialRender(page)
+
+  await addWorkspaceTab(page)
+  await addWorkspaceTab(page)
+  await addWorkspaceTab(page)
+
+  await renameWorkspaceTab(page, {
+    from: 'module.tsx',
+    to: 'boop.tsx',
+  })
+  await renameWorkspaceTab(page, {
+    from: 'module-2.tsx',
+    to: 'beep.tsx',
+  })
+
+  const appSource = [
+    "import './styles/styles.css'",
+    "import { Boop } from './components/boop.js'",
+    "import { Beep } from './components/beep.js'",
+    '',
+    'export function App() {',
+    '  return (',
+    '    <>',
+    '      <Boop />',
+    '      <Beep />',
+    '    </>',
+    '  )',
+    '}',
+  ].join('\n')
+
+  await setWorkspaceTabSource(page, {
+    fileName: 'App.tsx',
+    kind: 'component',
+    source: appSource,
+  })
+  await setWorkspaceTabSource(page, {
+    fileName: 'boop.tsx',
+    kind: 'component',
+    source: 'export const Boop = () => <p>boop sentinel</p>',
+  })
+  await setWorkspaceTabSource(page, {
+    fileName: 'beep.tsx',
+    kind: 'component',
+    source: 'export const Beep = () => <p>beep sentinel</p>',
+  })
+
+  await page.getByRole('button', { name: 'Open tab boop.tsx' }).click()
+  await page.getByRole('button', { name: 'Open tab App.tsx' }).click()
+  await page.getByRole('button', { name: 'Open tab beep.tsx' }).click()
+  await page.getByRole('button', { name: 'Open tab app.css' }).click()
+  await page.getByRole('button', { name: 'Open tab App.tsx' }).click()
+  await page.getByRole('button', { name: 'Open tab beep.tsx' }).click()
+
+  await page.getByRole('button', { name: 'Remove tab module-3.tsx' }).click()
+  await confirmRemoveDialog(page)
+  await addWorkspaceTab(page)
+
+  await page.getByRole('button', { name: 'Open tab App.tsx' }).click()
+  const entryEditor = page
+    .locator('.editor-panel[data-editor-kind="component"] .cm-content')
+    .first()
+  await expect(entryEditor).toContainText("import './styles/styles.css'")
+  await expect(entryEditor).toContainText("import { Beep } from './components/beep.js'")
+
+  await page.getByRole('button', { name: 'Open tab beep.tsx' }).click()
+  const beepEditor = page
+    .locator('.editor-panel[data-editor-kind="component"] .cm-content')
+    .first()
+  await expect(beepEditor).toContainText('export const Beep = () => <p>beep sentinel</p>')
+  await expect(beepEditor).not.toContainText("import './styles/styles.css'")
+})
+
+test('active tab remains source of truth for visible editor panel', async ({ page }) => {
+  await waitForInitialRender(page)
+
+  await addWorkspaceTab(page)
+  await addWorkspaceTab(page)
+
+  const componentPanel = page.locator('#editor-panel-component')
+  const stylesPanel = page.locator('#editor-panel-styles')
+
+  await page.getByRole('button', { name: 'Open tab app.css' }).click()
+  await expect(page.getByRole('button', { name: 'Open tab app.css' })).toHaveAttribute(
+    'aria-current',
+    'true',
+  )
+  await expect(stylesPanel).not.toHaveAttribute('hidden', '')
+  await expect(componentPanel).toHaveAttribute('hidden', '')
+
+  await page.getByRole('button', { name: 'Open tab module-2.tsx' }).click()
+  await expect(
+    page.getByRole('button', { name: 'Open tab module-2.tsx' }),
+  ).toHaveAttribute('aria-current', 'true')
+  await expect(componentPanel).not.toHaveAttribute('hidden', '')
+  await expect(stylesPanel).toHaveAttribute('hidden', '')
+  await page.getByRole('button', { name: 'Open tab app.css' }).click()
+
+  await expect(page.getByRole('button', { name: 'Open tab app.css' })).toHaveAttribute(
+    'aria-current',
+    'true',
+  )
+  await expect(stylesPanel).not.toHaveAttribute('hidden', '')
+  await expect(componentPanel).toHaveAttribute('hidden', '')
+})
+
+test('render mode can only be changed from entry tab', async ({ page }) => {
+  await waitForInitialRender(page)
+
+  await addWorkspaceTab(page)
+  await ensurePanelToolsVisible(page, 'component')
+
+  const renderMode = page.getByRole('combobox', { name: 'Render mode' })
+
+  await page.getByRole('button', { name: 'Open tab App.tsx' }).click()
+  await expect(renderMode).toBeEnabled()
+  await renderMode.selectOption('react')
+  await expect(renderMode).toHaveValue('react')
+
+  await page.getByRole('button', { name: 'Open tab module.tsx' }).click()
+  await expect(renderMode).toBeDisabled()
+  await expect(renderMode).toHaveValue('react')
+
+  await page.getByRole('button', { name: 'Open tab App.tsx' }).click()
+  await expect(renderMode).toBeEnabled()
+  await expect(renderMode).toHaveValue('react')
+})
+
+test('startup restores last active workspace tab after reload', async ({ page }) => {
+  await waitForInitialRender(page)
+
+  await addWorkspaceTab(page)
+  await addWorkspaceTab(page)
+
+  await page.getByRole('button', { name: 'Open tab module-2.tsx' }).click()
+  await expect(
+    page.getByRole('button', { name: 'Open tab module-2.tsx' }),
+  ).toHaveAttribute('aria-current', 'true')
+
+  await page.reload()
+  await waitForInitialRender(page)
+
+  await expect(
+    page.getByRole('button', { name: 'Open tab module-2.tsx' }),
+  ).toHaveAttribute('aria-current', 'true')
+  await expect(page.locator('#editor-panel-component')).not.toHaveAttribute('hidden', '')
+  await expect(page.locator('#editor-panel-styles')).toHaveAttribute('hidden', '')
+})
+
+test('editing a synced tab keeps dirty state local without Edited indicators', async ({
+  page,
+}) => {
+  await waitForInitialRender(page)
+
+  await seedSyncedComponentTab(page)
+  await page.reload()
+  await waitForInitialRender(page)
+
+  await setWorkspaceTabSource(page, {
+    fileName: 'App.tsx',
+    source: 'export default function App() { return <div>Dirty</div> }',
+    kind: 'component',
+  })
+
+  const componentTab = page
+    .getByRole('listitem', { name: 'Workspace tab App.tsx' })
+    .first()
+  await expect(componentTab.locator('.workspace-tab__dirty-indicator')).toHaveCount(0)
+  await expect(page.locator('#component-dirty-status')).toBeHidden()
+})
+
+test('removed default styles tab stays removed after reload', async ({ page }) => {
+  await waitForInitialRender(page)
+
+  await expect(page.getByRole('button', { name: 'Open tab app.css' })).toHaveCount(1)
+  await page.getByRole('button', { name: 'Remove tab app.css' }).click()
+  await confirmRemoveDialog(page)
+
+  await expect(page.getByRole('button', { name: 'Open tab app.css' })).toHaveCount(0)
+
+  await page.reload()
+  await waitForAppReady(page)
+
+  await expect(page.getByRole('button', { name: 'Open tab app.css' })).toHaveCount(0)
+})
+
+test('workspace tab drag reorder persists across reload', async ({ page }) => {
+  await waitForInitialRender(page)
+
+  await addWorkspaceTab(page)
+  await addWorkspaceTab(page)
+
+  await reorderWorkspaceTabBefore(page, {
+    from: 'module-2.tsx',
+    to: 'App.tsx',
+  })
+
+  const orderedTabs = page
+    .getByRole('list', { name: 'Workspace editor tabs' })
+    .getByRole('listitem')
+  await expect(orderedTabs.nth(0)).toHaveAccessibleName('Workspace tab module-2.tsx')
+  await expect(orderedTabs.nth(1)).toHaveAccessibleName('Workspace tab App.tsx')
+
+  /* Reorder persistence is debounced; wait until IndexedDB reflects the new order. */
+  await waitForWorkspaceTabOrderPersistence(page, ['module-2.tsx', 'App.tsx'])
+
+  await page.reload()
+  await waitForInitialRender(page)
+
+  const restoredTabs = page
+    .getByRole('list', { name: 'Workspace editor tabs' })
+    .getByRole('listitem')
+  await expect(restoredTabs.nth(0)).toHaveAccessibleName('Workspace tab module-2.tsx')
+  await expect(restoredTabs.nth(1)).toHaveAccessibleName('Workspace tab App.tsx')
+})
+
+test('workspace tab drag onto itself keeps order unchanged', async ({ page }) => {
+  await waitForInitialRender(page)
+
+  await addWorkspaceTab(page)
+  await addWorkspaceTab(page)
+
+  const labelsBefore = await page
+    .getByRole('list', { name: 'Workspace editor tabs' })
+    .getByRole('listitem')
+    .evaluateAll(nodes =>
+      nodes
+        .map(node => node.getAttribute('aria-label'))
+        .filter((label): label is string => typeof label === 'string'),
+    )
+
+  await reorderWorkspaceTabBefore(page, {
+    from: 'App.tsx',
+    to: 'App.tsx',
+  })
+
+  const labelsAfter = await page
+    .getByRole('list', { name: 'Workspace editor tabs' })
+    .getByRole('listitem')
+    .evaluateAll(nodes =>
+      nodes
+        .map(node => node.getAttribute('aria-label'))
+        .filter((label): label is string => typeof label === 'string'),
+    )
+
+  expect(labelsAfter).toEqual(labelsBefore)
+})
+
+test('add menu can create styles tab while component tab is active', async ({ page }) => {
+  await waitForInitialRender(page)
+
+  await page.getByRole('button', { name: 'Open tab App.tsx' }).click()
+  await addWorkspaceTab(page, { type: 'style' })
+
+  await expect(page.getByRole('button', { name: 'Open tab module.css' })).toHaveAttribute(
+    'aria-current',
+    'true',
+  )
+  await expect(page.locator('#editor-panel-styles')).not.toHaveAttribute('hidden', '')
+  await expect(page.locator('#editor-panel-component')).toHaveAttribute('hidden', '')
+  await expect(page.getByRole('status', { name: 'App status' })).toContainText(
+    'Added style tab.',
+  )
+})
+
+test('add menu stays closed until triggered and closes on outside click', async ({
+  page,
+}) => {
+  await waitForInitialRender(page)
+
+  const addButton = page.getByRole('button', { name: 'Add workspace tab' })
+  const addMenu = page.getByRole('group', { name: 'Add workspace tab' })
+
+  await expect(addMenu).toBeHidden()
+  await addButton.click()
+  await expect(addMenu).toBeVisible()
+
+  await page.getByRole('status', { name: 'App status' }).click()
+  await expect(addMenu).toBeHidden()
+})
+
+test('add menu keyboard interaction manages focus on open and escape close', async ({
+  page,
+}) => {
+  await waitForInitialRender(page)
+
+  const addButton = page.getByRole('button', { name: 'Add workspace tab' })
+  const addMenu = page.getByRole('group', { name: 'Add workspace tab' })
+  const addModuleButton = page.getByRole('button', { name: 'Add module tab' })
+
+  await addButton.focus()
+  await page.keyboard.press('ArrowDown')
+
+  await expect(addMenu).toBeVisible()
+  await expect(addModuleButton).toBeFocused()
+
+  await page.keyboard.press('Escape')
+
+  await expect(addMenu).toBeHidden()
+  await expect(addButton).toBeFocused()
+})

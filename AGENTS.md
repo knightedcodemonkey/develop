@@ -40,15 +40,18 @@ Repository structure:
 
 - Preserve current project formatting: single quotes, no semicolons, print width 90, arrowParens avoid.
 - Do not use index files or barrel-file architecture; prefer explicit file names and explicit import paths.
+- Prefer modular, colocated architecture; split focused features into nearby files and avoid monolithic modules.
 - Keep UI changes intentional and lightweight; avoid broad visual rewrites unless requested.
 - Keep runtime logic defensive for flaky/slow CDN conditions.
 - Preserve progressive loading behavior (lazy-load optional compilers/runtime pieces where possible).
 - Do not introduce bundler-only assumptions into src/ runtime code.
 - Prefer async/await over promise chains.
+- Prefer const-assigned function expressions over function declarations, unless hoisting is explicitly required.
 - Do not use IIFE, find another pattern instead.
 - In Playwright tests, prefer accessible selectors first: `getByRole`, `getByLabel`, `getByText`, and explicit accessible names.
 - Avoid `locator()` for interactive controls when a semantic selector is available.
 - Use `locator()` only as a fallback for cases without reliable semantics (for example: document root `html`, structural class assertions, or implementation-only hooks).
+- For known WebKit HTML `<dialog>` top-layer issues, prefer a stable dialog id locator and `evaluate`-based click for dialog confirmation controls.
 - When testability needs improvement, prefer adding accessibility semantics (`role`, `aria-label`, `aria-labelledby`) over introducing new id-only selectors.
 
 ## CDN and runtime expectations

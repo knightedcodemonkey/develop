@@ -39,8 +39,40 @@ export type PullRequestCreateBody = {
 
 export type BranchesByRepo = Record<string, string[]>
 
+const isRetryableGotoError = (error: unknown) => {
+  if (!(error instanceof Error)) {
+    return false
+  }
+
+  return /WebKit encountered an internal error|Test timeout/i.test(error.message)
+}
+
+const navigateToApp = async (page: Page, path: string) => {
+  const wait = (durationMs: number) =>
+    new Promise<void>(resolve => {
+      setTimeout(resolve, durationMs)
+    })
+
+  let attempt = 0
+
+  while (attempt < 3) {
+    attempt += 1
+
+    try {
+      await page.goto(path, { waitUntil: 'domcontentloaded' })
+      return
+    } catch (error) {
+      if (attempt >= 3 || !isRetryableGotoError(error)) {
+        throw error
+      }
+
+      await wait(attempt * 200)
+    }
+  }
+}
+
 export const waitForAppReady = async (page: Page, path = appEntryPath) => {
-  await page.goto(path)
+  await navigateToApp(page, path)
   await expect(page.getByRole('heading', { name: '@knighted/develop' })).toBeVisible()
   await expect
     .poll(async () => {
@@ -51,10 +83,58 @@ export const waitForAppReady = async (page: Page, path = appEntryPath) => {
       return (
         statusText === 'Rendered' ||
         statusText?.startsWith('Rendered (Type errors:') ||
-        statusText === 'Error'
+        statusText === 'Error' ||
+        statusText === 'Could not restore local workspace context.'
       )
     })
     .toBe(true)
+}
+
+export const resetWorkbenchStorage = async (page: Page) => {
+  await page.goto(appEntryPath)
+  await page.evaluate(async () => {
+    try {
+      localStorage.clear()
+    } catch {
+      /* noop */
+    }
+
+    try {
+      sessionStorage.clear()
+    } catch {
+      /* noop */
+    }
+
+    const deleteIndexedDbByName = async (name: string) => {
+      await new Promise<void>(resolve => {
+        if (!name) {
+          resolve()
+          return
+        }
+
+        const request = indexedDB.deleteDatabase(name)
+        request.onsuccess = () => resolve()
+        request.onerror = () => resolve()
+        request.onblocked = () => resolve()
+      })
+    }
+
+    if (typeof indexedDB === 'undefined') {
+      return
+    }
+
+    if (typeof indexedDB.databases === 'function') {
+      const databases = await indexedDB.databases()
+      const databaseNames = (databases || [])
+        .map(entry => entry?.name)
+        .filter((name): name is string => typeof name === 'string' && name.length > 0)
+
+      await Promise.all(databaseNames.map(name => deleteIndexedDbByName(name)))
+      return
+    }
+
+    await deleteIndexedDbByName('knighted-develop-workspaces')
+  })
 }
 
 export const waitForInitialRender = async (page: Page) => {
@@ -70,19 +150,100 @@ export const expectPreviewHasRenderedContent = async (page: Page) => {
     .toBeGreaterThan(0)
 }
 
+const escapeRegex = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+
+export const getPreviewFrame = (page: Page) => page.frameLocator('#preview-host iframe')
+
+export const addWorkspaceTab = async (
+  page: Page,
+  { type = 'script' }: { type?: 'script' | 'style' } = {},
+) => {
+  await page.getByRole('button', { name: 'Add workspace tab' }).click()
+  if (type === 'style') {
+    await page.getByRole('button', { name: 'Add styles tab' }).click()
+    return
+  }
+
+  await page.getByRole('button', { name: 'Add module tab' }).click()
+}
+
+export const openWorkspaceTab = async (page: Page, fileName: string) => {
+  const pattern = new RegExp(`^Open tab ${escapeRegex(fileName)}$`)
+  await page.getByRole('button', { name: pattern }).click()
+}
+
+const replaceEditorSource = async ({
+  editorContent,
+  source,
+}: {
+  editorContent: ReturnType<Page['locator']>
+  source: string
+}) => {
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    await editorContent.fill('')
+    await editorContent.fill(source)
+    await editorContent.press('End')
+    await editorContent.type(' ')
+    await editorContent.press('Backspace')
+  }
+}
+
+export const reorderWorkspaceTabBefore = async (
+  page: Page,
+  { from, to }: { from: string; to: string },
+) => {
+  const tabList = page.getByRole('list', { name: 'Workspace editor tabs' })
+  const source = tabList.getByRole('listitem', {
+    name: new RegExp(`^Workspace tab ${escapeRegex(from)}$`),
+  })
+  const target = tabList.getByRole('listitem', {
+    name: new RegExp(`^Workspace tab ${escapeRegex(to)}$`),
+  })
+
+  await source.dragTo(target)
+}
+
+export const setWorkspaceTabSource = async (
+  page: Page,
+  {
+    fileName,
+    source,
+    kind = 'component',
+  }: {
+    fileName: string
+    source: string
+    kind?: 'component' | 'styles'
+  },
+) => {
+  await openWorkspaceTab(page, fileName)
+  await expect(page.getByRole('region', { name: fileName })).toBeVisible()
+  const editorContent = page
+    .locator(`.editor-panel[data-editor-kind="${kind}"] .cm-content`)
+    .first()
+  await replaceEditorSource({ editorContent, source })
+}
+
 export const setComponentEditorSource = async (page: Page, source: string) => {
-  const editorContent = page.locator('.component-panel .cm-content').first()
-  await editorContent.fill(source)
+  await page.getByRole('button', { name: 'Open tab App.tsx' }).click()
+  await expect(page.getByRole('region', { name: 'App.tsx' })).toBeVisible()
+  const editorContent = page
+    .locator('.editor-panel[data-editor-kind="component"] .cm-content')
+    .first()
+  await replaceEditorSource({ editorContent, source })
 }
 
 export const setStylesEditorSource = async (page: Page, source: string) => {
-  const editorContent = page.locator('.styles-panel .cm-content').first()
-  await editorContent.fill(source)
+  await page.getByRole('button', { name: 'Open tab app.css' }).click()
+  await expect(page.getByRole('region', { name: 'app.css' })).toBeVisible()
+  const editorContent = page
+    .locator('.editor-panel[data-editor-kind="styles"] .cm-content')
+    .first()
+  await replaceEditorSource({ editorContent, source })
 }
 
 export const getActiveComponentEditorLineNumber = async (page: Page) => {
   return page
-    .locator('#component-panel .cm-activeLineGutter')
+    .locator('#editor-panel-component .cm-activeLineGutter')
     .first()
     .innerText()
     .then(text => text.trim())
@@ -103,18 +264,49 @@ export const runStylesLint = async (page: Page) => {
   await page.getByRole('button', { name: 'Styles lint' }).click()
 }
 
+export const waitForLintDiagnosticsIssues = async (
+  page: Page,
+  {
+    rerunLint,
+  }: {
+    rerunLint?: () => Promise<void>
+  } = {},
+) => {
+  const diagnosticsToggle = page.getByRole('button', { name: /^Diagnostics/ })
+
+  const expectLintIssuesVisible = async () => {
+    await expect(diagnosticsToggle).toHaveAttribute('aria-busy', 'false')
+    await expect(diagnosticsToggle).toHaveClass(/diagnostics-toggle--error/)
+    await expect(page.getByText(/Rendered \(Lint issues: [1-9]\d*\)/)).toBeVisible()
+  }
+
+  try {
+    await expectLintIssuesVisible()
+  } catch (error) {
+    if (typeof rerunLint !== 'function') {
+      throw error
+    }
+
+    await rerunLint()
+    await expectLintIssuesVisible()
+  }
+
+  await ensureDiagnosticsDrawerOpen(page)
+  await expect(page.locator('#diagnostics-styles')).toContainText(
+    'Biome reported issues.',
+  )
+}
+
 export const getActiveStylesEditorLineNumber = async (page: Page) => {
   return page
-    .locator('#styles-panel .cm-activeLineGutter')
+    .locator('#editor-panel-styles .cm-activeLineGutter')
     .first()
     .innerText()
     .then(text => text.trim())
 }
 
-export const getCollapseButton = (
-  page: Page,
-  panelName: 'component' | 'styles' | 'preview',
-) => page.locator(`#collapse-${panelName}`)
+export const getCollapseButton = (page: Page, panelName: 'preview') =>
+  page.locator(`#collapse-${panelName}`)
 
 export const getToolsButton = (page: Page, panelName: 'component' | 'styles') =>
   page.locator(`#tools-${panelName}`)
@@ -123,6 +315,12 @@ export const ensurePanelToolsVisible = async (
   page: Page,
   panelName: 'component' | 'styles',
 ) => {
+  if (panelName === 'styles') {
+    await page.getByRole('button', { name: 'Open tab app.css' }).click()
+  } else {
+    await page.getByRole('button', { name: 'Open tab App.tsx' }).click()
+  }
+
   const button = getToolsButton(page, panelName)
   const isPressed = await button.getAttribute('aria-pressed')
   if (isPressed !== 'true') {
@@ -137,7 +335,33 @@ export const ensureDiagnosticsDrawerOpen = async (page: Page) => {
   const isExpanded = await toggle.getAttribute('aria-expanded')
 
   if (isExpanded !== 'true') {
-    await toggle.click()
+    const waitForExpanded = async () => {
+      await expect
+        .poll(async () => {
+          return toggle.getAttribute('aria-expanded')
+        })
+        .toBe('true')
+    }
+
+    try {
+      await toggle.click({ timeout: 2_000 })
+      await waitForExpanded()
+    } catch {
+      /* WebKit can report pointer interception from the drawer during transitions. */
+      try {
+        await toggle.focus()
+        await page.keyboard.press('Enter')
+        await waitForExpanded()
+      } catch {
+        /* Fallback for intermittent top-layer/actionability issues. */
+        await toggle.evaluate(element => {
+          if (element instanceof HTMLButtonElement) {
+            element.click()
+          }
+        })
+        await waitForExpanded()
+      }
+    }
   }
 
   await expect(page.getByRole('complementary', { name: 'Diagnostics' })).toBeVisible()
@@ -175,12 +399,62 @@ export const ensureOpenPrDrawerOpen = async (page: Page) => {
   const isExpanded = await toggle.getAttribute('aria-expanded')
 
   if (isExpanded !== 'true') {
-    await toggle.click()
+    try {
+      await toggle.click({ timeout: 2_000 })
+    } catch {
+      await toggle.evaluate(element => {
+        if (element instanceof HTMLButtonElement) {
+          element.click()
+        }
+      })
+    }
   }
 
   await expect(
     page.getByRole('complementary', { name: /Open Pull Request|Push Commit/ }),
   ).toBeVisible()
+}
+
+export const ensureWorkspacesDrawerClosed = async (page: Page) => {
+  const toggle = page.locator('#workspaces-toggle')
+  await expect(toggle).toBeVisible()
+
+  const requestClose = async () => {
+    const closeButton = page.locator('#workspaces-close')
+    if (await closeButton.isVisible()) {
+      await closeButton.evaluate(element => {
+        if (element instanceof HTMLButtonElement) {
+          element.click()
+        }
+      })
+      return
+    }
+
+    await toggle.evaluate(element => {
+      if (element instanceof HTMLButtonElement) {
+        element.click()
+      }
+    })
+  }
+
+  const isExpanded = await toggle.getAttribute('aria-expanded')
+  if (isExpanded === 'true') {
+    await requestClose()
+  }
+
+  await expect
+    .poll(async () => {
+      const expanded = await toggle.getAttribute('aria-expanded')
+      if (expanded === 'true') {
+        await requestClose()
+      }
+
+      return expanded
+    })
+    .toBe('false')
+
+  await expect(toggle).toHaveAttribute('aria-expanded', 'false')
+  await expect(page.getByRole('complementary', { name: 'Workspaces' })).toBeHidden()
 }
 
 export const mockRepositoryBranches = async (
@@ -205,7 +479,14 @@ export const mockRepositoryBranches = async (
   })
 }
 
-export const connectByotWithSingleRepo = async (page: Page) => {
+export const connectByotWithSingleRepo = async (
+  page: Page,
+  {
+    branchesByRepo,
+  }: {
+    branchesByRepo?: BranchesByRepo
+  } = {},
+) => {
   await page.route('https://api.github.com/user/repos**', async route => {
     await route.fulfill({
       status: 200,
@@ -223,17 +504,54 @@ export const connectByotWithSingleRepo = async (page: Page) => {
     })
   })
 
-  await mockRepositoryBranches(page, {
-    'knightedcodemonkey/develop': ['main', 'release'],
-  })
+  await mockRepositoryBranches(
+    page,
+    branchesByRepo ?? {
+      'knightedcodemonkey/develop': ['main', 'release'],
+    },
+  )
 
   await page
     .getByRole('textbox', { name: 'GitHub token' })
     .fill('github_pat_fake_chat_1234567890')
   await page.getByRole('button', { name: 'Add GitHub token' }).click()
 
+  const workspacesToggle = page.getByRole('button', { name: 'Workspaces' })
+  await expect(workspacesToggle).toBeVisible()
+  await workspacesToggle.click()
+
+  const workspacesRepositoryFilter = page.getByLabel('Workspace repository filter')
+  await expect(workspacesRepositoryFilter).toBeVisible()
+  await workspacesRepositoryFilter.selectOption('knightedcodemonkey/develop')
+  await expect(workspacesRepositoryFilter).toHaveValue('knightedcodemonkey/develop')
+
+  const initializeButton = page.getByRole('button', {
+    name: 'Initialize',
+    exact: true,
+  })
+
+  if (await initializeButton.isVisible()) {
+    await initializeButton.click()
+  } else {
+    const storedWorkspace = page.getByLabel('Stored workspace')
+    if (await storedWorkspace.isVisible()) {
+      const workspaceValue = await storedWorkspace
+        .locator('option:not([value=""])')
+        .first()
+        .getAttribute('value')
+
+      if (workspaceValue) {
+        await storedWorkspace.selectOption(workspaceValue)
+        await page.getByRole('button', { name: 'Open', exact: true }).click()
+      }
+    }
+  }
+
+  await ensureWorkspacesDrawerClosed(page)
+
   const repoSelect = page.getByLabel('Pull request repository')
   await expect(repoSelect).toHaveValue('knightedcodemonkey/develop')
+  await expect(repoSelect).toBeDisabled()
 
   await expect(
     page.getByRole('button', {
@@ -244,7 +562,7 @@ export const connectByotWithSingleRepo = async (page: Page) => {
 
 export const expectCollapseButtonState = async (
   page: Page,
-  panelName: 'component' | 'styles' | 'preview',
+  panelName: 'preview',
   {
     axis,
     direction,

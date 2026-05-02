@@ -30,6 +30,7 @@ if (isCI || includeWebKit) {
 
 export default defineConfig({
   testDir: 'playwright',
+  fullyParallel: isCI,
   timeout: isCI ? 120_000 : 20_000,
   retries: isCI ? 1 : 0,
   workers: isCI ? 1 : undefined,

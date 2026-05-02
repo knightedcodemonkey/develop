@@ -22,11 +22,11 @@
 }
 
 .app-grid-ai-controls[hidden] {
-  display: none !important;
+  display: none;
 }
 
 .app-grid-ai-controls .layout-toggle[hidden] {
-  display: none !important;
+  display: none;
 }
 
 .github-token-control-wrap {
@@ -178,7 +178,7 @@
 }
 
 .github-token-info-panel[hidden] {
-  display: none !important;
+  display: none;
 }
 
 .github-token-info-message {
@@ -244,36 +244,6 @@
     transform: scale(1);
     opacity: 1;
   }
-}
-
-.github-repo-wrap select {
-  appearance: none;
-  background-color: var(--surface-select);
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath fill='currentColor' d='M1.2 0 5 3.8 8.8 0 10 1.2 5 6 0 1.2z'/%3E%3C/svg%3E");
-  background-repeat: no-repeat;
-  background-position: right 10px center;
-  color: var(--select-text);
-  border: 1px solid var(--border-control);
-  border-radius: 8px;
-  padding: 6px 30px 6px 10px;
-  color-scheme: var(--control-color-scheme);
-  min-width: 240px;
-  max-width: min(360px, 40vw);
-}
-
-.github-repo-wrap select:focus-visible {
-  outline: 2px solid var(--focus-ring);
-  outline-offset: 1px;
-}
-
-.github-repo-wrap select option,
-.github-repo-wrap select optgroup {
-  background: var(--surface-select-option);
-  color: var(--select-option-text);
-}
-
-.github-repo-wrap select option:disabled {
-  color: var(--select-option-disabled);
 }
 
 .diagnostics-toggle.ai-chat-toggle {
@@ -375,6 +345,41 @@
   --github-pr-icon-color: var(--github-pr-icon-color-disabled);
 }
 
+.diagnostics-toggle.workspaces-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: 2px;
+  --workspaces-toggle-color: color-mix(in srgb, #60a5fa 84%, var(--panel-text));
+  --workspaces-toggle-color-disabled: color-mix(
+    in srgb,
+    var(--text-muted) 82%,
+    var(--panel-text)
+  );
+  color: color-mix(in srgb, var(--panel-text) 84%, var(--text-subtle));
+}
+
+.diagnostics-toggle.workspaces-toggle:hover:not(:disabled) {
+  color: var(--workspaces-toggle-color);
+}
+
+.diagnostics-toggle.workspaces-toggle:disabled {
+  opacity: 0.64;
+  cursor: not-allowed;
+  --workspaces-toggle-color: var(--workspaces-toggle-color-disabled);
+  color: color-mix(in srgb, var(--text-muted) 82%, var(--panel-text));
+}
+
+.workspaces-toggle__icon {
+  width: 16px;
+  height: 16px;
+  fill: var(--workspaces-toggle-color);
+}
+
+.workspaces-toggle__icon path {
+  fill: var(--workspaces-toggle-color);
+}
+
 .github-pr-context-close {
   display: inline-flex;
   align-items: center;
@@ -422,70 +427,7 @@
 }
 
 .github-pr-context-close[hidden] {
-  display: none !important;
-}
-
-.diagnostics-toggle.github-pr-context-disconnect {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  --github-pr-disconnect-icon-color: color-mix(
-    in srgb,
-    var(--accent) 78%,
-    var(--panel-text)
-  );
-  --github-pr-disconnect-text-color: var(--shell-text);
-  --github-pr-disconnect-text-color-hover: color-mix(
-    in srgb,
-    var(--accent) 78%,
-    var(--panel-text)
-  );
-
-  color: var(--github-pr-disconnect-text-color);
-}
-
-:root[data-theme='light'] .diagnostics-toggle.github-pr-context-disconnect {
-  --github-pr-disconnect-icon-color: color-mix(in srgb, #6d28d9 84%, var(--panel-text));
-  --github-pr-disconnect-text-color-hover: color-mix(
-    in srgb,
-    #6d28d9 88%,
-    var(--panel-text)
-  );
-}
-
-.github-pr-context-disconnect__icon {
-  width: 14px;
-  height: 14px;
-  fill: var(--github-pr-disconnect-icon-color);
-}
-
-.github-pr-context-disconnect__icon path {
-  fill: var(--github-pr-disconnect-icon-color);
-}
-
-.diagnostics-toggle.github-pr-context-disconnect:hover:not(:disabled) {
-  color: var(--github-pr-disconnect-text-color-hover);
-}
-
-.github-pr-context-disconnect__label {
-  color: inherit;
-}
-
-.github-pr-context-disconnect:focus-visible:not(:disabled) {
-  outline: 2px solid var(--focus-ring);
-  outline-offset: 1px;
-}
-
-.github-pr-context-disconnect[hidden] {
-  display: none !important;
-}
-
-.github-pr-toggle[hidden] {
-  display: none !important;
-}
-
-.ai-chat-toggle[hidden] {
-  display: none !important;
+  display: none;
 }
 
 .ai-chat-drawer {
@@ -519,7 +461,7 @@
 }
 
 .ai-chat-drawer[hidden] {
-  display: none !important;
+  display: none;
 }
 
 .github-pr-drawer {
@@ -553,7 +495,112 @@
 }
 
 .github-pr-drawer[hidden] {
-  display: none !important;
+  display: none;
+}
+
+.workspaces-drawer {
+  position: fixed;
+  top: 82px;
+  left: auto;
+  right: 24px;
+  width: min(460px, calc(100vw - 24px));
+  max-height: min(76vh, 760px);
+  padding: 14px;
+  border: 1px solid var(--border-subtle);
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--surface-panel) 92%, transparent);
+  box-shadow: 0 20px 40px var(--shadow-elev-1);
+  backdrop-filter: blur(8px);
+  overflow: hidden;
+  display: grid;
+  grid-template-rows: auto auto minmax(180px, 1fr);
+  gap: 10px;
+  z-index: 96;
+}
+
+.workspaces-drawer.workspaces-drawer--right {
+  right: 24px;
+  left: auto;
+}
+
+.workspaces-drawer.workspaces-drawer--left {
+  left: 24px;
+  right: auto;
+}
+
+.workspaces-drawer[hidden] {
+  display: none;
+}
+
+.workspaces-drawer__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.workspaces-drawer__header h2 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.workspaces-drawer__status {
+  margin: 0;
+  font-size: 0.82rem;
+  line-height: 1.4;
+  color: color-mix(in srgb, var(--panel-text) 90%, var(--text-subtle));
+  border: 1px solid color-mix(in srgb, var(--border-subtle) 70%, var(--accent));
+  border-left: 3px solid color-mix(in srgb, var(--accent) 72%, var(--panel-text));
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--surface-panel-header) 86%, transparent);
+  padding: 9px 10px;
+}
+
+.workspaces-drawer__status[data-level='error'] {
+  color: color-mix(in srgb, rgb(var(--danger-rgb)) 85%, var(--panel-text));
+}
+
+.workspaces-drawer__body {
+  display: grid;
+  gap: 10px;
+  overflow: auto;
+  align-content: start;
+  padding: 2px;
+}
+
+.workspaces-drawer__repository-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: end;
+}
+
+.workspaces-drawer__repository-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.workspaces-drawer__repository-row .github-pr-field--full {
+  grid-column: auto;
+}
+
+.workspaces-drawer__repository-row .render-button {
+  height: 36px;
+  width: auto;
+  min-width: fit-content;
+  padding-inline: 12px;
+  white-space: nowrap;
+}
+
+.workspaces-drawer__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.workspaces-drawer__actions[hidden] {
+  display: none;
 }
 
 .github-pr-drawer__header {
@@ -626,7 +673,7 @@
 }
 
 .github-pr-field[hidden] {
-  display: none !important;
+  display: none;
 }
 
 .github-pr-field--checkbox {
@@ -647,6 +694,18 @@
 
 .github-pr-field--full {
   grid-column: 1 / -1;
+}
+
+.github-pr-local-context-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+}
+
+.github-pr-local-context-remove {
+  white-space: nowrap;
+  padding-inline: 12px;
 }
 
 .github-pr-field input,
@@ -970,18 +1029,13 @@
   accent-color: var(--accent);
 }
 
-@media (max-width: 1090px) {
+@media (width <= 1090px) {
   .app-grid-layout-controls {
     flex-wrap: nowrap;
   }
 
   .github-token-input {
     width: 136px;
-  }
-
-  .github-repo-wrap select {
-    min-width: 220px;
-    max-width: 260px;
   }
 
   .app-grid-ai-controls {
@@ -991,7 +1045,7 @@
   }
 }
 
-@media (max-width: 900px) {
+@media (width <= 900px) {
   .app-grid-layout-controls {
     flex-wrap: nowrap;
   }
@@ -1037,11 +1091,6 @@
 
   .github-token-input {
     width: min(34vw, 180px);
-  }
-
-  .github-repo-wrap select {
-    min-width: min(58vw, 260px);
-    max-width: min(58vw, 260px);
   }
 
   .ai-chat-drawer,

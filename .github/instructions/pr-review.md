@@ -24,6 +24,7 @@ You are reviewing changes for @knighted/develop. Be concise, technical, and spec
 ## What to verify
 
 - No generated artifacts are edited (dist/, coverage/, test-results/).
+- Duplicated logic paths are avoided when a shared helper/module already exists; prefer reusing the established implementation.
 - CDN import/fallback behavior is not bypassed with ad hoc URLs in feature modules.
 - Sensitive values (PAT/token) are not logged or exposed in UI/status output.
 - New UI behavior is covered in Playwright where appropriate.

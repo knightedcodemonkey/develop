@@ -8,6 +8,10 @@
   overflow: hidden;
 }
 
+.panel[hidden] {
+  display: none;
+}
+
 .panel-header {
   display: flex;
   align-items: center;
@@ -24,14 +28,36 @@
   font-size: 1rem;
 }
 
+#editor-header-component [data-editor-header-label],
+#editor-header-styles [data-editor-header-label] {
+  display: inline-block;
+  max-width: min(42vw, 420px);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: bottom;
+}
+
 .panel-header__title-with-status {
   display: inline-flex;
-  align-items: center;
+  align-items: baseline;
   gap: 8px;
+}
+
+.panel-header__status {
+  flex: none;
+  font-size: 0.72rem;
+  font-weight: 600;
+  line-height: 1;
+}
+
+.panel-header__status--dirty {
+  color: var(--warning);
 }
 
 .panel-header__sync-icon {
   display: none;
+  align-self: center;
   width: 14px;
   height: 14px;
   fill: color-mix(in srgb, var(--focus-ring) 78%, var(--panel-text));
@@ -71,13 +97,11 @@
   justify-content: flex-start;
 }
 
-.component-panel.panel--tools-hidden .panel-header-main-actions,
-.styles-panel.panel--tools-hidden .panel-header-main-actions {
+.editor-panel.panel--tools-hidden .panel-header-main-actions {
   display: none;
 }
 
-.component-panel.panel--tools-hidden .panel-header--grid,
-.styles-panel.panel--tools-hidden .panel-header--grid {
+.editor-panel.panel--tools-hidden .panel-header--grid {
   grid-template-areas: 'title quick';
   align-items: center;
   row-gap: 0;
@@ -222,6 +246,243 @@
   color: var(--select-option-disabled);
 }
 
+.workspace-tab,
+.workspace-tab-add {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid var(--border-control);
+  border-radius: 8px 8px 0 0;
+  background: var(--surface-control);
+  color: var(--text-subtle);
+  min-height: 32px;
+  padding: 6px 8px 5px 10px;
+  white-space: nowrap;
+  margin-bottom: -1px;
+}
+
+.workspace-tab {
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: min(200px, 36vw);
+  cursor: grab;
+  border-top-color: var(--border-control);
+}
+
+.workspace-tab:has(.workspace-tab__name-input) {
+  position: relative;
+  z-index: 3;
+}
+
+.workspace-tabs-strip:has(> .workspace-tab:nth-child(n + 7)) > .workspace-tab {
+  min-width: 148px;
+}
+
+.workspace-tab:active {
+  cursor: grabbing;
+}
+
+.workspace-tab[data-drag-over='true'] {
+  outline: 2px solid color-mix(in srgb, var(--accent) 72%, transparent);
+  outline-offset: -2px;
+}
+
+.workspace-tab[data-active='true'] {
+  background: color-mix(in srgb, var(--surface-panel-header) 92%, var(--accent-soft));
+  border-color: color-mix(in srgb, var(--accent) 68%, transparent);
+  color: var(--select-text);
+}
+
+.workspace-tab-add:hover {
+  background: color-mix(in srgb, var(--surface-panel-header) 92%, var(--accent-soft));
+  border-color: color-mix(in srgb, var(--accent) 68%, transparent);
+  color: var(--select-text);
+}
+
+.workspace-tab__select {
+  border: none;
+  background: transparent;
+  color: inherit;
+  padding: 0;
+  margin: 0;
+  font: inherit;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  flex: 1 1 auto;
+  min-width: 0;
+  position: relative;
+}
+
+.workspace-tab__path-file {
+  flex: 1 1 auto;
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  direction: rtl;
+  text-align: left;
+}
+
+.workspace-tab__select:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+  border-radius: 8px;
+}
+
+.workspace-tab__name-input {
+  width: min(320px, 52vw);
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  background: var(--surface-select-option);
+  color: var(--select-text);
+  padding: 3px 8px;
+  font: inherit;
+}
+
+.workspace-tab__name-input:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 1px;
+}
+
+.workspace-tab__remove {
+  border: none;
+  background: transparent;
+  color: inherit;
+  opacity: 0.72;
+  width: 22px;
+  height: 22px;
+  border-radius: 999px;
+  cursor: pointer;
+  line-height: 1;
+  padding: 0;
+}
+
+.workspace-tab__rename {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: transparent;
+  color: inherit;
+  opacity: 0.76;
+  border-radius: 6px;
+  cursor: pointer;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+}
+
+.workspace-tab__rename:hover {
+  opacity: 1;
+  background: color-mix(in srgb, var(--surface-control-hover) 90%, transparent);
+}
+
+.workspace-tab__rename:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 1px;
+}
+
+.workspace-tab__rename svg {
+  width: 13px;
+  height: 13px;
+  stroke: currentColor;
+  fill: none;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.workspace-tab__remove:hover {
+  opacity: 1;
+  background: color-mix(in srgb, rgb(var(--danger-rgb)) 18%, transparent);
+}
+
+.workspace-tab__remove:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 1px;
+}
+
+.workspace-tab__meta {
+  font-size: 0.72rem;
+  opacity: 0.8;
+  flex: none;
+}
+
+.workspace-tab__dirty-indicator {
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  color: var(--warning);
+  background: currentColor;
+  flex: none;
+}
+
+.workspace-tab-add {
+  justify-content: center;
+  min-width: 34px;
+  cursor: pointer;
+  border-bottom: none;
+}
+
+.workspace-tab-add-wrap {
+  position: relative;
+  margin-left: 8px;
+  flex: none;
+  z-index: 16;
+}
+
+.workspace-tab-add--strip {
+  margin-left: 0;
+  flex: none;
+}
+
+.workspace-tab-add-menu {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 6px);
+  display: grid;
+  gap: 4px;
+  min-width: 170px;
+  padding: 6px;
+  border-radius: 10px;
+  border: 1px solid var(--border-strong);
+  background: var(--surface-panel-header);
+  box-shadow: 0 14px 28px var(--shadow-elev-1);
+  z-index: 12;
+}
+
+.workspace-tab-add-menu[hidden] {
+  display: none;
+}
+
+.workspace-tab-add-menu__item {
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--panel-text);
+  font: inherit;
+  text-align: left;
+  padding: 6px 9px;
+  cursor: pointer;
+}
+
+.workspace-tab-add-menu__item:hover {
+  background: var(--surface-control-hover);
+}
+
+.workspace-tab-add-menu__item:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 1px;
+}
+
+.workspace-tab__rename,
+.workspace-tab__remove {
+  flex: none;
+}
+
 textarea {
   flex: 1;
   background: transparent;
@@ -267,41 +528,17 @@ textarea:focus {
   min-height: auto;
 }
 
-.component-panel.panel--collapsed-vertical,
-.styles-panel.panel--collapsed-vertical {
-  align-self: start;
-}
-
 .panel.preview.panel--collapsed-vertical {
   min-height: 0;
 }
 
-.component-panel.panel--collapsed-vertical .editor-host,
-.component-panel.panel--collapsed-vertical textarea,
-.styles-panel.panel--collapsed-vertical .editor-host,
-.styles-panel.panel--collapsed-vertical textarea,
 .preview-panel.panel--collapsed-vertical .preview-host,
-.component-panel.panel--collapsed-vertical .panel-content,
-.styles-panel.panel--collapsed-vertical .panel-content,
 .preview-panel.panel--collapsed-vertical .panel-content {
   display: none;
 }
 
-.component-panel.panel--collapsed-vertical .panel-header-main-actions,
-.styles-panel.panel--collapsed-vertical .panel-header-main-actions,
-.component-panel.panel--collapsed-vertical .panel-header .icon-button,
-.styles-panel.panel--collapsed-vertical .panel-header .icon-button,
-.preview-panel.panel--collapsed-vertical .controls label,
-.preview-panel.panel--collapsed-vertical .controls .hint-icon {
+.preview-panel.panel--collapsed-vertical .controls label {
   display: none;
-}
-
-.component-panel.panel--collapsed-vertical .panel-header--grid,
-.styles-panel.panel--collapsed-vertical .panel-header--grid {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
 }
 
 .preview-panel.panel--collapsed-vertical .panel-header .controls {
@@ -314,8 +551,7 @@ textarea:focus {
 
 .preview-panel.panel--collapsed-horizontal .preview-host,
 .preview-panel.panel--collapsed-horizontal .panel-content,
-.preview-panel.panel--collapsed-horizontal .controls label,
-.preview-panel.panel--collapsed-horizontal .controls .hint-icon {
+.preview-panel.panel--collapsed-horizontal .controls label {
   display: none;
 }
 
@@ -349,64 +585,20 @@ textarea:focus {
   display: none;
 }
 
-.component-panel.panel--collapsed-horizontal,
-.styles-panel.panel--collapsed-horizontal {
-  min-height: auto;
-}
-
-.component-panel.panel--collapsed-horizontal .editor-host,
-.component-panel.panel--collapsed-horizontal textarea,
-.component-panel.panel--collapsed-horizontal .panel-content,
-.component-panel.panel--collapsed-horizontal .panel-header-main-actions,
-.component-panel.panel--collapsed-horizontal .panel-header .icon-button,
-.styles-panel.panel--collapsed-horizontal .editor-host,
-.styles-panel.panel--collapsed-horizontal textarea,
-.styles-panel.panel--collapsed-horizontal .panel-content,
-.styles-panel.panel--collapsed-horizontal .panel-header-main-actions,
-.styles-panel.panel--collapsed-horizontal .panel-header .icon-button {
-  display: none;
-}
-
-.component-panel.panel--collapsed-horizontal .panel-header,
-.styles-panel.panel--collapsed-horizontal .panel-header {
-  height: 100%;
-  padding: 12px 8px;
-  border-bottom: none;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-}
-
-.component-panel.panel--collapsed-horizontal .panel-header h2,
-.styles-panel.panel--collapsed-horizontal .panel-header h2 {
-  writing-mode: vertical-rl;
-  transform: rotate(180deg);
-  font-size: 0.8rem;
-}
-
-.component-panel.panel--collapsed-horizontal .panel-header-quick-actions,
-.styles-panel.panel--collapsed-horizontal .panel-header-quick-actions {
-  width: 100%;
-  justify-content: center;
-}
-
-.component-panel.panel--collapsed-horizontal .panel-collapse-toggle,
-.styles-panel.panel--collapsed-horizontal .panel-collapse-toggle {
-  width: 32px;
-  min-width: 32px;
-  height: 32px;
-}
-
-@media (max-width: 900px) {
+@media (width <= 900px) {
   .panel-collapse-toggle {
     width: 32px;
     height: 32px;
   }
 
-  .component-panel,
-  .styles-panel {
+  .editor-panel {
     min-height: min(360px, var(--mobile-editor-max-height));
+  }
+}
+
+@media (width <= 640px) {
+  .workspace-tab {
+    flex: 0 0 auto;
+    min-width: 148px;
   }
 }

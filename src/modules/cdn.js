@@ -74,6 +74,12 @@ export const cdnImportSpecs = {
     esm: 'react-dom@19.2.4/client',
     jspmGa: 'npm:react-dom@19.2.4/client.js',
   },
+  idb: {
+    importMap: 'idb',
+    esm: 'idb@8.0.3',
+    unpkg: 'idb@8.0.3/build/index.js?module',
+    jspmGa: 'npm:idb@8.0.3/build/index.js',
+  },
   sass: {
     importMap: 'sass',
     esm: [

@@ -1,0 +1,362 @@
+import {
+  commitEditorContentToExistingBranch,
+  createEditorContentPullRequest,
+} from '../../../api/editor-content.js'
+import { listRepositoryBranches } from '../../../api/repositories.js'
+import {
+  closeRepositoryPullRequest,
+  findOpenRepositoryPullRequestByHead,
+  getRepositoryPullRequest,
+} from '../../../api/pull-requests.js'
+import { formatActivePrReference } from '../../context.js'
+import {
+  createDefaultBranchName,
+  createSelectOption,
+  mergeBranchOptions,
+  toBranchCacheKey,
+} from '../branches.js'
+import {
+  defaultCommitMessage,
+  normalizeRenderMode,
+  normalizeStyleMode,
+  sanitizeBranchPart,
+  toPullRequestNumber,
+  toSafeText,
+} from '../common.js'
+import { ensureTrailingNewline, normalizeFileCommits } from '../file-commits.js'
+import { stripTopLevelAppWrapper } from '../source-transform.js'
+import { buildSummary } from '../summary.js'
+import { createContextSyncHandlers } from './context-sync.js'
+import { bindControllerEvents } from './events.js'
+import { createPublicActions } from './public-actions.js'
+import { createRepositoryFormHandlers } from './repository-form.js'
+import { createRunSubmit } from './run-submit.js'
+import { createUiStateHandlers } from './ui-state.js'
+
+export const createGitHubPrDrawer = ({
+  toggleButton,
+  drawer,
+  closeButton,
+  repositorySelect,
+  baseBranchInput,
+  headBranchInput,
+  prTitleInput,
+  prBodyInput,
+  commitMessageInput,
+  includeAppWrapperToggle,
+  submitButton,
+  titleNode,
+  statusNode,
+  getToken,
+  getSelectedRepository,
+  getWritableRepositories,
+  getFileCommits,
+  getEditorSyncTargets,
+  persistWorkspaceMetadataOnSubmit,
+  getTopLevelDeclarations,
+  getRenderMode,
+  getStyleMode,
+  getDrawerSide,
+  confirmBeforeSubmit,
+  onPullRequestOpened,
+  onPullRequestCommitPushed,
+  onActivePrContextChange,
+  onSavedPullRequestContextClosed,
+  onSyncActivePrEditorContent,
+  onRestoreRenderMode,
+  onRestoreStyleMode,
+  getPersistedActivePrContext,
+}) => {
+  const state = {
+    open: false,
+    submitting: false,
+    pendingAbortController: null,
+    pendingBranchesAbortController: null,
+    pendingContextVerifyAbortController: null,
+    pendingActiveContentSyncAbortController: null,
+    pendingActiveContentSyncKey: '',
+    pendingBranchesRequestKey: '',
+    pendingBranchesPromise: null,
+    pendingContextVerifyRequestKey: '',
+    pendingContextVerifyPromise: null,
+    lastSyncedRepositoryFullName: '',
+    lastSyncedActivePrContextKey: '',
+    lastActiveContentSyncKey: '',
+    baseBranchesByRepository: new Map(),
+    activePrContextByRepository: new Map(),
+  }
+
+  const getSelectedRepositoryObject = () => getSelectedRepository?.() ?? null
+
+  const getRepositoryFullName = repository =>
+    typeof repository?.fullName === 'string' ? repository.fullName : ''
+
+  const sanitizeActiveContext = ({ repositoryFullName, activeContext }) => {
+    if (typeof repositoryFullName !== 'string' || !repositoryFullName.trim()) {
+      return null
+    }
+
+    if (!activeContext || typeof activeContext !== 'object') {
+      return null
+    }
+
+    const headBranch = sanitizeBranchPart(activeContext.headBranch)
+    const prTitle = toSafeText(activeContext.prTitle)
+    const pullRequestNumber = toPullRequestNumber(activeContext.pullRequestNumber)
+
+    if (!headBranch && pullRequestNumber === null) {
+      return null
+    }
+
+    return {
+      repositoryFullName,
+      headBranch,
+      renderMode: normalizeRenderMode(activeContext.renderMode),
+      styleMode: normalizeStyleMode(activeContext.styleMode),
+      prTitle,
+      prBody: typeof activeContext.prBody === 'string' ? activeContext.prBody : '',
+      baseBranch: toSafeText(activeContext.baseBranch),
+      pullRequestNumber,
+      pullRequestUrl: toSafeText(activeContext.pullRequestUrl),
+    }
+  }
+
+  const setRepositoryActivePrContext = ({ repositoryFullName, activeContext }) => {
+    const sanitized = sanitizeActiveContext({ repositoryFullName, activeContext })
+    if (!sanitized) {
+      state.activePrContextByRepository.delete(repositoryFullName)
+      return
+    }
+
+    state.activePrContextByRepository.set(repositoryFullName, sanitized)
+  }
+
+  const clearRepositoryActivePrContext = repositoryFullName => {
+    if (typeof repositoryFullName !== 'string' || !repositoryFullName.trim()) {
+      return
+    }
+
+    state.activePrContextByRepository.delete(repositoryFullName)
+  }
+
+  const getCurrentActivePrContext = () => {
+    const repository = getSelectedRepositoryObject()
+    const repositoryFullName = getRepositoryFullName(repository)
+    if (!repositoryFullName) {
+      return null
+    }
+
+    const inMemoryContext = state.activePrContextByRepository.get(repositoryFullName)
+    if (inMemoryContext) {
+      return inMemoryContext
+    }
+
+    if (typeof getPersistedActivePrContext !== 'function') {
+      return null
+    }
+
+    const persistedContext = sanitizeActiveContext({
+      repositoryFullName,
+      activeContext: getPersistedActivePrContext(repositoryFullName),
+    })
+
+    if (!persistedContext) {
+      return null
+    }
+
+    return persistedContext
+  }
+
+  const uiHandlers = createUiStateHandlers({
+    state,
+    repositorySelect,
+    baseBranchInput,
+    headBranchInput,
+    prTitleInput,
+    prBodyInput,
+    commitMessageInput,
+    includeAppWrapperToggle,
+    submitButton,
+    titleNode,
+    statusNode,
+    drawer,
+    onActivePrContextChange,
+    onRestoreRenderMode,
+    onRestoreStyleMode,
+    normalizeRenderMode,
+    normalizeStyleMode,
+    toSafeText,
+    getCurrentActivePrContext,
+  })
+
+  let syncFormForRepository = () => {}
+
+  const contextHandlers = createContextSyncHandlers({
+    state,
+    getSelectedRepositoryObject,
+    getRepositoryFullName,
+    getToken,
+    getEditorSyncTargets,
+    onSyncActivePrEditorContent,
+    getCurrentActivePrContext,
+    syncFormForRepository: options => syncFormForRepository(options),
+    setSubmitButtonLabel: uiHandlers.setSubmitButtonLabel,
+    emitActivePrContextChange: uiHandlers.emitActivePrContextChange,
+    onSavedPullRequestContextClosed,
+    setStatus: uiHandlers.setStatus,
+    toSafeText,
+    sanitizeBranchPart,
+    setRepositoryActivePrContext,
+    clearRepositoryActivePrContext,
+    getRepositoryPullRequest,
+    findOpenRepositoryPullRequestByHead,
+  })
+
+  const repositoryFormHandlers = createRepositoryFormHandlers({
+    state,
+    toggleButton,
+    drawer,
+    repositorySelect,
+    baseBranchInput,
+    headBranchInput,
+    prTitleInput,
+    prBodyInput,
+    commitMessageInput,
+    includeAppWrapperToggle,
+    getDrawerSide,
+    getToken,
+    getWritableRepositories,
+    getSelectedRepositoryObject,
+    getRepositoryFullName,
+    getCurrentActivePrContext,
+    getFormValues: uiHandlers.getFormValues,
+    setSubmitButtonLabel: uiHandlers.setSubmitButtonLabel,
+    emitActivePrContextChange: uiHandlers.emitActivePrContextChange,
+    verifyActivePullRequestContext: contextHandlers.verifyActivePullRequestContext,
+    toSafeText,
+    sanitizeBranchPart,
+    createDefaultBranchName,
+    createSelectOption,
+    mergeBranchOptions,
+    toBranchCacheKey,
+    listRepositoryBranches,
+  })
+
+  syncFormForRepository = repositoryFormHandlers.syncFormForRepository
+
+  const runSubmit = createRunSubmit({
+    state,
+    getSelectedRepositoryObject,
+    getRepositoryFullName,
+    getToken,
+    getCurrentActivePrContext,
+    getFormValues: uiHandlers.getFormValues,
+    getRenderMode,
+    getStyleMode,
+    prTitleInput,
+    includeAppWrapperToggle,
+    getFileCommits,
+    persistWorkspaceMetadataOnSubmit,
+    getTopLevelDeclarations,
+    confirmBeforeSubmit,
+    onPullRequestOpened,
+    onPullRequestCommitPushed,
+    setStatus: uiHandlers.setStatus,
+    setPendingState: uiHandlers.setPendingState,
+    setOpen: repositoryFormHandlers.setOpen,
+    setSubmitButtonLabel: uiHandlers.setSubmitButtonLabel,
+    emitActivePrContextChange: uiHandlers.emitActivePrContextChange,
+    defaultCommitMessage,
+    normalizeRenderMode,
+    normalizeStyleMode,
+    normalizeFileCommits,
+    toSafeText,
+    sanitizeBranchPart,
+    buildSummary,
+    stripTopLevelAppWrapper,
+    ensureTrailingNewline,
+    commitEditorContentToExistingBranch,
+    createEditorContentPullRequest,
+    formatActivePrReference,
+    setRepositoryActivePrContext,
+  })
+
+  bindControllerEvents({
+    state,
+    toggleButton,
+    closeButton,
+    baseBranchInput,
+    headBranchInput,
+    prTitleInput,
+    prBodyInput,
+    submitButton,
+    setOpen: repositoryFormHandlers.setOpen,
+    runSubmit,
+    refreshContextUi: repositoryFormHandlers.refreshContextUi,
+  })
+
+  repositoryFormHandlers.syncRepositories()
+
+  const publicActions = createPublicActions({
+    state,
+    toggleButton,
+    getSelectedRepositoryObject,
+    getRepositoryFullName,
+    getToken,
+    getCurrentActivePrContext,
+    getFormValues: uiHandlers.getFormValues,
+    setStatus: uiHandlers.setStatus,
+    setOpen: repositoryFormHandlers.setOpen,
+    setSubmitButtonLabel: uiHandlers.setSubmitButtonLabel,
+    emitActivePrContextChange: uiHandlers.emitActivePrContextChange,
+    syncFormForRepository: repositoryFormHandlers.syncFormForRepository,
+    verifyActivePullRequestContext: contextHandlers.verifyActivePullRequestContext,
+    loadBaseBranchesForSelectedRepository:
+      repositoryFormHandlers.loadBaseBranchesForSelectedRepository,
+    renderBaseBranchOptions: repositoryFormHandlers.renderBaseBranchOptions,
+    syncRepositories: repositoryFormHandlers.syncRepositories,
+    abortPendingBranchesRequest: repositoryFormHandlers.abortPendingBranchesRequest,
+    abortPendingContextVerifyRequest: contextHandlers.abortPendingContextVerifyRequest,
+    abortPendingActiveContentSyncRequest:
+      contextHandlers.abortPendingActiveContentSyncRequest,
+    closeRepositoryPullRequest,
+    formatActivePrReference,
+    clearRepositoryActivePrContext,
+    toSafeText,
+  })
+
+  const hydrateActivePrContext = (activeContext, { repositoryFullName } = {}) => {
+    const explicitRepositoryFullName =
+      typeof repositoryFullName === 'string' ? repositoryFullName.trim() : ''
+    const selectedRepository = getSelectedRepositoryObject()
+    const selectedRepositoryFullName = getRepositoryFullName(selectedRepository)
+    const targetRepositoryFullName =
+      explicitRepositoryFullName || selectedRepositoryFullName
+
+    if (!targetRepositoryFullName) {
+      return false
+    }
+
+    contextHandlers.abortPendingContextVerifyRequest()
+    contextHandlers.abortPendingActiveContentSyncRequest()
+
+    setRepositoryActivePrContext({
+      repositoryFullName: targetRepositoryFullName,
+      activeContext,
+    })
+    syncFormForRepository({ resetAll: true })
+    uiHandlers.setSubmitButtonLabel()
+    uiHandlers.emitActivePrContextChange()
+    return Boolean(getCurrentActivePrContext())
+  }
+
+  return {
+    setOpen: repositoryFormHandlers.setOpen,
+    isOpen: () => state.open,
+    getActivePrContext: () => getCurrentActivePrContext(),
+    hydrateActivePrContext,
+    resetStatus: uiHandlers.resetStatus,
+    ...publicActions,
+    syncRepositories: repositoryFormHandlers.syncRepositories,
+  }
+}

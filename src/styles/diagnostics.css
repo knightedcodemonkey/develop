@@ -91,6 +91,10 @@
   cursor: pointer;
 }
 
+.diagnostics-toggle[hidden] {
+  display: none;
+}
+
 .diagnostics-toggle:hover {
   background: var(--surface-control-hover);
 }
@@ -213,7 +217,7 @@
   }
 }
 
-@media (max-width: 900px) {
+@media (width <= 900px) {
   .diagnostics-drawer {
     top: auto;
     right: 24px;
