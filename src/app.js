@@ -379,8 +379,6 @@ const {
   compactAiControlsUi,
   appGrid,
   previewPanel,
-  componentEditorPanel,
-  stylesEditorPanel,
   panelCollapseButtons,
   editorKinds,
   editorPanelsByKind,

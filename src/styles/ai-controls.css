@@ -1029,7 +1029,7 @@
   accent-color: var(--accent);
 }
 
-@media (max-width: 1090px) {
+@media (width <= 1090px) {
   .app-grid-layout-controls {
     flex-wrap: nowrap;
   }
@@ -1045,7 +1045,7 @@
   }
 }
 
-@media (max-width: 900px) {
+@media (width <= 900px) {
   .app-grid-layout-controls {
     flex-wrap: nowrap;
   }

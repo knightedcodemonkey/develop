@@ -305,10 +305,8 @@ export const getActiveStylesEditorLineNumber = async (page: Page) => {
     .then(text => text.trim())
 }
 
-export const getCollapseButton = (
-  page: Page,
-  panelName: 'component' | 'styles' | 'preview',
-) => page.locator(`#collapse-${panelName}`)
+export const getCollapseButton = (page: Page, panelName: 'preview') =>
+  page.locator(`#collapse-${panelName}`)
 
 export const getToolsButton = (page: Page, panelName: 'component' | 'styles') =>
   page.locator(`#tools-${panelName}`)
@@ -564,7 +562,7 @@ export const connectByotWithSingleRepo = async (
 
 export const expectCollapseButtonState = async (
   page: Page,
-  panelName: 'component' | 'styles' | 'preview',
+  panelName: 'preview',
   {
     axis,
     direction,

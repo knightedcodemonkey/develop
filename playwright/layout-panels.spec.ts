@@ -162,17 +162,9 @@ test('expanded component and styles can shrink consistently in fixed layout', as
 test('panel collapse axis and direction match fixed layout', async ({ page }) => {
   await waitForInitialRender(page)
   await expect(page.getByRole('main')).toHaveClass(/app-grid--preview-right/)
+  await expect(page.locator('#collapse-component')).toHaveCount(0)
+  await expect(page.locator('#collapse-styles')).toHaveCount(0)
 
-  await expectCollapseButtonState(page, 'component', {
-    axis: 'vertical',
-    direction: 'none',
-    collapsed: false,
-  })
-  await expectCollapseButtonState(page, 'styles', {
-    axis: 'vertical',
-    direction: 'none',
-    collapsed: false,
-  })
   await expectCollapseButtonState(page, 'preview', {
     axis: 'horizontal',
     direction: 'right',
@@ -180,31 +172,22 @@ test('panel collapse axis and direction match fixed layout', async ({ page }) =>
   })
 })
 
-test('prevents collapsing all three panels at once', async ({ page }) => {
+test('preview panel can collapse and expand', async ({ page }) => {
   await waitForInitialRender(page)
-  const componentPanel = page.locator('#editor-panel-component')
-  const stylesPanel = page.locator('#editor-panel-styles')
+  const previewPanel = page.locator('#preview-panel')
 
-  await getCollapseButton(page, 'component').click()
-  await page.getByRole('button', { name: 'Open tab app.css' }).click()
-  await getCollapseButton(page, 'styles').click()
-
-  await expect(componentPanel).toHaveClass(/panel--collapsed-vertical/)
-  await expect(stylesPanel).toHaveClass(/panel--collapsed-vertical/)
+  await getCollapseButton(page, 'preview').click()
+  await expect(previewPanel).toHaveClass(/panel--collapsed-horizontal/)
 
   await expectCollapseButtonState(page, 'preview', {
     axis: 'horizontal',
     direction: 'right',
-    collapsed: false,
-    disabled: true,
+    collapsed: true,
+    disabled: false,
   })
-  await expect(getCollapseButton(page, 'preview')).toHaveAttribute(
-    'title',
-    'At least one panel must remain expanded.',
-  )
 
-  await page.getByRole('button', { name: 'Open tab App.tsx' }).click()
-  await getCollapseButton(page, 'component').click()
+  await getCollapseButton(page, 'preview').click()
+  await expect(previewPanel).not.toHaveClass(/panel--collapsed-horizontal/)
   await expectCollapseButtonState(page, 'preview', {
     axis: 'horizontal',
     direction: 'right',
@@ -215,25 +198,25 @@ test('prevents collapsing all three panels at once', async ({ page }) => {
 
 test('does not persist panel collapse state across reload', async ({ page }) => {
   await waitForInitialRender(page)
-  const componentPanel = page.locator('#editor-panel-component')
+  const previewPanel = page.locator('#preview-panel')
 
-  await getCollapseButton(page, 'component').click()
-  await expect(componentPanel).toHaveClass(/panel--collapsed-vertical/)
-  await expectCollapseButtonState(page, 'component', {
-    axis: 'vertical',
-    direction: 'none',
+  await getCollapseButton(page, 'preview').click()
+  await expect(previewPanel).toHaveClass(/panel--collapsed-horizontal/)
+  await expectCollapseButtonState(page, 'preview', {
+    axis: 'horizontal',
+    direction: 'right',
     collapsed: true,
   })
 
   await page.reload()
   await waitForInitialRender(page)
 
-  await expect(componentPanel).not.toHaveClass(
+  await expect(previewPanel).not.toHaveClass(
     /panel--collapsed-horizontal|panel--collapsed-vertical/,
   )
-  await expectCollapseButtonState(page, 'component', {
-    axis: 'vertical',
-    direction: 'none',
+  await expectCollapseButtonState(page, 'preview', {
+    axis: 'horizontal',
+    direction: 'right',
     collapsed: false,
   })
 })
