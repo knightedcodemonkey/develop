@@ -870,6 +870,7 @@ const {
   confirmAction: options => confirmAction(options),
   isStyleWorkspaceTab,
   clearTrackedWorkspaceTab,
+  trackRemovedWorkspaceTab: tab => workspaceSyncController.trackRemovedWorkspaceTab(tab),
   getWorkspaceTabByKind,
   makeUniqueTabPath,
   createWorkspaceTabId,

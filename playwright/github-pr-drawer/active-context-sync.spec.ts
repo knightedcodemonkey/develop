@@ -433,6 +433,290 @@ test('Renaming a synced module tab keeps plain tab label and includes renamed pa
   })
 })
 
+test('Removing a synced module tab includes a delete entry when pushing to an active PR', async ({
+  page,
+}) => {
+  const treeRequests: Array<Record<string, unknown>> = []
+
+  await page.route('https://api.github.com/user/repos**', async route => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify([
+        {
+          id: 11,
+          owner: { login: 'knightedcodemonkey' },
+          name: 'develop',
+          full_name: 'knightedcodemonkey/develop',
+          default_branch: 'main',
+          permissions: { push: true },
+        },
+      ]),
+    })
+  })
+
+  await mockRepositoryBranches(page, {
+    'knightedcodemonkey/develop': ['main', 'release', 'develop/open-pr-test'],
+  })
+
+  await page.route(
+    'https://api.github.com/repos/knightedcodemonkey/develop/pulls/2',
+    async route => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          number: 2,
+          state: 'open',
+          title: 'Existing PR context from storage',
+          html_url: 'https://github.com/knightedcodemonkey/develop/pull/2',
+          head: { ref: 'develop/open-pr-test' },
+          base: { ref: 'main' },
+        }),
+      })
+    },
+  )
+
+  await page.route(
+    'https://api.github.com/repos/knightedcodemonkey/develop/git/ref/**',
+    async route => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          ref: 'refs/heads/develop/open-pr-test',
+          object: { type: 'commit', sha: 'existing-head-sha' },
+        }),
+      })
+    },
+  )
+
+  await page.route(
+    'https://api.github.com/repos/knightedcodemonkey/develop/git/commits/existing-head-sha',
+    async route => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          sha: 'existing-head-sha',
+          tree: { sha: 'base-tree-sha' },
+        }),
+      })
+    },
+  )
+
+  await page.route(
+    'https://api.github.com/repos/knightedcodemonkey/develop/contents/**',
+    async route => {
+      const url = new URL(route.request().url())
+      const path = decodeURIComponent(url.pathname.split('/contents/')[1] ?? '').trim()
+      const responseByPath: Record<string, { status: number; body: string }> = {
+        'src/components/boop.tsx': {
+          status: 200,
+          body: JSON.stringify({ sha: 'boop-existing-sha' }),
+        },
+      }
+      const response = responseByPath[path] ?? {
+        status: 404,
+        body: JSON.stringify({ message: 'Not Found' }),
+      }
+
+      await route.fulfill({
+        status: response.status,
+        contentType: 'application/json',
+        body: response.body,
+      })
+    },
+  )
+
+  await page.route(
+    'https://api.github.com/repos/knightedcodemonkey/develop/git/trees',
+    async route => {
+      treeRequests.push(route.request().postDataJSON() as Record<string, unknown>)
+
+      await route.fulfill({
+        status: 201,
+        contentType: 'application/json',
+        body: JSON.stringify({ sha: 'remove-tree-sha' }),
+      })
+    },
+  )
+
+  await page.route(
+    'https://api.github.com/repos/knightedcodemonkey/develop/git/commits',
+    async route => {
+      await route.fulfill({
+        status: 201,
+        contentType: 'application/json',
+        body: JSON.stringify({ sha: 'remove-commit-sha' }),
+      })
+    },
+  )
+
+  await page.route(
+    'https://api.github.com/repos/knightedcodemonkey/develop/git/refs/**',
+    async route => {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          ref: 'refs/heads/develop/open-pr-test',
+          object: { type: 'commit', sha: 'remove-commit-sha' },
+        }),
+      })
+    },
+  )
+
+  await waitForAppReady(page, `${appEntryPath}`)
+
+  const now = Date.now()
+  await seedLocalWorkspaceContexts(page, [
+    {
+      id: buildWorkspaceRecordId({
+        repositoryFullName: 'knightedcodemonkey/develop',
+        headBranch: 'develop/open-pr-test',
+      }),
+      repo: 'knightedcodemonkey/develop',
+      base: 'main',
+      head: 'develop/open-pr-test',
+      prTitle: 'Existing PR context from storage',
+      prNumber: 2,
+      prContextState: 'active',
+      renderMode: 'react',
+      tabs: [
+        {
+          id: 'component',
+          name: 'App.tsx',
+          path: 'src/components/App.tsx',
+          language: 'javascript-jsx',
+          role: 'entry',
+          isActive: true,
+          content: 'export const App = () => <main>Hello from Knighted</main>',
+          targetPrFilePath: 'src/components/App.tsx',
+          syncedContent: 'export const App = () => <main>Hello from Knighted</main>',
+          syncedAt: now,
+          isDirty: false,
+        },
+        {
+          id: 'styles',
+          name: 'app.css',
+          path: 'src/styles/app.css',
+          language: 'css',
+          role: 'module',
+          isActive: false,
+          content: 'main { color: #111; }',
+          targetPrFilePath: 'src/styles/app.css',
+          syncedContent: 'main { color: #111; }',
+          syncedAt: now,
+          isDirty: false,
+        },
+        {
+          id: 'boop',
+          name: 'boop.tsx',
+          path: 'src/components/boop.tsx',
+          language: 'javascript-jsx',
+          role: 'module',
+          isActive: false,
+          content: 'export const Boop = () => <p>boop</p>',
+          targetPrFilePath: 'src/components/boop.tsx',
+          syncedContent: 'export const Boop = () => <p>boop</p>',
+          syncedAt: now,
+          isDirty: false,
+        },
+      ],
+      activeTabId: 'component',
+      createdAt: now,
+      lastModified: now,
+    },
+  ])
+
+  await connectByotWithSingleRepo(page)
+  await openMostRecentStoredWorkspaceContext(page)
+
+  await page.getByRole('button', { name: 'Remove tab boop.tsx' }).click()
+  const removeDialog = page.locator('#clear-confirm-dialog')
+  await expect(removeDialog).toBeVisible()
+  await removeDialog.locator('button[value="confirm"]').evaluate(element => {
+    if (element instanceof HTMLButtonElement) {
+      element.click()
+    }
+  })
+  await expect(page.getByRole('button', { name: 'Open tab boop.tsx' })).toHaveCount(0)
+
+  await setComponentEditorSource(
+    page,
+    'export const App = () => <main>Updated entry after removal</main>',
+  )
+
+  await ensureOpenPrDrawerOpen(page)
+  const pushCommitButton = page
+    .locator('#github-pr-drawer')
+    .getByRole('button', { name: 'Push commit', exact: true })
+  await expect(pushCommitButton).toBeEnabled()
+  await pushCommitButton.evaluate(element => {
+    if (element instanceof HTMLButtonElement) {
+      element.click()
+    }
+  })
+
+  const pushDialog = page.locator('#clear-confirm-dialog')
+  await expect(pushDialog).toBeVisible()
+  await expect(pushDialog.getByText('Files to commit:', { exact: true })).toBeVisible()
+  await expect(
+    pushDialog.getByText(/src\/components\/boop\.tsx.*\(delete\)/, { exact: false }),
+  ).toBeVisible()
+
+  await pushDialog.locator('button[value="confirm"]').evaluate(element => {
+    if (element instanceof HTMLButtonElement) {
+      element.click()
+    }
+  })
+
+  await expect(
+    page.getByRole('status', { name: 'Open pull request status', includeHidden: true }),
+  ).toContainText('Commit pushed to develop/open-pr-test')
+
+  await expect
+    .poll(async () => {
+      const workspaceRecord = await getWorkspaceTabsRecord(page, {
+        headBranch: 'develop/open-pr-test',
+      })
+      const tabs = Array.isArray(workspaceRecord?.tabs)
+        ? (workspaceRecord.tabs as Array<Record<string, unknown>>)
+        : []
+
+      return tabs.some(tab => {
+        const path = typeof tab?.path === 'string' ? tab.path.trim() : ''
+        return path === 'src/components/boop.tsx'
+      })
+    })
+    .toBe(false)
+
+  expect(treeRequests).toHaveLength(1)
+  const treePayload = treeRequests[0]?.tree as Array<Record<string, unknown>>
+  const updatedEntryBlob = treePayload?.find(
+    file => file.path === 'src/components/App.tsx',
+  )
+  const deletedBlob = treePayload?.find(file => file.path === 'src/components/boop.tsx')
+
+  expect(updatedEntryBlob).toMatchObject({
+    path: 'src/components/App.tsx',
+    mode: '100644',
+    type: 'blob',
+  })
+  expect(typeof updatedEntryBlob?.content).toBe('string')
+  expect(
+    (updatedEntryBlob?.content as string).includes('Updated entry after removal'),
+  ).toBe(true)
+
+  expect(deletedBlob).toEqual({
+    path: 'src/components/boop.tsx',
+    mode: '100644',
+    type: 'blob',
+    sha: null,
+  })
+})
+
 test('Push commit prunes stale delete entries before Git tree creation', async ({
   page,
 }) => {

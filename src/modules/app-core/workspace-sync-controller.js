@@ -19,6 +19,74 @@ const createWorkspaceSyncController = ({
   getRenderModeValue,
   normalizeRenderMode,
 }) => {
+  const removedWorkspaceTabPathsByWorkspaceKey = new Map()
+
+  const getCurrentWorkspaceKey = () => {
+    const context = getWorkspaceContextSnapshot()
+    return toWorkspaceRecordKey({
+      repositoryFullName: context?.repositoryFullName,
+      headBranch: context?.headBranch,
+    })
+  }
+
+  const getRemovedWorkspaceTabPathsForCurrentWorkspace = () => {
+    const workspaceKey = getCurrentWorkspaceKey()
+    if (!workspaceKey) {
+      return new Set()
+    }
+
+    const trackedPaths = removedWorkspaceTabPathsByWorkspaceKey.get(workspaceKey)
+    return trackedPaths instanceof Set ? trackedPaths : new Set()
+  }
+
+  const trackRemovedWorkspaceTab = tab => {
+    if (!hasTabCommittedSyncState(tab)) {
+      return false
+    }
+
+    const removedPath = normalizeWorkspacePathValue(
+      getTabTargetPrFilePath(tab) || tab?.path,
+    )
+    if (!removedPath) {
+      return false
+    }
+
+    const workspaceKey = getCurrentWorkspaceKey()
+    if (!workspaceKey) {
+      return false
+    }
+
+    const existingPaths = removedWorkspaceTabPathsByWorkspaceKey.get(workspaceKey)
+    const nextPaths = existingPaths instanceof Set ? existingPaths : new Set()
+    nextPaths.add(removedPath)
+    removedWorkspaceTabPathsByWorkspaceKey.set(workspaceKey, nextPaths)
+    return true
+  }
+
+  const clearTrackedRemovedWorkspaceTabPath = path => {
+    const normalizedPath = normalizeWorkspacePathValue(path)
+    if (!normalizedPath) {
+      return false
+    }
+
+    const workspaceKey = getCurrentWorkspaceKey()
+    if (!workspaceKey) {
+      return false
+    }
+
+    const trackedPaths = removedWorkspaceTabPathsByWorkspaceKey.get(workspaceKey)
+    if (!(trackedPaths instanceof Set) || !trackedPaths.has(normalizedPath)) {
+      return false
+    }
+
+    trackedPaths.delete(normalizedPath)
+    if (trackedPaths.size === 0) {
+      removedWorkspaceTabPathsByWorkspaceKey.delete(workspaceKey)
+    }
+
+    return true
+  }
+
   const resolveCanonicalDirtyState = ({ tab, content }) => {
     const syncedContent = toWorkspaceSyncedContent(tab?.syncedContent)
     if (syncedContent !== null) {
@@ -64,6 +132,12 @@ const createWorkspaceSyncController = ({
 
   const reconcileWorkspaceTabsWithPushUpdates = fileUpdates => {
     const updates = Array.isArray(fileUpdates) ? fileUpdates : []
+    for (const update of updates) {
+      if (update?.deleted === true) {
+        clearTrackedRemovedWorkspaceTabPath(update?.path)
+      }
+    }
+
     if (updates.length === 0) {
       return 0
     }
@@ -170,6 +244,23 @@ const createWorkspaceSyncController = ({
           content: '',
           tabLabel:
             toNonEmptyWorkspaceText(tab?.name) || toNonEmptyWorkspaceText(tab?.id),
+          isEntry: false,
+          deleted: true,
+        })
+      }
+    }
+
+    if (!includeAllWorkspaceFiles) {
+      const removedPaths = getRemovedWorkspaceTabPathsForCurrentWorkspace()
+      for (const removedPath of removedPaths) {
+        if (currentPaths.has(removedPath) || dedupedByPath.has(removedPath)) {
+          continue
+        }
+
+        dedupedByPath.set(removedPath, {
+          path: removedPath,
+          content: '',
+          tabLabel: removedPath,
           isEntry: false,
           deleted: true,
         })
@@ -320,6 +411,7 @@ const createWorkspaceSyncController = ({
     buildWorkspaceTabsSnapshot,
     getEditorSyncTargets,
     getWorkspacePrFileCommits,
+    trackRemovedWorkspaceTab,
     reconcileWorkspaceTabsWithEditorSync,
     reconcileWorkspaceTabsWithPushUpdates,
   }
