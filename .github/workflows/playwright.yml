@@ -61,10 +61,10 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v6.0.1
+        uses: actions/checkout@v6.0.2
 
       - name: Setup Node
-        uses: actions/setup-node@v6.2.0
+        uses: actions/setup-node@v6.4.0
         with:
           node-version: '24.14.0'
           cache: npm
@@ -76,7 +76,7 @@ jobs:
         run: npm run check-types
 
       - name: Cache Playwright Browsers
-        uses: actions/cache@v5
+        uses: actions/cache@v5.0.5
         with:
           path: ~/.cache/ms-playwright
           key: ${{ runner.os }}-playwright-${{ matrix.browser }}-${{ hashFiles('package-lock.json') }}
@@ -97,7 +97,7 @@ jobs:
           npm run test:e2e -- --project=${{ matrix.browser }} --workers=${{ matrix.workers }} $SHARD_ARGS
 
       - name: Upload Playwright report
-        uses: actions/upload-artifact@v6.0.0
+        uses: actions/upload-artifact@v7.0.1
         if: ${{ failure() }}
         with:
           name: playwright-report-${{ matrix.browser }}-${{ matrix.shardIndex }}of${{ matrix.shardTotal }}
@@ -105,7 +105,7 @@ jobs:
           if-no-files-found: ignore
 
       - name: Upload Playwright test results
-        uses: actions/upload-artifact@v6.0.0
+        uses: actions/upload-artifact@v7.0.1
         if: ${{ failure() }}
         with:
           name: test-results-${{ matrix.browser }}-${{ matrix.shardIndex }}of${{ matrix.shardTotal }}
