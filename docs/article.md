@@ -84,7 +84,7 @@ If you want a fast product tour, try this sequence:
 2. Toggle DOM -> React render mode.
 3. Toggle CSS -> Modules -> Less -> Sass style mode.
 4. Open diagnostics and jump to a reported line.
-5. Connect BYOT and run Open PR / Push Commit.
+5. Connect BYOT (Bring Your Own Token) by adding a GitHub personal access token, then run Open PR / Push Commit.
 6. Ask chat for a targeted tab update, then apply it.
 
 That flow tells the product story better than any architecture diagram.
