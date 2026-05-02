@@ -1,4 +1,4 @@
-import { toChatText } from './chat-utils.js'
+import { toChatText } from './utils.js'
 
 export const editorProposalTools = [
   {

@@ -1,4 +1,4 @@
-import { toChatText } from './chat-utils.js'
+import { toChatText } from './utils.js'
 
 const chatByteBudget = 120_000
 const chatMaxSummaryChars = 3_600

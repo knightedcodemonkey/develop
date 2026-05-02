@@ -51,8 +51,9 @@ import { persistClosedPrContextRecords } from './modules/app-core/pr-context-rec
 import { createPrContextStateChangeHandler } from './modules/app-core/pr-context-state-change-handler.js'
 import { createWorkspaceContextStatusController } from './modules/app-core/workspace-context-status-controller.js'
 import { createWorkspaceRecordAppliedHandler } from './modules/app-core/workspace-record-applied-handler.js'
+import { createGitHubChatWorkspaceActions } from './modules/app-core/github-chat-workspace-actions.js'
 import { createDiagnosticsUiController } from './modules/diagnostics/diagnostics-ui.js'
-import { createGitHubChatDrawer } from './modules/github/chat-drawer/drawer.js'
+import { createGitHubChatDrawer } from './modules/github/chat/drawer.js'
 import { createGitHubByotControls } from './modules/github/byot-controls.js'
 import {
   formatActivePrReference,
@@ -1041,6 +1042,18 @@ const onPrContextStateChange = createPrContextStateChangeHandler({
   editedIndicatorVisibilityController,
 })
 
+const githubChatWorkspaceActions = createGitHubChatWorkspaceActions({
+  getActiveWorkspaceTab,
+  isStyleWorkspaceTab,
+  getCssSource: () => getCssSource(),
+  getJsxSource: () => getJsxSource(),
+  workspaceTabsState,
+  getDirtyStateForTabChange,
+  loadWorkspaceTabIntoEditor,
+  renderWorkspaceTabs,
+  queueWorkspaceSave: () => queueWorkspaceSave(),
+})
+
 const githubWorkflows = createGitHubWorkflowsSetup({
   factories: {
     createGitHubPrEditorSyncController,
@@ -1218,71 +1231,7 @@ const githubWorkflows = createGitHubWorkflowsSetup({
     confirmAction: options => confirmAction(options),
     setStatus,
     showAppToast,
-    getActiveWorkspaceTabContext: () => {
-      const activeTab = getActiveWorkspaceTab()
-      if (!activeTab) {
-        return null
-      }
-
-      const isStylesTab = isStyleWorkspaceTab(activeTab)
-
-      return {
-        id: activeTab.id,
-        name: activeTab.name,
-        path: activeTab.path,
-        language: activeTab.language,
-        content: isStylesTab ? getCssSource() : getJsxSource(),
-        isActive: true,
-      }
-    },
-    getWorkspaceTabContexts: () => {
-      const activeTabId = workspaceTabsState.getActiveTabId()
-      return workspaceTabsState.getTabs().map(tab => {
-        const isActive = tab.id === activeTabId
-        const isStylesTab = isStyleWorkspaceTab(tab)
-        return {
-          id: tab.id,
-          name: tab.name,
-          path: tab.path,
-          language: tab.language,
-          isActive,
-          content: isActive
-            ? isStylesTab
-              ? getCssSource()
-              : getJsxSource()
-            : tab.content,
-        }
-      })
-    },
-    applyWorkspaceTabContent: ({ tabId, content }) => {
-      const tab = workspaceTabsState.getTab(tabId)
-      if (!tab || typeof content !== 'string') {
-        return null
-      }
-
-      const updatedTab = workspaceTabsState.upsertTab(
-        {
-          ...tab,
-          content,
-          isDirty: getDirtyStateForTabChange(tab, content),
-          lastModified: Date.now(),
-          isActive: tab.isActive,
-        },
-        { emitReason: 'chatApplyTabContent' },
-      )
-
-      if (!updatedTab) {
-        return null
-      }
-
-      if (updatedTab.isActive) {
-        loadWorkspaceTabIntoEditor(updatedTab)
-      }
-
-      renderWorkspaceTabs()
-      queueWorkspaceSave()
-      return updatedTab
-    },
+    ...githubChatWorkspaceActions,
     scheduleRender: () => {
       if (
         autoRenderToggle?.checked &&

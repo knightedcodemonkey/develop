@@ -12,7 +12,7 @@ import {
   toModelId,
   toRepositoryLabel,
   toRepositoryUrl,
-} from './chat-utils.js'
+} from './utils.js'
 import {
   buildActiveTabEditorContext,
   normalizeWorkspaceTabContext,

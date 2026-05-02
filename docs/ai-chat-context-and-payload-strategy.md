@@ -16,7 +16,7 @@ Each request includes a system prompt with policy guidance, then augments that p
 
 Primary implementation:
 
-- src/modules/github/chat-drawer/payload.js
+- src/modules/github/chat/payload.js
 
 ### 2. Repository context
 
@@ -29,7 +29,7 @@ Each request includes repository targeting context as a dedicated system message
 
 Primary implementation:
 
-- src/modules/github/chat-drawer/drawer.js
+- src/modules/github/chat/drawer.js
 
 ### 3. Editor context (Send tab content)
 
@@ -44,8 +44,8 @@ This context is designed to support dynamic proposal targeting by tab id/path an
 
 Primary implementation:
 
-- src/modules/github/chat-drawer/active-tab-context.js
-- src/modules/github/chat-drawer/drawer.js
+- src/modules/github/chat/active-tab-context.js
+- src/modules/github/chat/drawer.js
 
 ### 4. Tooling model
 
@@ -62,9 +62,9 @@ Contract:
 
 Primary implementation:
 
-- src/modules/github/chat-drawer/proposals.js
-- src/modules/github/chat-drawer/tab-target-resolver.js
-- src/modules/github/chat-drawer/drawer.js
+- src/modules/github/chat/proposals.js
+- src/modules/github/chat/tab-target-resolver.js
+- src/modules/github/chat/drawer.js
 
 ### 5. Apply and undo behavior
 
@@ -74,8 +74,8 @@ Primary implementation:
 
 Primary implementation:
 
-- src/modules/github/chat-drawer/drawer.js
-- src/modules/github/chat-drawer/tab-scoped-undo-state.js
+- src/modules/github/chat/drawer.js
+- src/modules/github/chat/tab-scoped-undo-state.js
 
 ### 6. Payload size controls and summary strategy
 
@@ -88,7 +88,7 @@ The payload builder includes bounded-conversation controls:
 
 Primary implementation:
 
-- src/modules/github/chat-drawer/payload.js
+- src/modules/github/chat/payload.js
 
 ### 7. Fallback and transport behavior
 
@@ -98,7 +98,7 @@ Primary implementation:
 
 Primary implementation:
 
-- src/modules/github/chat-drawer/drawer.js
+- src/modules/github/chat/drawer.js
 - src/modules/github/api/chat.js
 
 ## Why this approach
