@@ -149,7 +149,11 @@ export const createWorkspacesDrawer = ({
       selectInput instanceof HTMLSelectElement
         ? toSafeText(selectInput.value)
         : toSafeText(selectedId)
+    const activeWorkspaceId =
+      typeof getActiveWorkspaceId === 'function' ? toSafeText(getActiveWorkspaceId()) : ''
     const hasSelection = normalizedSelectedId.length > 0
+    const isSelectedWorkspaceActive =
+      hasSelection && activeWorkspaceId && normalizedSelectedId === activeWorkspaceId
     const canCreateWorkspace = typeof onCreateWorkspace === 'function'
     const canInitializeWorkspace = typeof onInitializeWorkspace === 'function'
     const hasStoredWorkspaces =
@@ -185,7 +189,7 @@ export const createWorkspacesDrawer = ({
     }
 
     if (removeButton instanceof HTMLButtonElement) {
-      removeButton.disabled = !hasSelection
+      removeButton.disabled = !hasSelection || isSelectedWorkspaceActive
     }
   }
 
@@ -325,7 +329,14 @@ export const createWorkspacesDrawer = ({
     }
 
     if (!entries.some(entry => toSafeText(entry?.id) === selectedId)) {
-      selectedId = ''
+      const activeWorkspaceId =
+        typeof getActiveWorkspaceId === 'function'
+          ? toSafeText(getActiveWorkspaceId())
+          : ''
+      const hasActiveWorkspaceEntry = entries.some(
+        entry => toSafeText(entry?.id) === activeWorkspaceId,
+      )
+      selectedId = hasActiveWorkspaceEntry ? activeWorkspaceId : ''
     }
 
     renderOptions()
@@ -466,6 +477,7 @@ export const createWorkspacesDrawer = ({
       typeof getActiveWorkspaceId === 'function' ? toSafeText(getActiveWorkspaceId()) : ''
     setStatus('Created workspace.', 'neutral')
     await refresh({ preserveSelection: Boolean(selectedId) })
+    closeDrawer()
   })
 
   openButton?.addEventListener('click', async () => {

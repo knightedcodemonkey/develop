@@ -1108,6 +1108,10 @@ test('Local New workspace always creates a new stored workspace snapshot', async
 
   const initialLocalRecordCount = await countLocalRecords()
   await page.getByRole('button', { name: 'New workspace', exact: true }).click()
+  await expect(page.getByRole('complementary', { name: 'Workspaces' })).toBeHidden()
+
+  await page.getByRole('button', { name: 'Workspaces' }).click()
+  await expect(page.getByRole('button', { name: 'Remove', exact: true })).toBeDisabled()
 
   await expect.poll(async () => countLocalRecords()).toBe(initialLocalRecordCount + 1)
 })
@@ -1151,6 +1155,7 @@ test('Non-Local New workspace forks a new repository-scoped workspace when entri
     page.getByRole('button', { name: 'New workspace', exact: true }),
   ).toBeVisible()
   await page.getByRole('button', { name: 'New workspace', exact: true }).click()
+  await expect(page.getByRole('complementary', { name: 'Workspaces' })).toBeHidden()
 
   await expect.poll(async () => countRepositoryRecords()).toBe(initialRepositoryCount + 1)
 
@@ -1172,6 +1177,86 @@ test('Non-Local New workspace forks a new repository-scoped workspace when entri
   ).toBe('')
   expect(typeof forkedRepositoryRecord?.head).toBe('string')
   expect(String(forkedRepositoryRecord?.head ?? '')).not.toBe(seededHead)
+})
+
+test('Removing a non-active workspace reselects the active workspace in Workspaces select', async ({
+  page,
+}) => {
+  const activeWorkspaceId = 'active_workspace_select_fallback_target'
+
+  await waitForAppReady(page, `${appEntryPath}`)
+
+  await seedLocalWorkspaceContexts(page, [
+    {
+      id: activeWorkspaceId,
+      repo: '',
+      base: 'main',
+      head: 'feat/active-workspace',
+      prTitle: 'Active workspace',
+      prNumber: null,
+      prContextState: 'inactive',
+    },
+    {
+      id: 'workspace_to_remove_from_drawer',
+      repo: '',
+      base: 'main',
+      head: 'feat/removable-workspace',
+      prTitle: 'Removable workspace',
+      prNumber: null,
+      prContextState: 'inactive',
+    },
+  ])
+
+  await page.reload()
+  await waitForAppReady(page, `${appEntryPath}`)
+  await connectByotWithSingleRepo(page)
+
+  await openStoredWorkspaceContextById(page, activeWorkspaceId, {
+    repositoryFilter: '__local__',
+  })
+
+  await page.getByRole('button', { name: 'Workspaces' }).click()
+  await selectWorkspacesRepositoryFilter(page, '__local__')
+
+  const storedWorkspaceSelect = page.locator('#workspaces-select')
+  const removeWorkspaceButton = page.getByRole('button', {
+    name: 'Remove',
+    exact: true,
+  })
+
+  const resolveRemovableWorkspaceId = () =>
+    storedWorkspaceSelect.evaluate((element, activeId) => {
+      if (!(element instanceof HTMLSelectElement)) {
+        return ''
+      }
+
+      const candidates = Array.from(element.options)
+        .map(option => option.value)
+        .filter(value => value && value !== activeId)
+
+      return candidates[0] ?? ''
+    }, activeWorkspaceId)
+
+  await expect.poll(resolveRemovableWorkspaceId).not.toBe('')
+  const removableWorkspaceId = await resolveRemovableWorkspaceId()
+
+  await storedWorkspaceSelect.selectOption(removableWorkspaceId)
+  await expect(storedWorkspaceSelect).toHaveValue(removableWorkspaceId)
+  await expect(removeWorkspaceButton).toBeEnabled()
+  await removeWorkspaceButton.click()
+
+  const dialog = page.locator('#clear-confirm-dialog')
+  await expect(dialog).toBeVisible()
+  await dialog.locator('button[value="confirm"]').evaluate(element => {
+    if (element instanceof HTMLButtonElement) {
+      element.click()
+    }
+  })
+
+  await expect
+    .poll(async () => storedWorkspaceSelect.inputValue())
+    .toBe(activeWorkspaceId)
+  await expect(removeWorkspaceButton).toBeDisabled()
 })
 
 test('Switching Workspaces repository scope to Local keeps inactive record repo and shows it as local in drawer', async ({
