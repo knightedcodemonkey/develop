@@ -215,12 +215,13 @@ const createWorkspaceTabMutationsController = ({
       onConfirm: () => {
         const removedKind = isStyleWorkspaceTab(tab) ? 'styles' : 'component'
         persistActiveTabEditorContent()
-        if (typeof trackRemovedWorkspaceTab === 'function') {
-          trackRemovedWorkspaceTab(tab)
-        }
         const removed = workspaceTabsState.removeTab(tab.id)
         if (!removed) {
           return
+        }
+
+        if (typeof trackRemovedWorkspaceTab === 'function') {
+          trackRemovedWorkspaceTab(tab)
         }
 
         if (typeof clearTrackedWorkspaceTab === 'function') {

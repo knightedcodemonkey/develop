@@ -44,8 +44,9 @@ const createWorkspaceSyncController = ({
       return false
     }
 
-    const removedPath =
-      getTabTargetPrFilePath(tab) || normalizeWorkspacePathValue(tab?.path) || ''
+    const removedPath = normalizeWorkspacePathValue(
+      getTabTargetPrFilePath(tab) || tab?.path,
+    )
     if (!removedPath) {
       return false
     }
