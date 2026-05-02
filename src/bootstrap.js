@@ -12,6 +12,7 @@ const preloadImportKeys = [
   'jsxTransform',
   'jsxReact',
   'react',
+  'reactDom',
   'reactDomClient',
   'idb',
 ]
