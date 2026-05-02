@@ -34,7 +34,7 @@ browser acts as the runtime host for editing, render, lint, and typecheck flows.
 - use iframe-isolated preview style encapsulation while iterating
 - connect a GitHub repository and run Open PR / Push Commit workflows
 - use AI chat with tab-aware proposals and apply/undo controls
-- switch layout and theme while preserving fast feedback loops
+- switch theme and collapse the preview panel while preserving fast feedback loops
 
 ## Why this shape
 
