@@ -153,7 +153,9 @@ export const createWorkspacesDrawer = ({
       typeof getActiveWorkspaceId === 'function' ? toSafeText(getActiveWorkspaceId()) : ''
     const hasSelection = normalizedSelectedId.length > 0
     const isSelectedWorkspaceActive =
-      hasSelection && activeWorkspaceId && normalizedSelectedId === activeWorkspaceId
+      hasSelection &&
+      Boolean(activeWorkspaceId) &&
+      normalizedSelectedId === activeWorkspaceId
     const canCreateWorkspace = typeof onCreateWorkspace === 'function'
     const canInitializeWorkspace = typeof onInitializeWorkspace === 'function'
     const hasStoredWorkspaces =
