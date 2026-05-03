@@ -411,7 +411,7 @@ export const createRenderRuntimeController = ({
 
     if (!entryTab) {
       clearStyleDiagnostics()
-      return { css: '', styleModuleExportsByTabId: {} }
+      return { css: '', userStyleSheets: [], styleModuleExportsByTabId: {} }
     }
 
     const runtimeSpecifiers = getWorkspaceRuntimeSpecifiers()
@@ -427,7 +427,7 @@ export const createRenderRuntimeController = ({
 
     if (!virtualModulePlan) {
       clearStyleDiagnostics()
-      return { css: '', styleModuleExportsByTabId: {} }
+      return { css: '', userStyleSheets: [], styleModuleExportsByTabId: {} }
     }
 
     const workspaceTabById = new Map(
@@ -481,7 +481,7 @@ export const createRenderRuntimeController = ({
 
     if (styleInputs.length === 0) {
       clearStyleDiagnostics()
-      const output = { css: '', styleModuleExportsByTabId: {} }
+      const output = { css: '', userStyleSheets: [], styleModuleExportsByTabId: {} }
       compiledStylesCache = {
         key: cacheKey,
         value: output,
@@ -560,6 +560,7 @@ export const createRenderRuntimeController = ({
 
       const styleModuleExportsByTabId = {}
       const compiledCssParts = []
+      const userStyleSheets = []
 
       for (let index = 0; index < styleInputs.length; index += 1) {
         const input = styleInputs[index]
@@ -567,6 +568,7 @@ export const createRenderRuntimeController = ({
 
         if (part && typeof part.css === 'string') {
           compiledCssParts.push(part.css)
+          userStyleSheets.push(part.css)
         }
 
         if (input?.dialect !== 'module' || !part?.moduleExports) {
@@ -594,6 +596,7 @@ export const createRenderRuntimeController = ({
 
       const output = {
         css: compiledCssParts.join('\n\n'),
+        userStyleSheets,
         styleModuleExportsByTabId,
       }
       if (styleWarningLines.length > 0) {
@@ -708,6 +711,7 @@ export const createRenderRuntimeController = ({
   const renderWorkspaceInIframe = async ({
     mode,
     cssText,
+    userStyleSheets = [],
     styleModuleExportsByTabId = {},
   }) => {
     const workspaceTabs = getWorkspaceTabsForPreview()
@@ -784,6 +788,7 @@ export const createRenderRuntimeController = ({
         entryExportName: virtualModulePlan.entryExportName,
         importMap: virtualModulePlan.importMap,
         cssText,
+        userStyleSheets,
         hostPadding,
         backgroundColor: getPreviewBackgroundColor(),
         runtimeSpecifiers,
@@ -816,6 +821,7 @@ export const createRenderRuntimeController = ({
     await renderWorkspaceInIframe({
       mode: 'dom',
       cssText: compiledStyles.css,
+      userStyleSheets: compiledStyles.userStyleSheets,
       styleModuleExportsByTabId: compiledStyles.styleModuleExportsByTabId,
     })
   }
@@ -834,6 +840,7 @@ export const createRenderRuntimeController = ({
     await renderWorkspaceInIframe({
       mode: 'react',
       cssText: compiledStyles.css,
+      userStyleSheets: compiledStyles.userStyleSheets,
       styleModuleExportsByTabId: compiledStyles.styleModuleExportsByTabId,
     })
   }

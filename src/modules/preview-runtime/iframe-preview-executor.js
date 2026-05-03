@@ -58,6 +58,7 @@ const createIframeShellDocument = ({ channelId, parentOrigin, importMap }) => {
         renderedNodes: [],
         visualConfig: {
           cssText: '',
+          userStyleSheets: [],
           hostPadding: '',
           backgroundColor: '',
         },
@@ -114,24 +115,100 @@ const createIframeShellDocument = ({ channelId, parentOrigin, importMap }) => {
         ].join('\\n')
       }
 
-      const __knightedApplyVisualConfig = ({ cssText = '', hostPadding = '', backgroundColor = '' }) => {
+      const __knightedApplyVisualConfig = ({
+        cssText = '',
+        userStyleSheets = [],
+        hostPadding = '',
+        backgroundColor = '',
+      }) => {
+        const normalizedUserStyleSheets = Array.isArray(userStyleSheets)
+          ? userStyleSheets
+              .filter(styleText => typeof styleText === 'string')
+              .map(styleText => String(styleText))
+          : []
+        const fallbackUserStyleText = typeof cssText === 'string' ? cssText : ''
+        const desiredUserStyleSheets =
+          normalizedUserStyleSheets.length > 0
+            ? normalizedUserStyleSheets
+            : [fallbackUserStyleText]
+
         __knightedState.visualConfig = {
-          cssText: typeof cssText === 'string' ? cssText : '',
+          cssText: fallbackUserStyleText,
+          userStyleSheets: desiredUserStyleSheets,
           hostPadding: typeof hostPadding === 'string' ? hostPadding : '',
           backgroundColor: typeof backgroundColor === 'string' ? backgroundColor : '',
         }
 
-        let styleElement = document.getElementById('knighted-preview-styles')
-        if (!(styleElement instanceof HTMLStyleElement)) {
-          styleElement = document.createElement('style')
-          styleElement.id = 'knighted-preview-styles'
-          document.head.append(styleElement)
+        let baseStyleElement = document.getElementById('knighted-preview-base-styles')
+        if (!(baseStyleElement instanceof HTMLStyleElement)) {
+          baseStyleElement = document.createElement('style')
+          baseStyleElement.id = 'knighted-preview-base-styles'
+          document.head.append(baseStyleElement)
         }
 
-        styleElement.textContent =
-          __knightedToBaseStyles(__knightedState.visualConfig.hostPadding) +
-          '\\n' +
-          String(__knightedState.visualConfig.cssText)
+        const desiredUserStyleElementIds = __knightedState.visualConfig.userStyleSheets.map(
+          (_styleText, index) =>
+            index === 0
+              ? 'knighted-preview-user-styles'
+              : 'knighted-preview-user-styles-' + index,
+        )
+
+        const desiredUserStyleElementIdSet = new Set(desiredUserStyleElementIds)
+        const existingUserStyleElements = Array.from(
+          document.head.querySelectorAll('style[id^="knighted-preview-user-styles"]'),
+        )
+        for (const existingUserStyleElement of existingUserStyleElements) {
+          if (!desiredUserStyleElementIdSet.has(existingUserStyleElement.id)) {
+            existingUserStyleElement.remove()
+          }
+        }
+
+        const userStyleElements = []
+        let previousPreviewStyleElement = baseStyleElement
+
+        for (const styleElementId of desiredUserStyleElementIds) {
+          let userStyleElement = document.getElementById(styleElementId)
+          if (!(userStyleElement instanceof HTMLStyleElement)) {
+            userStyleElement = document.createElement('style')
+            userStyleElement.id = styleElementId
+
+            if (
+              previousPreviewStyleElement instanceof HTMLStyleElement &&
+              previousPreviewStyleElement.parentNode === document.head
+            ) {
+              document.head.insertBefore(
+                userStyleElement,
+                previousPreviewStyleElement.nextSibling,
+              )
+            } else {
+              document.head.append(userStyleElement)
+            }
+          }
+
+          userStyleElements.push(userStyleElement)
+          previousPreviewStyleElement = userStyleElement
+        }
+
+        const firstUserStyleElement = userStyleElements[0]
+        const isBaseAfterUser =
+          firstUserStyleElement instanceof HTMLStyleElement &&
+          (baseStyleElement.compareDocumentPosition(firstUserStyleElement) &
+            Node.DOCUMENT_POSITION_PRECEDING) !==
+          0
+        if (isBaseAfterUser && firstUserStyleElement instanceof HTMLStyleElement) {
+          document.head.insertBefore(baseStyleElement, firstUserStyleElement)
+        }
+
+        baseStyleElement.textContent = __knightedToBaseStyles(
+          __knightedState.visualConfig.hostPadding,
+        )
+
+        for (let index = 0; index < userStyleElements.length; index += 1) {
+          const userStyleElement = userStyleElements[index]
+          userStyleElement.textContent = String(
+            __knightedState.visualConfig.userStyleSheets[index] ?? '',
+          )
+        }
 
         if (__knightedState.visualConfig.hostPadding.trim().length > 0) {
           document.documentElement.style.setProperty(
@@ -559,6 +636,7 @@ export const createWorkspaceIframePreviewBridge = ({
     entryExportName,
     importMap,
     cssText,
+    userStyleSheets = [],
     hostPadding = '',
     backgroundColor = '',
     runtimeSpecifiers,
@@ -594,13 +672,18 @@ export const createWorkspaceIframePreviewBridge = ({
         timer,
       }
 
+      const stylePayload =
+        Array.isArray(userStyleSheets) && userStyleSheets.length > 0
+          ? { userStyleSheets }
+          : { cssText }
+
       const payload = {
         mode,
         entrySpecifier,
         entryDisplaySpecifier,
         entryExportName,
         runtimeSpecifiers,
-        cssText,
+        ...stylePayload,
         hostPadding,
         backgroundColor,
         importMap,
