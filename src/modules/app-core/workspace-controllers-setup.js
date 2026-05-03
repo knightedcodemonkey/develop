@@ -7,6 +7,7 @@ import { createWorkspaceTabsRenderer } from './workspace-tabs-renderer.js'
 const createWorkspaceControllersSetup = ({
   createDebouncedWorkspaceSaver,
   workspaceStorage,
+  getHasGitHubToken,
   getWorkspacesDrawerController,
   toNonEmptyWorkspaceText,
   buildWorkspaceRecordSnapshot,
@@ -203,6 +204,7 @@ const createWorkspaceControllersSetup = ({
 
   const workspaceContextController = createWorkspaceContextController({
     workspaceStorage,
+    getHasGitHubToken,
     getCurrentSelectedRepository,
     getWorkspacesDrawerController,
     getActiveWorkspaceRecordId,

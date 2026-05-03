@@ -50,6 +50,10 @@ const domJsxTypes =
   '}\n'
 
 const styleImportTypes =
+  "declare module '*.module.css' {\n" +
+  '  const classNames: Record<string, string>\n' +
+  '  export default classNames\n' +
+  '}\n' +
   "declare module '*.css' {\n" +
   '  const cssText: string\n' +
   '  export default cssText\n' +

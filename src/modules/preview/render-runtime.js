@@ -221,36 +221,6 @@ export const createRenderRuntimeController = ({
     return typeof value === 'string' ? value : ''
   }
 
-  const escapeRegex = value => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-
-  const appendCssModuleLocalAliases = (cssText, moduleExports) => {
-    if (!cssText || !moduleExports) {
-      return cssText
-    }
-
-    let output = cssText
-
-    for (const [localClassName, exportedValue] of Object.entries(moduleExports)) {
-      if (typeof localClassName !== 'string' || !localClassName) {
-        continue
-      }
-
-      const hashedTokens = normalizeCssModuleExport(exportedValue)
-        .split(/\s+/)
-        .filter(Boolean)
-
-      for (const hashedClassName of hashedTokens) {
-        if (hashedClassName === localClassName) {
-          continue
-        }
-        const rx = new RegExp(`\\.${escapeRegex(hashedClassName)}(?![\\w-])`, 'g')
-        output = output.replace(rx, `.${hashedClassName}, .${localClassName}`)
-      }
-    }
-
-    return output
-  }
-
   const formatTransformDiagnosticsError = diagnostics => {
     const firstDiagnostic = diagnostics?.[0]
 
@@ -549,10 +519,7 @@ export const createRenderRuntimeController = ({
 
           const moduleExports = result.exports ?? null
           return {
-            css:
-              input.dialect === 'module'
-                ? appendCssModuleLocalAliases(result.css, moduleExports)
-                : result.css,
+            css: result.css,
             moduleExports,
           }
         }),

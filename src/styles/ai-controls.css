@@ -16,7 +16,6 @@
   display: inline-flex;
   align-items: center;
   gap: 10px;
-  margin-right: 6px;
   padding-right: 12px;
   border-right: 1px solid var(--border-subtle);
 }
@@ -1050,6 +1049,24 @@
     flex-wrap: nowrap;
   }
 
+  .diagnostics-toggle.workspaces-toggle {
+    gap: 0;
+    margin-left: 0;
+    padding-inline: 10px;
+  }
+
+  .diagnostics-toggle.workspaces-toggle > span {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+  }
+
   .app-grid-ai-controls {
     position: absolute;
     top: calc(100% + 10px);
@@ -1117,6 +1134,17 @@
     max-height: min(72vh, calc(100dvh - 92px));
   }
 
+  .workspaces-drawer,
+  .workspaces-drawer.workspaces-drawer--right,
+  .workspaces-drawer.workspaces-drawer--left {
+    top: max(132px, calc(env(safe-area-inset-top) + 108px));
+    right: 24px;
+    left: 24px;
+    width: calc(100vw - 48px);
+    max-width: none;
+    max-height: min(72vh, calc(100dvh - 148px));
+  }
+
   .github-pr-drawer__form-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -1135,5 +1163,14 @@
 
   .ai-chat-drawer__meta {
     align-items: flex-start;
+  }
+}
+
+@media (width <= 640px) {
+  .workspaces-drawer,
+  .workspaces-drawer.workspaces-drawer--right,
+  .workspaces-drawer.workspaces-drawer--left {
+    top: max(210px, calc(env(safe-area-inset-top) + 186px));
+    max-height: min(68vh, calc(100dvh - 226px));
   }
 }
