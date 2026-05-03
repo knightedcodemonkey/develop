@@ -498,6 +498,9 @@ const prContextUi = createGitHubPrContextUiController({
   closePrDrawer: () => {
     prDrawerController.setOpen(false)
   },
+  closeWorkspacesDrawer: () => {
+    void workspacesDrawerController?.setOpen(false)
+  },
 })
 
 const editedIndicatorVisibilityController = createEditedIndicatorVisibilityController({

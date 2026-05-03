@@ -15,6 +15,7 @@ export const createGitHubPrContextUiController = ({
   githubPrPushCommitIcon,
   closeChatDrawer,
   closePrDrawer,
+  closeWorkspacesDrawer,
 }) => {
   const setGitHubPrToggleVisual = mode => {
     if (
@@ -134,6 +135,7 @@ export const createGitHubPrContextUiController = ({
     githubPrContextClose?.setAttribute('hidden', '')
     closeChatDrawer?.()
     closePrDrawer?.()
+    closeWorkspacesDrawer?.()
   }
 
   return {

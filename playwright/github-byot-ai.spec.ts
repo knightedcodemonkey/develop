@@ -395,8 +395,20 @@ test('deleting saved GitHub token requires confirmation modal', async ({ page })
   const tokenDelete = page.getByRole('button', { name: 'Delete GitHub token' })
   const tokenAdd = page.getByRole('button', { name: 'Add GitHub token' })
   const tokenInput = page.getByRole('textbox', { name: 'GitHub token' })
+  const workspacesToggle = page.getByRole('button', {
+    name: 'Workspaces',
+    exact: true,
+  })
+  const repositoryFilter = page.getByRole('combobox', {
+    name: 'Workspace repository filter',
+  })
 
   await expect(tokenDelete).toBeVisible()
+
+  await workspacesToggle.click()
+  await expect(repositoryFilter).toBeEnabled()
+  await repositoryFilter.selectOption('knightedcodemonkey/develop')
+  await expect(repositoryFilter).toHaveValue('knightedcodemonkey/develop')
 
   await tokenDelete.click()
   await expect(dialog).toHaveAttribute('open', '')
@@ -430,6 +442,12 @@ test('deleting saved GitHub token requires confirmation modal', async ({ page })
   await expect(tokenAdd).toBeVisible()
   await expect(tokenDelete).toBeHidden()
   await expect(tokenInput).toHaveValue('')
+  await expect(workspacesToggle).toHaveAttribute('aria-expanded', 'false')
+  await expect(page.getByRole('complementary', { name: 'Workspaces' })).toBeHidden()
+
+  await workspacesToggle.click()
+  await expect(repositoryFilter).toBeDisabled()
+  await expect(repositoryFilter).toHaveValue('__local__')
 })
 
 test('AI chat drawer opens and closes', async ({ page }) => {
