@@ -26,22 +26,18 @@ const toSafeWorkspaceScope = workspace => {
     : localWorkspaceScopeValue
 }
 
-const toWorkspaceLabel = (workspace, { forceLocalPrefix = false } = {}) => {
-  const isLocalScoped =
-    forceLocalPrefix || toSafeWorkspaceScope(workspace) === localWorkspaceScopeValue
-
+const toWorkspaceLabel = workspace => {
   const hasTitle = toSafeText(workspace?.prTitle)
   if (hasTitle) {
-    return isLocalScoped ? `local:${hasTitle}` : hasTitle
+    return hasTitle
   }
 
   const hasHead = toSafeText(workspace?.head)
   if (hasHead) {
-    return isLocalScoped ? `local:${hasHead}` : hasHead
+    return hasHead
   }
 
-  const fallbackLabel = toSafeText(workspace?.id) || 'workspace'
-  return isLocalScoped ? `local:${fallbackLabel}` : fallbackLabel
+  return toSafeText(workspace?.id) || 'workspace'
 }
 
 export const createWorkspacesDrawer = ({
@@ -55,6 +51,7 @@ export const createWorkspacesDrawer = ({
   newButton,
   selectInput,
   openButton,
+  renameButton,
   removeButton,
   getDrawerSide,
   getRepositoryFilterOptions,
@@ -64,6 +61,7 @@ export const createWorkspacesDrawer = ({
   onInitializeWorkspace,
   onCreateWorkspace,
   onOpenSelected,
+  onRenameSelected,
   onRemoveSelected,
 } = {}) => {
   let open = false
@@ -152,15 +150,28 @@ export const createWorkspacesDrawer = ({
     const activeWorkspaceId =
       typeof getActiveWorkspaceId === 'function' ? toSafeText(getActiveWorkspaceId()) : ''
     const hasSelection = normalizedSelectedId.length > 0
+    const selectedEntry = entries.find(
+      entry => toSafeText(entry?.id) === normalizedSelectedId,
+    )
+    const selectedWorkspaceScope = toSafeWorkspaceScope(selectedEntry)
+    const isSelectedLocalWorkspace =
+      hasSelection && selectedWorkspaceScope === localWorkspaceScopeValue
     const isSelectedWorkspaceActive =
       hasSelection &&
       Boolean(activeWorkspaceId) &&
       normalizedSelectedId === activeWorkspaceId
+    const canRenameWorkspace =
+      typeof onRenameSelected === 'function' &&
+      isSelectedLocalWorkspace &&
+      !isSelectedWorkspaceActive
     const canCreateWorkspace = typeof onCreateWorkspace === 'function'
     const canInitializeWorkspace = typeof onInitializeWorkspace === 'function'
     const hasStoredWorkspaces =
       currentUiState === drawerUiState.localWithWorkspaces ||
       currentUiState === drawerUiState.repositoryWithWorkspaces
+    const isLocalUiState =
+      currentUiState === drawerUiState.localWithWorkspaces ||
+      currentUiState === drawerUiState.localEmpty
     const showInitialize = currentUiState === drawerUiState.repositoryEmpty
     const showNewWorkspace = !showInitialize
 
@@ -188,6 +199,11 @@ export const createWorkspacesDrawer = ({
 
     if (openButton instanceof HTMLButtonElement) {
       openButton.disabled = !hasSelection
+    }
+
+    if (renameButton instanceof HTMLButtonElement) {
+      renameButton.toggleAttribute('hidden', !isLocalUiState)
+      renameButton.disabled = !canRenameWorkspace
     }
 
     if (removeButton instanceof HTMLButtonElement) {
@@ -229,12 +245,7 @@ export const createWorkspacesDrawer = ({
     for (const entry of filteredEntries) {
       const option = document.createElement('option')
       option.value = toSafeText(entry.id)
-      const shouldPrefixAsLocal =
-        normalizedRepositoryFilter === localRepositoryFilterValue &&
-        shouldRenderAsLocalEntry(entry)
-      option.textContent = toWorkspaceLabel(entry, {
-        forceLocalPrefix: shouldPrefixAsLocal,
-      })
+      option.textContent = toWorkspaceLabel(entry)
       option.selected = option.value === selectedId
       selectInput.append(option)
     }
@@ -519,6 +530,30 @@ export const createWorkspacesDrawer = ({
 
     closeDrawer()
     setStatus('Loaded workspace.', 'neutral')
+  })
+
+  renameButton?.addEventListener('click', async () => {
+    const id = toSafeText(selectedId)
+    if (!id || typeof onRenameSelected !== 'function') {
+      return
+    }
+
+    selectedId = id
+
+    let renamed = false
+    try {
+      renamed = await onRenameSelected(id)
+    } catch {
+      setStatus('Could not rename stored workspace.', 'error')
+      return
+    }
+
+    if (!renamed) {
+      return
+    }
+
+    await refresh({ preserveSelection: true })
+    setStatus('Renamed workspace.', 'neutral')
   })
 
   removeButton?.addEventListener('click', async () => {

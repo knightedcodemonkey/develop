@@ -150,6 +150,7 @@ const workspacesInitialize = document.getElementById('workspaces-initialize')
 const workspacesNew = document.getElementById('workspaces-new')
 const workspacesSelect = document.getElementById('workspaces-select')
 const workspacesOpen = document.getElementById('workspaces-open')
+const workspacesRename = document.getElementById('workspaces-rename')
 const workspacesRemove = document.getElementById('workspaces-remove')
 const componentPrSyncIcon = document.getElementById('component-pr-sync-icon')
 const componentPrSyncIconPath = document.getElementById('component-pr-sync-icon-path')
@@ -425,6 +426,8 @@ let workspacePrContextState = 'inactive'
 let workspacePrNumber = null
 let workspaceRepositoryFullName = ''
 let workspaceScopeMarker = 'local'
+let activeWorkspacePersistedPrTitle = ''
+let activeWorkspacePersistedHeadBranch = ''
 let hasObservedActivePrContextInSession = false
 let workspaceContextStatusController = {
   render: () => {},
@@ -450,6 +453,8 @@ const toPullRequestNumber = value => {
 const setActiveWorkspaceRecordId = nextValue => {
   activeWorkspaceRecordId = toNonEmptyWorkspaceText(nextValue)
   if (!activeWorkspaceRecordId) {
+    activeWorkspacePersistedPrTitle = ''
+    activeWorkspacePersistedHeadBranch = ''
     workspaceRepositoryFullName = ''
     workspaceScopeMarker = 'local'
   }
@@ -607,6 +612,8 @@ workspaceContextStatusController = createWorkspaceContextStatusController({
   toNonEmptyWorkspaceText,
   getWorkspacePrTitle: () => githubPrTitle?.value,
   getWorkspaceHeadBranch: () => githubPrHeadBranch?.value,
+  getActiveWorkspacePersistedPrTitle: () => activeWorkspacePersistedPrTitle,
+  getActiveWorkspacePersistedHeadBranch: () => activeWorkspacePersistedHeadBranch,
   getWorkspaceScopeMarker: () => workspaceScopeMarker,
   getActiveWorkspaceRecordId: () => activeWorkspaceRecordId,
   getWorkspaceRepositoryFullName: () => workspaceRepositoryFullName,
@@ -787,6 +794,15 @@ const onWorkspaceRecordApplied = createWorkspaceRecordAppliedHandler({
   getStyleModeValue: () => styleMode.value,
 })
 
+const onWorkspaceRecordAppliedWithStatusMetadata = workspace => {
+  if (workspace && typeof workspace === 'object') {
+    activeWorkspacePersistedPrTitle = toNonEmptyWorkspaceText(workspace.prTitle)
+    activeWorkspacePersistedHeadBranch = toNonEmptyWorkspaceText(workspace.head)
+  }
+
+  onWorkspaceRecordApplied(workspace)
+}
+
 const {
   workspaceSaveController,
   listLocalContextRecords,
@@ -878,7 +894,7 @@ const {
   getWorkspaceTabByKind,
   makeUniqueTabPath,
   createWorkspaceTabId,
-  onWorkspaceRecordApplied,
+  onWorkspaceRecordApplied: onWorkspaceRecordAppliedWithStatusMetadata,
 })
 
 const { syncActiveWorkspaceRepositoryScope, forkWorkspaceFromCurrentState } =
@@ -1116,6 +1132,7 @@ const githubWorkflows = createGitHubWorkflowsSetup({
     workspacesNew,
     workspacesSelect,
     workspacesOpen,
+    workspacesRename,
     workspacesRemove,
   },
   workspace: {

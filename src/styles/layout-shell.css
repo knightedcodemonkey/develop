@@ -110,25 +110,17 @@
   --expanded-panel-min-height: 360px;
   display: grid;
   grid-template-columns: repeat(2, minmax(320px, 1fr));
-  grid-template-rows: auto auto minmax(0, 1fr);
-  grid-template-areas:
-    'layout-controls layout-controls'
-    'workspace-tabs workspace-tabs'
-    'editors preview';
-  gap: 18px;
-  padding: 24px;
-  min-height: 0;
-  height: 100%;
-  overflow: hidden;
-}
-
-.app-grid.app-grid--workspace-context-visible {
   grid-template-rows: auto auto auto minmax(0, 1fr);
   grid-template-areas:
     'layout-controls layout-controls'
     'workspace-tabs workspace-tabs'
     'workspace-context workspace-context'
     'editors preview';
+  gap: 18px;
+  padding: 24px;
+  min-height: 0;
+  height: 100%;
+  overflow: hidden;
 }
 
 .panels-stack {

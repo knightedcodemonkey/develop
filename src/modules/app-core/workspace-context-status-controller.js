@@ -5,6 +5,8 @@ const createWorkspaceContextStatusController = ({
   toNonEmptyWorkspaceText,
   getWorkspacePrTitle,
   getWorkspaceHeadBranch,
+  getActiveWorkspacePersistedPrTitle,
+  getActiveWorkspacePersistedHeadBranch,
   getWorkspaceScopeMarker,
   getActiveWorkspaceRecordId,
   getWorkspaceRepositoryFullName,
@@ -12,10 +14,27 @@ const createWorkspaceContextStatusController = ({
 }) => {
   let hasValidatedGitHubPat = false
   let hasCompletedRepositoryLoad = false
-  const appGrid =
-    statusNode instanceof HTMLElement ? statusNode.closest('.app-grid') : null
 
   const getWorkspaceName = () => {
+    const workspaceScope =
+      toNonEmptyWorkspaceText(getWorkspaceScopeMarker?.()).toLowerCase() || 'local'
+
+    if (workspaceScope === 'local') {
+      const persistedPrTitle = toNonEmptyWorkspaceText(
+        getActiveWorkspacePersistedPrTitle?.(),
+      )
+      if (persistedPrTitle) {
+        return persistedPrTitle
+      }
+
+      const persistedHeadBranch = toNonEmptyWorkspaceText(
+        getActiveWorkspacePersistedHeadBranch?.(),
+      )
+      if (persistedHeadBranch) {
+        return persistedHeadBranch
+      }
+    }
+
     const prTitle = toNonEmptyWorkspaceText(getWorkspacePrTitle?.())
     if (prTitle) {
       return prTitle
@@ -34,27 +53,18 @@ const createWorkspaceContextStatusController = ({
       return
     }
 
-    if (appGrid instanceof HTMLElement) {
-      appGrid.classList.toggle(
-        'app-grid--workspace-context-visible',
-        hasValidatedGitHubPat,
-      )
-    }
-
-    statusNode.toggleAttribute('hidden', !hasValidatedGitHubPat)
-    if (!hasValidatedGitHubPat) {
-      return
-    }
+    statusNode.removeAttribute('hidden')
 
     const workspaceName = getWorkspaceName()
     const workspaceScope =
       toNonEmptyWorkspaceText(getWorkspaceScopeMarker?.()).toLowerCase() || 'local'
-    const repository =
-      workspaceScope === 'local'
-        ? 'local'
-        : toNonEmptyWorkspaceText(getWorkspaceRepositoryFullName?.()) ||
-          toNonEmptyWorkspaceText(getSelectedRepositoryFullName?.()) ||
-          'unknown'
+    const shouldShowRepositoryContext =
+      hasValidatedGitHubPat && workspaceScope !== 'local'
+    const repository = shouldShowRepositoryContext
+      ? toNonEmptyWorkspaceText(getWorkspaceRepositoryFullName?.()) ||
+        toNonEmptyWorkspaceText(getSelectedRepositoryFullName?.()) ||
+        'unknown'
+      : 'local'
 
     statusNode.textContent = `${workspaceName} • ${repository}`
   }
