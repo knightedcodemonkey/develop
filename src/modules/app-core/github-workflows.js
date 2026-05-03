@@ -46,6 +46,7 @@ const initializeGitHubWorkflows = ({
   workspacesNew,
   workspacesSelect,
   workspacesOpen,
+  workspacesRename,
   workspacesRemove,
   workspaceStorage,
   getActiveWorkspaceRecordId,
@@ -120,6 +121,8 @@ const initializeGitHubWorkflows = ({
 
   const toSafeRepositoryFullName = value =>
     typeof value === 'string' ? value.trim() : ''
+
+  const toSafeWorkspaceText = value => (typeof value === 'string' ? value.trim() : '')
 
   const shouldApplyActivePrEditorSync = ({ repository, activeContext }) => {
     const syncedContextKey = getActivePrContextSyncKey(activeContext)
@@ -425,6 +428,7 @@ const initializeGitHubWorkflows = ({
     newButton: workspacesNew,
     selectInput: workspacesSelect,
     openButton: workspacesOpen,
+    renameButton: workspacesRename,
     removeButton: workspacesRemove,
     getRepositoryFilterOptions: () =>
       getCurrentWritableRepositories().map(repository => ({
@@ -522,6 +526,81 @@ const initializeGitHubWorkflows = ({
       } catch {
         workspacesDrawerController?.setStatus(
           'Could not load selected workspace.',
+          'error',
+        )
+        return false
+      }
+    },
+    onRenameSelected: async workspaceId => {
+      try {
+        const record = await workspaceStorage.getWorkspaceById(workspaceId)
+        if (!record) {
+          await refreshLocalContextOptions()
+          workspacesDrawerController?.setStatus(
+            'Stored workspace no longer exists.',
+            'error',
+          )
+          return false
+        }
+
+        const workspaceScope = toSafeWorkspaceText(record.workspaceScope).toLowerCase()
+        const isLocalWorkspace =
+          workspaceScope === 'local' ||
+          (!workspaceScope && !toSafeWorkspaceText(record.repo))
+        if (!isLocalWorkspace) {
+          workspacesDrawerController?.setStatus(
+            'Only Local workspaces can be renamed here.',
+            'error',
+          )
+          return false
+        }
+
+        if (getActiveWorkspaceRecordId() === workspaceId) {
+          workspacesDrawerController?.setStatus(
+            'Open a different workspace before renaming this one.',
+            'error',
+          )
+          return false
+        }
+
+        const currentWorkspaceName =
+          toSafeWorkspaceText(record.prTitle) ||
+          toSafeWorkspaceText(record.head) ||
+          toSafeWorkspaceText(record.id) ||
+          'workspace'
+        const promptedWorkspaceName = window.prompt(
+          'Rename local workspace',
+          currentWorkspaceName,
+        )
+
+        if (promptedWorkspaceName === null) {
+          return false
+        }
+
+        const nextWorkspaceName = promptedWorkspaceName.trim()
+        if (!nextWorkspaceName) {
+          workspacesDrawerController?.setStatus(
+            'Workspace name cannot be empty.',
+            'error',
+          )
+          return false
+        }
+
+        if (nextWorkspaceName === currentWorkspaceName) {
+          return false
+        }
+
+        await workspaceStorage.upsertWorkspace({
+          ...record,
+          prTitle: nextWorkspaceName,
+          lastModified: Date.now(),
+        })
+
+        await refreshLocalContextOptions()
+        return true
+      } catch {
+        workspacesDrawerController?.setStatus(
+          'Could not rename stored workspace.',
           'error',
         )
         return false

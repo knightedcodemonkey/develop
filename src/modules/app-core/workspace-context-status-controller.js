@@ -1,21 +1,35 @@
-const hasTokenValue = token => typeof token === 'string' && token.trim().length > 0
-
 const createWorkspaceContextStatusController = ({
   statusNode,
   toNonEmptyWorkspaceText,
   getWorkspacePrTitle,
   getWorkspaceHeadBranch,
+  getActiveWorkspacePersistedPrTitle,
+  getActiveWorkspacePersistedHeadBranch,
   getWorkspaceScopeMarker,
   getActiveWorkspaceRecordId,
   getWorkspaceRepositoryFullName,
   getSelectedRepositoryFullName,
 }) => {
-  let hasValidatedGitHubPat = false
-  let hasCompletedRepositoryLoad = false
-  const appGrid =
-    statusNode instanceof HTMLElement ? statusNode.closest('.app-grid') : null
-
   const getWorkspaceName = () => {
+    const workspaceScope =
+      toNonEmptyWorkspaceText(getWorkspaceScopeMarker?.()).toLowerCase() || 'local'
+
+    if (workspaceScope === 'local') {
+      const persistedPrTitle = toNonEmptyWorkspaceText(
+        getActiveWorkspacePersistedPrTitle?.(),
+      )
+      if (persistedPrTitle) {
+        return persistedPrTitle
+      }
+
+      const persistedHeadBranch = toNonEmptyWorkspaceText(
+        getActiveWorkspacePersistedHeadBranch?.(),
+      )
+      if (persistedHeadBranch) {
+        return persistedHeadBranch
+      }
+    }
+
     const prTitle = toNonEmptyWorkspaceText(getWorkspacePrTitle?.())
     if (prTitle) {
       return prTitle
@@ -34,17 +48,7 @@ const createWorkspaceContextStatusController = ({
       return
     }
 
-    if (appGrid instanceof HTMLElement) {
-      appGrid.classList.toggle(
-        'app-grid--workspace-context-visible',
-        hasValidatedGitHubPat,
-      )
-    }
-
-    statusNode.toggleAttribute('hidden', !hasValidatedGitHubPat)
-    if (!hasValidatedGitHubPat) {
-      return
-    }
+    statusNode.removeAttribute('hidden')
 
     const workspaceName = getWorkspaceName()
     const workspaceScope =
@@ -64,25 +68,13 @@ const createWorkspaceContextStatusController = ({
   }
 
   const syncTokenState = token => {
-    if (!hasTokenValue(token)) {
-      hasValidatedGitHubPat = false
-      hasCompletedRepositoryLoad = false
-    } else if (hasCompletedRepositoryLoad) {
-      hasValidatedGitHubPat = true
-    }
-
+    void token
     render()
   }
 
   const syncWritableRepositoriesState = ({ token, isLoadingRepositories = false }) => {
-    if (!isLoadingRepositories) {
-      hasCompletedRepositoryLoad = true
-    }
-
-    if (hasTokenValue(token) && !isLoadingRepositories) {
-      hasValidatedGitHubPat = true
-    }
-
+    void token
+    void isLoadingRepositories
     render()
   }
 

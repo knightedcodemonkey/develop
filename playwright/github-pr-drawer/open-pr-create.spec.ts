@@ -934,7 +934,7 @@ test('Workspaces repository selector filters contexts and keeps local-only conte
   await selectWorkspacesRepositoryFilter(page, '__local__')
   const localLabels = await getLocalContextOptionLabels(page)
   expect(localLabels).toContain('Select a stored workspace')
-  expect(localLabels).toContain('local:Alpha local context')
+  expect(localLabels).toContain('Alpha local context')
   expect(localLabels).not.toContain('Alpha active context')
 })
 
@@ -1312,7 +1312,7 @@ test('Switching Workspaces repository scope to Local keeps inactive record repo 
   await expect
     .poll(async () => {
       const localLabels = await getLocalContextOptionLabels(page)
-      return localLabels.includes('local:feat/component-v8zw')
+      return localLabels.includes('feat/component-v8zw')
     })
     .toBe(true)
 

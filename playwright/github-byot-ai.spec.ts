@@ -303,14 +303,101 @@ test('chat becomes available after token connect', async ({ page }) => {
   await expect(page.getByRole('button', { name: 'Chat' })).toBeVisible()
 })
 
-test('workspace context status is visible only after PAT connect', async ({ page }) => {
+test('workspace context status stays visible without PAT and after PAT connect', async ({
+  page,
+}) => {
   await waitForAppReady(page)
 
   const workspaceContextStatus = page.locator('#workspace-context-status')
-  await expect(workspaceContextStatus).toBeHidden()
+  await expect(workspaceContextStatus).toBeVisible()
+  await expect(workspaceContextStatus).toContainText('local')
 
   await connectByotWithSingleRepo(page)
   await expect(workspaceContextStatus).toBeVisible()
+})
+
+test('Local workspace can be renamed from Workspaces drawer', async ({ page }) => {
+  const sourceWorkspaceId = 'local_workspace_rename_source'
+  const targetWorkspaceId = 'local_workspace_rename_target'
+  const originalTitle = 'Local rename original title'
+  const renamedTitle = 'Local rename updated title'
+
+  await waitForAppReady(page)
+
+  await seedLocalWorkspaceContexts(page, [
+    {
+      id: sourceWorkspaceId,
+      repo: '',
+      workspaceScope: 'local',
+      head: 'feat/local-rename-source',
+      prTitle: originalTitle,
+      prContextState: 'inactive',
+      tabs: [
+        {
+          id: 'component',
+          path: 'src/component.tsx',
+          language: 'tsx',
+          role: 'component',
+          content: 'export const App = () => <main>rename source</main>',
+          order: 0,
+          source: 'workspace',
+          dirty: false,
+        },
+      ],
+      activeTabId: 'component',
+    },
+    {
+      id: targetWorkspaceId,
+      repo: '',
+      workspaceScope: 'local',
+      head: 'feat/local-rename-target',
+      prTitle: 'Local rename target title',
+      prContextState: 'inactive',
+      tabs: [
+        {
+          id: 'component',
+          path: 'src/component.tsx',
+          language: 'tsx',
+          role: 'component',
+          content: 'export const App = () => <main>rename target</main>',
+          order: 0,
+          source: 'workspace',
+          dirty: false,
+        },
+      ],
+      activeTabId: 'component',
+    },
+  ])
+
+  const workspacesToggle = page.getByRole('button', {
+    name: 'Workspaces',
+    exact: true,
+  })
+  await workspacesToggle.click()
+
+  const workspaceSelect = page.getByLabel('Stored workspace')
+  const renameButton = page.getByRole('button', { name: 'Rename', exact: true })
+
+  await workspaceSelect.selectOption(sourceWorkspaceId)
+  await expect(workspaceSelect).toHaveValue(sourceWorkspaceId)
+  await expect(renameButton).toBeEnabled()
+
+  page.once('dialog', async dialog => {
+    expect(dialog.type()).toBe('prompt')
+    expect(dialog.defaultValue()).toBe(originalTitle)
+    await dialog.accept(renamedTitle)
+  })
+
+  await renameButton.click()
+  await expect(page.locator('#workspaces-status')).toContainText('Renamed workspace.')
+
+  const records = await getAllWorkspaceRecords(page)
+  const renamedRecord = records.find(record => record?.id === sourceWorkspaceId)
+
+  expect(renamedRecord).toBeTruthy()
+  expect(typeof renamedRecord?.prTitle === 'string' ? renamedRecord.prTitle : '').toBe(
+    renamedTitle,
+  )
 })
 
 test('BYOT controls render with default app entry', async ({ page }) => {
