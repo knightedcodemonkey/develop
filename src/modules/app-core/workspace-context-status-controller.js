@@ -1,5 +1,3 @@
-const hasTokenValue = token => typeof token === 'string' && token.trim().length > 0
-
 const createWorkspaceContextStatusController = ({
   statusNode,
   toNonEmptyWorkspaceText,
@@ -12,9 +10,6 @@ const createWorkspaceContextStatusController = ({
   getWorkspaceRepositoryFullName,
   getSelectedRepositoryFullName,
 }) => {
-  let hasValidatedGitHubPat = false
-  let hasCompletedRepositoryLoad = false
-
   const getWorkspaceName = () => {
     const workspaceScope =
       toNonEmptyWorkspaceText(getWorkspaceScopeMarker?.()).toLowerCase() || 'local'
@@ -58,13 +53,12 @@ const createWorkspaceContextStatusController = ({
     const workspaceName = getWorkspaceName()
     const workspaceScope =
       toNonEmptyWorkspaceText(getWorkspaceScopeMarker?.()).toLowerCase() || 'local'
-    const shouldShowRepositoryContext =
-      hasValidatedGitHubPat && workspaceScope !== 'local'
-    const repository = shouldShowRepositoryContext
-      ? toNonEmptyWorkspaceText(getWorkspaceRepositoryFullName?.()) ||
-        toNonEmptyWorkspaceText(getSelectedRepositoryFullName?.()) ||
-        'unknown'
-      : 'local'
+    const repository =
+      workspaceScope === 'local'
+        ? 'local'
+        : toNonEmptyWorkspaceText(getWorkspaceRepositoryFullName?.()) ||
+          toNonEmptyWorkspaceText(getSelectedRepositoryFullName?.()) ||
+          'unknown'
 
     statusNode.textContent = `${workspaceName} • ${repository}`
   }
@@ -74,25 +68,13 @@ const createWorkspaceContextStatusController = ({
   }
 
   const syncTokenState = token => {
-    if (!hasTokenValue(token)) {
-      hasValidatedGitHubPat = false
-      hasCompletedRepositoryLoad = false
-    } else if (hasCompletedRepositoryLoad) {
-      hasValidatedGitHubPat = true
-    }
-
+    void token
     render()
   }
 
   const syncWritableRepositoriesState = ({ token, isLoadingRepositories = false }) => {
-    if (!isLoadingRepositories) {
-      hasCompletedRepositoryLoad = true
-    }
-
-    if (hasTokenValue(token) && !isLoadingRepositories) {
-      hasValidatedGitHubPat = true
-    }
-
+    void token
+    void isLoadingRepositories
     render()
   }
 
