@@ -121,17 +121,32 @@ const createIframeShellDocument = ({ channelId, parentOrigin, importMap }) => {
           backgroundColor: typeof backgroundColor === 'string' ? backgroundColor : '',
         }
 
-        let styleElement = document.getElementById('knighted-preview-styles')
-        if (!(styleElement instanceof HTMLStyleElement)) {
-          styleElement = document.createElement('style')
-          styleElement.id = 'knighted-preview-styles'
-          document.head.append(styleElement)
+        let baseStyleElement = document.getElementById('knighted-preview-base-styles')
+        if (!(baseStyleElement instanceof HTMLStyleElement)) {
+          baseStyleElement = document.createElement('style')
+          baseStyleElement.id = 'knighted-preview-base-styles'
+          document.head.append(baseStyleElement)
         }
 
-        styleElement.textContent =
-          __knightedToBaseStyles(__knightedState.visualConfig.hostPadding) +
-          '\\n' +
-          String(__knightedState.visualConfig.cssText)
+        let userStyleElement = document.getElementById('knighted-preview-user-styles')
+        if (!(userStyleElement instanceof HTMLStyleElement)) {
+          userStyleElement = document.createElement('style')
+          userStyleElement.id = 'knighted-preview-user-styles'
+          document.head.append(userStyleElement)
+        }
+
+        const isBaseAfterUser =
+          (baseStyleElement.compareDocumentPosition(userStyleElement) &
+            Node.DOCUMENT_POSITION_PRECEDING) !==
+          0
+        if (isBaseAfterUser) {
+          document.head.insertBefore(baseStyleElement, userStyleElement)
+        }
+
+        baseStyleElement.textContent = __knightedToBaseStyles(
+          __knightedState.visualConfig.hostPadding,
+        )
+        userStyleElement.textContent = String(__knightedState.visualConfig.cssText)
 
         if (__knightedState.visualConfig.hostPadding.trim().length > 0) {
           document.documentElement.style.setProperty(

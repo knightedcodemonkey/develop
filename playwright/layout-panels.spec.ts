@@ -69,24 +69,55 @@ test('changing preview background keeps applied preview styles', async ({ page }
 
   await expect(previewFrameRoot).toHaveCount(1)
   const hasComponentStylesBefore = await previewFrameRoot.evaluate(() => {
-    const styleElement = document.getElementById('knighted-preview-styles')
-    if (!(styleElement instanceof HTMLStyleElement)) {
+    const baseStyleElement = document.getElementById('knighted-preview-base-styles')
+    const userStyleElement = document.getElementById('knighted-preview-user-styles')
+    if (
+      !(baseStyleElement instanceof HTMLStyleElement) ||
+      !(userStyleElement instanceof HTMLStyleElement)
+    ) {
       return false
     }
 
-    return styleElement.textContent?.includes('.counter-button') ?? false
+    const baseContainsReset =
+      baseStyleElement.textContent?.includes('box-sizing: inherit;')
+    const userContainsComponentStyles =
+      userStyleElement.textContent?.includes('.counter-button')
+    const styleElements = Array.from(document.head.querySelectorAll('style'))
+    const baseIndex = styleElements.indexOf(baseStyleElement)
+    const userIndex = styleElements.indexOf(userStyleElement)
+
+    return Boolean(
+      baseContainsReset &&
+      userContainsComponentStyles &&
+      baseIndex >= 0 &&
+      userIndex >= 0 &&
+      baseIndex < userIndex,
+    )
   })
   expect(hasComponentStylesBefore).toBe(true)
 
   await page.getByLabel('Background').fill('#b1aaaa')
 
   const hasComponentStylesAfter = await previewFrameRoot.evaluate(() => {
-    const styleElement = document.getElementById('knighted-preview-styles')
-    if (!(styleElement instanceof HTMLStyleElement)) {
+    const baseStyleElements = document.querySelectorAll('#knighted-preview-base-styles')
+    const userStyleElements = document.querySelectorAll('#knighted-preview-user-styles')
+    if (baseStyleElements.length !== 1 || userStyleElements.length !== 1) {
       return false
     }
 
-    return styleElement.textContent?.includes('.counter-button') ?? false
+    const baseStyleElement = baseStyleElements[0]
+    const userStyleElement = userStyleElements[0]
+    if (
+      !(baseStyleElement instanceof HTMLStyleElement) ||
+      !(userStyleElement instanceof HTMLStyleElement)
+    ) {
+      return false
+    }
+
+    return (
+      (baseStyleElement.textContent?.includes('box-sizing: inherit;') ?? false) &&
+      (userStyleElement.textContent?.includes('.counter-button') ?? false)
+    )
   })
   expect(hasComponentStylesAfter).toBe(true)
 

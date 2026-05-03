@@ -134,6 +134,19 @@ const readLatestWorkspaceSnapshot = async (page: import('@playwright/test').Page
   })
 }
 
+const readPreviewUserStyleText = async (page: import('@playwright/test').Page) => {
+  return getPreviewFrame(page)
+    .locator('html')
+    .evaluate(() => {
+      const userStyleElement = document.getElementById('knighted-preview-user-styles')
+      if (!(userStyleElement instanceof HTMLStyleElement)) {
+        return ''
+      }
+
+      return userStyleElement.textContent ?? ''
+    })
+}
+
 test.beforeEach(async ({ page }) => {
   await resetWorkbenchStorage(page)
 })
@@ -283,11 +296,7 @@ test('preview styles require explicit import from entry graph', async ({ page })
 
   await expect
     .poll(async () => {
-      const styleContent = await getPreviewFrame(page)
-        .locator('style')
-        .first()
-        .textContent()
-      return styleContent ?? ''
+      return readPreviewUserStyleText(page)
     })
     .toContain('rgb(1, 2, 3)')
 
@@ -302,13 +311,115 @@ test('preview styles require explicit import from entry graph', async ({ page })
   await expect(page.getByRole('status', { name: 'App status' })).toHaveText('Rendered')
   await expect
     .poll(async () => {
-      const styleContent = await getPreviewFrame(page)
-        .locator('style')
-        .first()
-        .textContent()
-      return styleContent ?? ''
+      return readPreviewUserStyleText(page)
     })
     .not.toContain('rgb(1, 2, 3)')
+})
+
+test('top-level @import in user css is applied in preview iframe', async ({ page }) => {
+  await waitForInitialRender(page)
+
+  const importedCss = encodeURIComponent('.counter-button { color: rgb(11, 22, 33); }')
+
+  await setWorkspaceTabSource(page, {
+    fileName: 'app.css',
+    kind: 'styles',
+    source: [
+      `@import url("data:text/css,${importedCss}");`,
+      '.counter-button { font-weight: 700; }',
+    ].join('\n'),
+  })
+
+  await setComponentEditorSource(
+    page,
+    [
+      "import '../styles/app.css'",
+      '',
+      'const App = () => <button class="counter-button">Imported style</button>',
+      '',
+    ].join('\n'),
+  )
+
+  await expect(page.getByRole('status', { name: 'App status' })).toHaveText('Rendered')
+
+  await expect
+    .poll(async () => {
+      return getPreviewFrame(page)
+        .getByRole('button', { name: 'Imported style' })
+        .evaluate(element => getComputedStyle(element).color)
+    })
+    .toBe('rgb(11, 22, 33)')
+})
+
+test('preview iframe keeps one base and one user style node across rerenders', async ({
+  page,
+}) => {
+  await waitForInitialRender(page)
+
+  await setWorkspaceTabSource(page, {
+    fileName: 'app.css',
+    kind: 'styles',
+    source: ['.counter-button { color: rgb(40, 50, 60); }'].join('\n'),
+  })
+
+  await page.getByLabel('Background').fill('#123456')
+
+  await setWorkspaceTabSource(page, {
+    fileName: 'app.css',
+    kind: 'styles',
+    source: ['.counter-button { color: rgb(70, 80, 90); }'].join('\n'),
+  })
+
+  await expect
+    .poll(async () => {
+      return getPreviewFrame(page)
+        .locator('html')
+        .evaluate(() => {
+          const baseStyleElements = document.querySelectorAll(
+            '#knighted-preview-base-styles',
+          )
+          const userStyleElements = document.querySelectorAll(
+            '#knighted-preview-user-styles',
+          )
+
+          const baseStyleElement = document.getElementById('knighted-preview-base-styles')
+          const userStyleElement = document.getElementById('knighted-preview-user-styles')
+
+          if (
+            !(baseStyleElement instanceof HTMLStyleElement) ||
+            !(userStyleElement instanceof HTMLStyleElement)
+          ) {
+            return {
+              baseCount: baseStyleElements.length,
+              userCount: userStyleElements.length,
+              ordered: false,
+              userText: '',
+            }
+          }
+
+          const styleElements = Array.from(document.head.querySelectorAll('style'))
+          const baseIndex = styleElements.indexOf(baseStyleElement)
+          const userIndex = styleElements.indexOf(userStyleElement)
+
+          return {
+            baseCount: baseStyleElements.length,
+            userCount: userStyleElements.length,
+            ordered: baseIndex >= 0 && userIndex >= 0 && baseIndex < userIndex,
+            userText: userStyleElement.textContent ?? '',
+          }
+        })
+    })
+    .toMatchObject({
+      baseCount: 1,
+      userCount: 1,
+      ordered: true,
+    })
+
+  await expect
+    .poll(async () => {
+      return readPreviewUserStyleText(page)
+    })
+    .toContain('rgb(70, 80, 90)')
 })
 
 test('nested module imports can bring styles into preview graph', async ({ page }) => {
@@ -347,11 +458,7 @@ test('nested module imports can bring styles into preview graph', async ({ page 
   await expect(getPreviewFrame(page).getByRole('button')).toContainText('Nested style')
   await expect
     .poll(async () => {
-      const styleContent = await getPreviewFrame(page)
-        .locator('style')
-        .first()
-        .textContent()
-      return styleContent ?? ''
+      return readPreviewUserStyleText(page)
     })
     .toContain('rgb(9, 8, 7)')
 })
