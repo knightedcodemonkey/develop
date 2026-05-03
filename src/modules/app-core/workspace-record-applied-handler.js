@@ -21,7 +21,6 @@ const createWorkspaceRecordAppliedHandler = ({
       byotControls?.setSelectedRepository(nextWorkspaceRepositoryFullName)
     } else {
       setWorkspaceRepositoryFullName('')
-      byotControls?.clearSelectedRepositoryPreference?.()
     }
 
     const state =

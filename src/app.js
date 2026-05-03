@@ -607,6 +607,25 @@ const getCurrentSelectedRepositoryFullName = () => {
   return ''
 }
 
+const getActiveWorkspaceDisplayLabel = workspace => {
+  const workspaceIdFromArg = toNonEmptyWorkspaceText(workspace?.id)
+  const activeWorkspaceId = toNonEmptyWorkspaceText(activeWorkspaceRecordId)
+  if (
+    workspaceIdFromArg &&
+    activeWorkspaceId &&
+    workspaceIdFromArg !== activeWorkspaceId
+  ) {
+    return ''
+  }
+
+  return (
+    toNonEmptyWorkspaceText(activeWorkspacePersistedPrTitle) ||
+    toNonEmptyWorkspaceText(activeWorkspacePersistedHeadBranch) ||
+    toNonEmptyWorkspaceText(githubPrTitle?.value) ||
+    toNonEmptyWorkspaceText(githubPrHeadBranch?.value)
+  )
+}
+
 workspaceContextStatusController = createWorkspaceContextStatusController({
   statusNode: workspaceContextStatus,
   toNonEmptyWorkspaceText,
@@ -1138,6 +1157,7 @@ const githubWorkflows = createGitHubWorkflowsSetup({
   workspace: {
     workspaceStorage,
     getActiveWorkspaceRecordId: () => activeWorkspaceRecordId,
+    getActiveWorkspaceDisplayLabel,
     setActiveWorkspaceRecordId,
     setActiveWorkspaceCreatedAt: value => (activeWorkspaceCreatedAt = value),
     buildWorkspaceRecordSnapshot,

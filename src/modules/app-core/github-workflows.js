@@ -50,6 +50,7 @@ const initializeGitHubWorkflows = ({
   workspacesRemove,
   workspaceStorage,
   getActiveWorkspaceRecordId,
+  getActiveWorkspaceDisplayLabel,
   setActiveWorkspaceRecordId,
   setActiveWorkspaceCreatedAt,
   buildWorkspaceRecordSnapshot,
@@ -430,6 +431,10 @@ const initializeGitHubWorkflows = ({
     openButton: workspacesOpen,
     renameButton: workspacesRename,
     removeButton: workspacesRemove,
+    getActiveWorkspaceDisplayLabel: workspace =>
+      typeof getActiveWorkspaceDisplayLabel === 'function'
+        ? toSafeWorkspaceText(getActiveWorkspaceDisplayLabel(workspace))
+        : '',
     getRepositoryFilterOptions: () =>
       getCurrentWritableRepositories().map(repository => ({
         value: repository.fullName,

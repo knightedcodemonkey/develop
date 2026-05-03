@@ -23,6 +23,7 @@ const createGitHubWorkflowsSetup = ({
     setActiveWorkspaceRecordId: workspace.setActiveWorkspaceRecordId,
     setActiveWorkspaceCreatedAt: workspace.setActiveWorkspaceCreatedAt,
     buildWorkspaceRecordSnapshot: workspace.buildWorkspaceRecordSnapshot,
+    getActiveWorkspaceDisplayLabel: workspace.getActiveWorkspaceDisplayLabel,
     listLocalContextRecords: workspace.listLocalContextRecords,
     refreshLocalContextOptions: workspace.refreshLocalContextOptions,
     applyWorkspaceRecord: workspace.applyWorkspaceRecord,
