@@ -243,13 +243,12 @@ export const createWorkspacesDrawer = ({
     placeholder.selected = !filteredEntries.some(entry => entry.id === selectedId)
     selectInput.append(placeholder)
 
+    const activeWorkspaceId =
+      typeof getActiveWorkspaceId === 'function' ? toSafeText(getActiveWorkspaceId()) : ''
+
     for (const entry of filteredEntries) {
       const option = document.createElement('option')
       option.value = toSafeText(entry.id)
-      const activeWorkspaceId =
-        typeof getActiveWorkspaceId === 'function'
-          ? toSafeText(getActiveWorkspaceId())
-          : ''
       const activeWorkspaceDisplayLabel =
         option.value &&
         option.value === activeWorkspaceId &&
