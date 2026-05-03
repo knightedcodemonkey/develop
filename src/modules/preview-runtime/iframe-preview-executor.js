@@ -163,16 +163,31 @@ const createIframeShellDocument = ({ channelId, parentOrigin, importMap }) => {
           }
         }
 
-        const userStyleElements = desiredUserStyleElementIds.map(styleElementId => {
+        const userStyleElements = []
+        let previousPreviewStyleElement = baseStyleElement
+
+        for (const styleElementId of desiredUserStyleElementIds) {
           let userStyleElement = document.getElementById(styleElementId)
           if (!(userStyleElement instanceof HTMLStyleElement)) {
             userStyleElement = document.createElement('style')
             userStyleElement.id = styleElementId
-            document.head.append(userStyleElement)
+
+            if (
+              previousPreviewStyleElement instanceof HTMLStyleElement &&
+              previousPreviewStyleElement.parentNode === document.head
+            ) {
+              document.head.insertBefore(
+                userStyleElement,
+                previousPreviewStyleElement.nextSibling,
+              )
+            } else {
+              document.head.append(userStyleElement)
+            }
           }
 
-          return userStyleElement
-        })
+          userStyleElements.push(userStyleElement)
+          previousPreviewStyleElement = userStyleElement
+        }
 
         const firstUserStyleElement = userStyleElements[0]
         const isBaseAfterUser =
@@ -193,7 +208,6 @@ const createIframeShellDocument = ({ channelId, parentOrigin, importMap }) => {
           userStyleElement.textContent = String(
             __knightedState.visualConfig.userStyleSheets[index] ?? '',
           )
-          document.head.append(userStyleElement)
         }
 
         if (__knightedState.visualConfig.hostPadding.trim().length > 0) {
@@ -658,14 +672,18 @@ export const createWorkspaceIframePreviewBridge = ({
         timer,
       }
 
+      const stylePayload =
+        Array.isArray(userStyleSheets) && userStyleSheets.length > 0
+          ? { userStyleSheets }
+          : { cssText }
+
       const payload = {
         mode,
         entrySpecifier,
         entryDisplaySpecifier,
         entryExportName,
         runtimeSpecifiers,
-        cssText,
-        userStyleSheets,
+        ...stylePayload,
         hostPadding,
         backgroundColor,
         importMap,

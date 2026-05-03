@@ -481,6 +481,128 @@ test('preview iframe keeps one base and one user style node across rerenders', a
     .toContain('rgb(70, 80, 90)')
 })
 
+test('config patch keeps preview style order stable around app head styles', async ({
+  page,
+}) => {
+  await waitForInitialRender(page)
+
+  await setWorkspaceTabSource(page, {
+    fileName: 'app.css',
+    kind: 'styles',
+    source: ['.counter-button { color: rgb(80, 90, 100); }'].join('\n'),
+  })
+
+  await setComponentEditorSource(
+    page,
+    [
+      "import '../styles/app.css'",
+      '',
+      "const injected = document.getElementById('app-head-style')",
+      'if (!(injected instanceof HTMLStyleElement)) {',
+      "  const style = document.createElement('style')",
+      "  style.id = 'app-head-style'",
+      "  style.textContent = '.counter-button { border-radius: 0px; }'",
+      '  document.head.append(style)',
+      '}',
+      '',
+      'const App = () => <button class="counter-button">order check</button>',
+      '',
+    ].join('\n'),
+  )
+
+  await expect(page.getByRole('status', { name: 'App status' })).toHaveText('Rendered')
+
+  await expect
+    .poll(async () => {
+      return getPreviewFrame(page)
+        .locator('html')
+        .evaluate(() => {
+          const baseStyleElement = document.getElementById('knighted-preview-base-styles')
+          const userStyleElement = document.getElementById('knighted-preview-user-styles')
+          const appHeadStyleElement = document.getElementById('app-head-style')
+          const styleElements = Array.from(document.head.querySelectorAll('style'))
+
+          if (
+            !(baseStyleElement instanceof HTMLStyleElement) ||
+            !(userStyleElement instanceof HTMLStyleElement) ||
+            !(appHeadStyleElement instanceof HTMLStyleElement)
+          ) {
+            return null
+          }
+
+          return {
+            baseIndex: styleElements.indexOf(baseStyleElement),
+            userIndex: styleElements.indexOf(userStyleElement),
+            appIndex: styleElements.indexOf(appHeadStyleElement),
+          }
+        })
+    })
+    .not.toBeNull()
+
+  const resolvedOrderBeforePatch = await getPreviewFrame(page)
+    .locator('html')
+    .evaluate(() => {
+      const baseStyleElement = document.getElementById('knighted-preview-base-styles')
+      const userStyleElement = document.getElementById('knighted-preview-user-styles')
+      const appHeadStyleElement = document.getElementById('app-head-style')
+      const styleElements = Array.from(document.head.querySelectorAll('style'))
+
+      if (
+        !(baseStyleElement instanceof HTMLStyleElement) ||
+        !(userStyleElement instanceof HTMLStyleElement) ||
+        !(appHeadStyleElement instanceof HTMLStyleElement)
+      ) {
+        return null
+      }
+
+      return {
+        baseIndex: styleElements.indexOf(baseStyleElement),
+        userIndex: styleElements.indexOf(userStyleElement),
+        appIndex: styleElements.indexOf(appHeadStyleElement),
+      }
+    })
+
+  if (!resolvedOrderBeforePatch) {
+    throw new Error('Expected app-injected head style to exist before config patch.')
+  }
+
+  expect(resolvedOrderBeforePatch.baseIndex).toBeLessThan(
+    resolvedOrderBeforePatch.userIndex,
+  )
+  expect(resolvedOrderBeforePatch.userIndex).toBeLessThan(
+    resolvedOrderBeforePatch.appIndex,
+  )
+
+  await page.getByLabel('Background').fill('#456789')
+
+  await expect
+    .poll(async () => {
+      return getPreviewFrame(page)
+        .locator('html')
+        .evaluate(() => {
+          const baseStyleElement = document.getElementById('knighted-preview-base-styles')
+          const userStyleElement = document.getElementById('knighted-preview-user-styles')
+          const appHeadStyleElement = document.getElementById('app-head-style')
+          const styleElements = Array.from(document.head.querySelectorAll('style'))
+
+          if (
+            !(baseStyleElement instanceof HTMLStyleElement) ||
+            !(userStyleElement instanceof HTMLStyleElement) ||
+            !(appHeadStyleElement instanceof HTMLStyleElement)
+          ) {
+            return null
+          }
+
+          return {
+            baseIndex: styleElements.indexOf(baseStyleElement),
+            userIndex: styleElements.indexOf(userStyleElement),
+            appIndex: styleElements.indexOf(appHeadStyleElement),
+          }
+        })
+    })
+    .toEqual(resolvedOrderBeforePatch)
+})
+
 test('nested module imports can bring styles into preview graph', async ({ page }) => {
   await waitForInitialRender(page)
 
