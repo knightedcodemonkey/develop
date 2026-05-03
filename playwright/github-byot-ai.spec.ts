@@ -15,6 +15,7 @@ import {
 } from './helpers/app-test-helpers.js'
 import {
   getAllWorkspaceRecords,
+  openStoredWorkspaceContextById,
   seedLocalWorkspaceContexts,
 } from './github-pr-drawer/github-pr-drawer.helpers.js'
 
@@ -397,6 +398,79 @@ test('Local workspace can be renamed from Workspaces drawer', async ({ page }) =
   expect(renamedRecord).toBeTruthy()
   expect(typeof renamedRecord?.prTitle === 'string' ? renamedRecord.prTitle : '').toBe(
     renamedTitle,
+  )
+})
+
+test('chat stays usable after opening a Local workspace with PAT connected', async ({
+  page,
+}) => {
+  const localWorkspaceId = 'local_chat_issue_128'
+  let streamRequestBody: ChatRequestBody | undefined
+
+  await page.route('https://models.github.ai/inference/chat/completions', async route => {
+    streamRequestBody = route.request().postDataJSON() as ChatRequestBody
+
+    await route.fulfill({
+      status: 200,
+      contentType: 'text/event-stream',
+      body: [
+        'data: {"choices":[{"delta":{"content":"Local workspace chat works"}}]}',
+        '',
+        'data: [DONE]',
+        '',
+      ].join('\n'),
+    })
+  })
+
+  await waitForAppReady(page)
+
+  await seedLocalWorkspaceContexts(page, [
+    {
+      id: localWorkspaceId,
+      repo: '',
+      workspaceScope: 'local',
+      head: 'feat/local-chat-issue-128',
+      prTitle: 'Issue 128 local workspace',
+      prContextState: 'inactive',
+      tabs: [
+        {
+          id: 'component',
+          path: 'src/component.tsx',
+          language: 'tsx',
+          role: 'component',
+          content: 'export const App = () => <main>local chat issue 128</main>',
+          order: 0,
+          source: 'workspace',
+          dirty: false,
+        },
+      ],
+      activeTabId: 'component',
+    },
+  ])
+
+  await connectByotWithSingleRepo(page)
+  await openStoredWorkspaceContextById(page, localWorkspaceId, {
+    repositoryFilter: '__local__',
+  })
+  await ensureWorkspacesDrawerClosed(page)
+
+  await ensureAiChatDrawerOpen(page)
+
+  await page.getByLabel('Ask AI assistant').fill('Confirm local workspace chat context.')
+  await page.getByRole('button', { name: 'Send' }).click()
+
+  await expect(page.getByText('Local workspace chat works')).toBeVisible()
+  await expect(
+    page.getByText('Select a writable repository before starting chat.', { exact: true }),
+  ).toHaveCount(0)
+
+  const repositorySystemMessage = streamRequestBody?.messages?.find(
+    (message: ChatRequestMessage) =>
+      message.role === 'system' &&
+      message.content?.includes('Selected repository context'),
+  )
+  expect(repositorySystemMessage?.content).toContain(
+    'Repository: knightedcodemonkey/develop',
   )
 })
 

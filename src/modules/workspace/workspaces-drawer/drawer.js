@@ -54,6 +54,7 @@ export const createWorkspacesDrawer = ({
   renameButton,
   removeButton,
   getDrawerSide,
+  getActiveWorkspaceDisplayLabel,
   getRepositoryFilterOptions,
   getSelectedRepositoryFilter,
   onRepositoryFilterChange,
@@ -242,10 +243,19 @@ export const createWorkspacesDrawer = ({
     placeholder.selected = !filteredEntries.some(entry => entry.id === selectedId)
     selectInput.append(placeholder)
 
+    const activeWorkspaceId =
+      typeof getActiveWorkspaceId === 'function' ? toSafeText(getActiveWorkspaceId()) : ''
+
     for (const entry of filteredEntries) {
       const option = document.createElement('option')
       option.value = toSafeText(entry.id)
-      option.textContent = toWorkspaceLabel(entry)
+      const activeWorkspaceDisplayLabel =
+        option.value &&
+        option.value === activeWorkspaceId &&
+        typeof getActiveWorkspaceDisplayLabel === 'function'
+          ? toSafeText(getActiveWorkspaceDisplayLabel(entry))
+          : ''
+      option.textContent = activeWorkspaceDisplayLabel || toWorkspaceLabel(entry)
       option.selected = option.value === selectedId
       selectInput.append(option)
     }
