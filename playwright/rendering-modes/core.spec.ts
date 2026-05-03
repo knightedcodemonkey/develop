@@ -351,6 +351,65 @@ test('top-level @import in user css is applied in preview iframe', async ({ page
     .toBe('rgb(11, 22, 33)')
 })
 
+test('non-first style tab keeps top-level @import valid', async ({ page }) => {
+  await waitForInitialRender(page)
+
+  const importedCss = encodeURIComponent(
+    '.imported-tab-button { color: rgb(21, 31, 41); }',
+  )
+
+  await addWorkspaceTab(page, { type: 'style' })
+
+  await setWorkspaceTabSource(page, {
+    fileName: 'app.css',
+    kind: 'styles',
+    source: ['.first-style-sentinel { color: rgb(1, 2, 3); }'].join('\n'),
+  })
+
+  await setWorkspaceTabSource(page, {
+    fileName: 'module.css',
+    kind: 'styles',
+    source: [
+      `@import url("data:text/css,${importedCss}");`,
+      '.imported-tab-button { font-weight: 700; }',
+    ].join('\n'),
+  })
+
+  await setComponentEditorSource(
+    page,
+    [
+      "import '../styles/app.css'",
+      "import '../styles/module.css'",
+      '',
+      'const App = () => <button class="imported-tab-button">Imported from second tab</button>',
+      '',
+    ].join('\n'),
+  )
+
+  await expect(page.getByRole('status', { name: 'App status' })).toHaveText('Rendered')
+
+  await expect
+    .poll(async () => {
+      return getPreviewFrame(page)
+        .locator('html')
+        .evaluate(() => {
+          const userStyleElements = document.querySelectorAll(
+            'style[id^="knighted-preview-user-styles"]',
+          )
+          return userStyleElements.length
+        })
+    })
+    .toBe(2)
+
+  await expect
+    .poll(async () => {
+      return getPreviewFrame(page)
+        .getByRole('button', { name: 'Imported from second tab' })
+        .evaluate(element => getComputedStyle(element).color)
+    })
+    .toBe('rgb(21, 31, 41)')
+})
+
 test('preview iframe keeps one base and one user style node across rerenders', async ({
   page,
 }) => {
