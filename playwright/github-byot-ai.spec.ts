@@ -4,6 +4,7 @@ import type { ChatRequestBody, ChatRequestMessage } from './helpers/app-test-hel
 import {
   appEntryPath,
   connectByotWithSingleRepo,
+  ensureWorkspacesDrawerClosed,
   ensureAiChatDrawerOpen,
   ensureOpenPrDrawerOpen,
   mockRepositoryBranches,
@@ -12,6 +13,10 @@ import {
   setStylesEditorSource,
   waitForAppReady,
 } from './helpers/app-test-helpers.js'
+import {
+  getAllWorkspaceRecords,
+  seedLocalWorkspaceContexts,
+} from './github-pr-drawer/github-pr-drawer.helpers.js'
 
 test('PR/BYOT controls are visible and chat stays hidden until token connect', async ({
   page,
@@ -37,7 +42,256 @@ test('PR/BYOT controls are visible and chat stays hidden until token connect', a
   await expect(prToggle).toHaveCount(1)
   await expect(prToggle).toBeHidden()
   await expect(workspacesToggle).toHaveCount(1)
-  await expect(workspacesToggle).toBeHidden()
+  await expect(workspacesToggle).toBeVisible()
+})
+
+test('Workspaces repository filter is local-only and read-only without PAT', async ({
+  page,
+}) => {
+  await waitForAppReady(page)
+
+  const workspacesToggle = page.getByRole('button', {
+    name: 'Workspaces',
+    exact: true,
+  })
+  await expect(workspacesToggle).toBeVisible()
+
+  await workspacesToggle.click()
+
+  const repositoryFilter = page.getByRole('combobox', {
+    name: 'Workspace repository filter',
+  })
+  await expect(repositoryFilter).toBeDisabled()
+  await expect(repositoryFilter).toHaveValue('__local__')
+  await expect(repositoryFilter.locator('option')).toHaveCount(1)
+  await expect(repositoryFilter.locator('option')).toHaveText(['Local'])
+})
+
+test('No-PAT startup restores Local workspace from mixed stored contexts', async ({
+  page,
+}) => {
+  const localWorkspaceId = 'local_no_pat_restore_target'
+  const localHead = 'feat/local-no-pat-restore'
+  const localMarker = 'Local restore marker content'
+  const repositoryMarker = 'Repository restore marker content'
+
+  await waitForAppReady(page)
+
+  await page.evaluate(async () => {
+    const request = indexedDB.open('knighted-develop-workspaces')
+    const db = await new Promise<IDBDatabase>((resolve, reject) => {
+      request.onsuccess = () => resolve(request.result)
+      request.onerror = () => reject(request.error)
+      request.onblocked = () => reject(new Error('Could not open IndexedDB.'))
+    })
+
+    try {
+      const tx = db.transaction('prWorkspaces', 'readwrite')
+      const store = tx.objectStore('prWorkspaces')
+      const clearRequest = store.clear()
+
+      await new Promise<void>((resolve, reject) => {
+        clearRequest.onsuccess = () => resolve()
+        clearRequest.onerror = () => reject(clearRequest.error)
+      })
+
+      await new Promise<void>((resolve, reject) => {
+        tx.oncomplete = () => resolve()
+        tx.onerror = () => reject(tx.error)
+        tx.onabort = () => reject(tx.error)
+      })
+    } finally {
+      db.close()
+    }
+  })
+
+  await seedLocalWorkspaceContexts(page, [
+    {
+      id: localWorkspaceId,
+      repo: '',
+      workspaceScope: 'local',
+      base: 'main',
+      head: localHead,
+      prTitle: 'Local restore target',
+      prContextState: 'inactive',
+      prNumber: null,
+      tabs: [
+        {
+          id: 'entry',
+          name: 'App.tsx',
+          path: 'src/components/App.tsx',
+          language: 'javascript-jsx',
+          role: 'entry',
+          isActive: true,
+          content: `export const App = () => <main>${localMarker}</main>`,
+        },
+      ],
+      activeTabId: 'entry',
+      createdAt: Date.now() - 5000,
+      lastModified: Date.now() - 5000,
+    },
+    {
+      id: 'repo_no_pat_restore_should_not_apply',
+      repo: 'knightedcodemonkey/develop',
+      workspaceScope: 'repository',
+      base: 'main',
+      head: 'feat/repo-should-not-restore-without-pat',
+      prTitle: 'Repository active context',
+      prContextState: 'active',
+      prNumber: 107,
+      tabs: [
+        {
+          id: 'entry',
+          name: 'App.tsx',
+          path: 'src/components/App.tsx',
+          language: 'javascript-jsx',
+          role: 'entry',
+          isActive: true,
+          content: `export const App = () => <main>${repositoryMarker}</main>`,
+        },
+      ],
+      activeTabId: 'entry',
+      createdAt: Date.now() + 5000,
+      lastModified: Date.now() + 5000,
+    },
+  ])
+
+  await page.reload()
+  await waitForAppReady(page)
+
+  await expect(page.locator('#github-pr-head-branch')).toHaveValue(localHead)
+  await expect(
+    page.getByRole('textbox', { name: 'Component source editor' }),
+  ).toContainText(localMarker)
+  await expect(
+    page.getByRole('textbox', { name: 'Component source editor' }),
+  ).not.toContainText(repositoryMarker)
+
+  const workspacesToggle = page.getByRole('button', {
+    name: 'Workspaces',
+    exact: true,
+  })
+  await workspacesToggle.click()
+
+  await expect(page.locator('#workspaces-repository')).toBeDisabled()
+  await expect(page.locator('#workspaces-select')).toHaveValue(localWorkspaceId)
+  await expect(page.getByRole('button', { name: 'Remove', exact: true })).toBeDisabled()
+})
+
+test('PAT connect after Local-only session preserves Local records and enables repository workflows', async ({
+  page,
+}) => {
+  const localWorkspaceId = 'local_pat_connect_preserve'
+  const localHead = 'feat/local-before-pat-connect'
+
+  await waitForAppReady(page)
+
+  await page.evaluate(async () => {
+    const request = indexedDB.open('knighted-develop-workspaces')
+    const db = await new Promise<IDBDatabase>((resolve, reject) => {
+      request.onsuccess = () => resolve(request.result)
+      request.onerror = () => reject(request.error)
+      request.onblocked = () => reject(new Error('Could not open IndexedDB.'))
+    })
+
+    try {
+      const tx = db.transaction('prWorkspaces', 'readwrite')
+      const store = tx.objectStore('prWorkspaces')
+      const clearRequest = store.clear()
+
+      await new Promise<void>((resolve, reject) => {
+        clearRequest.onsuccess = () => resolve()
+        clearRequest.onerror = () => reject(clearRequest.error)
+      })
+
+      await new Promise<void>((resolve, reject) => {
+        tx.oncomplete = () => resolve()
+        tx.onerror = () => reject(tx.error)
+        tx.onabort = () => reject(tx.error)
+      })
+    } finally {
+      db.close()
+    }
+  })
+
+  await seedLocalWorkspaceContexts(page, [
+    {
+      id: localWorkspaceId,
+      repo: '',
+      workspaceScope: 'local',
+      base: 'main',
+      head: localHead,
+      prTitle: 'Local only workspace before PAT',
+      prContextState: 'inactive',
+      prNumber: null,
+      createdAt: Date.now() - 1000,
+      lastModified: Date.now() - 1000,
+    },
+  ])
+
+  await page.reload()
+  await waitForAppReady(page)
+
+  const workspacesToggle = page.getByRole('button', {
+    name: 'Workspaces',
+    exact: true,
+  })
+  await workspacesToggle.click()
+
+  const repositoryFilter = page.getByLabel('Workspace repository filter')
+  await expect(repositoryFilter).toBeDisabled()
+  await expect(repositoryFilter).toHaveValue('__local__')
+  await expect(page.locator('#workspaces-select')).toHaveValue(localWorkspaceId)
+
+  await ensureWorkspacesDrawerClosed(page)
+
+  await page.route('https://api.github.com/user/repos**', async route => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify([
+        {
+          id: 11,
+          owner: { login: 'knightedcodemonkey' },
+          name: 'develop',
+          full_name: 'knightedcodemonkey/develop',
+          default_branch: 'main',
+          permissions: { push: true },
+        },
+      ]),
+    })
+  })
+
+  await mockRepositoryBranches(page, {
+    'knightedcodemonkey/develop': ['main', 'release'],
+  })
+
+  await page
+    .getByRole('textbox', { name: 'GitHub token' })
+    .fill('github_pat_fake_transition_1234567890')
+  await page.getByRole('button', { name: 'Add GitHub token' }).click()
+
+  await expect(page.getByRole('button', { name: 'Open pull request' })).toBeVisible()
+
+  await workspacesToggle.click()
+  await expect(repositoryFilter).toBeEnabled()
+  await expect(repositoryFilter.locator('option')).toHaveCount(2)
+  await expect(repositoryFilter.locator('option')).toHaveText([
+    'Local',
+    'knightedcodemonkey/develop',
+  ])
+
+  await repositoryFilter.selectOption('knightedcodemonkey/develop')
+  await expect(repositoryFilter).toHaveValue('knightedcodemonkey/develop')
+
+  const records = await getAllWorkspaceRecords(page)
+  const localRecord = records.find(record => record?.id === localWorkspaceId)
+
+  expect(localRecord).toBeTruthy()
+  expect(typeof localRecord?.repo === 'string' ? localRecord.repo : '').toBe('')
+  expect(
+    typeof localRecord?.workspaceScope === 'string' ? localRecord.workspaceScope : '',
+  ).toBe('local')
 })
 
 test('chat becomes available after token connect', async ({ page }) => {
@@ -80,7 +334,7 @@ test('BYOT controls render with default app entry', async ({ page }) => {
   await expect(prToggle).toHaveCount(1)
   await expect(prToggle).toBeHidden()
   await expect(workspacesToggle).toHaveCount(1)
-  await expect(workspacesToggle).toBeHidden()
+  await expect(workspacesToggle).toBeVisible()
 })
 
 test('GitHub token info panel reflects missing and present token states', async ({
@@ -141,8 +395,20 @@ test('deleting saved GitHub token requires confirmation modal', async ({ page })
   const tokenDelete = page.getByRole('button', { name: 'Delete GitHub token' })
   const tokenAdd = page.getByRole('button', { name: 'Add GitHub token' })
   const tokenInput = page.getByRole('textbox', { name: 'GitHub token' })
+  const workspacesToggle = page.getByRole('button', {
+    name: 'Workspaces',
+    exact: true,
+  })
+  const repositoryFilter = page.getByRole('combobox', {
+    name: 'Workspace repository filter',
+  })
 
   await expect(tokenDelete).toBeVisible()
+
+  await workspacesToggle.click()
+  await expect(repositoryFilter).toBeEnabled()
+  await repositoryFilter.selectOption('knightedcodemonkey/develop')
+  await expect(repositoryFilter).toHaveValue('knightedcodemonkey/develop')
 
   await tokenDelete.click()
   await expect(dialog).toHaveAttribute('open', '')
@@ -176,6 +442,12 @@ test('deleting saved GitHub token requires confirmation modal', async ({ page })
   await expect(tokenAdd).toBeVisible()
   await expect(tokenDelete).toBeHidden()
   await expect(tokenInput).toHaveValue('')
+  await expect(workspacesToggle).toHaveAttribute('aria-expanded', 'false')
+  await expect(page.getByRole('complementary', { name: 'Workspaces' })).toBeHidden()
+
+  await workspacesToggle.click()
+  await expect(repositoryFilter).toBeDisabled()
+  await expect(repositoryFilter).toHaveValue('__local__')
 })
 
 test('AI chat drawer opens and closes', async ({ page }) => {

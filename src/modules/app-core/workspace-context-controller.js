@@ -1,5 +1,6 @@
 const createWorkspaceContextController = ({
   workspaceStorage,
+  getHasGitHubToken,
   getCurrentSelectedRepository,
   getWorkspacesDrawerController,
   getActiveWorkspaceRecordId,
@@ -33,6 +34,14 @@ const createWorkspaceContextController = ({
 }) => {
   const toWorkspacePrContextState = value =>
     typeof value === 'string' ? value.trim().toLowerCase() : ''
+
+  const shouldUseLocalOnlyRestoreCandidates = () => {
+    if (typeof getHasGitHubToken !== 'function') {
+      return false
+    }
+
+    return getHasGitHubToken() !== true
+  }
 
   const listLocalContextRecords = async ({ includeAllRepositories = true } = {}) => {
     if (includeAllRepositories) {
@@ -175,6 +184,29 @@ const createWorkspaceContextController = ({
 
     if (!Array.isArray(options) || options.length === 0) {
       return
+    }
+
+    if (shouldUseLocalOnlyRestoreCandidates()) {
+      options = options.filter(workspace => {
+        const scope =
+          typeof workspace?.workspaceScope === 'string'
+            ? workspace.workspaceScope.trim().toLowerCase()
+            : ''
+
+        if (scope === 'local') {
+          return true
+        }
+
+        if (scope === 'repository') {
+          return false
+        }
+
+        return !(typeof workspace?.repo === 'string' && workspace.repo.trim().length > 0)
+      })
+
+      if (options.length === 0) {
+        return
+      }
     }
 
     const activeWorkspaceRecordId = getActiveWorkspaceRecordId()

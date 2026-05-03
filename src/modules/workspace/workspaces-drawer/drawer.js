@@ -272,6 +272,9 @@ export const createWorkspacesDrawer = ({
     const hasLocalOption = normalizedOptions.some(
       option => option.value === localRepositoryFilterValue,
     )
+    const hasWritableRepositoryOptions = normalizedOptions.some(
+      option => option.value !== localRepositoryFilterValue,
+    )
 
     const repositoryOptions = hasLocalOption
       ? normalizedOptions
@@ -285,6 +288,10 @@ export const createWorkspacesDrawer = ({
 
     const nextSelectedFilter = getNormalizedRepositoryFilter(requestedFilter)
 
+    if (!hasWritableRepositoryOptions) {
+      hasUserSelectedRepositoryFilter = false
+    }
+
     repositorySelect.replaceChildren(
       ...repositoryOptions.map(option => {
         const optionNode = document.createElement('option')
@@ -294,6 +301,14 @@ export const createWorkspacesDrawer = ({
         return optionNode
       }),
     )
+
+    repositorySelect.disabled = !hasWritableRepositoryOptions
+
+    if (!hasWritableRepositoryOptions) {
+      selectedRepositoryFilter = localRepositoryFilterValue
+      repositorySelect.value = localRepositoryFilterValue
+      return
+    }
 
     if (repositoryOptions.some(option => option.value === nextSelectedFilter)) {
       selectedRepositoryFilter = nextSelectedFilter

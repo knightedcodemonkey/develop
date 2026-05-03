@@ -490,7 +490,6 @@ const prContextUi = createGitHubPrContextUiController({
   stylesPrSyncIconPath,
   githubPrContextClose,
   aiChatToggle,
-  workspacesToggle,
   githubPrOpenIcon,
   githubPrPushCommitIcon,
   closeChatDrawer: () => {
@@ -499,7 +498,9 @@ const prContextUi = createGitHubPrContextUiController({
   closePrDrawer: () => {
     prDrawerController.setOpen(false)
   },
-  closeWorkspacesDrawer: () => workspacesDrawerController?.setOpen(false),
+  closeWorkspacesDrawer: () => {
+    void workspacesDrawerController?.setOpen(false)
+  },
 })
 
 const editedIndicatorVisibilityController = createEditedIndicatorVisibilityController({
@@ -583,6 +584,8 @@ githubAiContextState.token = byotControls.getToken()
 githubAiContextState.writableRepositories = byotControls.getWritableRepositories()
 
 const getCurrentGitHubToken = () => githubAiContextState.token ?? byotControls.getToken()
+const hasCurrentGitHubToken = () =>
+  typeof getCurrentGitHubToken() === 'string' && getCurrentGitHubToken().trim().length > 0
 
 const getCurrentSelectedRepository = () =>
   githubAiContextState.selectedRepository ?? byotControls.getSelectedRepository()
@@ -799,6 +802,7 @@ const {
 } = createWorkspaceControllersSetup({
   createDebouncedWorkspaceSaver,
   workspaceStorage,
+  getHasGitHubToken: () => hasCurrentGitHubToken(),
   getWorkspacesDrawerController: () => workspacesDrawerController,
   toNonEmptyWorkspaceText,
   buildWorkspaceRecordSnapshot,

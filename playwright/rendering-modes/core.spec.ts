@@ -217,6 +217,14 @@ test('css module imports expose class map for module tabs', async ({ page }) => 
       '.item {',
       '  color: rgb(10, 20, 30);',
       '}',
+      '',
+      '.item:hover {',
+      '  color: rgb(30, 40, 50);',
+      '}',
+      '',
+      '.item:active {',
+      '  color: rgb(60, 70, 80);',
+      '}',
     ].join('\n'),
   })
 
@@ -283,6 +291,19 @@ test('css module imports expose class map for module tabs', async ({ page }) => 
     'color',
     'rgb(10, 20, 30)',
   )
+
+  await expect
+    .poll(async () => readPreviewUserStyleText(page))
+    .toEqual(expect.stringMatching(/\.[A-Za-z0-9_-]+_item:hover\s*\{/))
+  await expect
+    .poll(async () => readPreviewUserStyleText(page))
+    .toEqual(expect.stringMatching(/\.[A-Za-z0-9_-]+_item:active\s*\{/))
+  await expect
+    .poll(async () => readPreviewUserStyleText(page))
+    .not.toContain('.item:hover')
+  await expect
+    .poll(async () => readPreviewUserStyleText(page))
+    .not.toContain('.item:active')
 })
 
 test('preview styles require explicit import from entry graph', async ({ page }) => {
@@ -562,16 +583,15 @@ test('config patch keeps preview style order stable around app head styles', asy
       }
     })
 
-  if (!resolvedOrderBeforePatch) {
-    throw new Error('Expected app-injected head style to exist before config patch.')
+  expect(resolvedOrderBeforePatch).not.toBeNull()
+  const orderBeforePatch = resolvedOrderBeforePatch as {
+    baseIndex: number
+    userIndex: number
+    appIndex: number
   }
 
-  expect(resolvedOrderBeforePatch.baseIndex).toBeLessThan(
-    resolvedOrderBeforePatch.userIndex,
-  )
-  expect(resolvedOrderBeforePatch.userIndex).toBeLessThan(
-    resolvedOrderBeforePatch.appIndex,
-  )
+  expect(orderBeforePatch.baseIndex).toBeLessThan(orderBeforePatch.userIndex)
+  expect(orderBeforePatch.userIndex).toBeLessThan(orderBeforePatch.appIndex)
 
   await page.getByLabel('Background').fill('#456789')
 
@@ -600,7 +620,7 @@ test('config patch keeps preview style order stable around app head styles', asy
           }
         })
     })
-    .toEqual(resolvedOrderBeforePatch)
+    .toEqual(orderBeforePatch)
 })
 
 test('nested module imports can bring styles into preview graph', async ({ page }) => {

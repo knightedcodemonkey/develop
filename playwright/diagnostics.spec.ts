@@ -247,6 +247,42 @@ test('typecheck does not report TS2307 for stylesheet side-effect imports', asyn
   expect(diagnosticsText).not.toContain("Cannot find module '../styles/app.css'")
 })
 
+test('typecheck recognizes css module class maps in React mode', async ({ page }) => {
+  await waitForInitialRender(page)
+
+  await ensurePanelToolsVisible(page, 'component')
+  await addWorkspaceTab(page, { type: 'style' })
+  await page.getByRole('button', { name: 'Rename tab module.css' }).click()
+  const renameInput = page.getByLabel('Rename module.css')
+  await renameInput.fill('app.module.css')
+  await renameInput.press('Enter')
+
+  await setWorkspaceTabSource(page, {
+    fileName: 'app.module.css',
+    kind: 'styles',
+    source: ['.btn {', '  color: #fff;', '}'].join('\n'),
+  })
+
+  await setComponentEditorSource(
+    page,
+    [
+      "import styles from '../styles/app.module.css'",
+      '',
+      'const App = () => <button className={styles.btn}>ok</button>',
+      '',
+    ].join('\n'),
+  )
+
+  await runTypecheck(page)
+  await ensureDiagnosticsDrawerOpen(page)
+  await expect(page.locator('#diagnostics-component')).toContainText(
+    'No TypeScript errors found.',
+  )
+
+  const diagnosticsText = await page.locator('#diagnostics-component').innerText()
+  expect(diagnosticsText).not.toContain("Property 'btn' does not exist on type 'string'")
+})
+
 test('component diagnostics rows navigate editor to reported line', async ({ page }) => {
   await waitForInitialRender(page)
 

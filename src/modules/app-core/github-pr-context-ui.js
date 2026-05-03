@@ -11,7 +11,6 @@ export const createGitHubPrContextUiController = ({
   stylesPrSyncIconPath,
   githubPrContextClose,
   aiChatToggle,
-  workspacesToggle,
   githubPrOpenIcon,
   githubPrPushCommitIcon,
   closeChatDrawer,
@@ -104,20 +103,12 @@ export const createGitHubPrContextUiController = ({
     const hasToken = typeof token === 'string' && token.trim().length > 0
 
     if (hasToken) {
-      if (workspacesToggle instanceof HTMLButtonElement) {
-        workspacesToggle.disabled = false
-      }
-
       if (aiChatToggle instanceof HTMLElement) {
         aiChatToggle.hidden = false
       }
 
       if (githubPrToggle instanceof HTMLElement) {
         githubPrToggle.hidden = false
-      }
-
-      if (workspacesToggle instanceof HTMLElement) {
-        workspacesToggle.hidden = false
       }
 
       if (contextState.activePrContext) {
@@ -132,9 +123,6 @@ export const createGitHubPrContextUiController = ({
       aiChatToggle.hidden = true
     }
     aiChatToggle?.setAttribute('aria-expanded', 'false')
-    if (workspacesToggle instanceof HTMLButtonElement) {
-      workspacesToggle.disabled = true
-    }
     contextState.activePrContext = null
     contextState.activePrEditorSyncKey = ''
     contextState.hasSyncedActivePrEditorContent = false
@@ -144,14 +132,10 @@ export const createGitHubPrContextUiController = ({
       githubPrToggle.hidden = true
     }
     githubPrToggle?.setAttribute('aria-expanded', 'false')
-    if (workspacesToggle instanceof HTMLElement) {
-      workspacesToggle.hidden = true
-    }
-    workspacesToggle?.setAttribute('aria-expanded', 'false')
     githubPrContextClose?.setAttribute('hidden', '')
     closeChatDrawer?.()
     closePrDrawer?.()
-    void closeWorkspacesDrawer?.()
+    closeWorkspacesDrawer?.()
   }
 
   return {
