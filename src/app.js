@@ -664,6 +664,8 @@ const getWorkspaceContextSnapshot = createWorkspaceContextSnapshotGetter({
   getActivePrContext: () => githubAiContextState.activePrContext,
   getPrContextState: () => workspacePrContextState,
   getPrNumber: () => workspacePrNumber,
+  getWorkspaceScopeMarker: () => workspaceScopeMarker,
+  getActiveWorkspacePersistedPrTitle: () => activeWorkspacePersistedPrTitle,
 })
 
 const { getActiveWorkspaceTab, getEntryWorkspaceTab, getPrimaryStyleWorkspaceTab } =

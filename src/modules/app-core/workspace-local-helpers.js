@@ -7,6 +7,8 @@ const createWorkspaceContextSnapshotGetter =
     getActivePrContext,
     getPrContextState,
     getPrNumber,
+    getWorkspaceScopeMarker,
+    getActiveWorkspacePersistedPrTitle,
   }) =>
   () => {
     const toSafeText = value => (typeof value === 'string' ? value.trim() : '')
@@ -32,6 +34,15 @@ const createWorkspaceContextSnapshotGetter =
     const formBaseBranch = toSafeText(githubPrBaseBranch?.value)
     const formHeadBranch = toSafeText(githubPrHeadBranch?.value)
     const formPrTitle = toSafeText(githubPrTitle?.value)
+    const normalizedWorkspaceScope = toSafeText(getWorkspaceScopeMarker?.()).toLowerCase()
+    const isLocalScope = normalizedWorkspaceScope !== 'repository'
+    const persistedPrTitle = toSafeText(getActiveWorkspacePersistedPrTitle?.())
+    const nextPrTitle =
+      isActivePrContext && contextPrTitle
+        ? contextPrTitle
+        : isLocalScope && !formPrTitle && persistedPrTitle
+          ? persistedPrTitle
+          : formPrTitle
 
     return {
       repositoryFullName: getCurrentSelectedRepository(),
@@ -39,7 +50,7 @@ const createWorkspaceContextSnapshotGetter =
         isActivePrContext && contextBaseBranch ? contextBaseBranch : formBaseBranch,
       headBranch:
         isActivePrContext && contextHeadBranch ? contextHeadBranch : formHeadBranch,
-      prTitle: isActivePrContext && contextPrTitle ? contextPrTitle : formPrTitle,
+      prTitle: nextPrTitle,
       prNumber,
       prContextState,
     }
