@@ -1025,6 +1025,10 @@ const workspacePrSessionHandoffController = createWorkspacePrSessionHandoffContr
     setWorkspacePrContextState,
     setWorkspacePrNumber,
     setWorkspaceScopeMarker,
+    clearActiveWorkspacePersistedMetadata: () => {
+      activeWorkspacePersistedPrTitle = ''
+      activeWorkspacePersistedHeadBranch = ''
+    },
     getActiveWorkspaceCreatedAt: () => activeWorkspaceCreatedAt,
     setActiveWorkspaceRecordId,
     setActiveWorkspaceCreatedAt: value => (activeWorkspaceCreatedAt = value),
