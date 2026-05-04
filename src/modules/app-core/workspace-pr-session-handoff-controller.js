@@ -14,6 +14,7 @@ export const createWorkspacePrSessionHandoffController = ({
     setWorkspacePrContextState,
     setWorkspacePrNumber,
     setWorkspaceScopeMarker,
+    clearActiveWorkspacePersistedMetadata,
     getActiveWorkspaceCreatedAt,
     setActiveWorkspaceRecordId,
     setActiveWorkspaceCreatedAt,
@@ -87,6 +88,11 @@ export const createWorkspacePrSessionHandoffController = ({
     if (typeof setWorkspaceScopeMarker === 'function') {
       setWorkspaceScopeMarker('local')
     }
+
+    if (typeof clearActiveWorkspacePersistedMetadata === 'function') {
+      clearActiveWorkspacePersistedMetadata()
+    }
+
     lastKnownPrContextMeta = null
 
     if (githubPrHeadBranch) {

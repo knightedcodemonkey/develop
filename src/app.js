@@ -664,6 +664,8 @@ const getWorkspaceContextSnapshot = createWorkspaceContextSnapshotGetter({
   getActivePrContext: () => githubAiContextState.activePrContext,
   getPrContextState: () => workspacePrContextState,
   getPrNumber: () => workspacePrNumber,
+  getWorkspaceScopeMarker: () => workspaceScopeMarker,
+  getActiveWorkspacePersistedPrTitle: () => activeWorkspacePersistedPrTitle,
 })
 
 const { getActiveWorkspaceTab, getEntryWorkspaceTab, getPrimaryStyleWorkspaceTab } =
@@ -1023,6 +1025,10 @@ const workspacePrSessionHandoffController = createWorkspacePrSessionHandoffContr
     setWorkspacePrContextState,
     setWorkspacePrNumber,
     setWorkspaceScopeMarker,
+    clearActiveWorkspacePersistedMetadata: () => {
+      activeWorkspacePersistedPrTitle = ''
+      activeWorkspacePersistedHeadBranch = ''
+    },
     getActiveWorkspaceCreatedAt: () => activeWorkspaceCreatedAt,
     setActiveWorkspaceRecordId,
     setActiveWorkspaceCreatedAt: value => (activeWorkspaceCreatedAt = value),

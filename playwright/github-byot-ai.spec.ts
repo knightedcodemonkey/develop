@@ -399,6 +399,23 @@ test('Local workspace can be renamed from Workspaces drawer', async ({ page }) =
   expect(typeof renamedRecord?.prTitle === 'string' ? renamedRecord.prTitle : '').toBe(
     renamedTitle,
   )
+
+  await setComponentEditorSource(
+    page,
+    'export const App = () => <main>rename persists after edit</main>',
+  )
+
+  await expect
+    .poll(async () => {
+      const nextRecords = await getAllWorkspaceRecords(page)
+      const nextRenamedRecord = nextRecords.find(
+        record => record?.id === sourceWorkspaceId,
+      )
+      return typeof nextRenamedRecord?.prTitle === 'string'
+        ? nextRenamedRecord.prTitle
+        : ''
+    })
+    .toBe(renamedTitle)
 })
 
 test('chat stays usable after opening a Local workspace with PAT connected', async ({
