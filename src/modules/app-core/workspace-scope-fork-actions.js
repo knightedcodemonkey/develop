@@ -26,6 +26,7 @@ export const createWorkspaceScopeForkActions = ({
   setWorkspaceScopeMarker,
   setHeadBranchValue,
   setPrTitleValue,
+  setActiveWorkspacePersistedMetadata,
 }) => {
   const syncActiveWorkspaceRepositoryScope = async (
     repositoryFullName,
@@ -172,6 +173,14 @@ export const createWorkspaceScopeForkActions = ({
       typeof saved?.createdAt === 'number' && Number.isFinite(saved.createdAt)
         ? saved.createdAt
         : now
+
+    if (typeof setActiveWorkspacePersistedMetadata === 'function') {
+      setActiveWorkspacePersistedMetadata({
+        prTitle: '',
+        head: forkedHeadBranch,
+      })
+    }
+
     setActiveWorkspaceRecordId(savedId)
     setActiveWorkspaceCreatedAt(savedCreatedAt)
 

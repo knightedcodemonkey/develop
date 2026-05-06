@@ -950,6 +950,10 @@ const { syncActiveWorkspaceRepositoryScope, forkWorkspaceFromCurrentState } =
         githubPrTitle.value = value
       }
     },
+    setActiveWorkspacePersistedMetadata: ({ prTitle, head } = {}) => {
+      activeWorkspacePersistedPrTitle = toNonEmptyWorkspaceText(prTitle)
+      activeWorkspacePersistedHeadBranch = toNonEmptyWorkspaceText(head)
+    },
   })
 
 editedIndicatorVisibilityController.setRefreshHandlers({
