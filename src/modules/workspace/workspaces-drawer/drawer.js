@@ -78,11 +78,14 @@ export const createWorkspacesDrawer = ({
   }
 
   const isInactiveWithoutPrNumber = workspace => {
-    const state = toSafeText(workspace?.prContextState).toLowerCase()
+    const state = toSafeText(workspace?.prContextState).toLowerCase() || 'inactive'
     const hasPrNumber =
       typeof workspace?.prNumber === 'number' && Number.isFinite(workspace.prNumber)
     return state === 'inactive' && !hasPrNumber
   }
+
+  const hasFinitePrNumber = workspace =>
+    typeof workspace?.prNumber === 'number' && Number.isFinite(workspace.prNumber)
 
   const shouldRenderAsLocalEntry = workspace => {
     if (toSafeWorkspaceScope(workspace) === localWorkspaceScopeValue) {
@@ -157,6 +160,7 @@ export const createWorkspacesDrawer = ({
     const selectedWorkspaceScope = toSafeWorkspaceScope(selectedEntry)
     const isSelectedLocalWorkspace =
       hasSelection && selectedWorkspaceScope === localWorkspaceScopeValue
+    const isSelectedWorkspaceNonPr = hasSelection && !hasFinitePrNumber(selectedEntry)
     const isSelectedWorkspaceActive =
       hasSelection &&
       Boolean(activeWorkspaceId) &&
@@ -164,7 +168,7 @@ export const createWorkspacesDrawer = ({
     const canRenameWorkspace =
       typeof onRenameSelected === 'function' &&
       isSelectedLocalWorkspace &&
-      !isSelectedWorkspaceActive
+      isSelectedWorkspaceNonPr
     const canCreateWorkspace = typeof onCreateWorkspace === 'function'
     const canInitializeWorkspace = typeof onInitializeWorkspace === 'function'
     const hasStoredWorkspaces =
