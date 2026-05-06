@@ -1116,6 +1116,87 @@ test('Local New workspace always creates a new stored workspace snapshot', async
   await expect.poll(async () => countLocalRecords()).toBe(initialLocalRecordCount + 1)
 })
 
+test('Local New workspace shows forked head immediately when source workspace has prTitle', async ({
+  page,
+}) => {
+  const seededWorkspaceId = 'local_seed_title_carryover_guard'
+  const seededWorkspaceTitle = 'Seed local context title'
+
+  await waitForAppReady(page, `${appEntryPath}`)
+
+  await seedLocalWorkspaceContexts(page, [
+    {
+      id: seededWorkspaceId,
+      repo: '',
+      base: 'main',
+      head: 'feat/component-seeded-title-guard',
+      prTitle: seededWorkspaceTitle,
+      prNumber: null,
+      prContextState: 'inactive',
+    },
+  ])
+
+  await page.reload()
+  await waitForAppReady(page, `${appEntryPath}`)
+  await connectByotWithSingleRepo(page)
+  await selectWorkspacesRepositoryFilter(page, '__local__')
+
+  await page.getByRole('button', { name: 'New workspace', exact: true }).click()
+  await expect(page.getByRole('complementary', { name: 'Workspaces' })).toBeHidden()
+
+  let createdWorkspaceId = ''
+  await expect
+    .poll(async () => {
+      const records = await getAllWorkspaceRecords(page)
+      const createdRecord = records.find(record => {
+        const id = String(record?.id ?? '').trim()
+        const repo = String(record?.repo ?? '').trim()
+        const prTitle = String(record?.prTitle ?? '').trim()
+        return id !== seededWorkspaceId && !repo && !prTitle
+      })
+
+      createdWorkspaceId = String(createdRecord?.id ?? '').trim()
+      return createdWorkspaceId
+    })
+    .not.toBe('')
+
+  const createdRecords = await getAllWorkspaceRecords(page)
+  const createdRecord = createdRecords.find(record => {
+    const id = String(record?.id ?? '').trim()
+    return id === createdWorkspaceId
+  })
+
+  const createdHead = String(createdRecord?.head ?? '').trim()
+  expect(createdHead).toBeTruthy()
+
+  await page.getByRole('button', { name: 'Workspaces' }).click()
+  await selectWorkspacesRepositoryFilter(page, '__local__')
+
+  const selectedWorkspaceId = String(
+    (await page.locator('#workspaces-select option:checked').getAttribute('value')) ?? '',
+  ).trim()
+  expect(selectedWorkspaceId).not.toBe(seededWorkspaceId)
+
+  const selectedLabelText = await page
+    .locator('#workspaces-select option:checked')
+    .textContent()
+  const selectedLabel = String(selectedLabelText ?? '').trim()
+
+  const selectedRecord = createdRecords.find(record => {
+    const id = String(record?.id ?? '').trim()
+    return id === selectedWorkspaceId
+  })
+  const selectedHead = String(selectedRecord?.head ?? '').trim()
+  const selectedPrTitle = String(selectedRecord?.prTitle ?? '').trim()
+
+  expect(selectedPrTitle).toBe('')
+  expect(selectedHead).toBeTruthy()
+  expect(selectedLabel).toBe(selectedHead)
+  expect(selectedLabel).not.toBe(seededWorkspaceTitle)
+  await expect(page.locator('#workspace-context-status')).toContainText(selectedHead)
+  await expect(page.locator('#workspace-context-status')).toContainText('local')
+})
+
 test('Non-Local New workspace forks a new repository-scoped workspace when entries exist', async ({
   page,
 }) => {
