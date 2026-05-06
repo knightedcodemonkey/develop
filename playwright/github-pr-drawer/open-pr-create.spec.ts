@@ -1172,14 +1172,18 @@ test('Local New workspace shows forked head immediately when source workspace ha
   await page.getByRole('button', { name: 'Workspaces' }).click()
   await selectWorkspacesRepositoryFilter(page, '__local__')
 
+  const storedWorkspaceSelect = page.getByRole('combobox', {
+    name: 'Stored workspace',
+  })
   const selectedWorkspaceId = String(
-    (await page.locator('#workspaces-select option:checked').getAttribute('value')) ?? '',
+    await storedWorkspaceSelect.evaluate(element => (element as HTMLSelectElement).value),
   ).trim()
   expect(selectedWorkspaceId).not.toBe(seededWorkspaceId)
 
-  const selectedLabelText = await page
-    .locator('#workspaces-select option:checked')
-    .textContent()
+  const selectedLabelText = await storedWorkspaceSelect.evaluate(element => {
+    const select = element as HTMLSelectElement
+    return select.selectedOptions.item(0)?.textContent ?? ''
+  })
   const selectedLabel = String(selectedLabelText ?? '').trim()
 
   const selectedRecord = createdRecords.find(record => {
