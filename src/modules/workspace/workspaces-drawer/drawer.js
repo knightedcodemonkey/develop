@@ -84,9 +84,6 @@ export const createWorkspacesDrawer = ({
     return state === 'inactive' && !hasPrNumber
   }
 
-  const hasFinitePrNumber = workspace =>
-    typeof workspace?.prNumber === 'number' && Number.isFinite(workspace.prNumber)
-
   const shouldRenderAsLocalEntry = workspace => {
     if (toSafeWorkspaceScope(workspace) === localWorkspaceScopeValue) {
       return true
@@ -160,7 +157,8 @@ export const createWorkspacesDrawer = ({
     const selectedWorkspaceScope = toSafeWorkspaceScope(selectedEntry)
     const isSelectedLocalWorkspace =
       hasSelection && selectedWorkspaceScope === localWorkspaceScopeValue
-    const isSelectedWorkspaceNonPr = hasSelection && !hasFinitePrNumber(selectedEntry)
+    const isSelectedWorkspaceNonPr =
+      hasSelection && isInactiveWithoutPrNumber(selectedEntry)
     const isSelectedWorkspaceActive =
       hasSelection &&
       Boolean(activeWorkspaceId) &&

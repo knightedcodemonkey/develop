@@ -561,9 +561,12 @@ const initializeGitHubWorkflows = ({
           return false
         }
 
+        const workspacePrContextState =
+          toSafeWorkspaceText(record.prContextState).toLowerCase() || 'inactive'
         const hasWorkspacePrNumber =
           typeof record.prNumber === 'number' && Number.isFinite(record.prNumber)
-        const isPrAssociatedWorkspace = hasWorkspacePrNumber
+        const isPrAssociatedWorkspace =
+          workspacePrContextState !== 'inactive' || hasWorkspacePrNumber
         if (isPrAssociatedWorkspace) {
           workspacesDrawerController?.setStatus(
             'Use Pull Request controls to rename PR-associated workspaces.',
