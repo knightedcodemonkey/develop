@@ -627,8 +627,13 @@ export const createGitHubChatDrawer = ({
 
   const collectRepositoryContext = () => {
     const repository = getSelectedRepository?.()
+    const repositoryFullName =
+      typeof repository?.fullName === 'string' ? repository.fullName.trim() : ''
 
-    const repositoryLabel = toRepositoryLabel(repository)
+    if (!repositoryFullName) {
+      return ''
+    }
+
     const repositoryUrl = toRepositoryUrl(repository)
     const defaultBranch =
       repository && typeof repository.defaultBranch === 'string'
@@ -637,7 +642,7 @@ export const createGitHubChatDrawer = ({
 
     const contextLines = [
       'Selected repository context:',
-      `- Repository: ${repositoryLabel}`,
+      `- Repository: ${repositoryFullName}`,
       ...(repositoryUrl ? [`- Repository URL: ${repositoryUrl}`] : []),
       `- Default branch: ${defaultBranch}`,
       'Use this repository as the default target for the user request unless they explicitly override it.',
@@ -740,12 +745,6 @@ export const createGitHubChatDrawer = ({
     const token = getToken?.()
     if (!token) {
       setChatStatus('Add a GitHub token before starting chat.', 'error')
-      return
-    }
-
-    const repository = getSelectedRepository?.()
-    if (!repository?.fullName) {
-      setChatStatus('Select a writable repository before starting chat.', 'error')
       return
     }
 

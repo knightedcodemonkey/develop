@@ -151,12 +151,15 @@ export const buildOutboundMessages = ({
   styleMode,
   existingSummary,
 }) => {
+  const normalizedRepositoryContext = toChatText(repositoryContext)
   const systemMessages = [
     {
       role: 'system',
       content: collectSystemRolePrompt({ renderMode, styleMode }),
     },
-    { role: 'system', content: repositoryContext },
+    ...(normalizedRepositoryContext
+      ? [{ role: 'system', content: normalizedRepositoryContext }]
+      : []),
     ...(editorContext ? [{ role: 'system', content: editorContext }] : []),
   ]
   const conversation = collectConversation(messages)
