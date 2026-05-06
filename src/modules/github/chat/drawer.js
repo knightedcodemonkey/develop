@@ -743,12 +743,6 @@ export const createGitHubChatDrawer = ({
       return
     }
 
-    const repository = getSelectedRepository?.()
-    if (!repository?.fullName) {
-      setChatStatus('Select a writable repository before starting chat.', 'error')
-      return
-    }
-
     const selectedModel = getSelectedModel()
 
     stopPendingRequest()
