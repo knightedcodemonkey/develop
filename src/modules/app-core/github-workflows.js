@@ -51,6 +51,7 @@ const initializeGitHubWorkflows = ({
   workspaceStorage,
   getActiveWorkspaceRecordId,
   getActiveWorkspaceDisplayLabel,
+  setActiveWorkspacePersistedMetadata,
   setActiveWorkspaceRecordId,
   setActiveWorkspaceCreatedAt,
   buildWorkspaceRecordSnapshot,
@@ -560,13 +561,21 @@ const initializeGitHubWorkflows = ({
           return false
         }
 
-        if (getActiveWorkspaceRecordId() === workspaceId) {
+        const workspacePrContextState =
+          toSafeWorkspaceText(record.prContextState).toLowerCase() || 'inactive'
+        const hasWorkspacePrNumber =
+          typeof record.prNumber === 'number' && Number.isFinite(record.prNumber)
+        const isPrAssociatedWorkspace =
+          workspacePrContextState !== 'inactive' || hasWorkspacePrNumber
+        if (isPrAssociatedWorkspace) {
           workspacesDrawerController?.setStatus(
-            'Open a different workspace before renaming this one.',
+            'Use Pull Request controls to rename PR-associated workspaces.',
             'error',
           )
           return false
         }
+
+        const isActiveWorkspace = getActiveWorkspaceRecordId() === workspaceId
 
         const currentWorkspaceName =
           toSafeWorkspaceText(record.prTitle) ||
@@ -600,6 +609,16 @@ const initializeGitHubWorkflows = ({
           prTitle: nextWorkspaceName,
           lastModified: Date.now(),
         })
+
+        if (
+          isActiveWorkspace &&
+          typeof setActiveWorkspacePersistedMetadata === 'function'
+        ) {
+          setActiveWorkspacePersistedMetadata({
+            prTitle: nextWorkspaceName,
+            head: toSafeWorkspaceText(record.head),
+          })
+        }
 
         await refreshLocalContextOptions()
         return true

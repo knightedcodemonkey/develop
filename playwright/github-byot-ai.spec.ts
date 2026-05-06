@@ -18,6 +18,7 @@ import {
   openStoredWorkspaceContextById,
   seedLocalWorkspaceContexts,
 } from './github-pr-drawer/github-pr-drawer.helpers.js'
+import { selectWorkspacesRepositoryFilter } from './github-pr-drawer/github-pr-drawer.helpers.js'
 
 test('PR/BYOT controls are visible and chat stays hidden until token connect', async ({
   page,
@@ -416,6 +417,191 @@ test('Local workspace can be renamed from Workspaces drawer', async ({ page }) =
         : ''
     })
     .toBe(renamedTitle)
+})
+
+test('Active Local non-PR workspace can be renamed from Workspaces drawer', async ({
+  page,
+}) => {
+  const activeWorkspaceId = 'active_local_workspace_rename_allowed'
+  const originalTitle = 'Active local rename original title'
+  const renamedTitle = 'Active local rename updated title'
+
+  await waitForAppReady(page)
+
+  await seedLocalWorkspaceContexts(page, [
+    {
+      id: activeWorkspaceId,
+      repo: '',
+      workspaceScope: 'local',
+      head: 'feat/active-local-rename-allowed',
+      prTitle: originalTitle,
+      prContextState: 'inactive',
+      prNumber: null,
+      tabs: [
+        {
+          id: 'component',
+          path: 'src/component.tsx',
+          language: 'tsx',
+          role: 'component',
+          content: 'export const App = () => <main>active local rename allowed</main>',
+          order: 0,
+          source: 'workspace',
+          dirty: false,
+        },
+      ],
+      activeTabId: 'component',
+    },
+  ])
+
+  await page.reload()
+  await waitForAppReady(page)
+
+  const workspacesToggle = page.getByRole('button', {
+    name: 'Workspaces',
+    exact: true,
+  })
+  await workspacesToggle.click()
+
+  const workspaceSelect = page.getByLabel('Stored workspace')
+  const renameButton = page.getByRole('button', { name: 'Rename', exact: true })
+  await expect(renameButton).toBeVisible()
+
+  await expect(workspaceSelect).toHaveValue(activeWorkspaceId)
+  await expect(renameButton).toBeEnabled()
+
+  page.once('dialog', async dialog => {
+    expect(dialog.type()).toBe('prompt')
+    expect(dialog.defaultValue()).toBe(originalTitle)
+    await dialog.accept(renamedTitle)
+  })
+
+  await renameButton.click()
+  await expect(page.locator('#workspaces-status')).toContainText('Renamed workspace.')
+
+  const records = await getAllWorkspaceRecords(page)
+  const renamedRecord = records.find(record => record?.id === activeWorkspaceId)
+
+  expect(renamedRecord).toBeTruthy()
+  expect(typeof renamedRecord?.prTitle === 'string' ? renamedRecord.prTitle : '').toBe(
+    renamedTitle,
+  )
+
+  const selectedLabelText = await page
+    .locator('#workspaces-select option:checked')
+    .textContent()
+  expect(String(selectedLabelText ?? '').trim()).toBe(renamedTitle)
+  await expect(page.locator('#workspace-context-status')).toContainText(renamedTitle)
+})
+
+test('Active Local workspace with active PR context and null PR number cannot be renamed from Workspaces drawer', async ({
+  page,
+}) => {
+  const activeWorkspaceId = 'active_local_workspace_rename_blocked_pr_associated'
+
+  await waitForAppReady(page)
+
+  await seedLocalWorkspaceContexts(page, [
+    {
+      id: activeWorkspaceId,
+      repo: '',
+      workspaceScope: 'local',
+      head: 'feat/active-local-rename-blocked',
+      prTitle: 'PR-associated local workspace',
+      prContextState: 'active',
+      prNumber: null,
+      tabs: [
+        {
+          id: 'component',
+          path: 'src/component.tsx',
+          language: 'tsx',
+          role: 'component',
+          content: 'export const App = () => <main>active local rename blocked</main>',
+          order: 0,
+          source: 'workspace',
+          dirty: false,
+        },
+      ],
+      activeTabId: 'component',
+    },
+  ])
+
+  await page.reload()
+  await waitForAppReady(page)
+
+  const workspacesToggle = page.getByRole('button', {
+    name: 'Workspaces',
+    exact: true,
+  })
+  await workspacesToggle.click()
+
+  const workspaceSelect = page.getByLabel('Stored workspace')
+  const renameButton = page.getByRole('button', { name: 'Rename', exact: true })
+  await expect(renameButton).toBeVisible()
+
+  await expect(workspaceSelect).toHaveValue(activeWorkspaceId)
+  await expect(renameButton).toBeDisabled()
+})
+
+test('Repository-scoped workspace cannot be renamed from Workspaces drawer', async ({
+  page,
+}) => {
+  const repositoryFullName = 'knightedcodemonkey/develop'
+  const repositoryWorkspaceId = 'repository_workspace_rename_blocked'
+
+  await waitForAppReady(page)
+
+  await seedLocalWorkspaceContexts(page, [
+    {
+      id: repositoryWorkspaceId,
+      repo: repositoryFullName,
+      workspaceScope: 'repository',
+      head: 'feat/repository-rename-blocked',
+      prTitle: 'Repository scoped workspace',
+      prContextState: 'inactive',
+      prNumber: null,
+      tabs: [
+        {
+          id: 'component',
+          path: 'src/component.tsx',
+          language: 'tsx',
+          role: 'component',
+          content: 'export const App = () => <main>repository rename blocked</main>',
+          order: 0,
+          source: 'workspace',
+          dirty: false,
+        },
+      ],
+      activeTabId: 'component',
+    },
+  ])
+
+  await page.route('https://api.github.com/user/repos**', async route => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify([
+        {
+          id: 11,
+          owner: { login: 'knightedcodemonkey' },
+          name: 'develop',
+          full_name: repositoryFullName,
+          default_branch: 'main',
+          permissions: { push: true },
+        },
+      ]),
+    })
+  })
+
+  await page.reload()
+  await waitForAppReady(page)
+  await connectByotWithSingleRepo(page)
+  await selectWorkspacesRepositoryFilter(page, repositoryFullName)
+
+  const workspaceSelect = page.getByLabel('Stored workspace')
+  const renameButton = page.getByRole('button', { name: 'Rename', exact: true })
+
+  await expect(workspaceSelect).toHaveValue(repositoryWorkspaceId)
+  await expect(renameButton).toBeHidden()
 })
 
 test('chat stays usable after opening a Local workspace with PAT connected', async ({

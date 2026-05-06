@@ -953,6 +953,7 @@ const { syncActiveWorkspaceRepositoryScope, forkWorkspaceFromCurrentState } =
     setActiveWorkspacePersistedMetadata: ({ prTitle, head } = {}) => {
       activeWorkspacePersistedPrTitle = toNonEmptyWorkspaceText(prTitle)
       activeWorkspacePersistedHeadBranch = toNonEmptyWorkspaceText(head)
+      workspaceContextStatusController.render()
     },
   })
 
@@ -1168,6 +1169,11 @@ const githubWorkflows = createGitHubWorkflowsSetup({
     workspaceStorage,
     getActiveWorkspaceRecordId: () => activeWorkspaceRecordId,
     getActiveWorkspaceDisplayLabel,
+    setActiveWorkspacePersistedMetadata: ({ prTitle, head } = {}) => {
+      activeWorkspacePersistedPrTitle = toNonEmptyWorkspaceText(prTitle)
+      activeWorkspacePersistedHeadBranch = toNonEmptyWorkspaceText(head)
+      workspaceContextStatusController.render()
+    },
     setActiveWorkspaceRecordId,
     setActiveWorkspaceCreatedAt: value => (activeWorkspaceCreatedAt = value),
     buildWorkspaceRecordSnapshot,
