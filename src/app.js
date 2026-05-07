@@ -52,11 +52,7 @@ import { createPrContextStateChangeHandler } from './modules/app-core/pr-context
 import { createWorkspaceContextStatusController } from './modules/app-core/workspace-context-status-controller.js'
 import { createWorkspaceRecordAppliedHandler } from './modules/app-core/workspace-record-applied-handler.js'
 import { createGitHubChatWorkspaceActions } from './modules/app-core/github-chat-workspace-actions.js'
-import {
-  encodeWorkspaceSharePayload,
-  isNativeWorkspaceShareCodecSupported,
-  workspaceShareParam,
-} from './modules/app-core/workspace-share-codec.js'
+import { createShareCurrentLocalWorkspace } from './modules/app-core/workspace-share-action.js'
 import { createDiagnosticsUiController } from './modules/diagnostics/diagnostics-ui.js'
 import { createGitHubChatDrawer } from './modules/github/chat/drawer.js'
 import { createGitHubByotControls } from './modules/github/byot-controls.js'
@@ -991,40 +987,14 @@ const { syncActiveWorkspaceRepositoryScope, forkWorkspaceFromCurrentState } =
     },
   })
 
-const maxWorkspaceShareUrlLength = 8000
-
-const shareCurrentLocalWorkspace = async () => {
-  if (!clipboardSupported) {
-    throw new Error('Clipboard API is not available in this browser context.')
-  }
-
-  if (!isNativeWorkspaceShareCodecSupported()) {
-    throw new Error('Native compression is not supported in this browser context.')
-  }
-
-  if (workspaceScopeMarker !== 'local') {
-    throw new Error('Share is only available for local workspaces.')
-  }
-
-  await flushWorkspaceSave({ preserveRecordId: true })
-  const snapshot = buildWorkspaceRecordSnapshot()
-  if (!snapshot || typeof snapshot !== 'object') {
-    throw new Error('Could not prepare workspace snapshot.')
-  }
-
-  const encodedPayload = await encodeWorkspaceSharePayload(snapshot)
-  const sharedUrl = new URL(window.location.href)
-  sharedUrl.searchParams.set(workspaceShareParam, encodedPayload)
-  const sharedUrlText = sharedUrl.toString()
-
-  if (sharedUrlText.length > maxWorkspaceShareUrlLength) {
-    throw new Error('Workspace is too large for a URL.')
-  }
-
-  await navigator.clipboard.writeText(sharedUrlText)
-  setStatus('Share link copied', 'neutral')
-  showAppToast('Share link copied to clipboard.')
-}
+const shareCurrentLocalWorkspace = createShareCurrentLocalWorkspace({
+  clipboardSupported,
+  getWorkspaceScopeMarker: () => workspaceScopeMarker,
+  flushWorkspaceSave,
+  buildWorkspaceRecordSnapshot,
+  setStatus,
+  showAppToast,
+})
 
 editedIndicatorVisibilityController.setRefreshHandlers({
   syncHeaderLabels,

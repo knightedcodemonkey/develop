@@ -1,6 +1,9 @@
 const workspaceShareParam = 'sws'
 const workspaceShareSchemaVersion = 1
 const workspaceShareCompression = 'gzip'
+const maxWorkspaceShareEncodedPayloadLength = 8192
+const maxWorkspaceShareDecodedBytes = 1024 * 1024
+const maxWorkspaceShareExpansionRatio = 100
 
 const isNativeWorkspaceShareCodecSupported = () => {
   return (
@@ -53,6 +56,60 @@ const streamToUint8Array = async stream => {
   return new Uint8Array(buffer)
 }
 
+const streamToUint8ArrayWithLimit = async ({
+  stream,
+  maxBytes,
+  compressedBytesLength,
+  maxExpansionRatio,
+}) => {
+  const reader = stream.getReader()
+  const chunks = []
+  let totalBytes = 0
+
+  try {
+    while (true) {
+      // Sequential reads are required for Web Streams reader consumption.
+      // eslint-disable-next-line no-await-in-loop
+      const { done, value } = await reader.read()
+      if (done) {
+        break
+      }
+
+      if (!(value instanceof Uint8Array)) {
+        continue
+      }
+
+      totalBytes += value.byteLength
+      if (totalBytes > maxBytes) {
+        throw new Error('Workspace share payload exceeds maximum decoded size.')
+      }
+
+      if (
+        typeof compressedBytesLength === 'number' &&
+        compressedBytesLength > 0 &&
+        typeof maxExpansionRatio === 'number' &&
+        maxExpansionRatio > 0 &&
+        totalBytes > compressedBytesLength * maxExpansionRatio
+      ) {
+        throw new Error('Workspace share payload expansion ratio is too large.')
+      }
+
+      chunks.push(value)
+    }
+  } finally {
+    reader.releaseLock()
+  }
+
+  const bytes = new Uint8Array(totalBytes)
+  let offset = 0
+  for (const chunk of chunks) {
+    bytes.set(chunk, offset)
+    offset += chunk.byteLength
+  }
+
+  return bytes
+}
+
 const compressText = async text => {
   const encoder = new TextEncoder()
   const sourceBytes = encoder.encode(text)
@@ -69,7 +126,12 @@ const decompressText = async bytes => {
   const decompressedStream = sourceStream.pipeThrough(
     new DecompressionStream(workspaceShareCompression),
   )
-  const decompressedBytes = await streamToUint8Array(decompressedStream)
+  const decompressedBytes = await streamToUint8ArrayWithLimit({
+    stream: decompressedStream,
+    maxBytes: maxWorkspaceShareDecodedBytes,
+    compressedBytesLength: bytes?.byteLength ?? 0,
+    maxExpansionRatio: maxWorkspaceShareExpansionRatio,
+  })
   const decoder = new TextDecoder()
   return decoder.decode(decompressedBytes)
 }
@@ -92,7 +154,12 @@ const encodeWorkspaceSharePayload = async snapshot => {
 
   const serialized = JSON.stringify(envelope)
   const compressed = await compressText(serialized)
-  return toBase64Url(compressed)
+  const encoded = toBase64Url(compressed)
+  if (encoded.length > maxWorkspaceShareEncodedPayloadLength) {
+    throw new Error('Workspace share payload is too large.')
+  }
+
+  return encoded
 }
 
 const decodeWorkspaceSharePayload = async encodedPayload => {
@@ -102,6 +169,10 @@ const decodeWorkspaceSharePayload = async encodedPayload => {
 
   if (typeof encodedPayload !== 'string' || encodedPayload.trim().length === 0) {
     throw new TypeError('Workspace share payload must be a non-empty string.')
+  }
+
+  if (encodedPayload.trim().length > maxWorkspaceShareEncodedPayloadLength) {
+    throw new Error('Workspace share payload exceeds maximum encoded length.')
   }
 
   let parsed = null

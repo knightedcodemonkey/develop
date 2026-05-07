@@ -1,7 +1,4 @@
-import {
-  decodeWorkspaceSharePayload,
-  workspaceShareParam,
-} from './workspace-share-codec.js'
+import { createWorkspaceShareUrlImporter } from './workspace-share-url-import.js'
 
 const bindAppEventsAndStart = ({
   editorUi,
@@ -90,6 +87,7 @@ const bindAppEventsAndStart = ({
     getPrimaryStyleWorkspaceTab,
     workspaceSaveController,
     workspaceStorage,
+    createWorkspaceRecordId,
     syncDiagnosticsDrawerLayout,
     setHasCompletedInitialWorkspaceBootstrap,
   } = workspaceUi
@@ -125,61 +123,12 @@ const bindAppEventsAndStart = ({
     initializeCodeEditors,
   } = startup
 
-  const toShareableWorkspaceRecord = snapshot => {
-    if (!snapshot || typeof snapshot !== 'object') {
-      return null
-    }
-
-    const nextTabs = Array.isArray(snapshot.tabs) ? snapshot.tabs : []
-    if (nextTabs.length === 0) {
-      return null
-    }
-
-    return {
-      ...snapshot,
-      id: typeof snapshot.id === 'string' && snapshot.id.trim() ? snapshot.id.trim() : '',
-      workspaceScope: 'local',
-      repo: '',
-      base: '',
-      head: '',
-      prNumber: null,
-      prTitle: '',
-      prContextState: 'inactive',
-      workspaceKey: '',
-      lastModified: Date.now(),
-      createdAt: Date.now(),
-    }
-  }
-
-  const clearWorkspaceShareParamFromUrl = () => {
-    const currentUrl = new URL(window.location.href)
-    currentUrl.searchParams.delete(workspaceShareParam)
-    window.history.replaceState(window.history.state, '', currentUrl.toString())
-  }
-
-  const importWorkspaceFromShareUrl = async () => {
-    const currentUrl = new URL(window.location.href)
-    const encodedPayload = currentUrl.searchParams.get(workspaceShareParam)
-    if (!encodedPayload) {
-      return false
-    }
-
-    const decodedSnapshot = await decodeWorkspaceSharePayload(encodedPayload)
-    const importedRecord = toShareableWorkspaceRecord(decodedSnapshot)
-    if (!importedRecord) {
-      throw new Error('Shared workspace payload is missing a valid tab snapshot.')
-    }
-
-    const savedWorkspace = await workspaceStorage.upsertWorkspace(importedRecord)
-    const didApply = await applyWorkspaceRecord(savedWorkspace, { silent: false })
-
-    if (didApply) {
-      clearWorkspaceShareParamFromUrl()
-      await refreshLocalContextOptions()
-    }
-
-    return didApply
-  }
+  const importWorkspaceFromShareUrl = createWorkspaceShareUrlImporter({
+    workspaceStorage,
+    applyWorkspaceRecord,
+    refreshLocalContextOptions,
+    createWorkspaceRecordId,
+  })
   const clearComponentSource = () => {
     setJsxSource('')
     clearDiagnosticsScope('component')

@@ -482,7 +482,6 @@ const initializeGitHubWorkflows = ({
 
       try {
         await shareCurrentLocalWorkspace()
-        workspacesDrawerController?.setStatus('Share link copied.', 'neutral')
         return true
       } catch (error) {
         const message =
