@@ -48,6 +48,7 @@ export const createWorkspacesDrawer = ({
   repositorySelect,
   getActiveWorkspaceId,
   initializeButton,
+  shareButton,
   newButton,
   selectInput,
   openButton,
@@ -59,6 +60,7 @@ export const createWorkspacesDrawer = ({
   getSelectedRepositoryFilter,
   onRepositoryFilterChange,
   onRefreshRequested,
+  onShareCurrentWorkspace,
   onInitializeWorkspace,
   onCreateWorkspace,
   onOpenSelected,
@@ -144,6 +146,15 @@ export const createWorkspacesDrawer = ({
   }
 
   const updateActions = () => {
+    const normalizedRepositoryFilter = getNormalizedRepositoryFilter(
+      selectedRepositoryFilter,
+    )
+    const selectedRepositoryContextValue =
+      repositorySelect instanceof HTMLSelectElement
+        ? getNormalizedRepositoryFilter(repositorySelect.value)
+        : normalizedRepositoryFilter
+    const isLocalRepositoryContext =
+      selectedRepositoryContextValue === localRepositoryFilterValue
     const normalizedSelectedId =
       selectInput instanceof HTMLSelectElement
         ? toSafeText(selectInput.value)
@@ -168,6 +179,7 @@ export const createWorkspacesDrawer = ({
       isSelectedLocalWorkspace &&
       isSelectedWorkspaceNonPr
     const canCreateWorkspace = typeof onCreateWorkspace === 'function'
+    const canShareWorkspace = typeof onShareCurrentWorkspace === 'function'
     const canInitializeWorkspace = typeof onInitializeWorkspace === 'function'
     const hasStoredWorkspaces =
       currentUiState === drawerUiState.localWithWorkspaces ||
@@ -198,6 +210,12 @@ export const createWorkspacesDrawer = ({
     if (newButton instanceof HTMLButtonElement) {
       newButton.toggleAttribute('hidden', !showNewWorkspace)
       newButton.disabled = !canCreateWorkspace
+    }
+
+    if (shareButton instanceof HTMLButtonElement) {
+      const showShare = isLocalRepositoryContext
+      shareButton.toggleAttribute('hidden', !showShare)
+      shareButton.disabled = !showShare || !canShareWorkspace
     }
 
     if (openButton instanceof HTMLButtonElement) {
@@ -518,6 +536,22 @@ export const createWorkspacesDrawer = ({
     setStatus('Created workspace.', 'neutral')
     await refresh({ preserveSelection: Boolean(selectedId) })
     closeDrawer()
+  })
+
+  shareButton?.addEventListener('click', async () => {
+    if (typeof onShareCurrentWorkspace !== 'function') {
+      return
+    }
+
+    const normalizedRepositoryFilter = getNormalizedRepositoryFilter(
+      selectedRepositoryFilter,
+    )
+
+    try {
+      await onShareCurrentWorkspace(normalizedRepositoryFilter)
+    } catch {
+      setStatus('Could not share workspace.', 'error')
+    }
   })
 
   openButton?.addEventListener('click', async () => {

@@ -43,6 +43,7 @@ const initializeGitHubWorkflows = ({
   workspacesStatus,
   workspacesRepository,
   workspacesInitialize,
+  workspacesShare,
   workspacesNew,
   workspacesSelect,
   workspacesOpen,
@@ -84,6 +85,7 @@ const initializeGitHubWorkflows = ({
   confirmAction,
   setStatus,
   showAppToast,
+  shareCurrentLocalWorkspace,
   getActiveWorkspaceTabContext,
   getWorkspaceTabContexts,
   applyWorkspaceTabContent,
@@ -427,6 +429,7 @@ const initializeGitHubWorkflows = ({
     repositorySelect: workspacesRepository,
     getActiveWorkspaceId: () => getActiveWorkspaceRecordId(),
     initializeButton: workspacesInitialize,
+    shareButton: workspacesShare,
     newButton: workspacesNew,
     selectInput: workspacesSelect,
     openButton: workspacesOpen,
@@ -460,6 +463,33 @@ const initializeGitHubWorkflows = ({
       return 'right'
     },
     onRefreshRequested: listLocalContextRecords,
+    onShareCurrentWorkspace: async repositoryFilter => {
+      const normalizedFilter =
+        typeof repositoryFilter === 'string' ? repositoryFilter.trim() : ''
+      const isLocalFilter = !normalizedFilter || normalizedFilter === '__local__'
+      if (!isLocalFilter) {
+        workspacesDrawerController?.setStatus(
+          'Share is only available for Local workspaces.',
+          'error',
+        )
+        return false
+      }
+
+      if (typeof shareCurrentLocalWorkspace !== 'function') {
+        workspacesDrawerController?.setStatus('Share is currently unavailable.', 'error')
+        return false
+      }
+
+      try {
+        await shareCurrentLocalWorkspace()
+        return true
+      } catch (error) {
+        const message =
+          error instanceof Error ? error.message : 'Could not share workspace.'
+        workspacesDrawerController?.setStatus(`Share failed: ${message}`, 'error')
+        return false
+      }
+    },
     onInitializeWorkspace: async repositoryFilter => {
       const normalizedFilter =
         typeof repositoryFilter === 'string' ? repositoryFilter.trim() : ''

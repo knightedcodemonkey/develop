@@ -52,6 +52,7 @@ import { createPrContextStateChangeHandler } from './modules/app-core/pr-context
 import { createWorkspaceContextStatusController } from './modules/app-core/workspace-context-status-controller.js'
 import { createWorkspaceRecordAppliedHandler } from './modules/app-core/workspace-record-applied-handler.js'
 import { createGitHubChatWorkspaceActions } from './modules/app-core/github-chat-workspace-actions.js'
+import { createShareCurrentLocalWorkspace } from './modules/app-core/workspace-share-action.js'
 import { createDiagnosticsUiController } from './modules/diagnostics/diagnostics-ui.js'
 import { createGitHubChatDrawer } from './modules/github/chat/drawer.js'
 import { createGitHubByotControls } from './modules/github/byot-controls.js'
@@ -147,6 +148,7 @@ const workspacesClose = document.getElementById('workspaces-close')
 const workspacesStatus = document.getElementById('workspaces-status')
 const workspacesRepository = document.getElementById('workspaces-repository')
 const workspacesInitialize = document.getElementById('workspaces-initialize')
+const workspacesShare = document.getElementById('workspaces-share')
 const workspacesNew = document.getElementById('workspaces-new')
 const workspacesSelect = document.getElementById('workspaces-select')
 const workspacesOpen = document.getElementById('workspaces-open')
@@ -426,6 +428,7 @@ let workspacePrContextState = 'inactive'
 let workspacePrNumber = null
 let workspaceRepositoryFullName = ''
 let workspaceScopeMarker = 'local'
+const workspaceScopeListeners = new Set()
 let activeWorkspacePersistedPrTitle = ''
 let activeWorkspacePersistedHeadBranch = ''
 let hasObservedActivePrContextInSession = false
@@ -437,8 +440,31 @@ let workspaceContextStatusController = {
 }
 
 const toWorkspaceScopeMarker = value => (value === 'repository' ? 'repository' : 'local')
+
+const notifyWorkspaceScopeChanged = () => {
+  for (const listener of workspaceScopeListeners) {
+    listener(workspaceScopeMarker)
+  }
+}
+
+const onWorkspaceScopeChange = listener => {
+  if (typeof listener !== 'function') {
+    return () => {}
+  }
+
+  workspaceScopeListeners.add(listener)
+  return () => {
+    workspaceScopeListeners.delete(listener)
+  }
+}
+
 const setWorkspaceScopeMarker = nextScope => {
-  workspaceScopeMarker = toWorkspaceScopeMarker(nextScope)
+  const nextMarker = toWorkspaceScopeMarker(nextScope)
+  const didChangeScope = workspaceScopeMarker !== nextMarker
+  workspaceScopeMarker = nextMarker
+  if (didChangeScope) {
+    notifyWorkspaceScopeChanged()
+  }
   workspaceContextStatusController.render()
 }
 
@@ -456,7 +482,11 @@ const setActiveWorkspaceRecordId = nextValue => {
     activeWorkspacePersistedPrTitle = ''
     activeWorkspacePersistedHeadBranch = ''
     workspaceRepositoryFullName = ''
+    const didChangeScope = workspaceScopeMarker !== 'local'
     workspaceScopeMarker = 'local'
+    if (didChangeScope) {
+      notifyWorkspaceScopeChanged()
+    }
   }
   workspaceContextStatusController.render()
 }
@@ -957,6 +987,15 @@ const { syncActiveWorkspaceRepositoryScope, forkWorkspaceFromCurrentState } =
     },
   })
 
+const shareCurrentLocalWorkspace = createShareCurrentLocalWorkspace({
+  clipboardSupported,
+  getWorkspaceScopeMarker: () => workspaceScopeMarker,
+  flushWorkspaceSave,
+  buildWorkspaceRecordSnapshot,
+  setStatus,
+  showAppToast,
+})
+
 editedIndicatorVisibilityController.setRefreshHandlers({
   syncHeaderLabels,
   renderWorkspaceTabs,
@@ -1159,6 +1198,7 @@ const githubWorkflows = createGitHubWorkflowsSetup({
     workspacesStatus,
     workspacesRepository,
     workspacesInitialize,
+    workspacesShare,
     workspacesNew,
     workspacesSelect,
     workspacesOpen,
@@ -1287,6 +1327,7 @@ const githubWorkflows = createGitHubWorkflowsSetup({
     confirmAction: options => confirmAction(options),
     setStatus,
     showAppToast,
+    shareCurrentLocalWorkspace,
     ...githubChatWorkspaceActions,
     scheduleRender: () => {
       if (
@@ -1500,16 +1541,22 @@ bindAppEventsAndStart({
     addWorkspaceTab,
     syncHeaderLabels,
     renderWorkspaceTabs,
+    refreshLocalContextOptions,
+    applyWorkspaceRecord,
+    buildWorkspaceRecordSnapshot,
     updateRenderModeEditability,
     loadPreferredWorkspaceContext,
     getActiveWorkspaceTab,
     isStyleWorkspaceTab,
+    getWorkspaceScopeMarker: () => workspaceScopeMarker,
+    onWorkspaceScopeChange,
     setActiveWorkspaceTab,
     workspaceTabsState,
     getPrimaryStyleWorkspaceTab,
     syncDiagnosticsDrawerLayout,
     workspaceSaveController,
     workspaceStorage,
+    createWorkspaceRecordId,
     bindWorkspaceMetadataPersistence,
     setHasCompletedInitialWorkspaceBootstrap: value =>
       (hasCompletedInitialWorkspaceBootstrap = value),

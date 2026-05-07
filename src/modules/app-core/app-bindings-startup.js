@@ -1,3 +1,5 @@
+import { createWorkspaceShareUrlImporter } from './workspace-share-url-import.js'
+
 const bindAppEventsAndStart = ({
   editorUi,
   diagnosticsUi,
@@ -75,6 +77,8 @@ const bindAppEventsAndStart = ({
     addWorkspaceTab,
     syncHeaderLabels,
     renderWorkspaceTabs,
+    refreshLocalContextOptions,
+    applyWorkspaceRecord,
     updateRenderModeEditability,
     loadPreferredWorkspaceContext,
     getActiveWorkspaceTab,
@@ -83,6 +87,7 @@ const bindAppEventsAndStart = ({
     getPrimaryStyleWorkspaceTab,
     workspaceSaveController,
     workspaceStorage,
+    createWorkspaceRecordId,
     syncDiagnosticsDrawerLayout,
     setHasCompletedInitialWorkspaceBootstrap,
   } = workspaceUi
@@ -117,6 +122,13 @@ const bindAppEventsAndStart = ({
     previewBackground,
     initializeCodeEditors,
   } = startup
+
+  const importWorkspaceFromShareUrl = createWorkspaceShareUrlImporter({
+    workspaceStorage,
+    applyWorkspaceRecord,
+    refreshLocalContextOptions,
+    createWorkspaceRecordId,
+  })
   const clearComponentSource = () => {
     setJsxSource('')
     clearDiagnosticsScope('component')
@@ -484,7 +496,18 @@ const bindAppEventsAndStart = ({
   renderRuntime.setStyleCompiling(false)
   setCdnLoading(true)
   previewBackground.initializePreviewBackgroundPicker()
-  const workspaceRestoreReady = loadPreferredWorkspaceContext().catch(() => {
+  const workspaceRestoreReady = (async () => {
+    try {
+      const didImportSharedWorkspace = await importWorkspaceFromShareUrl()
+      if (didImportSharedWorkspace) {
+        return
+      }
+    } catch {
+      setStatus('Could not import shared workspace context.', 'error')
+    }
+
+    await loadPreferredWorkspaceContext()
+  })().catch(() => {
     setStatus('Could not restore local workspace context.', 'neutral')
   })
   void initializeCodeEditors().then(async () => {

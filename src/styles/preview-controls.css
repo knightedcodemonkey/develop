@@ -149,6 +149,10 @@
   place-content: center;
 }
 
+.icon-button[hidden] {
+  display: none;
+}
+
 .icon-button:hover {
   background: var(--surface-control-hover);
 }
