@@ -54,6 +54,55 @@ const stripQueryAndHash = value => {
   return value.split(/[?#]/, 1)[0]
 }
 
+const getOwnRecordValue = (record, key) => {
+  if (!record || typeof record !== 'object') {
+    return undefined
+  }
+
+  if (!Object.prototype.hasOwnProperty.call(record, key)) {
+    return undefined
+  }
+
+  return record[key]
+}
+
+const parseSpecifierQueryFlags = specifier => {
+  if (typeof specifier !== 'string') {
+    return {
+      hasKnightedCss: false,
+      isCombined: false,
+    }
+  }
+
+  const queryIndex = specifier.indexOf('?')
+  if (queryIndex < 0) {
+    return {
+      hasKnightedCss: false,
+      isCombined: false,
+    }
+  }
+
+  const hashIndex = specifier.indexOf('#', queryIndex + 1)
+  const queryText =
+    hashIndex >= 0
+      ? specifier.slice(queryIndex + 1, hashIndex)
+      : specifier.slice(queryIndex + 1)
+
+  const flags = new Set(
+    queryText
+      .split('&')
+      .map(part => part.trim())
+      .filter(Boolean)
+      .map(part => part.split('=')[0]?.trim().toLowerCase())
+      .filter(Boolean),
+  )
+
+  return {
+    hasKnightedCss: flags.has('knighted-css'),
+    isCombined: flags.has('combined'),
+  }
+}
+
 const normalizePathSegments = value => {
   const normalized = toModuleSpecifierKey(value)
   const inputParts = normalized.split('/')
@@ -421,6 +470,61 @@ const toStyleModuleDataUrl = ({ moduleKey, styleModuleExports }) => {
   )
 }
 
+const toKnightedCssQueryDataUrl = ({
+  moduleKey,
+  targetModuleUrl,
+  targetStyleModuleUrl,
+  cssText,
+  isCombined,
+}) => {
+  const safeCssText = typeof cssText === 'string' ? cssText : ''
+  const safeModuleKey = moduleKey || 'module'
+
+  if (typeof targetStyleModuleUrl === 'string' && targetStyleModuleUrl.length > 0) {
+    const sourceUrl = `//# sourceURL=knighted-workspace/${safeModuleKey}.knighted-css.style.mjs`
+    return toModuleDataUrl(
+      [
+        `import __knightedCssDefault from ${JSON.stringify(targetStyleModuleUrl)}`,
+        'export default __knightedCssDefault',
+        `export const knightedCss = ${JSON.stringify(safeCssText)}`,
+        'export const knightedCssModules = __knightedCssDefault',
+        'export const stableSelectors = {}',
+        sourceUrl,
+      ].join('\n'),
+    )
+  }
+
+  if (typeof targetModuleUrl !== 'string' || targetModuleUrl.length === 0) {
+    return null
+  }
+
+  if (isCombined) {
+    const sourceUrl = `//# sourceURL=knighted-workspace/${safeModuleKey}.knighted-css.combined.mjs`
+    return toModuleDataUrl(
+      [
+        `import * as __knightedCombinedModule from ${JSON.stringify(targetModuleUrl)}`,
+        `export * from ${JSON.stringify(targetModuleUrl)}`,
+        'const __knightedCombinedDefault = __knightedCombinedModule.default',
+        'export default __knightedCombinedDefault',
+        `export const knightedCss = ${JSON.stringify(safeCssText)}`,
+        'export const knightedCssModules = {}',
+        'export const stableSelectors = {}',
+        sourceUrl,
+      ].join('\n'),
+    )
+  }
+
+  const sourceUrl = `//# sourceURL=knighted-workspace/${safeModuleKey}.knighted-css.mjs`
+  return toModuleDataUrl(
+    [
+      `export const knightedCss = ${JSON.stringify(safeCssText)}`,
+      'export const knightedCssModules = {}',
+      'export const stableSelectors = {}',
+      sourceUrl,
+    ].join('\n'),
+  )
+}
+
 const runtimeSpecifierRewrites = runtimeSpecifiers => ({
   react: runtimeSpecifiers.react,
   'react-dom': runtimeSpecifiers.reactDom,
@@ -563,6 +667,7 @@ export const planWorkspaceVirtualModules = ({
   mode,
   runtimeSpecifiers,
   styleModuleExportsByTabId = {},
+  styleCssByTabId = {},
 }) => {
   if (!entryTab || typeof entryTab.content !== 'string') {
     return null
@@ -694,6 +799,72 @@ export const planWorkspaceVirtualModules = ({
   const moduleDataByTabId = new Map()
   const styleModuleUrlByTabId = new Map()
 
+  const styleDependencyIdsByModuleTabId = new Map()
+  const styleDependencyResolutionInProgress = new Set()
+
+  const collectStyleDependencyIdsForTabId = tabId => {
+    if (styleDependencyIdsByModuleTabId.has(tabId)) {
+      return styleDependencyIdsByModuleTabId.get(tabId)
+    }
+
+    if (styleDependencyResolutionInProgress.has(tabId)) {
+      return []
+    }
+
+    const tab = byId.get(tabId)
+    if (!tab || isStyleTab(tab)) {
+      styleDependencyIdsByModuleTabId.set(tabId, [])
+      return []
+    }
+
+    styleDependencyResolutionInProgress.add(tabId)
+
+    const importerModuleKey = toTabModuleKey(tab)
+    const imports = getParsedImportsForTab(tab)
+    const collectedStyleIds = []
+
+    for (const entry of imports) {
+      if (!isRelativeSpecifier(entry?.source) && !isStyleImportSpecifier(entry?.source)) {
+        continue
+      }
+
+      const target = resolveWorkspaceImport({
+        importerModuleKey,
+        source: entry.source,
+        byModuleKey,
+      })
+
+      if (!target || typeof target.id !== 'string') {
+        continue
+      }
+
+      if (isStyleTab(target)) {
+        collectedStyleIds.push(target.id)
+        continue
+      }
+
+      const nestedStyleIds = collectStyleDependencyIdsForTabId(target.id)
+      collectedStyleIds.push(...nestedStyleIds)
+    }
+
+    styleDependencyResolutionInProgress.delete(tabId)
+
+    const uniqueStyleIds = [...new Set(collectedStyleIds)]
+    styleDependencyIdsByModuleTabId.set(tabId, uniqueStyleIds)
+    return uniqueStyleIds
+  }
+
+  const toCssTextForStyleIds = styleIds => {
+    if (!Array.isArray(styleIds) || styleIds.length === 0) {
+      return ''
+    }
+
+    return styleIds
+      .map(styleId => getOwnRecordValue(styleCssByTabId, styleId) ?? '')
+      .filter(part => typeof part === 'string' && part.length > 0)
+      .join('\n\n')
+  }
+
   for (const tabId of moduleDependencyOrder) {
     const tab = byId.get(tabId)
     if (!tab) {
@@ -723,10 +894,7 @@ export const planWorkspaceVirtualModules = ({
     }
 
     const moduleKey = toTabModuleKey(tab) || tab.id
-    const styleModuleExports =
-      styleModuleExportsByTabId && typeof styleModuleExportsByTabId === 'object'
-        ? styleModuleExportsByTabId[tabId]
-        : {}
+    const styleModuleExports = getOwnRecordValue(styleModuleExportsByTabId, tabId) ?? {}
     const moduleCacheKey = [
       'style-module',
       moduleKey,
@@ -767,6 +935,70 @@ export const planWorkspaceVirtualModules = ({
       source: moduleData.source,
       imports: importsForRewrite,
       resolveSpecifier: sourceSpecifier => {
+        const queryFlags = parseSpecifierQueryFlags(sourceSpecifier)
+
+        if (
+          queryFlags.hasKnightedCss &&
+          (isRelativeSpecifier(sourceSpecifier) ||
+            isStyleImportSpecifier(sourceSpecifier))
+        ) {
+          const target = resolveWorkspaceImport({
+            importerModuleKey: moduleData.moduleKey,
+            source: sourceSpecifier,
+            byModuleKey,
+          })
+
+          if (!target || typeof target.id !== 'string') {
+            return null
+          }
+
+          const isStyleTarget = isStyleTab(target)
+          const targetStyleModuleUrl = isStyleTarget
+            ? (styleModuleUrlByTabId.get(target.id) ?? null)
+            : null
+          const targetModuleUrl = isStyleTarget
+            ? null
+            : (moduleUrlByTabId.get(target.id) ?? null)
+
+          const queryCssText = isStyleTarget
+            ? toCssTextForStyleIds([target.id])
+            : toCssTextForStyleIds(collectStyleDependencyIdsForTabId(target.id))
+
+          const queryModuleKey = `${moduleData.moduleKey || tab.id}->${toTabModuleKey(target) || target.id}`
+          const queryModuleCacheKey = [
+            'knighted-css-query',
+            queryModuleKey,
+            queryFlags.isCombined ? 'combined' : 'plain',
+            targetModuleUrl ?? '',
+            targetStyleModuleUrl ?? '',
+            queryCssText,
+          ].join('\u0000')
+
+          const cachedQueryModuleUrl = getCachedValue(
+            moduleDataUrlCache,
+            queryModuleCacheKey,
+          )
+          if (typeof cachedQueryModuleUrl === 'string') {
+            return cachedQueryModuleUrl
+          }
+
+          const queryModuleUrl = toKnightedCssQueryDataUrl({
+            moduleKey: queryModuleKey,
+            targetModuleUrl,
+            targetStyleModuleUrl,
+            cssText: queryCssText,
+            isCombined: queryFlags.isCombined,
+          })
+
+          if (typeof queryModuleUrl !== 'string' || queryModuleUrl.length === 0) {
+            return null
+          }
+
+          moduleDataUrlCache.set(queryModuleCacheKey, queryModuleUrl)
+          trimCache(moduleDataUrlCache, maxModuleDataUrlCacheEntries)
+          return queryModuleUrl
+        }
+
         if (
           isRelativeSpecifier(sourceSpecifier) ||
           isStyleImportSpecifier(sourceSpecifier)
