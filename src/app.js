@@ -52,6 +52,11 @@ import { createPrContextStateChangeHandler } from './modules/app-core/pr-context
 import { createWorkspaceContextStatusController } from './modules/app-core/workspace-context-status-controller.js'
 import { createWorkspaceRecordAppliedHandler } from './modules/app-core/workspace-record-applied-handler.js'
 import { createGitHubChatWorkspaceActions } from './modules/app-core/github-chat-workspace-actions.js'
+import {
+  encodeWorkspaceSharePayload,
+  isNativeWorkspaceShareCodecSupported,
+  workspaceShareParam,
+} from './modules/app-core/workspace-share-codec.js'
 import { createDiagnosticsUiController } from './modules/diagnostics/diagnostics-ui.js'
 import { createGitHubChatDrawer } from './modules/github/chat/drawer.js'
 import { createGitHubByotControls } from './modules/github/byot-controls.js'
@@ -147,6 +152,7 @@ const workspacesClose = document.getElementById('workspaces-close')
 const workspacesStatus = document.getElementById('workspaces-status')
 const workspacesRepository = document.getElementById('workspaces-repository')
 const workspacesInitialize = document.getElementById('workspaces-initialize')
+const workspacesShare = document.getElementById('workspaces-share')
 const workspacesNew = document.getElementById('workspaces-new')
 const workspacesSelect = document.getElementById('workspaces-select')
 const workspacesOpen = document.getElementById('workspaces-open')
@@ -426,6 +432,7 @@ let workspacePrContextState = 'inactive'
 let workspacePrNumber = null
 let workspaceRepositoryFullName = ''
 let workspaceScopeMarker = 'local'
+const workspaceScopeListeners = new Set()
 let activeWorkspacePersistedPrTitle = ''
 let activeWorkspacePersistedHeadBranch = ''
 let hasObservedActivePrContextInSession = false
@@ -437,8 +444,31 @@ let workspaceContextStatusController = {
 }
 
 const toWorkspaceScopeMarker = value => (value === 'repository' ? 'repository' : 'local')
+
+const notifyWorkspaceScopeChanged = () => {
+  for (const listener of workspaceScopeListeners) {
+    listener(workspaceScopeMarker)
+  }
+}
+
+const onWorkspaceScopeChange = listener => {
+  if (typeof listener !== 'function') {
+    return () => {}
+  }
+
+  workspaceScopeListeners.add(listener)
+  return () => {
+    workspaceScopeListeners.delete(listener)
+  }
+}
+
 const setWorkspaceScopeMarker = nextScope => {
-  workspaceScopeMarker = toWorkspaceScopeMarker(nextScope)
+  const nextMarker = toWorkspaceScopeMarker(nextScope)
+  const didChangeScope = workspaceScopeMarker !== nextMarker
+  workspaceScopeMarker = nextMarker
+  if (didChangeScope) {
+    notifyWorkspaceScopeChanged()
+  }
   workspaceContextStatusController.render()
 }
 
@@ -456,7 +486,11 @@ const setActiveWorkspaceRecordId = nextValue => {
     activeWorkspacePersistedPrTitle = ''
     activeWorkspacePersistedHeadBranch = ''
     workspaceRepositoryFullName = ''
+    const didChangeScope = workspaceScopeMarker !== 'local'
     workspaceScopeMarker = 'local'
+    if (didChangeScope) {
+      notifyWorkspaceScopeChanged()
+    }
   }
   workspaceContextStatusController.render()
 }
@@ -957,6 +991,41 @@ const { syncActiveWorkspaceRepositoryScope, forkWorkspaceFromCurrentState } =
     },
   })
 
+const maxWorkspaceShareUrlLength = 8000
+
+const shareCurrentLocalWorkspace = async () => {
+  if (!clipboardSupported) {
+    throw new Error('Clipboard API is not available in this browser context.')
+  }
+
+  if (!isNativeWorkspaceShareCodecSupported()) {
+    throw new Error('Native compression is not supported in this browser context.')
+  }
+
+  if (workspaceScopeMarker !== 'local') {
+    throw new Error('Share is only available for local workspaces.')
+  }
+
+  await flushWorkspaceSave({ preserveRecordId: true })
+  const snapshot = buildWorkspaceRecordSnapshot()
+  if (!snapshot || typeof snapshot !== 'object') {
+    throw new Error('Could not prepare workspace snapshot.')
+  }
+
+  const encodedPayload = await encodeWorkspaceSharePayload(snapshot)
+  const sharedUrl = new URL(window.location.href)
+  sharedUrl.searchParams.set(workspaceShareParam, encodedPayload)
+  const sharedUrlText = sharedUrl.toString()
+
+  if (sharedUrlText.length > maxWorkspaceShareUrlLength) {
+    throw new Error('Workspace is too large for a URL.')
+  }
+
+  await navigator.clipboard.writeText(sharedUrlText)
+  setStatus('Share link copied', 'neutral')
+  showAppToast('Share link copied to clipboard.')
+}
+
 editedIndicatorVisibilityController.setRefreshHandlers({
   syncHeaderLabels,
   renderWorkspaceTabs,
@@ -1159,6 +1228,7 @@ const githubWorkflows = createGitHubWorkflowsSetup({
     workspacesStatus,
     workspacesRepository,
     workspacesInitialize,
+    workspacesShare,
     workspacesNew,
     workspacesSelect,
     workspacesOpen,
@@ -1287,6 +1357,7 @@ const githubWorkflows = createGitHubWorkflowsSetup({
     confirmAction: options => confirmAction(options),
     setStatus,
     showAppToast,
+    shareCurrentLocalWorkspace,
     ...githubChatWorkspaceActions,
     scheduleRender: () => {
       if (
@@ -1500,16 +1571,22 @@ bindAppEventsAndStart({
     addWorkspaceTab,
     syncHeaderLabels,
     renderWorkspaceTabs,
+    refreshLocalContextOptions,
+    applyWorkspaceRecord,
+    buildWorkspaceRecordSnapshot,
     updateRenderModeEditability,
     loadPreferredWorkspaceContext,
     getActiveWorkspaceTab,
     isStyleWorkspaceTab,
+    getWorkspaceScopeMarker: () => workspaceScopeMarker,
+    onWorkspaceScopeChange,
     setActiveWorkspaceTab,
     workspaceTabsState,
     getPrimaryStyleWorkspaceTab,
     syncDiagnosticsDrawerLayout,
     workspaceSaveController,
     workspaceStorage,
+    createWorkspaceRecordId,
     bindWorkspaceMetadataPersistence,
     setHasCompletedInitialWorkspaceBootstrap: value =>
       (hasCompletedInitialWorkspaceBootstrap = value),
