@@ -165,6 +165,69 @@ test('renders in react mode with css modules', async ({ page }) => {
   await expectPreviewHasRenderedContent(page)
 })
 
+test('reactJsx tag interpolation renders memo and forwardRef components', async ({
+  page,
+}) => {
+  await waitForInitialRender(page)
+  await ensurePanelToolsVisible(page, 'component')
+
+  await page.getByRole('button', { name: 'Open tab App.tsx' }).click()
+  await page.getByRole('combobox', { name: 'Render mode' }).selectOption('react')
+
+  await setComponentEditorSource(
+    page,
+    [
+      "import { memo, forwardRef } from 'react'",
+      "import { reactJsx } from '@knighted/jsx/react'",
+      '',
+      'type ButtonProps = {',
+      '  label: string',
+      '}',
+      '',
+      'const MemoButton = memo(({ label }: ButtonProps) => (',
+      '  <button type="button" data-testid="memo-button">',
+      '    {label}',
+      '  </button>',
+      '))',
+      '',
+      'const ForwardRefButton = forwardRef<HTMLButtonElement, ButtonProps>(',
+      '  ({ label }, ref) => (',
+      '    <button ref={ref} type="button" data-testid="forward-ref-button">',
+      '      {label}',
+      '    </button>',
+      '  ),',
+      ')',
+      '',
+      'const App = () =>',
+      '  reactJsx`',
+      '    <section>',
+      '      <${MemoButton} label="Memo OK" />',
+      '      <${ForwardRefButton} label="ForwardRef OK" />',
+      '    </section>',
+      '  `',
+    ].join('\n'),
+  )
+
+  await expect(page.getByRole('status', { name: 'App status' })).toHaveText('Rendered')
+  await expect(getPreviewFrame(page).getByTestId('memo-button')).toHaveText('Memo OK')
+  await expect(getPreviewFrame(page).getByTestId('forward-ref-button')).toHaveText(
+    'ForwardRef OK',
+  )
+
+  await expect
+    .poll(async () => {
+      return getPreviewFrame(page)
+        .locator('html')
+        .evaluate(
+          () =>
+            Array.from(document.querySelectorAll('*')).filter(node =>
+              /^__kx_expr__/i.test(node.localName),
+            ).length,
+        )
+    })
+    .toBe(0)
+})
+
 test('react mode keeps App.ts entry but surfaces rename guidance until compatible', async ({
   page,
 }) => {
