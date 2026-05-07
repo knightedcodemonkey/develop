@@ -369,6 +369,128 @@ test('css module imports expose class map for module tabs', async ({ page }) => 
     .not.toContain('.item:active')
 })
 
+test('workspace modules support ?knighted-css&combined imports', async ({ page }) => {
+  await waitForInitialRender(page)
+
+  await ensurePanelToolsVisible(page, 'component')
+  await ensurePanelToolsVisible(page, 'styles')
+
+  await page.getByRole('button', { name: 'Open tab App.tsx' }).click()
+  await page.getByRole('combobox', { name: 'Render mode' }).selectOption('react')
+
+  await renameWorkspaceTab(page, {
+    from: 'app.css',
+    to: 'button.module.css',
+  })
+
+  await page.getByRole('button', { name: 'Open tab button.module.css' }).click()
+  await page.getByRole('combobox', { name: 'Style mode' }).selectOption('module')
+
+  await setWorkspaceTabSource(page, {
+    fileName: 'button.module.css',
+    kind: 'styles',
+    source: ['.btn {', '  color: rgb(7, 89, 160);', '  font-weight: 700;', '}'].join(
+      '\n',
+    ),
+  })
+
+  await addWorkspaceTab(page, { type: 'script' })
+  await renameWorkspaceTab(page, {
+    from: 'module.tsx',
+    to: 'button.tsx',
+  })
+
+  await setWorkspaceTabSource(page, {
+    fileName: 'button.tsx',
+    source: [
+      "import styles from '../styles/button.module.css'",
+      '',
+      'type ButtonProps = {',
+      '  label: string',
+      '}',
+      '',
+      'export const ReactButton = ({ label }: ButtonProps) => (',
+      '  <button type="button" className={styles.btn}>{label}</button>',
+      ')',
+    ].join('\n'),
+  })
+
+  await setComponentEditorSource(
+    page,
+    [
+      "import { ReactButton, knightedCss } from './button.tsx?knighted-css&combined'",
+      '',
+      'const App = () => (',
+      '  <>',
+      '    <style>{knightedCss}</style>',
+      '    <ReactButton label="Combined query works" />',
+      '  </>',
+      ')',
+    ].join('\n'),
+  )
+
+  await expect(page.getByRole('status', { name: 'App status' })).toHaveText('Rendered')
+  await expect(page.locator('#preview-host pre.preview-runtime-error')).toHaveCount(0)
+  await expect(
+    getPreviewFrame(page).getByRole('button', { name: 'Combined query works' }),
+  ).toHaveCSS('color', 'rgb(7, 89, 160)')
+})
+
+test('workspace style tabs support ?knighted-css query exports', async ({ page }) => {
+  await waitForInitialRender(page)
+
+  await ensurePanelToolsVisible(page, 'component')
+  await ensurePanelToolsVisible(page, 'styles')
+
+  await page.getByRole('button', { name: 'Open tab app.css' }).click()
+  await renameWorkspaceTab(page, {
+    from: 'app.css',
+    to: 'button.module.css',
+  })
+  await page.getByRole('combobox', { name: 'Style mode' }).selectOption('module')
+
+  await setWorkspaceTabSource(page, {
+    fileName: 'button.module.css',
+    kind: 'styles',
+    source: [
+      '.btn {',
+      '  color: rgb(14, 110, 173);',
+      '  border: 1px solid rgb(14, 110, 173);',
+      '}',
+    ].join('\n'),
+  })
+
+  await page.getByRole('button', { name: 'Open tab App.tsx' }).click()
+  await setComponentEditorSource(
+    page,
+    [
+      "import styles, { knightedCss } from '../styles/button.module.css?knighted-css'",
+      '',
+      'const App = () => (',
+      '  <>',
+      '    <style>{knightedCss}</style>',
+      '    <button',
+      '      type="button"',
+      '      className={styles.btn}',
+      '      data-css-length={String(knightedCss.length)}',
+      '    >',
+      '      Style query works',
+      '    </button>',
+      '  </>',
+      ')',
+    ].join('\n'),
+  )
+
+  await expect(page.getByRole('status', { name: 'App status' })).toHaveText('Rendered')
+  await expect(page.locator('#preview-host pre.preview-runtime-error')).toHaveCount(0)
+
+  const previewButton = getPreviewFrame(page).getByRole('button', {
+    name: 'Style query works',
+  })
+  await expect(previewButton).toHaveCSS('color', 'rgb(14, 110, 173)')
+  await expect(previewButton).toHaveAttribute('data-css-length', /[1-9]\d*/)
+})
+
 test('preview styles require explicit import from entry graph', async ({ page }) => {
   await waitForInitialRender(page)
 

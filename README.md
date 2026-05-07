@@ -36,6 +36,27 @@ browser acts as the runtime host for editing, render, lint, and typecheck flows.
 - use AI chat with tab-aware proposals and apply/undo controls
 - switch theme and collapse the preview panel while preserving fast feedback loops
 
+## CSS Query Imports In Editor Tabs
+
+`@knighted/develop` supports `@knighted/css` query syntax in workspace tabs, including:
+
+- `./styles/button.module.css?knighted-css`
+- `./button.tsx?knighted-css&combined`
+
+For Lit + React-in-Shadow-DOM flows, a minimal pattern is:
+
+1. In `button.tsx`, export your React component and import CSS Modules normally.
+2. In `lit-host.ts`, import from `./button.tsx?knighted-css&combined` and use `knightedCss`.
+3. Apply `unsafeCSS(knightedCss)` in `static styles` so styles render inside the shadow root.
+
+Example imports:
+
+- `import { ReactButton, knightedCss } from './button.tsx?knighted-css&combined'`
+- `import { LitElement, css, html, unsafeCSS } from 'lit'`
+
+`knightedCssModules` is optional for this flow and is not required when you only need
+the compiled CSS text plus your component exports.
+
 ## Why this shape
 
 The app started as a focused compile-and-preview loop and has grown into a

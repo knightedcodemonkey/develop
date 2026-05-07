@@ -381,7 +381,12 @@ export const createRenderRuntimeController = ({
 
     if (!entryTab) {
       clearStyleDiagnostics()
-      return { css: '', userStyleSheets: [], styleModuleExportsByTabId: {} }
+      return {
+        css: '',
+        userStyleSheets: [],
+        styleModuleExportsByTabId: {},
+        styleCssByTabId: {},
+      }
     }
 
     const runtimeSpecifiers = getWorkspaceRuntimeSpecifiers()
@@ -397,7 +402,12 @@ export const createRenderRuntimeController = ({
 
     if (!virtualModulePlan) {
       clearStyleDiagnostics()
-      return { css: '', userStyleSheets: [], styleModuleExportsByTabId: {} }
+      return {
+        css: '',
+        userStyleSheets: [],
+        styleModuleExportsByTabId: {},
+        styleCssByTabId: {},
+      }
     }
 
     const workspaceTabById = new Map(
@@ -451,7 +461,12 @@ export const createRenderRuntimeController = ({
 
     if (styleInputs.length === 0) {
       clearStyleDiagnostics()
-      const output = { css: '', userStyleSheets: [], styleModuleExportsByTabId: {} }
+      const output = {
+        css: '',
+        userStyleSheets: [],
+        styleModuleExportsByTabId: {},
+        styleCssByTabId: {},
+      }
       compiledStylesCache = {
         key: cacheKey,
         value: output,
@@ -526,6 +541,7 @@ export const createRenderRuntimeController = ({
       )
 
       const styleModuleExportsByTabId = {}
+      const styleCssByTabId = {}
       const compiledCssParts = []
       const userStyleSheets = []
 
@@ -536,6 +552,7 @@ export const createRenderRuntimeController = ({
         if (part && typeof part.css === 'string') {
           compiledCssParts.push(part.css)
           userStyleSheets.push(part.css)
+          styleCssByTabId[input.id] = part.css
         }
 
         if (input?.dialect !== 'module' || !part?.moduleExports) {
@@ -565,6 +582,7 @@ export const createRenderRuntimeController = ({
         css: compiledCssParts.join('\n\n'),
         userStyleSheets,
         styleModuleExportsByTabId,
+        styleCssByTabId,
       }
       if (styleWarningLines.length > 0) {
         setStyleDiagnosticsDetails({
@@ -680,6 +698,7 @@ export const createRenderRuntimeController = ({
     cssText,
     userStyleSheets = [],
     styleModuleExportsByTabId = {},
+    styleCssByTabId = {},
   }) => {
     const workspaceTabs = getWorkspaceTabsForPreview()
     const entryTab = resolveWorkspaceEntryTab(workspaceTabs)
@@ -718,6 +737,7 @@ export const createRenderRuntimeController = ({
       mode,
       runtimeSpecifiers,
       styleModuleExportsByTabId,
+      styleCssByTabId,
     })
 
     if (!virtualModulePlan) {
@@ -790,6 +810,7 @@ export const createRenderRuntimeController = ({
       cssText: compiledStyles.css,
       userStyleSheets: compiledStyles.userStyleSheets,
       styleModuleExportsByTabId: compiledStyles.styleModuleExportsByTabId,
+      styleCssByTabId: compiledStyles.styleCssByTabId,
     })
   }
 
@@ -809,6 +830,7 @@ export const createRenderRuntimeController = ({
       cssText: compiledStyles.css,
       userStyleSheets: compiledStyles.userStyleSheets,
       styleModuleExportsByTabId: compiledStyles.styleModuleExportsByTabId,
+      styleCssByTabId: compiledStyles.styleCssByTabId,
     })
   }
 
