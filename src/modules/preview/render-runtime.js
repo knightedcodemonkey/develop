@@ -540,8 +540,8 @@ export const createRenderRuntimeController = ({
         }),
       )
 
-      const styleModuleExportsByTabId = {}
-      const styleCssByTabId = {}
+      const styleModuleExportsByTabId = Object.create(null)
+      const styleCssByTabId = Object.create(null)
       const compiledCssParts = []
       const userStyleSheets = []
 
@@ -559,7 +559,7 @@ export const createRenderRuntimeController = ({
           continue
         }
 
-        const normalizedModuleExports = {}
+        const normalizedModuleExports = Object.create(null)
         for (const [localClassName, exportedValue] of Object.entries(
           part.moduleExports,
         )) {

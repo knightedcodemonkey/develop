@@ -54,6 +54,18 @@ const stripQueryAndHash = value => {
   return value.split(/[?#]/, 1)[0]
 }
 
+const getOwnRecordValue = (record, key) => {
+  if (!record || typeof record !== 'object') {
+    return undefined
+  }
+
+  if (!Object.prototype.hasOwnProperty.call(record, key)) {
+    return undefined
+  }
+
+  return record[key]
+}
+
 const parseSpecifierQueryFlags = specifier => {
   if (typeof specifier !== 'string') {
     return {
@@ -848,11 +860,7 @@ export const planWorkspaceVirtualModules = ({
     }
 
     return styleIds
-      .map(styleId =>
-        styleCssByTabId && typeof styleCssByTabId === 'object'
-          ? styleCssByTabId[styleId]
-          : '',
-      )
+      .map(styleId => getOwnRecordValue(styleCssByTabId, styleId) ?? '')
       .filter(part => typeof part === 'string' && part.length > 0)
       .join('\n\n')
   }
@@ -886,10 +894,7 @@ export const planWorkspaceVirtualModules = ({
     }
 
     const moduleKey = toTabModuleKey(tab) || tab.id
-    const styleModuleExports =
-      styleModuleExportsByTabId && typeof styleModuleExportsByTabId === 'object'
-        ? styleModuleExportsByTabId[tabId]
-        : {}
+    const styleModuleExports = getOwnRecordValue(styleModuleExportsByTabId, tabId) ?? {}
     const moduleCacheKey = [
       'style-module',
       moduleKey,
