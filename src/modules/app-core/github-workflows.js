@@ -46,6 +46,8 @@ const initializeGitHubWorkflows = ({
   workspacesShare,
   workspacesNew,
   workspacesSelect,
+  workspacesFontCssUrlInput,
+  workspacesFontCssUrlLoad,
   workspacesOpen,
   workspacesRename,
   workspacesRemove,
@@ -59,6 +61,7 @@ const initializeGitHubWorkflows = ({
   listLocalContextRecords,
   refreshLocalContextOptions,
   applyWorkspaceRecord,
+  applyWorkspaceFontCssUrl,
   syncActiveWorkspaceRepositoryScope,
   forkWorkspaceFromCurrentState,
   flushWorkspaceSave,
@@ -432,6 +435,8 @@ const initializeGitHubWorkflows = ({
     shareButton: workspacesShare,
     newButton: workspacesNew,
     selectInput: workspacesSelect,
+    fontCssUrlInput: workspacesFontCssUrlInput,
+    fontCssUrlLoadButton: workspacesFontCssUrlLoad,
     openButton: workspacesOpen,
     renameButton: workspacesRename,
     removeButton: workspacesRemove,
@@ -540,8 +545,30 @@ const initializeGitHubWorkflows = ({
         return false
       }
     },
+    onLoadFontCssUrl: async fontCssUrl => {
+      if (typeof applyWorkspaceFontCssUrl !== 'function') {
+        return false
+      }
+
+      try {
+        await applyWorkspaceFontCssUrl(fontCssUrl)
+        if (typeof scheduleRender === 'function') {
+          await Promise.resolve(scheduleRender())
+        }
+        return true
+      } catch {
+        workspacesDrawerController?.setStatus('Could not load font CSS URL.', 'error')
+        return false
+      }
+    },
     onOpenSelected: async workspaceId => {
       try {
+        try {
+          await flushWorkspaceSave?.({ preserveRecordId: true })
+        } catch {
+          /* Save failures are surfaced via saver onError; continue with open attempt. */
+        }
+
         const record = await workspaceStorage.getWorkspaceById(workspaceId)
         if (!record) {
           await refreshLocalContextOptions()

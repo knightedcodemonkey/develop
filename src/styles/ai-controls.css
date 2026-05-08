@@ -598,6 +598,25 @@
   gap: 8px;
 }
 
+.workspaces-drawer__font-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  gap: 8px;
+}
+
+.workspaces-drawer__font-row .github-pr-field--full {
+  grid-column: auto;
+}
+
+.workspaces-drawer__font-row .render-button {
+  height: 36px;
+  width: auto;
+  min-width: fit-content;
+  padding-inline: 12px;
+  white-space: nowrap;
+}
+
 .workspaces-drawer__actions[hidden] {
   display: none;
 }

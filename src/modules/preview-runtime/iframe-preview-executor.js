@@ -61,6 +61,8 @@ const createIframeShellDocument = ({ channelId, parentOrigin, importMap }) => {
           userStyleSheets: [],
           hostPadding: '',
           backgroundColor: '',
+          fontCssUrl: '',
+          fontFamily: '',
         },
       }
 
@@ -89,13 +91,38 @@ const createIframeShellDocument = ({ channelId, parentOrigin, importMap }) => {
         parent.postMessage(__knightedToMessage(type, payload), __knightedParentOrigin)
       }
 
-      const __knightedToBaseStyles = hostPadding => {
+      const __knightedNormalizeFontCssUrl = value => {
+        const normalized = typeof value === 'string' ? value.trim() : ''
+        if (!normalized) {
+          return ''
+        }
+
+        try {
+          const parsed = new URL(normalized, window.location.href)
+          const protocol = parsed.protocol.toLowerCase()
+          if (protocol !== 'https:' && protocol !== 'http:') {
+            return ''
+          }
+
+          return parsed.href
+        } catch {
+          return ''
+        }
+      }
+
+      const __knightedToBaseStyles = (hostPadding, fontCssUrl = '') => {
         const resolvedPadding =
           typeof hostPadding === 'string' && hostPadding.trim().length > 0
             ? hostPadding.trim()
             : '18px'
+        const resolvedFontCssUrl = __knightedNormalizeFontCssUrl(fontCssUrl)
+        const escapedFontCssUrl = resolvedFontCssUrl.replace(/"/g, '\\"')
+        const fontImportRule = resolvedFontCssUrl
+          ? '@import url("' + escapedFontCssUrl + '");'
+          : ''
 
         return [
+          fontImportRule,
           'html, body {',
           '  margin: 0;',
           '  min-height: 100%;',
@@ -111,6 +138,10 @@ const createIframeShellDocument = ({ channelId, parentOrigin, importMap }) => {
           '  padding: var(--preview-host-padding, ' + resolvedPadding + ');',
           '  overflow-y: auto;',
           '  overflow-x: hidden;',
+          '  font-family: var(--preview-font-family, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif);',
+          '}',
+          'button, input, select, textarea {',
+          '  font: inherit;',
           '}',
         ].join('\\n')
       }
@@ -120,6 +151,8 @@ const createIframeShellDocument = ({ channelId, parentOrigin, importMap }) => {
         userStyleSheets = [],
         hostPadding = '',
         backgroundColor = '',
+        fontCssUrl = '',
+        fontFamily = '',
       }) => {
         const normalizedUserStyleSheets = Array.isArray(userStyleSheets)
           ? userStyleSheets
@@ -137,6 +170,8 @@ const createIframeShellDocument = ({ channelId, parentOrigin, importMap }) => {
           userStyleSheets: desiredUserStyleSheets,
           hostPadding: typeof hostPadding === 'string' ? hostPadding : '',
           backgroundColor: typeof backgroundColor === 'string' ? backgroundColor : '',
+          fontCssUrl: __knightedNormalizeFontCssUrl(fontCssUrl),
+          fontFamily: typeof fontFamily === 'string' ? fontFamily : '',
         }
 
         let baseStyleElement = document.getElementById('knighted-preview-base-styles')
@@ -201,6 +236,7 @@ const createIframeShellDocument = ({ channelId, parentOrigin, importMap }) => {
 
         baseStyleElement.textContent = __knightedToBaseStyles(
           __knightedState.visualConfig.hostPadding,
+          __knightedState.visualConfig.fontCssUrl,
         )
 
         for (let index = 0; index < userStyleElements.length; index += 1) {
@@ -217,6 +253,15 @@ const createIframeShellDocument = ({ channelId, parentOrigin, importMap }) => {
           )
         } else {
           document.documentElement.style.removeProperty('--preview-host-padding')
+        }
+
+        if (__knightedState.visualConfig.fontFamily.trim().length > 0) {
+          document.documentElement.style.setProperty(
+            '--preview-font-family',
+            __knightedState.visualConfig.fontFamily.trim(),
+          )
+        } else {
+          document.documentElement.style.removeProperty('--preview-font-family')
         }
 
         if (__knightedState.visualConfig.backgroundColor.length > 0) {
@@ -639,6 +684,8 @@ export const createWorkspaceIframePreviewBridge = ({
     userStyleSheets = [],
     hostPadding = '',
     backgroundColor = '',
+    fontCssUrl = '',
+    fontFamily = '',
     runtimeSpecifiers,
     timeoutMs = 12000,
   }) => {
@@ -666,6 +713,7 @@ export const createWorkspaceIframePreviewBridge = ({
             dispose,
             render,
             updateBackgroundColor,
+            updateFont,
           })
         },
         reject,
@@ -686,6 +734,8 @@ export const createWorkspaceIframePreviewBridge = ({
         ...stylePayload,
         hostPadding,
         backgroundColor,
+        fontCssUrl,
+        fontFamily,
         importMap,
         parentOrigin,
       }
@@ -712,12 +762,23 @@ export const createWorkspaceIframePreviewBridge = ({
     })
   }
 
+  const updateFont = ({ fontCssUrl = '', fontFamily = '' } = {}) => {
+    postMessageToIframe({
+      type: previewProtocolMessageTypes.configPatch,
+      payload: {
+        fontCssUrl: typeof fontCssUrl === 'string' ? fontCssUrl : '',
+        fontFamily: typeof fontFamily === 'string' ? fontFamily : '',
+      },
+    })
+  }
+
   return {
     target,
     iframe,
     dispose,
     render,
     updateBackgroundColor,
+    updateFont,
     isReady: () => ready,
   }
 }

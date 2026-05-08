@@ -120,6 +120,7 @@ const bindAppEventsAndStart = ({
     typeDiagnostics,
     clipboardSupported,
     previewBackground,
+    previewFont,
     initializeCodeEditors,
   } = startup
 
@@ -495,6 +496,7 @@ const bindAppEventsAndStart = ({
   syncDiagnosticsDrawerLayout()
   renderRuntime.setStyleCompiling(false)
   setCdnLoading(true)
+  previewFont.initializePreviewFontInput()
   previewBackground.initializePreviewBackgroundPicker()
   const workspaceRestoreReady = (async () => {
     try {

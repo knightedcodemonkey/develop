@@ -51,6 +51,8 @@ export const createWorkspacesDrawer = ({
   shareButton,
   newButton,
   selectInput,
+  fontCssUrlInput,
+  fontCssUrlLoadButton,
   openButton,
   renameButton,
   removeButton,
@@ -61,6 +63,7 @@ export const createWorkspacesDrawer = ({
   onRepositoryFilterChange,
   onRefreshRequested,
   onShareCurrentWorkspace,
+  onLoadFontCssUrl,
   onInitializeWorkspace,
   onCreateWorkspace,
   onOpenSelected,
@@ -229,6 +232,10 @@ export const createWorkspacesDrawer = ({
 
     if (removeButton instanceof HTMLButtonElement) {
       removeButton.disabled = !hasSelection || isSelectedWorkspaceActive
+    }
+
+    if (fontCssUrlLoadButton instanceof HTMLButtonElement) {
+      fontCssUrlLoadButton.disabled = typeof onLoadFontCssUrl !== 'function'
     }
   }
 
@@ -552,6 +559,38 @@ export const createWorkspacesDrawer = ({
     } catch {
       setStatus('Could not share workspace.', 'error')
     }
+  })
+
+  fontCssUrlLoadButton?.addEventListener('click', async () => {
+    if (typeof onLoadFontCssUrl !== 'function') {
+      return
+    }
+
+    const fontCssUrlValue =
+      fontCssUrlInput instanceof HTMLInputElement ? toSafeText(fontCssUrlInput.value) : ''
+
+    let loaded = false
+    try {
+      loaded = await onLoadFontCssUrl(fontCssUrlValue)
+    } catch {
+      setStatus('Could not load font CSS URL.', 'error')
+      return
+    }
+
+    if (!loaded) {
+      return
+    }
+
+    setStatus('Loaded font CSS URL.', 'neutral')
+  })
+
+  fontCssUrlInput?.addEventListener('keydown', event => {
+    if (event.key !== 'Enter') {
+      return
+    }
+
+    event.preventDefault()
+    fontCssUrlLoadButton?.click()
   })
 
   openButton?.addEventListener('click', async () => {

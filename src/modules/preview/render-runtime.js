@@ -18,6 +18,8 @@ export const createRenderRuntimeController = ({
   getWorkspaceTabs,
   getPreviewHost,
   getPreviewBackgroundColor = () => '',
+  getPreviewFontCssUrl = () => '',
+  getPreviewFontFamily = () => '',
   clearStyleDiagnostics,
   setStyleDiagnosticsDetails,
   setStatus,
@@ -44,12 +46,15 @@ export const createRenderRuntimeController = ({
   }
   let disposeWorkspaceVirtualModules = null
   let iframeRuntimeBridge = null
+  let forceRecreateIframeBridgeOnNextRender = false
   let lastRenderedEntryTabId = ''
   let lastRenderedDependencyTabIds = new Set()
+  let lastRenderedHasCustomElementDefinitions = false
   let hasCompletedInitialRender = false
   const workspaceGraphCache = createPreviewWorkspaceGraphCache()
   const styleTabLanguages = new Set(['css', 'less', 'sass', 'module'])
   const stylePathPattern = /\.(?:css|less|sass|scss)$/i
+  const customElementDefinePattern = /\bcustomElements\s*\.\s*define\s*\(/i
   const fallbackEntryTab = {
     id: 'component',
     name: 'App.tsx',
@@ -693,6 +698,15 @@ export const createRenderRuntimeController = ({
     reactDomClient: getRuntimeSpecifier('reactDomClient'),
   })
 
+  const hasCustomElementDefinition = tab => {
+    if (!tab || typeof tab !== 'object') {
+      return false
+    }
+
+    const source = typeof tab.content === 'string' ? tab.content : ''
+    return customElementDefinePattern.test(source)
+  }
+
   const renderWorkspaceInIframe = async ({
     mode,
     cssText,
@@ -751,12 +765,23 @@ export const createRenderRuntimeController = ({
         ? virtualModulePlan.includedTabIds
         : [],
     )
+    lastRenderedHasCustomElementDefinitions = [...lastRenderedDependencyTabIds].some(
+      tabId => {
+        const tab = tabsForExecution.find(candidate => candidate?.id === tabId)
+        return hasCustomElementDefinition(tab)
+      },
+    )
 
     disposeWorkspaceModules()
     disposeWorkspaceVirtualModules = virtualModulePlan.dispose
 
     try {
       const renderTarget = getRenderTarget()
+      if (forceRecreateIframeBridgeOnNextRender) {
+        disposeIframeBridge()
+        forceRecreateIframeBridgeOnNextRender = false
+      }
+
       if (!iframeRuntimeBridge || iframeRuntimeBridge.target !== renderTarget) {
         disposeIframeBridge()
         iframeRuntimeBridge = createWorkspaceIframePreviewBridge({
@@ -778,6 +803,8 @@ export const createRenderRuntimeController = ({
         userStyleSheets,
         hostPadding,
         backgroundColor: getPreviewBackgroundColor(),
+        fontCssUrl: getPreviewFontCssUrl(),
+        fontFamily: getPreviewFontFamily(),
         runtimeSpecifiers,
       })
     } catch (error) {
@@ -790,6 +817,8 @@ export const createRenderRuntimeController = ({
   const clearPreview = () => {
     disposeWorkspaceModules()
     disposeIframeBridge()
+    forceRecreateIframeBridgeOnNextRender = false
+    lastRenderedHasCustomElementDefinitions = false
     const target = getRenderTarget()
     clearTarget(target)
   }
@@ -927,6 +956,9 @@ export const createRenderRuntimeController = ({
     }
 
     if (lastRenderedDependencyTabIds.has(tabId)) {
+      if (lastRenderedHasCustomElementDefinitions) {
+        forceRecreateIframeBridgeOnNextRender = true
+      }
       return true
     }
 
@@ -964,6 +996,11 @@ export const createRenderRuntimeController = ({
         typeof iframeRuntimeBridge.updateBackgroundColor === 'function'
       ) {
         iframeRuntimeBridge.updateBackgroundColor(color)
+      }
+    },
+    updatePreviewFont: ({ fontCssUrl = '', fontFamily = '' } = {}) => {
+      if (iframeRuntimeBridge && typeof iframeRuntimeBridge.updateFont === 'function') {
+        iframeRuntimeBridge.updateFont({ fontCssUrl, fontFamily })
       }
     },
   }

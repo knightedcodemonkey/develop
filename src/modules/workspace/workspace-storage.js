@@ -23,6 +23,27 @@ const toTabRole = value => {
 
 const normalizeRenderMode = value => (value === 'react' ? 'react' : 'dom')
 
+const defaultFontCssUrl =
+  'https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&family=Roboto:ital,wght@0,100..900;1,100..900&display=swap'
+
+const normalizePreviewFontCssUrl = value => {
+  const normalized = typeof value === 'string' ? value.trim() : ''
+  if (!normalized) {
+    return defaultFontCssUrl
+  }
+
+  try {
+    const parsed = new URL(normalized)
+    const protocol = parsed.protocol.toLowerCase()
+    if (protocol !== 'https:' && protocol !== 'http:') {
+      return defaultFontCssUrl
+    }
+    return parsed.href
+  } catch {
+    return defaultFontCssUrl
+  }
+}
+
 const toSyncTimestamp = value =>
   Number.isFinite(value) && value > 0 ? Math.max(0, Number(value)) : null
 
@@ -112,6 +133,7 @@ const normalizeWorkspaceRecord = record => {
         ? record.prContextState.trim()
         : 'inactive',
     renderMode: normalizeRenderMode(record.renderMode),
+    fontCssUrl: normalizePreviewFontCssUrl(record.fontCssUrl ?? record.previewFontCssUrl),
     tabs: normalizedTabs,
     activeTabId: typeof record.activeTabId === 'string' ? record.activeTabId : null,
     schemaVersion:
@@ -164,8 +186,52 @@ const withLastModifiedNow = record => ({
   lastModified: Date.now(),
 })
 
+const hasOwnRecordValue = (record, key) =>
+  Boolean(record) && Object.prototype.hasOwnProperty.call(record, key)
+
+const backfillWorkspaceFontCssUrlField = async db => {
+  const records = await db.getAllFromIndex(
+    workspaceStoreName,
+    workspaceByLastModifiedIndexName,
+  )
+  if (!Array.isArray(records) || records.length === 0) {
+    return
+  }
+
+  const recordIds = records
+    .map(record => (typeof record?.id === 'string' ? record.id : ''))
+    .filter(Boolean)
+
+  await Promise.all(
+    recordIds.map(async recordId => {
+      const record = await db.get(workspaceStoreName, recordId)
+      if (!record || typeof record !== 'object') {
+        return
+      }
+
+      const normalizedFontCssUrl = normalizePreviewFontCssUrl(
+        record.fontCssUrl ?? record.previewFontCssUrl,
+      )
+      const shouldPersistFontCssUrl =
+        !hasOwnRecordValue(record, 'fontCssUrl') ||
+        typeof record.fontCssUrl !== 'string' ||
+        record.fontCssUrl !== normalizedFontCssUrl
+
+      if (!shouldPersistFontCssUrl) {
+        return
+      }
+
+      await db.put(workspaceStoreName, {
+        ...record,
+        fontCssUrl: normalizedFontCssUrl,
+      })
+    }),
+  )
+}
+
 export const createWorkspaceStorageAdapter = ({ loadRuntime } = {}) => {
   let dbPromise = null
+  let fontCssUrlBackfillPromise = null
 
   const ensureDb = () => {
     if (!dbPromise) {
@@ -175,7 +241,15 @@ export const createWorkspaceStorageAdapter = ({ loadRuntime } = {}) => {
       })
     }
 
-    return dbPromise
+    if (!fontCssUrlBackfillPromise) {
+      fontCssUrlBackfillPromise = dbPromise
+        .then(backfillWorkspaceFontCssUrlField)
+        .catch(() => {
+          /* If backfill fails, continue with existing records to avoid blocking app load. */
+        })
+    }
+
+    return Promise.all([dbPromise, fontCssUrlBackfillPromise]).then(([db]) => db)
   }
 
   const getWorkspaceById = async id => {

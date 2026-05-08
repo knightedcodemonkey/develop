@@ -66,6 +66,11 @@ import { createGitHubPrDrawer } from './modules/github/pr/drawer/controller/crea
 import { createLayoutThemeController } from './modules/ui/layout-theme.js'
 import { createLintDiagnosticsController } from './modules/diagnostics/lint-diagnostics.js'
 import { createPreviewBackgroundController } from './modules/preview/preview-background.js'
+import {
+  createPreviewFontController,
+  defaultPreviewFontCssUrl,
+  normalizePreviewFontCssUrl,
+} from './modules/preview/preview-font.js'
 import { getReactEntryTabCompatibilityError } from './modules/preview/preview-entry-resolver.js'
 import { createRenderRuntimeController } from './modules/preview/render-runtime.js'
 import { createTypeDiagnosticsController } from './modules/diagnostics/type-diagnostics.js'
@@ -151,6 +156,8 @@ const workspacesInitialize = document.getElementById('workspaces-initialize')
 const workspacesShare = document.getElementById('workspaces-share')
 const workspacesNew = document.getElementById('workspaces-new')
 const workspacesSelect = document.getElementById('workspaces-select')
+const workspacesFontCssUrlInput = document.getElementById('workspaces-font-css-url')
+const workspacesFontCssUrlLoad = document.getElementById('workspaces-font-css-url-load')
 const workspacesOpen = document.getElementById('workspaces-open')
 const workspacesRename = document.getElementById('workspaces-rename')
 const workspacesRemove = document.getElementById('workspaces-remove')
@@ -346,6 +353,20 @@ const previewBackground = createPreviewBackgroundController({
     }
 
     return ''
+  },
+})
+
+const previewFont = createPreviewFontController({
+  previewFontCssUrlInput: workspacesFontCssUrlInput,
+  getDefaultPreviewFontCssUrl: () => defaultPreviewFontCssUrl,
+  onFontConfigChange: ({ fontCssUrl, fontFamily }) => {
+    if (renderRuntime && typeof renderRuntime.updatePreviewFont === 'function') {
+      renderRuntime.updatePreviewFont({ fontCssUrl, fontFamily })
+    }
+
+    if (typeof queueWorkspaceSave === 'function') {
+      queueWorkspaceSave()
+    }
   },
 })
 
@@ -757,7 +778,9 @@ const workspaceSyncController = createWorkspaceSyncController({
   getActiveWorkspaceRecordId: () => activeWorkspaceRecordId,
   getActiveWorkspaceCreatedAt: () => activeWorkspaceCreatedAt,
   getRenderModeValue: () => renderMode.value,
+  getPreviewFontCssUrlValue: () => previewFont.getPreviewFontCssUrl(),
   normalizeRenderMode: mode => normalizeRenderMode(mode),
+  normalizePreviewFontCssUrl,
 })
 
 const getTypecheckSourcePath = () =>
@@ -891,9 +914,14 @@ const {
   workspaceTabsState,
   resolveWorkspaceActiveTabId,
   normalizeRenderMode: mode => normalizeRenderMode(mode),
+  normalizePreviewFontCssUrl,
   getRenderModeValue: () => renderMode.value,
+  getPreviewFontCssUrlValue: () => previewFont.getPreviewFontCssUrl(),
   setRenderModeValue: value => {
     renderMode.value = value
+  },
+  setPreviewFontCssUrlValue: (value, options) => {
+    previewFont.applyPreviewFontCssUrl(value, options)
   },
   getActiveWorkspaceTab,
   onActiveWorkspaceTabChange: (_tab, { changed } = {}) => {
@@ -1201,6 +1229,8 @@ const githubWorkflows = createGitHubWorkflowsSetup({
     workspacesShare,
     workspacesNew,
     workspacesSelect,
+    workspacesFontCssUrlInput,
+    workspacesFontCssUrlLoad,
     workspacesOpen,
     workspacesRename,
     workspacesRemove,
@@ -1220,6 +1250,14 @@ const githubWorkflows = createGitHubWorkflowsSetup({
     listLocalContextRecords,
     refreshLocalContextOptions,
     applyWorkspaceRecord,
+    applyWorkspaceFontCssUrl: async fontCssUrl => {
+      previewFont.applyPreviewFontCssUrl(fontCssUrl, {
+        emitChange: true,
+        syncInputValue: true,
+      })
+      await flushWorkspaceSave({ preserveRecordId: true })
+      return true
+    },
     syncActiveWorkspaceRepositoryScope,
     forkWorkspaceFromCurrentState,
     flushWorkspaceSave,
@@ -1424,6 +1462,7 @@ const runtimeCoreOptions = createRuntimeCoreOptions({
   getRenderRuntime: () => renderRuntime,
   getPreviewHost: () => previewHost,
   previewBackground,
+  previewFont,
   clearDiagnosticsScope,
   clearConfirmDialog,
   clearConfirmTitle,
@@ -1602,6 +1641,7 @@ bindAppEventsAndStart({
     typeDiagnostics,
     clipboardSupported,
     previewBackground,
+    previewFont,
     initializeCodeEditors,
   },
 })
