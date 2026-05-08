@@ -115,19 +115,13 @@ const createIframeShellDocument = ({ channelId, parentOrigin, importMap }) => {
         }
       }
 
-      const __knightedToBaseStyles = (hostPadding, fontCssUrl = '') => {
+      const __knightedToBaseStyles = hostPadding => {
         const resolvedPadding =
           typeof hostPadding === 'string' && hostPadding.trim().length > 0
             ? hostPadding.trim()
             : '18px'
-        const resolvedFontCssUrl = __knightedNormalizeFontCssUrl(fontCssUrl)
-        const escapedFontCssUrl = resolvedFontCssUrl.replace(/"/g, '\\"')
-        const fontImportRule = resolvedFontCssUrl
-          ? '@import url("' + escapedFontCssUrl + '");'
-          : ''
 
         return [
-          fontImportRule,
           'html, body {',
           '  margin: 0;',
           '  min-height: 100%;',
@@ -149,6 +143,50 @@ const createIframeShellDocument = ({ channelId, parentOrigin, importMap }) => {
           '  font: inherit;',
           '}',
         ].join('\\n')
+      }
+
+      const __knightedSyncFontStylesheetLink = ({
+        normalizedFontCssUrl = '',
+        baseStyleElement,
+      }) => {
+        const linkId = 'knighted-preview-font-stylesheet'
+        const existingLink = document.getElementById(linkId)
+        const hasNormalizedFontCssUrl =
+          typeof normalizedFontCssUrl === 'string' &&
+          normalizedFontCssUrl.length > 0
+
+        if (!hasNormalizedFontCssUrl) {
+          if (existingLink instanceof HTMLLinkElement) {
+            existingLink.remove()
+          }
+          return
+        }
+
+        let linkElement = existingLink
+        if (!(linkElement instanceof HTMLLinkElement)) {
+          linkElement = document.createElement('link')
+          linkElement.id = linkId
+          linkElement.rel = 'stylesheet'
+        }
+
+        if (linkElement.getAttribute('href') !== normalizedFontCssUrl) {
+          linkElement.setAttribute('href', normalizedFontCssUrl)
+        }
+
+        const shouldInsertBeforeBase =
+          baseStyleElement instanceof HTMLStyleElement &&
+          baseStyleElement.parentNode === document.head
+
+        if (shouldInsertBeforeBase) {
+          if (linkElement !== baseStyleElement.previousSibling) {
+            document.head.insertBefore(linkElement, baseStyleElement)
+          }
+          return
+        }
+
+        if (linkElement.parentNode !== document.head) {
+          document.head.append(linkElement)
+        }
       }
 
       const __knightedApplyVisualConfig = ({
@@ -239,9 +277,13 @@ const createIframeShellDocument = ({ channelId, parentOrigin, importMap }) => {
           document.head.insertBefore(baseStyleElement, firstUserStyleElement)
         }
 
+        __knightedSyncFontStylesheetLink({
+          normalizedFontCssUrl: __knightedState.visualConfig.fontCssUrl,
+          baseStyleElement,
+        })
+
         baseStyleElement.textContent = __knightedToBaseStyles(
           __knightedState.visualConfig.hostPadding,
-          __knightedState.visualConfig.fontCssUrl,
         )
 
         for (let index = 0; index < userStyleElements.length; index += 1) {

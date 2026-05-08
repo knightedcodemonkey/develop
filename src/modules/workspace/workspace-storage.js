@@ -1,5 +1,5 @@
 import { cdnImports, importFromCdnWithFallback } from '../cdn.js'
-import { defaultFontCssUrl, normalizeFontCssUrl } from '../font-css-url.js'
+import { normalizeFontCssUrl } from '../font-css-url.js'
 import { toWorkspaceRecordKey } from './workspace-tab-helpers.js'
 
 const workspaceDbName = 'knighted-develop-workspaces'
@@ -24,8 +24,8 @@ const toTabRole = value => {
 
 const normalizeRenderMode = value => (value === 'react' ? 'react' : 'dom')
 
-const normalizePreviewFontCssUrl = value =>
-  normalizeFontCssUrl(value, { fallback: defaultFontCssUrl })
+const normalizeStoredPreviewFontCssUrl = value =>
+  normalizeFontCssUrl(value, { fallback: '' })
 
 const toSyncTimestamp = value =>
   Number.isFinite(value) && value > 0 ? Math.max(0, Number(value)) : null
@@ -116,7 +116,9 @@ const normalizeWorkspaceRecord = record => {
         ? record.prContextState.trim()
         : 'inactive',
     renderMode: normalizeRenderMode(record.renderMode),
-    fontCssUrl: normalizePreviewFontCssUrl(record.fontCssUrl ?? record.previewFontCssUrl),
+    fontCssUrl: normalizeStoredPreviewFontCssUrl(
+      record.fontCssUrl ?? record.previewFontCssUrl,
+    ),
     tabs: normalizedTabs,
     activeTabId: typeof record.activeTabId === 'string' ? record.activeTabId : null,
     schemaVersion:
@@ -173,45 +175,16 @@ const hasOwnRecordValue = (record, key) =>
   Boolean(record) && Object.prototype.hasOwnProperty.call(record, key)
 
 const backfillWorkspaceFontCssUrlField = async db => {
-  const records = await db.getAllFromIndex(
-    workspaceStoreName,
-    workspaceByLastModifiedIndexName,
-  )
-  if (!Array.isArray(records) || records.length === 0) {
-    return
-  }
+  const transaction = db.transaction(workspaceStoreName, 'readwrite')
+  const index = transaction.store.index(workspaceByLastModifiedIndexName)
+  const processCursor = async cursor => {
+    if (!cursor) {
+      return
+    }
 
-  const candidateRecordIds = records
-    .filter(record => {
-      if (!record || typeof record !== 'object') {
-        return false
-      }
-
-      const normalizedFontCssUrl = normalizePreviewFontCssUrl(
-        record.fontCssUrl ?? record.previewFontCssUrl,
-      )
-
-      return (
-        !hasOwnRecordValue(record, 'fontCssUrl') ||
-        typeof record.fontCssUrl !== 'string' ||
-        record.fontCssUrl !== normalizedFontCssUrl
-      )
-    })
-    .map(record => (typeof record?.id === 'string' ? record.id : ''))
-    .filter(Boolean)
-
-  if (candidateRecordIds.length === 0) {
-    return
-  }
-
-  await Promise.all(
-    candidateRecordIds.map(async recordId => {
-      const record = await db.get(workspaceStoreName, recordId)
-      if (!record || typeof record !== 'object') {
-        return
-      }
-
-      const normalizedFontCssUrl = normalizePreviewFontCssUrl(
+    const record = cursor.value
+    if (record && typeof record === 'object') {
+      const normalizedFontCssUrl = normalizeStoredPreviewFontCssUrl(
         record.fontCssUrl ?? record.previewFontCssUrl,
       )
       const shouldPersistFontCssUrl =
@@ -219,16 +192,21 @@ const backfillWorkspaceFontCssUrlField = async db => {
         typeof record.fontCssUrl !== 'string' ||
         record.fontCssUrl !== normalizedFontCssUrl
 
-      if (!shouldPersistFontCssUrl) {
-        return
+      if (shouldPersistFontCssUrl) {
+        await cursor.update({
+          ...record,
+          fontCssUrl: normalizedFontCssUrl,
+        })
       }
+    }
 
-      await db.put(workspaceStoreName, {
-        ...record,
-        fontCssUrl: normalizedFontCssUrl,
-      })
-    }),
-  )
+    const nextCursor = await cursor.continue()
+    await processCursor(nextCursor)
+  }
+
+  await processCursor(await index.openCursor())
+
+  await transaction.done
 }
 
 export const createWorkspaceStorageAdapter = ({ loadRuntime } = {}) => {

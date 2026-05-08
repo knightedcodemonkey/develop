@@ -243,12 +243,12 @@ test('workspace font CSS URL applies to preview and persists per workspace', asy
   await page.getByRole('button', { name: 'Workspaces' }).click()
 
   const fontCssUrlInput = page.getByRole('textbox', {
-    name: 'Workspace Google Fonts CSS URL',
+    name: 'Workspace font stylesheet URL',
   })
   await fontCssUrlInput.fill(
     'https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;700&display=swap',
   )
-  await fontCssUrlInput.press('Tab')
+  await page.getByRole('button', { name: 'Load', exact: true }).click()
 
   await expect
     .poll(async () => (await readPreviewBodyFontFamily(page)).toLowerCase())

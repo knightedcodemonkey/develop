@@ -92,13 +92,6 @@ export const createPreviewFontController = ({
       emitChange: true,
       syncInputValue: true,
     })
-
-    previewFontCssUrlInput.addEventListener('change', () => {
-      applyPreviewFontCssUrl(previewFontCssUrlInput.value, {
-        emitChange: true,
-        syncInputValue: true,
-      })
-    })
   }
 
   return {

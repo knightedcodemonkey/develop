@@ -102,3 +102,4 @@ Never:
 - Edit generated output folders unless explicitly requested.
 - Modify node_modules or lockfiles unless explicitly requested.
 - Reintroduce cross-workspace overwrite/delete behavior with any changes.
+- Use eslint disable comments.
