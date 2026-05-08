@@ -551,11 +551,11 @@ const initializeGitHubWorkflows = ({
       }
 
       try {
-        await applyWorkspaceFontCssUrl(fontCssUrl)
+        const loadResult = await applyWorkspaceFontCssUrl(fontCssUrl)
         if (typeof scheduleRender === 'function') {
           await Promise.resolve(scheduleRender())
         }
-        return true
+        return loadResult
       } catch {
         workspacesDrawerController?.setStatus('Could not load font CSS URL.', 'error')
         return false

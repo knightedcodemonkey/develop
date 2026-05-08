@@ -100,6 +100,11 @@ const createIframeShellDocument = ({ channelId, parentOrigin, importMap }) => {
         try {
           const parsed = new URL(normalized, window.location.href)
           const protocol = parsed.protocol.toLowerCase()
+          const currentProtocol = String(window.location.protocol || '').toLowerCase()
+          const allowHttp = currentProtocol === 'http:'
+          if (protocol === 'http:' && !allowHttp) {
+            return ''
+          }
           if (protocol !== 'https:' && protocol !== 'http:') {
             return ''
           }

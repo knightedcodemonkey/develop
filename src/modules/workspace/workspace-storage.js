@@ -1,4 +1,5 @@
 import { cdnImports, importFromCdnWithFallback } from '../cdn.js'
+import { defaultFontCssUrl, normalizeFontCssUrl } from '../font-css-url.js'
 import { toWorkspaceRecordKey } from './workspace-tab-helpers.js'
 
 const workspaceDbName = 'knighted-develop-workspaces'
@@ -23,26 +24,8 @@ const toTabRole = value => {
 
 const normalizeRenderMode = value => (value === 'react' ? 'react' : 'dom')
 
-const defaultFontCssUrl =
-  'https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&family=Roboto:ital,wght@0,100..900;1,100..900&display=swap'
-
-const normalizePreviewFontCssUrl = value => {
-  const normalized = typeof value === 'string' ? value.trim() : ''
-  if (!normalized) {
-    return defaultFontCssUrl
-  }
-
-  try {
-    const parsed = new URL(normalized)
-    const protocol = parsed.protocol.toLowerCase()
-    if (protocol !== 'https:' && protocol !== 'http:') {
-      return defaultFontCssUrl
-    }
-    return parsed.href
-  } catch {
-    return defaultFontCssUrl
-  }
-}
+const normalizePreviewFontCssUrl = value =>
+  normalizeFontCssUrl(value, { fallback: defaultFontCssUrl })
 
 const toSyncTimestamp = value =>
   Number.isFinite(value) && value > 0 ? Math.max(0, Number(value)) : null
@@ -198,12 +181,31 @@ const backfillWorkspaceFontCssUrlField = async db => {
     return
   }
 
-  const recordIds = records
+  const candidateRecordIds = records
+    .filter(record => {
+      if (!record || typeof record !== 'object') {
+        return false
+      }
+
+      const normalizedFontCssUrl = normalizePreviewFontCssUrl(
+        record.fontCssUrl ?? record.previewFontCssUrl,
+      )
+
+      return (
+        !hasOwnRecordValue(record, 'fontCssUrl') ||
+        typeof record.fontCssUrl !== 'string' ||
+        record.fontCssUrl !== normalizedFontCssUrl
+      )
+    })
     .map(record => (typeof record?.id === 'string' ? record.id : ''))
     .filter(Boolean)
 
+  if (candidateRecordIds.length === 0) {
+    return
+  }
+
   await Promise.all(
-    recordIds.map(async recordId => {
+    candidateRecordIds.map(async recordId => {
       const record = await db.get(workspaceStoreName, recordId)
       if (!record || typeof record !== 'object') {
         return
@@ -249,7 +251,7 @@ export const createWorkspaceStorageAdapter = ({ loadRuntime } = {}) => {
         })
     }
 
-    return Promise.all([dbPromise, fontCssUrlBackfillPromise]).then(([db]) => db)
+    return dbPromise
   }
 
   const getWorkspaceById = async id => {

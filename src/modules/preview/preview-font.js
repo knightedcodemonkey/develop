@@ -1,26 +1,12 @@
+import { defaultFontCssUrl, normalizeFontCssUrl } from '../font-css-url.js'
+
 const systemSansFontFamily =
   'system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif'
 
-const defaultPreviewFontCssUrl =
-  'https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&family=Roboto:ital,wght@0,100..900;1,100..900&display=swap'
+const defaultPreviewFontCssUrl = defaultFontCssUrl
 
-const normalizePreviewFontCssUrl = value => {
-  const normalized = typeof value === 'string' ? value.trim() : ''
-  if (!normalized) {
-    return defaultPreviewFontCssUrl
-  }
-
-  try {
-    const parsed = new URL(normalized)
-    const protocol = parsed.protocol.toLowerCase()
-    if (protocol !== 'https:' && protocol !== 'http:') {
-      return defaultPreviewFontCssUrl
-    }
-    return parsed.href
-  } catch {
-    return defaultPreviewFontCssUrl
-  }
-}
+const normalizePreviewFontCssUrl = value =>
+  normalizeFontCssUrl(value, { fallback: defaultPreviewFontCssUrl })
 
 const decodeGoogleFontsFamilyName = value => {
   if (typeof value !== 'string' || value.length === 0) {

@@ -79,6 +79,8 @@ import { ensureJsxTransformSource } from './modules/preview/jsx-transform-runtim
 import { createEditorPoolManager } from './modules/editor/editor-pool-manager.js'
 import { createWorkspaceTabsState } from './modules/workspace/workspace-tabs-state.js'
 import { createWorkspacesDrawer } from './modules/workspace/workspaces-drawer/drawer.js'
+import { createApplyWorkspaceFontCssUrl } from './modules/app-core/workspace-font-css-url-load.js'
+import { createPreviewFontSetup } from './modules/app-core/preview-font-setup.js'
 import {
   createDebouncedWorkspaceSaver,
   createWorkspaceStorageAdapter,
@@ -356,18 +358,12 @@ const previewBackground = createPreviewBackgroundController({
   },
 })
 
-const previewFont = createPreviewFontController({
+const previewFont = createPreviewFontSetup({
+  createPreviewFontController,
   previewFontCssUrlInput: workspacesFontCssUrlInput,
-  getDefaultPreviewFontCssUrl: () => defaultPreviewFontCssUrl,
-  onFontConfigChange: ({ fontCssUrl, fontFamily }) => {
-    if (renderRuntime && typeof renderRuntime.updatePreviewFont === 'function') {
-      renderRuntime.updatePreviewFont({ fontCssUrl, fontFamily })
-    }
-
-    if (typeof queueWorkspaceSave === 'function') {
-      queueWorkspaceSave()
-    }
-  },
+  defaultPreviewFontCssUrl,
+  getRenderRuntime: () => renderRuntime,
+  queueWorkspaceSave: () => queueWorkspaceSave?.(),
 })
 
 const layoutTheme = createLayoutThemeController({
@@ -976,6 +972,13 @@ const {
   onWorkspaceRecordApplied: onWorkspaceRecordAppliedWithStatusMetadata,
 })
 
+const applyWorkspaceFontCssUrl = createApplyWorkspaceFontCssUrl({
+  previewFont,
+  flushWorkspaceSave,
+  normalizePreviewFontCssUrl,
+  defaultPreviewFontCssUrl,
+})
+
 const { syncActiveWorkspaceRepositoryScope, forkWorkspaceFromCurrentState } =
   createWorkspaceScopeForkActions({
     toNonEmptyWorkspaceText,
@@ -1250,14 +1253,7 @@ const githubWorkflows = createGitHubWorkflowsSetup({
     listLocalContextRecords,
     refreshLocalContextOptions,
     applyWorkspaceRecord,
-    applyWorkspaceFontCssUrl: async fontCssUrl => {
-      previewFont.applyPreviewFontCssUrl(fontCssUrl, {
-        emitChange: true,
-        syncInputValue: true,
-      })
-      await flushWorkspaceSave({ preserveRecordId: true })
-      return true
-    },
+    applyWorkspaceFontCssUrl,
     syncActiveWorkspaceRepositoryScope,
     forkWorkspaceFromCurrentState,
     flushWorkspaceSave,

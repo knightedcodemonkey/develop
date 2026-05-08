@@ -569,16 +569,29 @@ export const createWorkspacesDrawer = ({
     const fontCssUrlValue =
       fontCssUrlInput instanceof HTMLInputElement ? toSafeText(fontCssUrlInput.value) : ''
 
-    let loaded = false
+    let loadResult = false
     try {
-      loaded = await onLoadFontCssUrl(fontCssUrlValue)
+      loadResult = await onLoadFontCssUrl(fontCssUrlValue)
     } catch {
       setStatus('Could not load font CSS URL.', 'error')
       return
     }
 
-    if (!loaded) {
+    if (!loadResult) {
       return
+    }
+
+    if (loadResult && typeof loadResult === 'object') {
+      const status = toSafeText(loadResult.status)
+      if (status === 'rejected') {
+        setStatus('Invalid font CSS URL. Loaded default value instead.', 'error')
+        return
+      }
+
+      if (status === 'normalized') {
+        setStatus('Loaded normalized font CSS URL.', 'neutral')
+        return
+      }
     }
 
     setStatus('Loaded font CSS URL.', 'neutral')
