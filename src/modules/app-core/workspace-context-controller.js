@@ -18,8 +18,11 @@ const createWorkspaceContextController = ({
   workspaceTabsState,
   resolveWorkspaceActiveTabId,
   normalizeRenderMode,
+  normalizePreviewFontCssUrl,
   getRenderModeValue,
+  getPreviewFontCssUrlValue,
   setRenderModeValue,
+  setPreviewFontCssUrlValue,
   onWorkspaceRecordApplied,
   getActiveWorkspaceTab,
   loadWorkspaceTabIntoEditor,
@@ -138,6 +141,21 @@ const createWorkspaceContextController = ({
 
       if (getRenderModeValue() !== nextRenderMode) {
         setRenderModeValue(nextRenderMode)
+      }
+
+      if (typeof setPreviewFontCssUrlValue === 'function') {
+        const nextPreviewFontCssUrl = normalizePreviewFontCssUrl(
+          workspace.fontCssUrl ?? workspace.previewFontCssUrl,
+        )
+        const currentPreviewFontCssUrl = normalizePreviewFontCssUrl(
+          getPreviewFontCssUrlValue?.(),
+        )
+        if (currentPreviewFontCssUrl !== nextPreviewFontCssUrl) {
+          setPreviewFontCssUrlValue(nextPreviewFontCssUrl, {
+            emitChange: true,
+            syncInputValue: true,
+          })
+        }
       }
 
       const activeTab = getActiveWorkspaceTab()

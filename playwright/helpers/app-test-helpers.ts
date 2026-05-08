@@ -2,6 +2,7 @@ import { expect } from '@playwright/test'
 import type { Page } from '@playwright/test'
 
 const webServerMode = process.env.PLAYWRIGHT_WEB_SERVER_MODE ?? 'dev'
+const pagesWithStubbedExternalFonts = new WeakSet<Page>()
 
 export const appEntryPath =
   webServerMode === 'preview' ? '/index.html' : '/src/index.html'
@@ -71,7 +72,34 @@ const navigateToApp = async (page: Page, path: string) => {
   }
 }
 
+const stubExternalFontRequests = async (page: Page) => {
+  if (pagesWithStubbedExternalFonts.has(page)) {
+    return
+  }
+
+  pagesWithStubbedExternalFonts.add(page)
+
+  await page.route('https://fonts.googleapis.com/**', async route => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'text/css; charset=utf-8',
+      body: '',
+      headers: {
+        'cache-control': 'public, max-age=31536000, immutable',
+      },
+    })
+  })
+
+  await page.route('https://fonts.gstatic.com/**', async route => {
+    await route.fulfill({
+      status: 204,
+      body: '',
+    })
+  })
+}
+
 export const waitForAppReady = async (page: Page, path = appEntryPath) => {
+  await stubExternalFontRequests(page)
   await navigateToApp(page, path)
   await expect(page.getByRole('heading', { name: '@knighted/develop' })).toBeVisible()
   await expect
@@ -483,8 +511,12 @@ export const connectByotWithSingleRepo = async (
   page: Page,
   {
     branchesByRepo,
+    autoOpenWorkspace = true,
+    assertPrRepositorySelected = true,
   }: {
     branchesByRepo?: BranchesByRepo
+    autoOpenWorkspace?: boolean
+    assertPrRepositorySelected?: boolean
   } = {},
 ) => {
   await page.route('https://api.github.com/user/repos**', async route => {
@@ -525,33 +557,37 @@ export const connectByotWithSingleRepo = async (
   await workspacesRepositoryFilter.selectOption('knightedcodemonkey/develop')
   await expect(workspacesRepositoryFilter).toHaveValue('knightedcodemonkey/develop')
 
-  const initializeButton = page.getByRole('button', {
-    name: 'Initialize',
-    exact: true,
-  })
+  if (autoOpenWorkspace) {
+    const initializeButton = page.getByRole('button', {
+      name: 'Initialize',
+      exact: true,
+    })
 
-  if (await initializeButton.isVisible()) {
-    await initializeButton.click()
-  } else {
-    const storedWorkspace = page.getByLabel('Stored workspace')
-    if (await storedWorkspace.isVisible()) {
-      const workspaceValue = await storedWorkspace
-        .locator('option:not([value=""])')
-        .first()
-        .getAttribute('value')
+    if (await initializeButton.isVisible()) {
+      await initializeButton.click()
+    } else {
+      const storedWorkspace = page.getByLabel('Stored workspace')
+      if (await storedWorkspace.isVisible()) {
+        const workspaceValue = await storedWorkspace
+          .locator('option:not([value=""])')
+          .first()
+          .getAttribute('value')
 
-      if (workspaceValue) {
-        await storedWorkspace.selectOption(workspaceValue)
-        await page.getByRole('button', { name: 'Open', exact: true }).click()
+        if (workspaceValue) {
+          await storedWorkspace.selectOption(workspaceValue)
+          await page.getByRole('button', { name: 'Open', exact: true }).click()
+        }
       }
     }
   }
 
   await ensureWorkspacesDrawerClosed(page)
 
-  const repoSelect = page.getByLabel('Pull request repository')
-  await expect(repoSelect).toHaveValue('knightedcodemonkey/develop')
-  await expect(repoSelect).toBeDisabled()
+  if (assertPrRepositorySelected) {
+    const repoSelect = page.getByLabel('Pull request repository')
+    await expect(repoSelect).toHaveValue('knightedcodemonkey/develop')
+    await expect(repoSelect).toBeDisabled()
+  }
 
   await expect(
     page.getByRole('button', {

@@ -128,6 +128,7 @@ const readLatestWorkspaceSnapshot = async (page: import('@playwright/test').Page
 
     return {
       renderMode: typeof latest.renderMode === 'string' ? latest.renderMode : '',
+      fontCssUrl: typeof latest.fontCssUrl === 'string' ? latest.fontCssUrl : '',
       styleLanguage:
         typeof primaryStylesTab?.language === 'string' ? primaryStylesTab.language : '',
     }
@@ -145,6 +146,12 @@ const readPreviewUserStyleText = async (page: import('@playwright/test').Page) =
 
       return userStyleElement.textContent ?? ''
     })
+}
+
+const readPreviewBodyFontFamily = async (page: import('@playwright/test').Page) => {
+  return getPreviewFrame(page)
+    .locator('html')
+    .evaluate(() => getComputedStyle(document.body).fontFamily || '')
 }
 
 test.beforeEach(async ({ page }) => {
@@ -226,6 +233,46 @@ test('reactJsx tag interpolation renders memo and forwardRef components', async 
         )
     })
     .toBe(0)
+})
+
+test('workspace font CSS URL applies to preview and persists per workspace', async ({
+  page,
+}) => {
+  await waitForInitialRender(page)
+
+  await page.getByRole('button', { name: 'Workspaces' }).click()
+
+  const fontCssUrlInput = page.getByRole('textbox', {
+    name: 'Workspace font stylesheet URL',
+  })
+  await fontCssUrlInput.fill(
+    'https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;700&display=swap',
+  )
+  await page.getByRole('button', { name: 'Load', exact: true }).click()
+
+  await expect
+    .poll(async () => (await readPreviewBodyFontFamily(page)).toLowerCase())
+    .toContain('ibm plex sans')
+
+  await expect
+    .poll(async () => {
+      const snapshot = await readLatestWorkspaceSnapshot(page)
+      return snapshot?.fontCssUrl ?? ''
+    })
+    .toBe(
+      'https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;700&display=swap',
+    )
+
+  await page.reload()
+  await waitForInitialRender(page)
+  await page.getByRole('button', { name: 'Workspaces' }).click()
+
+  await expect(fontCssUrlInput).toHaveValue(
+    'https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;700&display=swap',
+  )
+  await expect
+    .poll(async () => (await readPreviewBodyFontFamily(page)).toLowerCase())
+    .toContain('ibm plex sans')
 })
 
 test('react mode keeps App.ts entry but surfaces rename guidance until compatible', async ({

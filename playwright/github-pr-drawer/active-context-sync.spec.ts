@@ -10,6 +10,7 @@ import {
   getWorkspaceTabsRecord,
   mockRepositoryBranches,
   openMostRecentStoredWorkspaceContext,
+  openStoredWorkspaceContextByHead,
   renameWorkspaceTab,
   seedActivePrWorkspaceContext,
   seedLocalWorkspaceContexts,
@@ -1304,7 +1305,6 @@ test('Active PR context push commit uses Git Database API atomic path by default
   await connectByotWithSingleRepo(page)
   await openMostRecentStoredWorkspaceContext(page)
   await ensureOpenPrDrawerOpen(page)
-
   await setComponentEditorSource(page, 'const commitMarker = 2')
   await setStylesEditorSource(page, '.commit-marker { color: blue; }')
   const pushCommitMessage = 'chore: push active context sync (atomic)'
@@ -1563,8 +1563,11 @@ test('Open PR uses module tab paths when stale target file paths collide', async
     },
   ])
 
-  await connectByotWithSingleRepo(page)
-  await openMostRecentStoredWorkspaceContext(page)
+  await connectByotWithSingleRepo(page, {
+    autoOpenWorkspace: false,
+    assertPrRepositorySelected: false,
+  })
+  await openStoredWorkspaceContextByHead(page, 'develop/open-pr-stale-target-paths')
   await ensureOpenPrDrawerOpen(page)
 
   const commitMessage = 'chore: open pr with stale module target path metadata'

@@ -60,6 +60,7 @@ const createGitHubWorkflowsSetup = ({
     getWorkspaceTabContexts: actions.getWorkspaceTabContexts,
     applyWorkspaceTabContent: actions.applyWorkspaceTabContent,
     scheduleRender: actions.scheduleRender,
+    applyWorkspaceFontCssUrl: workspace.applyWorkspaceFontCssUrl,
   })
 
 export { createGitHubWorkflowsSetup }

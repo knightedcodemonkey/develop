@@ -17,7 +17,9 @@ const createWorkspaceSyncController = ({
   getActiveWorkspaceRecordId,
   getActiveWorkspaceCreatedAt,
   getRenderModeValue,
+  getPreviewFontCssUrlValue = () => '',
   normalizeRenderMode,
+  normalizePreviewFontCssUrl = value => value,
 }) => {
   const removedWorkspaceTabPathsByWorkspaceKey = new Map()
 
@@ -399,6 +401,7 @@ const createWorkspaceSyncController = ({
       prTitle: normalizedPrTitle,
       prContextState: requestedPrContextState,
       renderMode: normalizeRenderMode(getRenderModeValue()),
+      fontCssUrl: normalizePreviewFontCssUrl(getPreviewFontCssUrlValue()),
       tabs: buildWorkspaceTabsSnapshot(),
       activeTabId: workspaceTabsState.getActiveTabId(),
       createdAt: getActiveWorkspaceCreatedAt() ?? Date.now(),

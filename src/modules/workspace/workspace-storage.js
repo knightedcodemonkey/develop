@@ -1,4 +1,5 @@
 import { cdnImports, importFromCdnWithFallback } from '../cdn.js'
+import { normalizeFontCssUrl } from '../font-css-url.js'
 import { toWorkspaceRecordKey } from './workspace-tab-helpers.js'
 
 const workspaceDbName = 'knighted-develop-workspaces'
@@ -22,6 +23,9 @@ const toTabRole = value => {
 }
 
 const normalizeRenderMode = value => (value === 'react' ? 'react' : 'dom')
+
+const normalizeStoredPreviewFontCssUrl = value =>
+  normalizeFontCssUrl(value, { fallback: '' })
 
 const toSyncTimestamp = value =>
   Number.isFinite(value) && value > 0 ? Math.max(0, Number(value)) : null
@@ -112,6 +116,9 @@ const normalizeWorkspaceRecord = record => {
         ? record.prContextState.trim()
         : 'inactive',
     renderMode: normalizeRenderMode(record.renderMode),
+    fontCssUrl: normalizeStoredPreviewFontCssUrl(
+      record.fontCssUrl ?? record.previewFontCssUrl,
+    ),
     tabs: normalizedTabs,
     activeTabId: typeof record.activeTabId === 'string' ? record.activeTabId : null,
     schemaVersion:
@@ -164,8 +171,47 @@ const withLastModifiedNow = record => ({
   lastModified: Date.now(),
 })
 
+const hasOwnRecordValue = (record, key) =>
+  Boolean(record) && Object.prototype.hasOwnProperty.call(record, key)
+
+const backfillWorkspaceFontCssUrlField = async db => {
+  const transaction = db.transaction(workspaceStoreName, 'readwrite')
+  const index = transaction.store.index(workspaceByLastModifiedIndexName)
+  const processCursor = async cursor => {
+    if (!cursor) {
+      return
+    }
+
+    const record = cursor.value
+    if (record && typeof record === 'object') {
+      const normalizedFontCssUrl = normalizeStoredPreviewFontCssUrl(
+        record.fontCssUrl ?? record.previewFontCssUrl,
+      )
+      const shouldPersistFontCssUrl =
+        !hasOwnRecordValue(record, 'fontCssUrl') ||
+        typeof record.fontCssUrl !== 'string' ||
+        record.fontCssUrl !== normalizedFontCssUrl
+
+      if (shouldPersistFontCssUrl) {
+        await cursor.update({
+          ...record,
+          fontCssUrl: normalizedFontCssUrl,
+        })
+      }
+    }
+
+    const nextCursor = await cursor.continue()
+    await processCursor(nextCursor)
+  }
+
+  await processCursor(await index.openCursor())
+
+  await transaction.done
+}
+
 export const createWorkspaceStorageAdapter = ({ loadRuntime } = {}) => {
   let dbPromise = null
+  let fontCssUrlBackfillPromise = null
 
   const ensureDb = () => {
     if (!dbPromise) {
@@ -173,6 +219,14 @@ export const createWorkspaceStorageAdapter = ({ loadRuntime } = {}) => {
         dbPromise = null
         throw error
       })
+    }
+
+    if (!fontCssUrlBackfillPromise) {
+      fontCssUrlBackfillPromise = dbPromise
+        .then(backfillWorkspaceFontCssUrlField)
+        .catch(() => {
+          /* If backfill fails, continue with existing records to avoid blocking app load. */
+        })
     }
 
     return dbPromise

@@ -66,6 +66,11 @@ import { createGitHubPrDrawer } from './modules/github/pr/drawer/controller/crea
 import { createLayoutThemeController } from './modules/ui/layout-theme.js'
 import { createLintDiagnosticsController } from './modules/diagnostics/lint-diagnostics.js'
 import { createPreviewBackgroundController } from './modules/preview/preview-background.js'
+import {
+  createPreviewFontController,
+  defaultPreviewFontCssUrl,
+  normalizePreviewFontCssUrl,
+} from './modules/preview/preview-font.js'
 import { getReactEntryTabCompatibilityError } from './modules/preview/preview-entry-resolver.js'
 import { createRenderRuntimeController } from './modules/preview/render-runtime.js'
 import { createTypeDiagnosticsController } from './modules/diagnostics/type-diagnostics.js'
@@ -74,6 +79,8 @@ import { ensureJsxTransformSource } from './modules/preview/jsx-transform-runtim
 import { createEditorPoolManager } from './modules/editor/editor-pool-manager.js'
 import { createWorkspaceTabsState } from './modules/workspace/workspace-tabs-state.js'
 import { createWorkspacesDrawer } from './modules/workspace/workspaces-drawer/drawer.js'
+import { createApplyWorkspaceFontCssUrl } from './modules/app-core/workspace-font-css-url-load.js'
+import { createPreviewFontSetup } from './modules/app-core/preview-font-setup.js'
 import {
   createDebouncedWorkspaceSaver,
   createWorkspaceStorageAdapter,
@@ -151,6 +158,8 @@ const workspacesInitialize = document.getElementById('workspaces-initialize')
 const workspacesShare = document.getElementById('workspaces-share')
 const workspacesNew = document.getElementById('workspaces-new')
 const workspacesSelect = document.getElementById('workspaces-select')
+const workspacesFontCssUrlInput = document.getElementById('workspaces-font-css-url')
+const workspacesFontCssUrlLoad = document.getElementById('workspaces-font-css-url-load')
 const workspacesOpen = document.getElementById('workspaces-open')
 const workspacesRename = document.getElementById('workspaces-rename')
 const workspacesRemove = document.getElementById('workspaces-remove')
@@ -347,6 +356,14 @@ const previewBackground = createPreviewBackgroundController({
 
     return ''
   },
+})
+
+const previewFont = createPreviewFontSetup({
+  createPreviewFontController,
+  previewFontCssUrlInput: workspacesFontCssUrlInput,
+  defaultPreviewFontCssUrl,
+  getRenderRuntime: () => renderRuntime,
+  queueWorkspaceSave: () => queueWorkspaceSave?.(),
 })
 
 const layoutTheme = createLayoutThemeController({
@@ -757,7 +774,9 @@ const workspaceSyncController = createWorkspaceSyncController({
   getActiveWorkspaceRecordId: () => activeWorkspaceRecordId,
   getActiveWorkspaceCreatedAt: () => activeWorkspaceCreatedAt,
   getRenderModeValue: () => renderMode.value,
+  getPreviewFontCssUrlValue: () => previewFont.getPreviewFontCssUrl(),
   normalizeRenderMode: mode => normalizeRenderMode(mode),
+  normalizePreviewFontCssUrl,
 })
 
 const getTypecheckSourcePath = () =>
@@ -891,9 +910,14 @@ const {
   workspaceTabsState,
   resolveWorkspaceActiveTabId,
   normalizeRenderMode: mode => normalizeRenderMode(mode),
+  normalizePreviewFontCssUrl,
   getRenderModeValue: () => renderMode.value,
+  getPreviewFontCssUrlValue: () => previewFont.getPreviewFontCssUrl(),
   setRenderModeValue: value => {
     renderMode.value = value
+  },
+  setPreviewFontCssUrlValue: (value, options) => {
+    previewFont.applyPreviewFontCssUrl(value, options)
   },
   getActiveWorkspaceTab,
   onActiveWorkspaceTabChange: (_tab, { changed } = {}) => {
@@ -946,6 +970,13 @@ const {
   makeUniqueTabPath,
   createWorkspaceTabId,
   onWorkspaceRecordApplied: onWorkspaceRecordAppliedWithStatusMetadata,
+})
+
+const applyWorkspaceFontCssUrl = createApplyWorkspaceFontCssUrl({
+  previewFont,
+  flushWorkspaceSave,
+  normalizePreviewFontCssUrl,
+  defaultPreviewFontCssUrl,
 })
 
 const { syncActiveWorkspaceRepositoryScope, forkWorkspaceFromCurrentState } =
@@ -1201,6 +1232,8 @@ const githubWorkflows = createGitHubWorkflowsSetup({
     workspacesShare,
     workspacesNew,
     workspacesSelect,
+    workspacesFontCssUrlInput,
+    workspacesFontCssUrlLoad,
     workspacesOpen,
     workspacesRename,
     workspacesRemove,
@@ -1220,6 +1253,7 @@ const githubWorkflows = createGitHubWorkflowsSetup({
     listLocalContextRecords,
     refreshLocalContextOptions,
     applyWorkspaceRecord,
+    applyWorkspaceFontCssUrl,
     syncActiveWorkspaceRepositoryScope,
     forkWorkspaceFromCurrentState,
     flushWorkspaceSave,
@@ -1424,6 +1458,7 @@ const runtimeCoreOptions = createRuntimeCoreOptions({
   getRenderRuntime: () => renderRuntime,
   getPreviewHost: () => previewHost,
   previewBackground,
+  previewFont,
   clearDiagnosticsScope,
   clearConfirmDialog,
   clearConfirmTitle,
@@ -1602,6 +1637,7 @@ bindAppEventsAndStart({
     typeDiagnostics,
     clipboardSupported,
     previewBackground,
+    previewFont,
     initializeCodeEditors,
   },
 })
