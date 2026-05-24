@@ -442,6 +442,35 @@ test('sass compiler warnings surface in styles diagnostics', async ({ page }) =>
   )
 })
 
+test('css modules nesting compiles without lightning wasm compatibility errors', async ({
+  page,
+}) => {
+  await waitForInitialRender(page)
+
+  await ensurePanelToolsVisible(page, 'styles')
+  await page.getByRole('combobox', { name: 'Style mode' }).selectOption('module')
+  await setStylesEditorSource(
+    page,
+    ['.btn {', '  &:hover {', '    color: red;', '  }', '}'].join('\n'),
+  )
+
+  await expect
+    .poll(async () => {
+      return (
+        await page.getByRole('status', { name: 'App status' }).textContent()
+      )?.trim()
+    })
+    .toBe('Rendered')
+
+  await ensureDiagnosticsDrawerOpen(page)
+  await expect(page.locator('#diagnostics-styles')).not.toContainText(
+    'Style compilation failed.',
+  )
+  await expect(page.locator('#diagnostics-styles')).not.toContainText(
+    'invalid type: unit value, expected a boolean',
+  )
+})
+
 test('clear component diagnostics resets rendered lint-issue status pill', async ({
   page,
 }) => {
