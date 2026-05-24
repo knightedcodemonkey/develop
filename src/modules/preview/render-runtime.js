@@ -318,7 +318,7 @@ export const createRenderRuntimeController = ({
     if (hasNamedInit) {
       await module.init()
     } else if (hasNamedTransform && typeof module.default === 'function') {
-      // @parcel/css-wasm exports default init + named transform.
+      // Common WASM ESM shape: default init + named transform.
       await module.default()
     }
 

@@ -45,24 +45,25 @@ const fallbackCdnProviders = fallbackCdnProvidersByPrimary[primaryCdnProvider] ?
 
 export const cdnImportSpecs = {
   cssBrowser: {
-    importMap: '@knighted/css/browser',
-    esm: '@knighted/css/browser',
-    jspmGa: 'npm:@knighted/css/browser',
+    importMap: '@knighted/css@1.2.1/browser',
+    esm: '@knighted/css@1.2.1/browser',
+    unpkg: '@knighted/css@1.2.1/dist/browser.js?module',
+    jspmGa: 'npm:@knighted/css@1.2.1/browser',
   },
   jsxDom: {
-    importMap: '@knighted/jsx',
-    esm: '@knighted/jsx',
-    jspmGa: 'npm:@knighted/jsx',
+    importMap: '@knighted/jsx@1.14.0',
+    esm: '@knighted/jsx@1.14.0',
+    jspmGa: 'npm:@knighted/jsx@1.14.0',
   },
   jsxTransform: {
-    importMap: '@knighted/jsx/transform',
-    esm: '@knighted/jsx/transform',
-    jspmGa: 'npm:@knighted/jsx/transform',
+    importMap: '@knighted/jsx@1.14.0/transform',
+    esm: '@knighted/jsx@1.14.0/transform',
+    jspmGa: 'npm:@knighted/jsx@1.14.0/transform',
   },
   jsxReact: {
-    importMap: '@knighted/jsx/react',
-    esm: '@knighted/jsx/react',
-    jspmGa: 'npm:@knighted/jsx/react',
+    importMap: '@knighted/jsx@1.14.0/react',
+    esm: '@knighted/jsx@1.14.0/react',
+    jspmGa: 'npm:@knighted/jsx@1.14.0/react',
   },
   react: {
     importMap: 'react',
@@ -100,9 +101,13 @@ export const cdnImportSpecs = {
     jspmGa: 'npm:less',
   },
   lightningCssWasm: {
-    importMap: '@parcel/css-wasm',
-    esm: '@parcel/css-wasm',
-    jspmGa: 'npm:@parcel/css-wasm',
+    /**
+     * Keep this pinned to a runtime version verified with @knighted/css browser.
+     * Drift here can break cssFromSource module transforms (e.g. drafts.nesting).
+     */
+    importMap: 'lightningcss-wasm@1.30.1',
+    esm: 'lightningcss-wasm@1.30.1',
+    jspmGa: 'npm:lightningcss-wasm@1.30.1',
   },
   typescript: {
     importMap: 'typescript',
