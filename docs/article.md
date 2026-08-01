@@ -21,42 +21,44 @@ Open the app, spin up isolated workspaces, edit multiple files in dynamic tabs, 
 
 No local bundler is required for that inner loop.
 
-In DOM mode, JSX expressions resolve to real DOM nodes — no virtual DOM, no diffing, no reconciler. Here is a countdown timer that offloads its tick to a Web Worker and mutates the element JSX returned directly:
+In DOM mode, JSX expressions resolve to real DOM nodes — no virtual DOM, no diffing, no reconciler. Tabs are standard ESM modules too, so your entry tab can import from sibling tabs with relative paths:
+
+`App.tsx`
 
 ```tsx
-export const App = () => {
-  // <div> resolves to a real HTMLDivElement; the cast reflects the runtime type
-  const counterEl = (
-    <div style="font-size: 5rem; font-weight: bold;">100</div>
-  ) as HTMLDivElement
+import { Counter } from './Counter.js'
 
-  const workerCode = `
-    let startTime = performance.now();
-    let ticks = 0;
-    function tick() {
-      ticks++;
-      self.postMessage(100 - ticks);
-      if (ticks < 100) {
-        setTimeout(tick, 1000 - ((performance.now() - startTime) - (ticks * 1000)));
-      }
-    }
-    tick();
-  `
+export const App = () => (
+  <main>
+    <Counter label="Clicks" />
+  </main>
+)
+```
 
-  const worker = new Worker(
-    URL.createObjectURL(new Blob([workerCode], { type: 'application/javascript' })),
-  )
+`Counter.tsx`
 
-  worker.onmessage = e => {
-    counterEl.textContent = String(e.data)
-    if (e.data <= 0) worker.terminate()
+```tsx
+import '../styles/app.css'
+
+type CounterProps = {
+  label: string
+}
+
+export const Counter = ({ label }: CounterProps) => {
+  const el = (
+    <button class="counter-button" type="button">
+      {label}: 0
+    </button>
+  ) as HTMLButtonElement
+  let count = 0
+
+  el.onclick = () => {
+    count += 1
+    el.textContent = `${label}: ${count}`
+    el.classList.toggle('is-even', count % 2 === 0)
   }
 
-  return (
-    <div style="display:flex; justify-content:center; background:#12141c; color:#fff; height:100vh; align-items:center;">
-      {counterEl}
-    </div>
-  )
+  return el
 }
 ```
 
@@ -106,6 +108,7 @@ For prototyping and focused component work, that is worth something.
 
 - Live workbench: https://knightedcodemonkey.github.io/develop/
 - Source: https://github.com/knightedcodemonkey/develop
+- Worker DOM snapshot (Share URL): [Open workspace example](https://knightedcodemonkey.github.io/develop/?sws=H4sIAAAAAAAAE4VWYW_bNhD9Kwd2m-1VkqXUdVM5SpumHVYsWYskxT7UxUJTJ5kJRQokbdc1_N8HklacpN1mwLZ4vHs8vnt39oYsURuuJMmziDDVtBpNWJP6G29JRJhGarE8sSTPXhw-H2ejLB2n6bOIGElbM1eW5BvCS5KTlfm7epaVmLGX8fj5GOMRKw_il-noMD4o8RDT6vBFOUYSEbNoURsssXzvAklEVkrfmpYyvGSqRZIToRgV9zf-wHVnzvMKqY1dvkqitHFZ1i9iJkaGRERjqwLmjBqH1FAuSUTmSN1ZLnL448hW_7loZqhJLhdCuPUVt8JB_KX0LWp4--Hcu50qafGrvbTUul0uKbN8if5wWaI-V6Wzl6ohEamUtKfGfNKC5GRubWvy4dAZTVIrVQukLTcJU82QGXPwqqINF-vivbSoc26piFRrvkWrem5fp1E2SpJnB1GWpknyMk0n2WPLL7v4CzVTVgWALvZeUOddctMKui7MirpiWzozJP-8qydKq9ckIpI27jonbZtY89UxQO2c5MRotmfSDPf7gsp6QWsXdEOX1DDNWxvf-D2tPKMdNjcngbvc6gVGxDCthCB56uQoLUpLcvdkLJy0LRTQH0BxDJupBAhmphaOq3cCCjgq-RKMXQsspp742PBvmMNzjc0EvGGFvJ7bHGZKlJMpOc7S9GhY8uUxUAO_X52fveXLdwIblHayP2TlBXCqSoQCrp0dQKAFY6m2V7xx5hZ1pXRDJcNEqlV_MNn7Wc5uDRSQ7mzVQjLLlfQb_UG4j3t5x6dPJ93aoKiSVhl7jsbQGvtZmkIc3AZ3XryCfjjiCLI0vYfnEHyCamG9S-QcHES__13CEO8v5BY7zF99yGCwP28bHnZf4Q5-8_o7zqAAiSsIHdT_dHGWhInyYXaDzH66OOu77TdCzfqf9yx_iWADdt1iDj3atoIz6uga7uXUg23IyB0YAhMlm8CS0wnuhQJ7kSSucU-DsqCAS6u5rPuYlNTS7n6OzWCBowLSQQdvUTdcUou7y279p3trtAstH8pv11p5JfDrBG4WxvJqHe9EnTN0-UxgRtltrdVClvmT7CAbZWwCTAml8ydVVU1gHuSapelyPgEqeC1jbrExHcKUHG_ubrcNUp5M5Xbi21nXaD_q37jAj__Ts9y85dqu7_pwLVmY-mEWCmrspbddYKMsXs5ptxVcT--6lTet0hZ6STL0XJghbduEGdNzxXJFhdOQ8JuFtUp-1Kp1veFLJegMRQ7G18UZlDwVnN3m0MelIw7O1cLgO_fsC7xUvJzKrYMOsnuA7YSwCaBRBwXb_AcJeLC-O_FoFkKZoMYUU7JjNw7mKfG6LKbkbr3DLTa7h-1x0NHGn-ub5GgYvI-ncrBP9buJ5kaFP86Nin0nzaksBYbki38j4r7S4WkBWbd2CLOODR-bsIXWKO2V10c3-AIZu9kXgkPYo5659omYHH4KwtteP3B2fWPQJuE3EYpdRj_DARRFASm8gl5FhcEe5NBzaus9iPe0n3FjE6vqWmC_x03s0u5Fj6EGvgvDCOha8GH5fQWKXpdx2tsX6x6pWxgeew2RIPRzVfKKY_noL8_2S0TCra7o7P39X8jHf5LS8Xh0cHh4-N9w238AZi93_38JAAA)
 
 If you want a fast product tour, try this sequence:
 

@@ -36,7 +36,7 @@ import { createLayoutDiagnosticsSetup } from './modules/app-core/layout-diagnost
 import { createWorkspaceControllersSetup } from './modules/app-core/workspace-controllers-setup.js'
 import { createWorkspaceScopeForkActions } from './modules/app-core/workspace-scope-fork-actions.js'
 import { createGitHubWorkflowsSetup } from './modules/app-core/github-workflows-setup.js'
-import { defaultCss, defaultJsx } from './modules/app-core/defaults.js'
+import { defaultCss, defaultJsx, defaultModuleJsx } from './modules/app-core/defaults.js'
 import { createGitHubPrContextUiController } from './modules/app-core/github-pr-context-ui.js'
 import { createGitHubTokenInfoUiController } from './modules/app-core/github-token-info-ui.js'
 import {
@@ -227,8 +227,10 @@ const clearConfirmCopy = document.getElementById('clear-confirm-copy')
 const clearConfirmButton = clearConfirmDialog?.querySelector('button[value="confirm"]')
 
 const defaultComponentTabPath = 'src/components/App.tsx'
+const defaultModuleTabPath = 'src/components/Counter.tsx'
 const defaultStylesTabPath = 'src/styles/app.css'
 const defaultComponentTabName = 'App.tsx'
+const defaultModuleTabName = 'Counter.tsx'
 const defaultStylesTabName = 'app.css'
 const editorKinds = ['component', 'styles']
 const editorPanelsByKind = {
@@ -278,6 +280,15 @@ const workspaceTabsState = createWorkspaceTabsState({
       role: 'entry',
       isActive: true,
       content: defaultJsx,
+    },
+    {
+      id: 'counter',
+      name: defaultModuleTabName,
+      path: defaultModuleTabPath,
+      language: 'javascript-jsx',
+      role: 'module',
+      isActive: false,
+      content: defaultModuleJsx,
     },
     {
       id: 'styles',
