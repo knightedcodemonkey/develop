@@ -25,7 +25,7 @@ import {
   waitForAppReady,
 } from './github-pr-drawer.helpers.js'
 
-test('Open PR drawer confirms and submits component/styles filepaths', async ({
+test('Open PR drawer confirms and submits default workspace filepaths', async ({
   page,
 }) => {
   const customCommitMessage = 'chore: sync develop editor outputs'
@@ -191,7 +191,19 @@ test('Open PR drawer confirms and submits component/styles filepaths', async ({
   expect(createdRefPayload?.ref).toBe('refs/heads/Develop/Open-Pr-Test')
   expect(createdRefPayload?.sha).toBe('abc123mainsha')
   expect(treeRequests).toHaveLength(1)
-  expect((treeRequests[0]?.tree as Array<Record<string, unknown>>)?.length).toBe(2)
+  const submittedTree = treeRequests[0]?.tree
+  expect(Array.isArray(submittedTree)).toBe(true)
+  const submittedPaths = (submittedTree as Array<Record<string, unknown>>).map(
+    entry => entry.path,
+  )
+  expect(submittedPaths).toHaveLength(3)
+  expect(submittedPaths).toEqual(
+    expect.arrayContaining([
+      'src/components/App.tsx',
+      'src/components/Counter.tsx',
+      'src/styles/app.css',
+    ]),
+  )
   expect(commitRequests).toHaveLength(1)
   expect(commitRequests[0]?.message).toBe(customCommitMessage)
   expect(updateRefRequests).toHaveLength(1)
@@ -2083,7 +2095,19 @@ test('Open PR drawer uses Git Database API atomic commit path by default', async
   )
 
   expect(treeRequests).toHaveLength(1)
-  expect((treeRequests[0]?.tree as Array<Record<string, unknown>>)?.length).toBe(2)
+  const submittedTree = treeRequests[0]?.tree
+  expect(Array.isArray(submittedTree)).toBe(true)
+  const submittedPaths = (submittedTree as Array<Record<string, unknown>>).map(
+    entry => entry.path,
+  )
+  expect(submittedPaths).toHaveLength(3)
+  expect(submittedPaths).toEqual(
+    expect.arrayContaining([
+      'src/components/App.tsx',
+      'src/components/Counter.tsx',
+      'src/styles/app.css',
+    ]),
+  )
   expect(commitRequests).toHaveLength(1)
   expect(updateRefRequests).toHaveLength(1)
   expect(updateRefRequests[0]?.sha).toBe('new-commit-sha')
