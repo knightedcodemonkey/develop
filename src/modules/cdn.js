@@ -42,6 +42,10 @@ const fallbackCdnProvidersByPrimary = {
 }
 
 const fallbackCdnProviders = fallbackCdnProvidersByPrimary[primaryCdnProvider] ?? []
+const jsxWasmPinnedDeps =
+  'deps=oxc-parser@0.132.0,@oxc-parser/binding-wasm32-wasi@0.132.0,@napi-rs/wasm-runtime@1.1.4'
+const jsxTransformWasmPinnedDeps =
+  'deps=oxc-parser@0.132.0,oxc-transform@0.132.0,@oxc-parser/binding-wasm32-wasi@0.132.0,@oxc-transform/binding-wasm32-wasi@0.132.0,@napi-rs/wasm-runtime@1.1.4'
 
 export const cdnImportSpecs = {
   cssBrowser: {
@@ -52,17 +56,17 @@ export const cdnImportSpecs = {
   },
   jsxDom: {
     importMap: '@knighted/jsx@1.14.0',
-    esm: '@knighted/jsx@1.14.0',
+    esm: `@knighted/jsx@1.14.0?bundle&target=es2022&${jsxWasmPinnedDeps}`,
     jspmGa: 'npm:@knighted/jsx@1.14.0',
   },
   jsxTransform: {
     importMap: '@knighted/jsx@1.14.0/transform',
-    esm: '@knighted/jsx@1.14.0/transform',
+    esm: `@knighted/jsx@1.14.0/transform?bundle&target=es2022&${jsxTransformWasmPinnedDeps}`,
     jspmGa: 'npm:@knighted/jsx@1.14.0/transform',
   },
   jsxReact: {
     importMap: '@knighted/jsx@1.14.0/react',
-    esm: '@knighted/jsx@1.14.0/react',
+    esm: `@knighted/jsx@1.14.0/react?bundle&target=es2022&${jsxWasmPinnedDeps}`,
     jspmGa: 'npm:@knighted/jsx@1.14.0/react',
   },
   react: {
