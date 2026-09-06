@@ -1,23 +1,24 @@
-export const chatCompletionsUrl = 'https://models.github.ai/inference/chat/completions'
+export const chatCompletionsUrl = 'https://openrouter.ai/api/v1/chat/completions'
+export const openRouterKeysUrl = 'https://openrouter.ai/keys'
 
-export const defaultChatModel = 'openai/gpt-4.1-mini'
+/* The free router auto-selects a free model, so it survives free-slug churn. */
+export const defaultChatModel = 'openrouter/free'
 
-/* Local model options avoid browser CORS failures when calling catalog endpoints directly. */
+/*
+ * Fallback catalog for when the live model list is unavailable. Every entry is
+ * tool-capable, since editor proposals depend on tool calling.
+ */
 export const chatModelOptions = [
-  'openai/gpt-4.1-mini',
-  'openai/gpt-4.1',
-  'openai/gpt-4.1-nano',
-  'openai/gpt-4o',
-  'openai/gpt-4o-mini',
-  'openai/gpt-5',
-  'openai/gpt-5-chat',
-  'openai/gpt-5-mini',
-  'openai/gpt-5-nano',
-  'cohere/cohere-command-r-plus-08-2024',
-  'deepseek/deepseek-v3-0324',
-  'meta/llama-4-maverick-17b-128e-instruct-fp8',
-  'meta/llama-4-scout-17b-16e-instruct',
-  'mistral-ai/ministral-3b',
-  'mistral-ai/mistral-medium-2505',
-  'mistral-ai/mistral-small-2503',
+  'openrouter/free',
+  'nvidia/nemotron-3-ultra-550b-a55b:free',
+  'minimax/minimax-m3:free',
+  'google/gemma-4-31b-it:free',
+  'thinkingmachines/inkling:free',
+  'openai/gpt-6-astra',
+  'anthropic/claude-sonnet-5',
+  'google/gemini-3.8-flash',
+  'deepseek/deepseek-v4-flash-0731',
 ]
+
+export const isFreeChatModel = model =>
+  typeof model === 'string' && (model === 'openrouter/free' || model.endsWith(':free'))

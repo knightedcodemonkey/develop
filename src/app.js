@@ -132,6 +132,10 @@ const aiChatSend = document.getElementById('ai-chat-send')
 const aiChatStatus = document.getElementById('ai-chat-status')
 const aiChatRepository = document.getElementById('ai-chat-repository')
 const aiChatMessages = document.getElementById('ai-chat-messages')
+const aiChatKey = document.getElementById('ai-chat-key')
+const aiChatKeyInput = document.getElementById('ai-chat-key-input')
+const aiChatKeyAdd = document.getElementById('ai-chat-key-add')
+const aiChatKeyDelete = document.getElementById('ai-chat-key-delete')
 const githubPrToggle = document.getElementById('github-pr-toggle')
 const githubPrToggleLabel = document.getElementById('github-pr-toggle-label')
 const githubPrToggleIcon = document.getElementById('github-pr-toggle-icon')
@@ -523,7 +527,6 @@ let chatDrawerController = {
   setOpen: () => {},
   setSelectedRepository: () => {},
   onActiveWorkspaceTabChange: () => {},
-  setToken: () => {},
   dispose: () => {},
 }
 
@@ -552,12 +555,8 @@ const prContextUi = createGitHubPrContextUiController({
   stylesPrSyncIcon,
   stylesPrSyncIconPath,
   githubPrContextClose,
-  aiChatToggle,
   githubPrOpenIcon,
   githubPrPushCommitIcon,
-  closeChatDrawer: () => {
-    chatDrawerController.setOpen(false)
-  },
   closePrDrawer: () => {
     prDrawerController.setOpen(false)
   },
@@ -634,8 +633,7 @@ const byotControls = createGitHubByotControls({
   onTokenChange: token => {
     githubAiContextState.token = token
     workspaceContextStatusController.syncTokenState(token)
-    prContextUi.syncAiChatTokenVisibility(token)
-    chatDrawerController.setToken(token)
+    prContextUi.syncPrSurfaceVisibility(token)
     prDrawerController.setToken(token)
     editedIndicatorVisibilityController.refreshIndicators()
   },
@@ -1172,7 +1170,7 @@ const onPrContextStateChange = createPrContextStateChangeHandler({
   editedIndicatorVisibilityController,
 })
 
-const githubChatWorkspaceActions = createChatWorkspaceActions({
+const chatWorkspaceActions = createChatWorkspaceActions({
   getActiveWorkspaceTab,
   isStyleWorkspaceTab,
   getCssSource: () => getCssSource(),
@@ -1383,9 +1381,12 @@ const chatWorkflows = initializeChatWorkflows({
   aiChatStatus,
   aiChatRepository,
   aiChatMessages,
-  getToken: getCurrentGitHubToken,
+  aiChatKey,
+  aiChatKeyInput,
+  aiChatKeyAdd,
+  aiChatKeyDelete,
   getSelectedRepository: getCurrentSelectedRepository,
-  ...githubChatWorkspaceActions,
+  ...chatWorkspaceActions,
   getRenderMode: () => renderMode.value,
   getStyleMode: () => styleMode.value,
   getPersistedActivePrContext,

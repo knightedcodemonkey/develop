@@ -6,6 +6,7 @@ import {
 } from './api/completions.js'
 import {
   formatModelAccessErrorMessage,
+  isCredentialError,
   isModelAccessError,
   isModelAccessStatusMessage,
   toChatText,
@@ -13,12 +14,16 @@ import {
   toRepositoryLabel,
   toRepositoryUrl,
 } from './utils.js'
+import { createChatKeyControls } from './key-controls.js'
 import {
   buildActiveTabEditorContext,
   normalizeWorkspaceTabContext,
   normalizeWorkspaceTabContexts,
 } from './active-tab-context.js'
-import { buildOutboundMessages as buildPayloadMessages } from './payload.js'
+import {
+  buildOutboundMessages as buildPayloadMessages,
+  shouldEnableEditorUpdateTools,
+} from './payload.js'
 import { editorProposalTools, toMessageEditorProposals } from './proposals.js'
 import { resolveWorkspaceTabTarget } from './tab-target-resolver.js'
 import { createTabScopedUndoState } from './tab-scoped-undo-state.js'
@@ -59,8 +64,11 @@ export const createChatDrawer = ({
   statusNode,
   repositoryNode,
   messagesNode,
+  keyRoot,
+  keyInput,
+  keyAddButton,
+  keyDeleteButton,
   includeEditorsContextToggle,
-  getToken,
   getSelectedRepository,
   getWorkspaceTabContexts,
   applyWorkspaceTabContent,
@@ -177,6 +185,32 @@ export const createChatDrawer = ({
     modelSelect.disabled = isDisabled
   }
 
+  const keyControls = createChatKeyControls({
+    root: keyRoot,
+    input: keyInput,
+    addButton: keyAddButton,
+    deleteButton: keyDeleteButton,
+    onKeyChange: nextKey => {
+      syncModelSelectionForKey(nextKey)
+      syncComposerAvailability()
+    },
+  })
+
+  const getChatKey = () => keyControls.getKey()
+  const hasChatKey = () => keyControls.hasKey()
+
+  const syncComposerAvailability = () => {
+    const keyPresent = hasChatKey()
+
+    if (promptInput instanceof HTMLTextAreaElement) {
+      promptInput.disabled = !keyPresent
+    }
+
+    if (sendButton instanceof HTMLButtonElement) {
+      sendButton.disabled = !keyPresent
+    }
+  }
+
   const replaceModelOptions = ({ modelIds, selectedModel }) => {
     if (!(modelSelect instanceof HTMLSelectElement)) {
       return
@@ -215,16 +249,16 @@ export const createChatDrawer = ({
     })
   }
 
-  const syncModelSelectionForToken = token => {
-    const hasToken = typeof token === 'string' && token.trim().length > 0
+  const syncModelSelectionForKey = key => {
+    const keyPresent = typeof key === 'string' && key.trim().length > 0
 
-    setModelSelectDisabled(!hasToken)
+    setModelSelectDisabled(!keyPresent)
 
-    if (!hasToken && modelSelect instanceof HTMLSelectElement) {
+    if (!keyPresent && modelSelect instanceof HTMLSelectElement) {
       modelSelect.value = defaultChatModel
     }
 
-    if (hasToken && isModelAccessStatusMessage(statusNode?.textContent)) {
+    if (keyPresent && isModelAccessStatusMessage(statusNode?.textContent)) {
       setChatStatus('Idle', 'neutral')
     }
   }
@@ -512,6 +546,7 @@ export const createChatDrawer = ({
   const resolveMessageProposals = message => {
     const proposals = toMessageEditorProposals(message, {
       fallbackTarget: getFallbackProposalTarget(),
+      allowMarkdownFallback: message?.allowApplyActions === true,
     })
     const workspaceTabs = getWorkspaceTabs()
     const activeTabId = getActiveTabContext()?.id || ''
@@ -547,6 +582,7 @@ export const createChatDrawer = ({
 
     const proposals = toMessageEditorProposals(message, {
       fallbackTarget: getFallbackProposalTarget(),
+      allowMarkdownFallback: message?.allowApplyActions === true,
     })
     const proposal = proposals[proposalOriginalIndex]
     if (!proposal) {
@@ -683,21 +719,21 @@ export const createChatDrawer = ({
   }
 
   const setPendingState = isPending => {
+    const composerEnabled = !isPending && hasChatKey()
+
     if (sendButton instanceof HTMLButtonElement) {
-      sendButton.disabled = isPending
+      sendButton.disabled = !composerEnabled
     }
 
     if (promptInput instanceof HTMLTextAreaElement) {
-      promptInput.disabled = isPending
+      promptInput.disabled = !composerEnabled
     }
 
     if (modelSelect instanceof HTMLSelectElement) {
       if (isPending) {
         modelSelect.disabled = true
       } else {
-        const token = getToken?.()
-        const hasToken = typeof token === 'string' && token.trim().length > 0
-        modelSelect.disabled = !hasToken
+        modelSelect.disabled = !hasChatKey()
       }
     }
 
@@ -714,11 +750,21 @@ export const createChatDrawer = ({
     const normalizedContent = typeof content === 'string' ? content : lastMessage.content
     const hasContent =
       typeof normalizedContent === 'string' && normalizedContent.trim().length > 0
+    const hasActionableToolProposal =
+      !hasContent &&
+      normalizedToolCalls.length > 0 &&
+      resolveMessageProposals({
+        role: 'assistant',
+        content: normalizedContent,
+        toolCalls: normalizedToolCalls,
+      }).length > 0
 
     lastMessage.content =
       hasContent || normalizedToolCalls.length === 0
         ? normalizedContent
-        : 'Proposed editor update is ready. Apply below.'
+        : hasActionableToolProposal
+          ? 'Proposed editor update is ready. Apply below.'
+          : 'Proposed editor update is ready, but I could not match its target to an open tab. Ask me to target the active tab or one of the listed tab ids or paths.'
     lastMessage.toolCalls = normalizedToolCalls
 
     if (typeof model === 'string' && model.trim()) {
@@ -742,13 +788,16 @@ export const createChatDrawer = ({
       return
     }
 
-    const token = getToken?.()
+    const token = getChatKey()
     if (!token) {
-      setChatStatus('Add a GitHub token before starting chat.', 'error')
+      setChatStatus('Add an OpenRouter API key before starting chat.', 'error')
       return
     }
 
     const selectedModel = getSelectedModel()
+    const allowEditorUpdateTools =
+      includeEditorsContextToggle?.checked === true &&
+      shouldEnableEditorUpdateTools(prompt)
 
     stopPendingRequest()
     const requestAbortController = new AbortController()
@@ -756,18 +805,25 @@ export const createChatDrawer = ({
     pendingAbortController = requestAbortController
 
     appendMessage({ role: 'user', content: prompt })
-    appendMessage({ role: 'assistant', content: '', model: selectedModel })
+    appendMessage({
+      role: 'assistant',
+      content: '',
+      model: selectedModel,
+      allowApplyActions: allowEditorUpdateTools,
+    })
+
     if (promptInput instanceof HTMLTextAreaElement) {
       promptInput.value = ''
     }
 
     setPendingState(true)
-    setChatStatus('Streaming response from GitHub...', 'pending')
+    setChatStatus('Streaming response...', 'pending')
 
     const repositoryContext = collectRepositoryContext()
     const editorContext = collectEditorContext()
     const outboundMessages = buildRequestMessages({ repositoryContext, editorContext })
-    const toolChoice = includeEditorsContextToggle?.checked ? 'auto' : 'none'
+    const toolChoice = allowEditorUpdateTools ? 'auto' : 'none'
+    const tools = allowEditorUpdateTools ? editorProposalTools : []
 
     let streamedContent = ''
     let streamSucceeded = false
@@ -777,7 +833,7 @@ export const createChatDrawer = ({
         token,
         messages: outboundMessages,
         model: selectedModel,
-        tools: editorProposalTools,
+        tools,
         toolChoice,
         signal: requestSignal,
         onToken: tokenChunk => {
@@ -794,7 +850,7 @@ export const createChatDrawer = ({
         toolCalls: streamResult?.toolCalls,
         model: streamedModel,
       })
-      setChatStatus('Response streamed from GitHub.', 'ok')
+      setChatStatus('Response streamed.', 'ok')
     } catch (streamError) {
       if (requestSignal.aborted) {
         if (pendingAbortController === requestAbortController) {
@@ -823,6 +879,25 @@ export const createChatDrawer = ({
         return
       }
 
+      if (isCredentialError(streamError)) {
+        const credentialMessage =
+          streamError instanceof Error ? streamError.message : 'Chat request failed.'
+
+        updateLastAssistantMessage(credentialMessage)
+        const lastMessage = messages[messages.length - 1]
+        if (lastMessage) {
+          lastMessage.level = 'error'
+        }
+        renderMessages()
+        setChatStatus(credentialMessage, 'error')
+
+        if (pendingAbortController === requestAbortController) {
+          pendingAbortController = null
+          setPendingState(false)
+        }
+        return
+      }
+
       setChatStatus(
         'Streaming unavailable. Retrying with fallback response...',
         'pending',
@@ -842,7 +917,7 @@ export const createChatDrawer = ({
         token,
         messages: outboundMessages,
         model: selectedModel,
-        tools: editorProposalTools,
+        tools,
         toolChoice,
         signal: requestSignal,
       })
@@ -892,7 +967,8 @@ export const createChatDrawer = ({
   toggleButton?.setAttribute('aria-expanded', 'false')
   drawer?.setAttribute('hidden', '')
   initializeModelOptions()
-  syncModelSelectionForToken(getToken?.())
+  syncModelSelectionForKey(getChatKey())
+  syncComposerAvailability()
   syncRepositoryLabel()
   ensureUndoActionsNode()
   renderMessages()
@@ -1016,15 +1092,13 @@ export const createChatDrawer = ({
     onActiveWorkspaceTabChange: () => {
       renderMessages()
     },
-    setToken: token => {
-      syncModelSelectionForToken(token)
-    },
     dispose: () => {
       stopPendingRequest()
       setPendingState(false)
       cancelPendingAssistantBodyUpdate()
       pendingAssistantBodyText = null
       resetChatContextState()
+      keyControls.dispose()
       if (undoActionsNode) {
         undoActionsNode.remove()
         undoActionsNode = null

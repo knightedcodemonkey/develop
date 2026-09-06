@@ -43,6 +43,45 @@ Chat no longer depends on a selected repository. Local-mode users can chat to up
 editor tab with no GitHub connection at all. A selected repository remains useful context
 when one is connected, but it is never a precondition.
 
+## Implementation status (updated 2026-09-06)
+
+### Done
+
+- Phase 1 completed: chat extracted to `src/modules/chat` and decoupled from
+  `src/modules/github` imports.
+- Phase 2 completed for core runtime path:
+  - OpenRouter chat completions endpoint is live.
+  - OpenRouter header and error handling is implemented.
+  - Streaming and fallback request paths are both wired.
+  - Live verification confirmed SSE keepalive comment handling and `[DONE]` sentinel flow.
+- Phase 3 completed:
+  - Chat toggle remains visible regardless of GitHub PAT state.
+  - Chat works with no repository selected (local mode).
+  - In-drawer OpenRouter key controls are implemented with independent storage.
+  - PR visibility logic was split away from chat visibility behavior.
+- Security and UX hardening completed after initial migration:
+  - Proposal/apply actions are intent-gated (explicit edit intent required).
+  - Read-only prompts do not surface apply actions from markdown fallback.
+  - Unmatched proposal targets show guidance instead of a misleading apply prompt.
+  - OpenRouter key controls now reuse the GitHub PAT-style control pattern and trash icon.
+- Tests and checks completed for the implemented behaviors:
+  - Focused Playwright coverage added for intent gating, tab-context sending, and apply behavior.
+  - Lint checks are passing.
+
+### Remaining
+
+- Phase 4 model catalog work is not yet implemented in runtime code:
+  - No live `/api/v1/models` fetch integration yet.
+  - Free vs paid grouping in the model picker is still pending.
+  - Tool-support filtering from live model metadata is still pending.
+- Phase 5 remains partial:
+  - Chat tests still live inside `playwright/github-byot-ai.spec.ts` rather than a split chat spec path.
+  - Dedicated OpenRouter usage docs listed below are not fully completed.
+- Live production verification still pending for exhaustion states:
+  - 402 out-of-credits behavior.
+  - 429 rate-limit behavior.
+- Optional one-time migration notice behavior is still pending.
+
 ### Correction to a common assumption
 
 OpenRouter's free models are **not** keyless. Every request to the OpenRouter API requires
@@ -71,8 +110,18 @@ plan's assumptions are measured rather than inferred.
 | Exposed response headers             | Only `content-type` and `cf-ray`                                         |
 | Catalog size                         | 430 models, 21 free, 18 free with `tools` support                        |
 
-Still unverified, because both require a funded key: SSE keepalive handling, and the
-402 / 404 / 429 error mappings. Both are Phase 2 opening tasks.
+Still unverified, because both require exhausting an account: the 402 (out of credits) and
+429 (rate limited) mappings.
+
+### Verified live with a funded key
+
+| Check                        | Result                                                                     |
+| ---------------------------- | -------------------------------------------------------------------------- |
+| SSE keepalive comments       | `: OPENROUTER PROCESSING` lines do appear; `parseSseDataLine` ignores them |
+| `data: [DONE]` sentinel      | Present and handled                                                        |
+| Invalid model slug           | Returns **400**, not 404 — `"... is not a valid model ID"`                 |
+| Tool calling on a free model | `openrouter/free` emits a real `propose_editor_update` call                |
+| Apply + undo round trip      | Proposal applies to the editor tab and the undo action appears             |
 
 ## Current state
 
@@ -238,15 +287,15 @@ still opens and renders.
 
    | Status | Meaning                | Drawer message                                       |
    | ------ | ---------------------- | ---------------------------------------------------- |
+   | 400    | Unknown model slug     | Model unavailable; pick another                      |
    | 401    | Invalid or revoked key | Key rejected; re-enter or create a new one           |
    | 402    | Out of credits         | Out of credits; add credits or pick a free model     |
-   | 404    | Unknown model slug     | Model unavailable; pick another                      |
    | 429    | Rate limited           | Free-model daily limit reached, or too many requests |
 
    The 402 and 429 cases are the ones users on free models will actually hit, so their copy
    should name the free-model limits explicitly and point at the free-model filter in the
-   picker. Only the 401 mapping is verified; OpenRouter checks auth before model validity,
-   so 402/404/429 could not be provoked with an invalid key. Confirm each during Phase 2.
+   picker. 400 and 401 are verified live. 402 and 429 remain unverified, since provoking
+   them means exhausting an account.
 
 8. **Rate metadata.** Delete header-based rate parsing entirely rather than porting it.
    Verified: OpenRouter exposes only `content-type` and `cf-ray` to browser JavaScript via
@@ -412,10 +461,10 @@ those 21 advertise tool support.
 | Browser CORS on `/api/v1/models`                | Resolved | Verified: accessible cross-origin, no key required                                                                                                             |
 | Free models lack tool support                   | Resolved | Verified: 18 of 21 free models advertise `tools` in `supported_parameters`                                                                                     |
 | Rate-limit headers unreadable in browser        | Resolved | Verified: only `content-type` and `cf-ray` exposed. Drop header parsing; use `/api/v1/key` if needed                                                           |
-| SSE keepalive comments break the stream reader  | Open     | Needs a funded key. First task of Phase 2                                                                                                                      |
-| 402/404/429 mappings unconfirmed                | Open     | Auth is checked first, so these need a valid key to provoke. Confirm during Phase 2                                                                            |
-| `syncAiChatTokenVisibility` split leaves gaps   | Open     | Enumerated above; explicit matrix coverage in Playwright                                                                                                       |
-| Repository-independent chat hits untested paths | Open     | Audit list above; local-mode specs with no PAT                                                                                                                 |
+| SSE keepalive comments break the stream reader  | Resolved | Verified live with a funded key; keepalive comments are ignored and stream completion is handled correctly                                                     |
+| 402/404/429 mappings unconfirmed                | Partial  | 400 invalid model behavior is verified; 402 out-of-credits and 429 rate-limit remain to be validated against exhausted-account conditions                      |
+| `syncAiChatTokenVisibility` split leaves gaps   | Resolved | Chat visibility is decoupled from PAT gating; PR surface visibility remains PAT-scoped                                                                         |
+| Repository-independent chat hits untested paths | Partial  | Core no-repository behavior is implemented and covered by focused tests; broader cross-browser matrix coverage remains                                         |
 | Pinned default free slug goes away              | Open     | 404 on default falls back to the picker; periodic sanity check                                                                                                 |
 | 50 req/day free limit feels broken to users     | Open     | Explicit 429 copy naming the limit and the credits threshold                                                                                                   |
 | Key in `localStorage` is XSS-exposed            | Accepted | Same threat model as the existing PAT; document it, and note the OpenRouter key is scoped to inference spend only, unlike the PAT which can write repositories |
