@@ -1,4 +1,4 @@
-import { defaultGitHubChatModel } from '../api/chat.js'
+import { defaultChatModel } from './api/completions.js'
 
 export const toChatText = value => {
   if (typeof value !== 'string') {
@@ -10,11 +10,11 @@ export const toChatText = value => {
 
 export const toModelId = value => {
   if (typeof value !== 'string') {
-    return defaultGitHubChatModel
+    return defaultChatModel
   }
 
   const model = value.trim()
-  return model || defaultGitHubChatModel
+  return model || defaultChatModel
 }
 
 export const isModelAccessError = error => {
@@ -35,7 +35,7 @@ export const isModelAccessError = error => {
 
 export const formatModelAccessErrorMessage = selectedModel => {
   const model = toModelId(selectedModel)
-  return `Selected model "${model}" is not available for this token. Choose a different model.`
+  return `Selected model "${model}" is not available for this key. Choose a different model.`
 }
 
 export const isModelAccessStatusMessage = value => {
@@ -44,7 +44,7 @@ export const isModelAccessStatusMessage = value => {
   }
 
   return (
-    value.startsWith('Selected model "') && value.includes('not available for this token')
+    value.startsWith('Selected model "') && value.includes('not available for this key')
   )
 }
 

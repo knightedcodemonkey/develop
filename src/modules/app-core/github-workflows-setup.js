@@ -35,7 +35,6 @@ const createGitHubWorkflowsSetup = ({
     getEditorSyncTargets: workspace.getEditorSyncTargets,
     getRenderMode: runtime.getRenderMode,
     getStyleMode: runtime.getStyleMode,
-    getPersistedActivePrContext: runtime.getPersistedActivePrContext,
     setCurrentSelectedRepository: byot.setCurrentSelectedRepository,
     clearCurrentSelectedRepository: byot.clearCurrentSelectedRepository,
     reconcileWorkspaceTabsWithPushUpdates:
@@ -56,9 +55,6 @@ const createGitHubWorkflowsSetup = ({
     setStatus: actions.setStatus,
     showAppToast: actions.showAppToast,
     shareCurrentLocalWorkspace: actions.shareCurrentLocalWorkspace,
-    getActiveWorkspaceTabContext: actions.getActiveWorkspaceTabContext,
-    getWorkspaceTabContexts: actions.getWorkspaceTabContexts,
-    applyWorkspaceTabContent: actions.applyWorkspaceTabContent,
     scheduleRender: actions.scheduleRender,
     applyWorkspaceFontCssUrl: workspace.applyWorkspaceFontCssUrl,
   })

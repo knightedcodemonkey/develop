@@ -1,9 +1,9 @@
 import {
-  defaultGitHubChatModel,
-  githubChatModelOptions,
-  requestGitHubChatCompletion,
-  streamGitHubChatCompletion,
-} from '../api/chat.js'
+  chatModelOptions,
+  defaultChatModel,
+  requestChatCompletion,
+  streamChatCompletion,
+} from './api/completions.js'
 import {
   formatModelAccessErrorMessage,
   isModelAccessError,
@@ -48,7 +48,7 @@ const createMessageLabelIconTemplate = role => {
   return svg
 }
 
-export const createGitHubChatDrawer = ({
+export const createChatDrawer = ({
   toggleButton,
   drawer,
   closeButton,
@@ -183,7 +183,7 @@ export const createGitHubChatDrawer = ({
     }
 
     const nextSelectedModel = toModelId(selectedModel)
-    const nextModelIds = [...new Set([defaultGitHubChatModel, ...modelIds])]
+    const nextModelIds = [...new Set([defaultChatModel, ...modelIds])]
 
     modelSelect.replaceChildren()
 
@@ -196,13 +196,13 @@ export const createGitHubChatDrawer = ({
     }
 
     if (!nextModelIds.includes(nextSelectedModel)) {
-      modelSelect.value = defaultGitHubChatModel
+      modelSelect.value = defaultChatModel
     }
   }
 
   const getSelectedModel = () => {
     if (!(modelSelect instanceof HTMLSelectElement)) {
-      return defaultGitHubChatModel
+      return defaultChatModel
     }
 
     return toModelId(modelSelect.value)
@@ -210,8 +210,8 @@ export const createGitHubChatDrawer = ({
 
   const initializeModelOptions = () => {
     replaceModelOptions({
-      modelIds: githubChatModelOptions,
-      selectedModel: defaultGitHubChatModel,
+      modelIds: chatModelOptions,
+      selectedModel: defaultChatModel,
     })
   }
 
@@ -221,7 +221,7 @@ export const createGitHubChatDrawer = ({
     setModelSelectDisabled(!hasToken)
 
     if (!hasToken && modelSelect instanceof HTMLSelectElement) {
-      modelSelect.value = defaultGitHubChatModel
+      modelSelect.value = defaultChatModel
     }
 
     if (hasToken && isModelAccessStatusMessage(statusNode?.textContent)) {
@@ -773,7 +773,7 @@ export const createGitHubChatDrawer = ({
     let streamSucceeded = false
 
     try {
-      const streamResult = await streamGitHubChatCompletion({
+      const streamResult = await streamChatCompletion({
         token,
         messages: outboundMessages,
         model: selectedModel,
@@ -838,7 +838,7 @@ export const createGitHubChatDrawer = ({
     }
 
     try {
-      const fallbackResult = await requestGitHubChatCompletion({
+      const fallbackResult = await requestChatCompletion({
         token,
         messages: outboundMessages,
         model: selectedModel,

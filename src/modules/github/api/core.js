@@ -39,13 +39,6 @@ const buildRequestHeaders = token => ({
   'X-GitHub-Api-Version': '2022-11-28',
 })
 
-const buildChatRequestHeaders = ({ token, stream }) => ({
-  Accept: stream ? 'text/event-stream' : 'application/json',
-  Authorization: `Bearer ${token}`,
-  'Content-Type': 'application/json',
-  'X-GitHub-Api-Version': '2022-11-28',
-})
-
 const toFiniteNumber = value => {
   if (value === null || value === undefined) {
     return null
@@ -204,7 +197,6 @@ const buildRepoApiUrl = ({ owner, repo, path }) =>
   `${githubApiBaseUrl}/repos/${owner}/${repo}${path}`
 
 export {
-  buildChatRequestHeaders,
   buildRepoApiUrl,
   buildRequestHeaders,
   encodePathForApi,
