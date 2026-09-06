@@ -28,7 +28,7 @@ export const isModelAccessError = error => {
   }
 
   /* OpenRouter reports an unknown slug as 400 "... is not a valid model ID". */
-  if (error?.status === 400 && message.includes('model')) {
+  if (error?.status === 400 && message.includes('not a valid model')) {
     return true
   }
 

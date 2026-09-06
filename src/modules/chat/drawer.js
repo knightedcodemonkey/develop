@@ -898,6 +898,29 @@ export const createChatDrawer = ({
         return
       }
 
+      const streamStatus = streamError?.status
+      if (typeof streamStatus === 'number' && streamStatus >= 400 && streamStatus < 500) {
+        const streamMessage =
+          streamError instanceof Error ? streamError.message : 'Chat request failed.'
+
+        updateLastAssistantMessage(streamMessage)
+        const lastMessage = messages[messages.length - 1]
+
+        if (lastMessage) {
+          lastMessage.level = 'error'
+        }
+
+        renderMessages()
+        setChatStatus(streamMessage, 'error')
+
+        if (pendingAbortController === requestAbortController) {
+          pendingAbortController = null
+          setPendingState(false)
+        }
+
+        return
+      }
+
       setChatStatus(
         'Streaming unavailable. Retrying with fallback response...',
         'pending',

@@ -719,7 +719,7 @@ test('chat stays usable after opening a Local workspace with PAT connected', asy
     },
   ])
 
-  await connectByotWithSingleRepo(page)
+  await connectByotWithSingleRepo(page, { assertPrRepositorySelected: false })
   await openStoredWorkspaceContextById(page, localWorkspaceId, {
     repositoryFilter: '__local__',
   })
@@ -1093,7 +1093,8 @@ test('AI chat can disable editor context payload via checkbox', async ({ page })
   )
 
   expect(streamRequestBody?.metadata).toBeUndefined()
-  expect(streamRequestBody?.tool_choice).toBe('none')
+  expect(streamRequestBody?.tool_choice).toBeUndefined()
+  expect(streamRequestBody?.tools).toBeUndefined()
   const systemMessages = streamRequestBody?.messages?.filter(
     (message: ChatRequestMessage) => message.role === 'system',
   )
