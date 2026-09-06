@@ -408,8 +408,22 @@ export const ensureDiagnosticsDrawerClosed = async (page: Page) => {
   await expect(page.getByRole('complementary', { name: 'Diagnostics' })).toBeHidden()
 }
 
+export const openRouterTestKey = 'sk-or-v1-fake-chat-key-1234567890'
+
+export const connectOpenRouterKey = async (
+  page: Page,
+  key: string = openRouterTestKey,
+) => {
+  await ensureAiChatDrawerOpen(page)
+  await page.getByLabel('OpenRouter API key', { exact: true }).fill(key)
+  await page.getByRole('button', { name: 'Save OpenRouter API key' }).click()
+  await expect(
+    page.getByRole('button', { name: 'Remove OpenRouter API key' }),
+  ).toBeVisible()
+}
+
 export const ensureAiChatDrawerOpen = async (page: Page) => {
-  const toggle = page.getByRole('button', { name: 'Chat' })
+  const toggle = page.getByRole('button', { name: 'Chat', exact: true })
   const isExpanded = await toggle.getAttribute('aria-expanded')
 
   if (isExpanded !== 'true') {

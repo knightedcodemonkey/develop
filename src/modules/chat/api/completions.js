@@ -308,8 +308,8 @@ const streamChatCompletion = async ({
   })
 
   if (!response.ok) {
-    const { message, rateLimit } = await parseErrorResponse(response)
-    throw toApiError({ message, rateLimit })
+    const { message, status, rateLimit } = await parseErrorResponse(response)
+    throw toApiError({ message, status, rateLimit })
   }
 
   if (!response.body) {
@@ -388,7 +388,7 @@ const streamChatCompletion = async ({
     content: combined,
     toolCalls: streamingToolCalls,
     model: responseModel || model,
-    rateLimit: parseRateMetadata({ headers: response.headers, body: null }),
+    rateLimit: parseRateMetadata(),
   }
 }
 
@@ -425,8 +425,8 @@ const requestChatCompletion = async ({
   })
 
   if (!response.ok) {
-    const { message, rateLimit } = await parseErrorResponse(response)
-    throw toApiError({ message, rateLimit })
+    const { message, status, rateLimit } = await parseErrorResponse(response)
+    throw toApiError({ message, status, rateLimit })
   }
 
   const body = await response.json()
@@ -441,7 +441,7 @@ const requestChatCompletion = async ({
     content,
     toolCalls,
     model: typeof body?.model === 'string' && body.model ? body.model : model,
-    rateLimit: parseRateMetadata({ headers: response.headers, body }),
+    rateLimit: parseRateMetadata(),
   }
 }
 

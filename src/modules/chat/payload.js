@@ -6,9 +6,21 @@ const chatMaxConversationMessages = 14
 const systemPromptMessage = [
   'You are an expert software development assistant focused on CSS dialects and JSX syntax across React and native DOM APIs.',
   'Prioritize practical, safe, and minimal changes that fit the current project architecture.',
-  'When proposing concrete editor edits, prefer tool calls so the user can explicitly review and apply changes.',
+  'Only use propose_editor_update tool calls when the user explicitly asks you to modify code (for example: apply, update, edit, patch, rewrite, refactor, or fix).',
+  'For read-only questions (for example: can you see, summarize, explain, review, or what changed), respond with text and do not emit propose_editor_update tool calls.',
   'Do not assume framework migrations unless the user asks.',
 ].join(' ')
+
+const explicitEditorUpdateIntentPatterns = [
+  /\b(apply|update|edit|modify|change|rewrite|refactor|patch|fix|replace|insert|remove|delete|rename)\b/i,
+  /\b(make|prepare|propose|generate)\b.{0,40}\b(update|updates|edit|edits|patch|patches|change|changes)\b/i,
+]
+
+const readOnlyPromptPatterns = [
+  /\b(can you|could you|please)\s+(see|summarize|explain|review|inspect|analyze)\b/i,
+  /\bwhat\s+(do you|did you)\s+(see|find|notice|think)\b/i,
+  /\bcan\s+you\s+still\s+see\b/i,
+]
 
 const toUtf8ByteLength = value => {
   const text = typeof value === 'string' ? value : ''
@@ -141,6 +153,19 @@ const collectConversation = messages => {
       content: toChatText(message.content),
     }))
     .filter(message => Boolean(message.content))
+}
+
+export const shouldEnableEditorUpdateTools = prompt => {
+  const promptText = toChatText(prompt)
+  if (!promptText) {
+    return false
+  }
+
+  if (readOnlyPromptPatterns.some(pattern => pattern.test(promptText))) {
+    return false
+  }
+
+  return explicitEditorUpdateIntentPatterns.some(pattern => pattern.test(promptText))
 }
 
 export const buildOutboundMessages = ({

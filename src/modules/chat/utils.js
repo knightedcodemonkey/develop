@@ -18,9 +18,18 @@ export const toModelId = value => {
 }
 
 export const isModelAccessError = error => {
+  if (error?.status === 404) {
+    return true
+  }
+
   const message = error instanceof Error ? error.message.toLowerCase() : ''
   if (!message) {
     return false
+  }
+
+  /* OpenRouter reports an unknown slug as 400 "... is not a valid model ID". */
+  if (error?.status === 400 && message.includes('not a valid model')) {
+    return true
   }
 
   return (
@@ -29,9 +38,13 @@ export const isModelAccessError = error => {
     (message.includes('model') && message.includes('not available')) ||
     (message.includes('model') && message.includes('not found')) ||
     (message.includes('model') && message.includes('not enabled')) ||
+    (message.includes('model') && message.includes('not a valid')) ||
     (message.includes('forbidden') && message.includes('model'))
   )
 }
+
+/* 401 means the key itself is bad, so retrying a non-stream request cannot help. */
+export const isCredentialError = error => error?.status === 401
 
 export const formatModelAccessErrorMessage = selectedModel => {
   const model = toModelId(selectedModel)

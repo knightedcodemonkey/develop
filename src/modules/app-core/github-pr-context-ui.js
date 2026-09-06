@@ -10,10 +10,8 @@ export const createGitHubPrContextUiController = ({
   stylesPrSyncIcon,
   stylesPrSyncIconPath,
   githubPrContextClose,
-  aiChatToggle,
   githubPrOpenIcon,
   githubPrPushCommitIcon,
-  closeChatDrawer,
   closePrDrawer,
   closeWorkspacesDrawer,
 }) => {
@@ -99,14 +97,10 @@ export const createGitHubPrContextUiController = ({
     syncEditorPrContextIndicators(true)
   }
 
-  const syncAiChatTokenVisibility = token => {
+  const syncPrSurfaceVisibility = token => {
     const hasToken = typeof token === 'string' && token.trim().length > 0
 
     if (hasToken) {
-      if (aiChatToggle instanceof HTMLElement) {
-        aiChatToggle.hidden = false
-      }
-
       if (githubPrToggle instanceof HTMLElement) {
         githubPrToggle.hidden = false
       }
@@ -119,10 +113,6 @@ export const createGitHubPrContextUiController = ({
       return
     }
 
-    if (aiChatToggle instanceof HTMLElement) {
-      aiChatToggle.hidden = true
-    }
-    aiChatToggle?.setAttribute('aria-expanded', 'false')
     contextState.activePrContext = null
     contextState.activePrEditorSyncKey = ''
     contextState.hasSyncedActivePrEditorContent = false
@@ -133,7 +123,6 @@ export const createGitHubPrContextUiController = ({
     }
     githubPrToggle?.setAttribute('aria-expanded', 'false')
     githubPrContextClose?.setAttribute('hidden', '')
-    closeChatDrawer?.()
     closePrDrawer?.()
     closeWorkspacesDrawer?.()
   }
@@ -141,6 +130,6 @@ export const createGitHubPrContextUiController = ({
   return {
     markActivePrEditorContentSynced,
     setActivePrContext,
-    syncAiChatTokenVisibility,
+    syncPrSurfaceVisibility,
   }
 }

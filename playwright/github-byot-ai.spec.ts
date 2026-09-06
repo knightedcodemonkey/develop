@@ -5,7 +5,8 @@ import {
   appEntryPath,
   connectByotWithSingleRepo,
   ensureWorkspacesDrawerClosed,
-  ensureAiChatDrawerOpen,
+  connectOpenRouterKey,
+  openRouterTestKey,
   ensureOpenPrDrawerOpen,
   mockRepositoryBranches,
   openWorkspaceTab,
@@ -20,7 +21,7 @@ import {
 } from './github-pr-drawer/github-pr-drawer.helpers.js'
 import { selectWorkspacesRepositoryFilter } from './github-pr-drawer/github-pr-drawer.helpers.js'
 
-test('PR/BYOT controls are visible and chat stays hidden until token connect', async ({
+test('PR/BYOT controls are visible and chat is available without a GitHub token', async ({
   page,
 }) => {
   await waitForAppReady(page)
@@ -39,12 +40,40 @@ test('PR/BYOT controls are visible and chat stays hidden until token connect', a
   await expect(byotControls).toBeVisible()
   await expect(page.getByRole('textbox', { name: 'GitHub token' })).toBeVisible()
   await expect(page.getByRole('button', { name: 'Add GitHub token' })).toBeVisible()
-  await expect(page.getByRole('button', { name: 'Chat' })).toBeHidden()
+  await expect(page.getByRole('button', { name: 'Chat' })).toBeVisible()
   await expect(page.getByRole('heading', { name: 'AI Chat' })).toBeHidden()
   await expect(prToggle).toHaveCount(1)
   await expect(prToggle).toBeHidden()
   await expect(workspacesToggle).toHaveCount(1)
   await expect(workspacesToggle).toBeVisible()
+})
+
+test('chat drawer prompts for an OpenRouter key and gates the composer', async ({
+  page,
+}) => {
+  await waitForAppReady(page)
+
+  await page.getByRole('button', { name: 'Chat', exact: true }).click()
+  await expect(page.getByRole('complementary', { name: 'AI Chat' })).toBeVisible()
+
+  const keyInput = page.getByLabel('OpenRouter API key', { exact: true })
+  await expect(keyInput).toBeVisible()
+  await expect(
+    page.getByRole('button', { name: 'Save OpenRouter API key' }),
+  ).toBeVisible()
+  await expect(
+    page.getByRole('button', { name: 'Remove OpenRouter API key' }),
+  ).toBeHidden()
+
+  await expect(page.getByLabel('Ask AI assistant')).toBeDisabled()
+  await expect(page.getByRole('button', { name: 'Send' })).toBeDisabled()
+  await expect(page.getByLabel('Chat model')).toBeDisabled()
+
+  await connectOpenRouterKey(page)
+
+  await expect(page.getByLabel('Ask AI assistant')).toBeEnabled()
+  await expect(page.getByRole('button', { name: 'Send' })).toBeEnabled()
+  await expect(page.getByLabel('Chat model')).toBeEnabled()
 })
 
 test('Workspaces repository filter is local-only and read-only without PAT', async ({
@@ -296,13 +325,52 @@ test('PAT connect after Local-only session preserves Local records and enables r
   ).toBe('local')
 })
 
-test('chat becomes available after token connect', async ({ page }) => {
+test('GitHub token is never sent to OpenRouter and the chat key is never sent to GitHub', async ({
+  page,
+}) => {
+  const openRouterAuthHeaders: string[] = []
+  const githubAuthHeaders: string[] = []
+
+  page.on('request', request => {
+    const auth = request.headers().authorization ?? ''
+    if (!auth) {
+      return
+    }
+
+    if (request.url().includes('openrouter.ai')) {
+      openRouterAuthHeaders.push(auth)
+    }
+
+    if (request.url().includes('api.github.com')) {
+      githubAuthHeaders.push(auth)
+    }
+  })
+
+  await page.route('https://openrouter.ai/api/v1/chat/completions', async route => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        choices: [{ message: { role: 'assistant', content: 'ok' } }],
+      }),
+    })
+  })
+
   await waitForAppReady(page)
   await connectByotWithSingleRepo(page)
+  await connectOpenRouterKey(page)
 
-  await expect(page.getByRole('button', { name: 'Open pull request' })).toBeVisible()
-  await expect(page.getByRole('button', { name: 'Workspaces' })).toBeVisible()
-  await expect(page.getByRole('button', { name: 'Chat' })).toBeVisible()
+  await page.getByLabel('Ask AI assistant').fill('hello')
+  await page.getByRole('button', { name: 'Send' }).click()
+  await expect(page.getByText('ok', { exact: true })).toBeVisible()
+
+  expect(openRouterAuthHeaders.length).toBeGreaterThan(0)
+  expect(githubAuthHeaders.length).toBeGreaterThan(0)
+  expect(openRouterAuthHeaders.every(header => header.includes(openRouterTestKey))).toBe(
+    true,
+  )
+  expect(openRouterAuthHeaders.some(header => header.includes('github_pat'))).toBe(false)
+  expect(githubAuthHeaders.some(header => header.includes(openRouterTestKey))).toBe(false)
 })
 
 test('workspace context status stays visible without PAT and after PAT connect', async ({
@@ -610,7 +678,7 @@ test('chat stays usable after opening a Local workspace with PAT connected', asy
   const localWorkspaceId = 'local_chat_issue_128'
   let streamRequestBody: ChatRequestBody | undefined
 
-  await page.route('https://models.github.ai/inference/chat/completions', async route => {
+  await page.route('https://openrouter.ai/api/v1/chat/completions', async route => {
     streamRequestBody = route.request().postDataJSON() as ChatRequestBody
 
     await route.fulfill({
@@ -651,13 +719,13 @@ test('chat stays usable after opening a Local workspace with PAT connected', asy
     },
   ])
 
-  await connectByotWithSingleRepo(page)
+  await connectByotWithSingleRepo(page, { assertPrRepositorySelected: false })
   await openStoredWorkspaceContextById(page, localWorkspaceId, {
     repositoryFilter: '__local__',
   })
   await ensureWorkspacesDrawerClosed(page)
 
-  await ensureAiChatDrawerOpen(page)
+  await connectOpenRouterKey(page)
 
   await page.getByLabel('Ask AI assistant').fill('Confirm local workspace chat context.')
   await page.getByRole('button', { name: 'Send' }).click()
@@ -694,7 +762,7 @@ test('BYOT controls render with default app entry', async ({ page }) => {
   await expect(byotControls).toBeVisible()
   await expect(page.getByRole('textbox', { name: 'GitHub token' })).toBeVisible()
   await expect(page.getByRole('button', { name: 'Add GitHub token' })).toBeVisible()
-  await expect(page.getByRole('button', { name: 'Chat' })).toBeHidden()
+  await expect(page.getByRole('button', { name: 'Chat' })).toBeVisible()
   await expect(prToggle).toHaveCount(1)
   await expect(prToggle).toBeHidden()
   await expect(workspacesToggle).toHaveCount(1)
@@ -814,29 +882,10 @@ test('deleting saved GitHub token requires confirmation modal', async ({ page })
   await expect(repositoryFilter).toHaveValue('__local__')
 })
 
-test('AI chat drawer opens and closes', async ({ page }) => {
-  await waitForAppReady(page, appEntryPath)
-  await connectByotWithSingleRepo(page)
-
-  const chatToggle = page.getByRole('button', { name: 'Chat', exact: true })
-  const chatDrawer = page.getByRole('heading', { name: 'AI Chat' })
-
-  await expect(chatToggle).toBeVisible()
-  await expect(chatToggle).toHaveAttribute('aria-expanded', 'false')
-
-  await chatToggle.click()
-  await expect(chatDrawer).toBeVisible()
-  await expect(chatToggle).toHaveAttribute('aria-expanded', 'true')
-
-  await page.getByRole('button', { name: 'Close AI chat drawer' }).click()
-  await expect(chatDrawer).toBeHidden()
-  await expect(chatToggle).toHaveAttribute('aria-expanded', 'false')
-})
-
 test('AI chat prefers streaming responses when available', async ({ page }) => {
   let streamRequestBody: ChatRequestBody | undefined
 
-  await page.route('https://models.github.ai/inference/chat/completions', async route => {
+  await page.route('https://openrouter.ai/api/v1/chat/completions', async route => {
     streamRequestBody = route.request().postDataJSON() as ChatRequestBody
 
     await route.fulfill({
@@ -855,25 +904,21 @@ test('AI chat prefers streaming responses when available', async ({ page }) => {
 
   await waitForAppReady(page, `${appEntryPath}`)
   await connectByotWithSingleRepo(page)
-  await ensureAiChatDrawerOpen(page)
+  await connectOpenRouterKey(page)
 
   await page.getByLabel('Ask AI assistant').fill('Summarize this repository.')
   await page.getByRole('button', { name: 'Send' }).click()
 
-  await expect(
-    page.getByText('Response streamed from GitHub.', { exact: true }),
-  ).toHaveText('Response streamed from GitHub.')
+  await expect(page.getByText('Response streamed.', { exact: true })).toHaveText(
+    'Response streamed.',
+  )
   await expect(page.getByText('Summarize this repository.')).toBeVisible()
   await expect(page.getByText('Streaming response ready')).toBeVisible()
 
   expect(streamRequestBody?.metadata).toBeUndefined()
   expect(streamRequestBody?.model).toBe(defaultChatModel)
-  expect(streamRequestBody?.tool_choice).toBe('auto')
-  expect(
-    streamRequestBody?.tools?.some(
-      tool => tool.type === 'function' && tool.function?.name === 'propose_editor_update',
-    ),
-  ).toBe(true)
+  expect(streamRequestBody?.tool_choice).toBeUndefined()
+  expect(streamRequestBody?.tools).toBeUndefined()
   expect(streamRequestBody?.messages?.[0]?.role).toBe('system')
   expect(streamRequestBody?.messages?.[0]?.content).toContain(
     'expert software development assistant focused on CSS dialects and JSX syntax',
@@ -923,10 +968,12 @@ test('AI chat prefers streaming responses when available', async ({ page }) => {
   ).toBe(true)
 })
 
-test('AI chat can disable editor context payload via checkbox', async ({ page }) => {
+test('AI chat enables editor update tools only for explicit edit requests', async ({
+  page,
+}) => {
   let streamRequestBody: ChatRequestBody | undefined
 
-  await page.route('https://models.github.ai/inference/chat/completions', async route => {
+  await page.route('https://openrouter.ai/api/v1/chat/completions', async route => {
     streamRequestBody = route.request().postDataJSON() as ChatRequestBody
 
     await route.fulfill({
@@ -943,7 +990,97 @@ test('AI chat can disable editor context payload via checkbox', async ({ page })
 
   await waitForAppReady(page, `${appEntryPath}`)
   await connectByotWithSingleRepo(page)
-  await ensureAiChatDrawerOpen(page)
+  await connectOpenRouterKey(page)
+
+  await page
+    .getByLabel('Ask AI assistant')
+    .fill('Please update app.css to use blue text.')
+  await page.getByRole('button', { name: 'Send' }).click()
+  await expect(page.getByText('Response streamed.', { exact: true })).toHaveText(
+    'Response streamed.',
+  )
+
+  expect(streamRequestBody?.tool_choice).toBe('auto')
+  expect(
+    streamRequestBody?.tools?.some(
+      tool => tool.type === 'function' && tool.function?.name === 'propose_editor_update',
+    ),
+  ).toBe(true)
+})
+
+test('AI chat does not render apply actions for read-only visibility prompts', async ({
+  page,
+}) => {
+  let streamRequestBody: ChatRequestBody | undefined
+
+  await page.route('https://openrouter.ai/api/v1/chat/completions', async route => {
+    const body = route.request().postDataJSON() as ChatRequestBody | null
+
+    if (body?.stream) {
+      streamRequestBody = body
+      await route.fulfill({
+        status: 502,
+        contentType: 'application/json',
+        body: JSON.stringify({ message: 'stream intentionally disabled in this test' }),
+      })
+      return
+    }
+
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        choices: [
+          {
+            message: {
+              role: 'assistant',
+              content:
+                'Yes, I can see your editor content.\n\n```jsx\nconst App = () => <p>Visible</p>\n```',
+            },
+          },
+        ],
+      }),
+    })
+  })
+
+  await waitForAppReady(page, `${appEntryPath}`)
+  await connectByotWithSingleRepo(page)
+  await setComponentEditorSource(page, 'const App = () => <p>Before</p>')
+  await openWorkspaceTab(page, 'App.tsx')
+  await connectOpenRouterKey(page)
+
+  await page.getByLabel('Ask AI assistant').fill('Can you see my editor content?')
+  await page.getByRole('button', { name: 'Send' }).click()
+
+  await expect(page.getByText('Fallback response loaded.', { exact: true })).toHaveText(
+    'Fallback response loaded.',
+  )
+  await expect(page.locator('button[data-action="request-apply"]')).toHaveCount(0)
+  expect(streamRequestBody?.tool_choice).toBeUndefined()
+  expect(streamRequestBody?.tools).toBeUndefined()
+})
+
+test('AI chat can disable editor context payload via checkbox', async ({ page }) => {
+  let streamRequestBody: ChatRequestBody | undefined
+
+  await page.route('https://openrouter.ai/api/v1/chat/completions', async route => {
+    streamRequestBody = route.request().postDataJSON() as ChatRequestBody
+
+    await route.fulfill({
+      status: 200,
+      contentType: 'text/event-stream',
+      body: [
+        'data: {"choices":[{"delta":{"content":"ok"}}]}',
+        '',
+        'data: [DONE]',
+        '',
+      ].join('\n'),
+    })
+  })
+
+  await waitForAppReady(page, `${appEntryPath}`)
+  await connectByotWithSingleRepo(page)
+  await connectOpenRouterKey(page)
 
   const includeEditorsToggle = page.getByLabel('Send tab content')
   await expect(includeEditorsToggle).toBeChecked()
@@ -951,12 +1088,13 @@ test('AI chat can disable editor context payload via checkbox', async ({ page })
 
   await page.getByLabel('Ask AI assistant').fill('No editor source this time.')
   await page.getByRole('button', { name: 'Send' }).click()
-  await expect(
-    page.getByText('Response streamed from GitHub.', { exact: true }),
-  ).toHaveText('Response streamed from GitHub.')
+  await expect(page.getByText('Response streamed.', { exact: true })).toHaveText(
+    'Response streamed.',
+  )
 
   expect(streamRequestBody?.metadata).toBeUndefined()
-  expect(streamRequestBody?.tool_choice).toBe('none')
+  expect(streamRequestBody?.tool_choice).toBeUndefined()
+  expect(streamRequestBody?.tools).toBeUndefined()
   const systemMessages = streamRequestBody?.messages?.filter(
     (message: ChatRequestMessage) => message.role === 'system',
   )
@@ -982,7 +1120,7 @@ test('AI chat can disable editor context payload via checkbox', async ({ page })
 test('AI chat proposals can be confirmed, applied, and undone per active tab', async ({
   page,
 }) => {
-  await page.route('https://models.github.ai/inference/chat/completions', async route => {
+  await page.route('https://openrouter.ai/api/v1/chat/completions', async route => {
     const body = route.request().postDataJSON() as ChatRequestBody | null
 
     if (body?.stream) {
@@ -1041,7 +1179,7 @@ test('AI chat proposals can be confirmed, applied, and undone per active tab', a
   await setComponentEditorSource(page, 'const App = () => <button>Before</button>')
   await setStylesEditorSource(page, '.button { color: red; }')
   await openWorkspaceTab(page, 'App.tsx')
-  await ensureAiChatDrawerOpen(page)
+  await connectOpenRouterKey(page)
 
   await page.getByLabel('Ask AI assistant').fill('Suggest updates for both editors.')
   await page.getByRole('button', { name: 'Send' }).click()
@@ -1109,7 +1247,7 @@ test('AI chat proposals can be confirmed, applied, and undone per active tab', a
 })
 
 test('AI chat apply actions resolve dynamic tab targets', async ({ page }) => {
-  await page.route('https://models.github.ai/inference/chat/completions', async route => {
+  await page.route('https://openrouter.ai/api/v1/chat/completions', async route => {
     const body = route.request().postDataJSON() as ChatRequestBody | null
 
     if (body?.stream) {
@@ -1166,7 +1304,7 @@ test('AI chat apply actions resolve dynamic tab targets', async ({ page }) => {
   await setComponentEditorSource(page, 'const App = () => <button>Before</button>')
   await setStylesEditorSource(page, '.button { color: red; }')
   await openWorkspaceTab(page, 'App.tsx')
-  await ensureAiChatDrawerOpen(page)
+  await connectOpenRouterKey(page)
 
   await page.getByLabel('Ask AI assistant').fill('Suggest updates for both editors.')
   await page.getByRole('button', { name: 'Send' }).click()
@@ -1195,7 +1333,7 @@ test('AI chat apply actions resolve dynamic tab targets', async ({ page }) => {
 test('AI chat applies the correct proposal when unresolved targets are filtered out', async ({
   page,
 }) => {
-  await page.route('https://models.github.ai/inference/chat/completions', async route => {
+  await page.route('https://openrouter.ai/api/v1/chat/completions', async route => {
     const body = route.request().postDataJSON() as ChatRequestBody | null
 
     if (body?.stream) {
@@ -1251,7 +1389,7 @@ test('AI chat applies the correct proposal when unresolved targets are filtered 
   await connectByotWithSingleRepo(page)
   await setComponentEditorSource(page, 'const App = () => <p>Before</p>')
   await openWorkspaceTab(page, 'App.tsx')
-  await ensureAiChatDrawerOpen(page)
+  await connectOpenRouterKey(page)
 
   await page.getByLabel('Ask AI assistant').fill('Update App tab only.')
   await page.getByRole('button', { name: 'Send' }).click()
@@ -1269,7 +1407,7 @@ test('AI chat applies the correct proposal when unresolved targets are filtered 
 test('AI chat renders a single apply action for multiple targets resolving to the same tab', async ({
   page,
 }) => {
-  await page.route('https://models.github.ai/inference/chat/completions', async route => {
+  await page.route('https://openrouter.ai/api/v1/chat/completions', async route => {
     const body = route.request().postDataJSON() as ChatRequestBody | null
 
     if (body?.stream) {
@@ -1325,7 +1463,7 @@ test('AI chat renders a single apply action for multiple targets resolving to th
   await connectByotWithSingleRepo(page)
   await setComponentEditorSource(page, 'const App = () => <p>Before</p>')
   await openWorkspaceTab(page, 'App.tsx')
-  await ensureAiChatDrawerOpen(page)
+  await connectOpenRouterKey(page)
 
   await page.getByLabel('Ask AI assistant').fill('Update App tab once.')
   await page.getByRole('button', { name: 'Send' }).click()
@@ -1335,12 +1473,73 @@ test('AI chat renders a single apply action for multiple targets resolving to th
   )
 })
 
+test('AI chat shows guidance when an editor update target cannot be matched', async ({
+  page,
+}) => {
+  await page.route('https://openrouter.ai/api/v1/chat/completions', async route => {
+    const body = route.request().postDataJSON() as ChatRequestBody | null
+
+    if (body?.stream) {
+      await route.fulfill({
+        status: 502,
+        contentType: 'application/json',
+        body: JSON.stringify({ message: 'stream intentionally disabled in this test' }),
+      })
+      return
+    }
+
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        choices: [
+          {
+            message: {
+              role: 'assistant',
+              content: '',
+              tool_calls: [
+                {
+                  id: 'call_unknown_target',
+                  type: 'function',
+                  function: {
+                    name: 'propose_editor_update',
+                    arguments: JSON.stringify({
+                      target: 'src/does-not-exist.ts',
+                      content: 'export const value = 1',
+                    }),
+                  },
+                },
+              ],
+            },
+          },
+        ],
+      }),
+    })
+  })
+
+  await waitForAppReady(page, `${appEntryPath}`)
+  await connectByotWithSingleRepo(page)
+  await setComponentEditorSource(page, 'const App = () => <p>Before</p>')
+  await openWorkspaceTab(page, 'App.tsx')
+  await connectOpenRouterKey(page)
+
+  await page.getByLabel('Ask AI assistant').fill('Can you still see my tab content?')
+  await page.getByRole('button', { name: 'Send' }).click()
+
+  await expect(
+    page.getByText(
+      'Proposed editor update is ready, but I could not match its target to an open tab. Ask me to target the active tab or one of the listed tab ids or paths.',
+    ),
+  ).toHaveCount(1)
+  await expect(page.locator('button[data-action="request-apply"]')).toHaveCount(0)
+})
+
 test('AI chat sends the currently active tab when context is enabled', async ({
   page,
 }) => {
   let streamRequestBody: ChatRequestBody | undefined
 
-  await page.route('https://models.github.ai/inference/chat/completions', async route => {
+  await page.route('https://openrouter.ai/api/v1/chat/completions', async route => {
     streamRequestBody = route.request().postDataJSON() as ChatRequestBody
 
     await route.fulfill({
@@ -1358,13 +1557,13 @@ test('AI chat sends the currently active tab when context is enabled', async ({
   await waitForAppReady(page, `${appEntryPath}`)
   await connectByotWithSingleRepo(page)
   await setStylesEditorSource(page, '.button { color: red; }')
-  await ensureAiChatDrawerOpen(page)
+  await connectOpenRouterKey(page)
 
   await page.getByLabel('Ask AI assistant').fill('Use active tab context only.')
   await page.getByRole('button', { name: 'Send' }).click()
-  await expect(
-    page.getByText('Response streamed from GitHub.', { exact: true }),
-  ).toHaveText('Response streamed from GitHub.')
+  await expect(page.getByText('Response streamed.', { exact: true })).toHaveText(
+    'Response streamed.',
+  )
 
   const systemMessages = streamRequestBody?.messages?.filter(
     (message: ChatRequestMessage) => message.role === 'system',
@@ -1393,7 +1592,7 @@ test('AI chat streaming text still updates while latest undo actions are visible
 }) => {
   let requestCount = 0
 
-  await page.route('https://models.github.ai/inference/chat/completions', async route => {
+  await page.route('https://openrouter.ai/api/v1/chat/completions', async route => {
     requestCount += 1
     const body = route.request().postDataJSON() as ChatRequestBody | null
 
@@ -1465,7 +1664,7 @@ test('AI chat streaming text still updates while latest undo actions are visible
   await waitForAppReady(page, `${appEntryPath}`)
   await connectByotWithSingleRepo(page)
   await setStylesEditorSource(page, '.button { color: red; }')
-  await ensureAiChatDrawerOpen(page)
+  await connectOpenRouterKey(page)
 
   await page.getByLabel('Ask AI assistant').fill('Suggest a styles update.')
   await page.getByRole('button', { name: 'Send' }).click()
@@ -1493,7 +1692,7 @@ test('AI chat falls back to non-streaming response when streaming fails', async 
   let fallbackAttemptCount = 0
   const attemptedModels: string[] = []
 
-  await page.route('https://models.github.ai/inference/chat/completions', async route => {
+  await page.route('https://openrouter.ai/api/v1/chat/completions', async route => {
     const body = route.request().postDataJSON() as ChatRequestBody | null
     if (typeof body?.model === 'string') {
       attemptedModels.push(body.model)
@@ -1532,9 +1731,9 @@ test('AI chat falls back to non-streaming response when streaming fails', async 
 
   await waitForAppReady(page, `${appEntryPath}`)
   await connectByotWithSingleRepo(page)
-  await ensureAiChatDrawerOpen(page)
+  await connectOpenRouterKey(page)
 
-  const selectedModel = 'openai/gpt-5-mini'
+  const selectedModel = 'openai/gpt-6-astra'
   await page.getByLabel('Chat model').selectOption(selectedModel)
   await expect(page.getByLabel('Chat model')).toHaveValue(selectedModel)
 
@@ -1556,7 +1755,7 @@ test('clearing chat removes previous conversation context from new request', asy
 }) => {
   const streamBodies: ChatRequestBody[] = []
 
-  await page.route('https://models.github.ai/inference/chat/completions', async route => {
+  await page.route('https://openrouter.ai/api/v1/chat/completions', async route => {
     const body = route.request().postDataJSON() as ChatRequestBody
     if (body?.stream) {
       streamBodies.push(body)
@@ -1584,22 +1783,18 @@ test('clearing chat removes previous conversation context from new request', asy
 
   await waitForAppReady(page, `${appEntryPath}`)
   await connectByotWithSingleRepo(page)
-  await ensureAiChatDrawerOpen(page)
+  await connectOpenRouterKey(page)
 
   await page.getByLabel('Ask AI assistant').fill('First conversation prompt')
   await page.getByRole('button', { name: 'Send' }).click()
-  await expect(
-    page.getByText('Response streamed from GitHub.', { exact: true }),
-  ).toBeVisible()
+  await expect(page.getByText('Response streamed.', { exact: true })).toBeVisible()
 
   await page.getByRole('button', { name: 'Clear', exact: true }).click()
   await expect(page.getByText('Chat cleared.', { exact: true })).toBeVisible()
 
   await page.getByLabel('Ask AI assistant').fill('Second conversation prompt')
   await page.getByRole('button', { name: 'Send' }).click()
-  await expect(
-    page.getByText('Response streamed from GitHub.', { exact: true }),
-  ).toBeVisible()
+  await expect(page.getByText('Response streamed.', { exact: true })).toBeVisible()
 
   expect(streamBodies.length).toBeGreaterThanOrEqual(2)
   const latestMessages = streamBodies[streamBodies.length - 1]?.messages ?? []

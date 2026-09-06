@@ -488,7 +488,7 @@ const bindAppEventsAndStart = ({
   updateRenderModeEditability()
   compactAiControlsUi.setOpen(false)
   githubTokenInfoUi.close()
-  prContextUi.syncAiChatTokenVisibility(githubAiContextState.token)
+  prContextUi.syncPrSurfaceVisibility(githubAiContextState.token)
 
   updateRenderButtonVisibility()
   setDiagnosticsDrawerOpen(false)

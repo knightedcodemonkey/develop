@@ -336,7 +336,7 @@ const initializeGitHubWorkflows = ({
     },
     onActivePrContextChange: activeContext => {
       prContextUi.setActivePrContext(activeContext)
-      prContextUi.syncAiChatTokenVisibility(getTokenForVisibility())
+      prContextUi.syncPrSurfaceVisibility(getTokenForVisibility())
 
       if (typeof onPrContextStateChange === 'function') {
         onPrContextStateChange(activeContext)
