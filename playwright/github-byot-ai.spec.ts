@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test'
-import { defaultGitHubChatModel } from '../src/modules/github/api/chat.js'
+import { defaultChatModel } from '../src/modules/chat/api/completions.js'
 import type { ChatRequestBody, ChatRequestMessage } from './helpers/app-test-helpers.js'
 import {
   appEntryPath,
@@ -867,7 +867,7 @@ test('AI chat prefers streaming responses when available', async ({ page }) => {
   await expect(page.getByText('Streaming response ready')).toBeVisible()
 
   expect(streamRequestBody?.metadata).toBeUndefined()
-  expect(streamRequestBody?.model).toBe(defaultGitHubChatModel)
+  expect(streamRequestBody?.model).toBe(defaultChatModel)
   expect(streamRequestBody?.tool_choice).toBe('auto')
   expect(
     streamRequestBody?.tools?.some(

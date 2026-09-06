@@ -1,4 +1,4 @@
-const createGitHubChatWorkspaceActions = ({
+const createChatWorkspaceActions = ({
   getActiveWorkspaceTab,
   isStyleWorkspaceTab,
   getCssSource,
@@ -82,4 +82,4 @@ const createGitHubChatWorkspaceActions = ({
   }
 }
 
-export { createGitHubChatWorkspaceActions }
+export { createChatWorkspaceActions }

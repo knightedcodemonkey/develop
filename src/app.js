@@ -51,10 +51,10 @@ import { persistClosedPrContextRecords } from './modules/app-core/pr-context-rec
 import { createPrContextStateChangeHandler } from './modules/app-core/pr-context-state-change-handler.js'
 import { createWorkspaceContextStatusController } from './modules/app-core/workspace-context-status-controller.js'
 import { createWorkspaceRecordAppliedHandler } from './modules/app-core/workspace-record-applied-handler.js'
-import { createGitHubChatWorkspaceActions } from './modules/app-core/github-chat-workspace-actions.js'
+import { createChatWorkspaceActions } from './modules/chat/workspace-actions.js'
 import { createShareCurrentLocalWorkspace } from './modules/app-core/workspace-share-action.js'
 import { createDiagnosticsUiController } from './modules/diagnostics/diagnostics-ui.js'
-import { createGitHubChatDrawer } from './modules/github/chat/drawer.js'
+import { initializeChatWorkflows } from './modules/app-core/chat-workflows.js'
 import { createGitHubByotControls } from './modules/github/byot-controls.js'
 import {
   formatActivePrReference,
@@ -1172,7 +1172,7 @@ const onPrContextStateChange = createPrContextStateChangeHandler({
   editedIndicatorVisibilityController,
 })
 
-const githubChatWorkspaceActions = createGitHubChatWorkspaceActions({
+const githubChatWorkspaceActions = createChatWorkspaceActions({
   getActiveWorkspaceTab,
   isStyleWorkspaceTab,
   getCssSource: () => getCssSource(),
@@ -1187,7 +1187,6 @@ const githubChatWorkspaceActions = createGitHubChatWorkspaceActions({
 const githubWorkflows = createGitHubWorkflowsSetup({
   factories: {
     createGitHubPrEditorSyncController,
-    createGitHubChatDrawer,
     createGitHubPrDrawer,
     createWorkspacesDrawer,
   },
@@ -1210,17 +1209,6 @@ const githubWorkflows = createGitHubWorkflowsSetup({
       byotControls.clearSelectedRepositoryPreference(),
   },
   ui: {
-    aiChatToggle,
-    aiChatDrawer,
-    aiChatClose,
-    aiChatPrompt,
-    aiChatModel,
-    aiChatIncludeEditors,
-    aiChatSend,
-    aiChatClear,
-    aiChatStatus,
-    aiChatRepository,
-    aiChatMessages,
     githubPrToggle,
     githubPrDrawer,
     githubPrClose,
@@ -1351,7 +1339,6 @@ const githubWorkflows = createGitHubWorkflowsSetup({
         /* Save failures are already surfaced through saver onError. */
       })
     },
-    getPersistedActivePrContext,
     getTokenForVisibility: () => githubAiContextState.token,
     getActivePrEditorSyncKey: () => githubAiContextState.activePrEditorSyncKey,
     syncFromActiveContext: ({ tabTargets }) => {
@@ -1373,7 +1360,6 @@ const githubWorkflows = createGitHubWorkflowsSetup({
     setStatus,
     showAppToast,
     shareCurrentLocalWorkspace,
-    ...githubChatWorkspaceActions,
     scheduleRender: () => {
       if (
         autoRenderToggle?.checked &&
@@ -1385,7 +1371,35 @@ const githubWorkflows = createGitHubWorkflowsSetup({
   },
 })
 
-chatDrawerController = githubWorkflows.chatDrawerController
+const chatWorkflows = initializeChatWorkflows({
+  aiChatToggle,
+  aiChatDrawer,
+  aiChatClose,
+  aiChatPrompt,
+  aiChatModel,
+  aiChatIncludeEditors,
+  aiChatSend,
+  aiChatClear,
+  aiChatStatus,
+  aiChatRepository,
+  aiChatMessages,
+  getToken: getCurrentGitHubToken,
+  getSelectedRepository: getCurrentSelectedRepository,
+  ...githubChatWorkspaceActions,
+  getRenderMode: () => renderMode.value,
+  getStyleMode: () => styleMode.value,
+  getPersistedActivePrContext,
+  scheduleRender: () => {
+    if (
+      autoRenderToggle?.checked &&
+      typeof renderRuntime?.scheduleRender === 'function'
+    ) {
+      renderRuntime.scheduleRender()
+    }
+  },
+})
+
+chatDrawerController = chatWorkflows.chatDrawerController
 prDrawerController = githubWorkflows.prDrawerController
 workspacesDrawerController = githubWorkflows.workspacesDrawerController
 
