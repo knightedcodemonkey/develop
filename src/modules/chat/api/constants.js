@@ -1,4 +1,5 @@
 export const chatCompletionsUrl = 'https://openrouter.ai/api/v1/chat/completions'
+export const chatModelsUrl = 'https://openrouter.ai/api/v1/models'
 export const openRouterKeysUrl = 'https://openrouter.ai/keys'
 
 /* The free router auto-selects a free model, so it survives free-slug churn. */

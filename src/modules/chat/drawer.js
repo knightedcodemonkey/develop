@@ -1,20 +1,15 @@
-import {
-  chatModelOptions,
-  defaultChatModel,
-  requestChatCompletion,
-  streamChatCompletion,
-} from './api/completions.js'
+import { requestChatCompletion, streamChatCompletion } from './api/completions.js'
 import {
   formatModelAccessErrorMessage,
   isCredentialError,
   isModelAccessError,
   isModelAccessStatusMessage,
   toChatText,
-  toModelId,
   toRepositoryLabel,
   toRepositoryUrl,
 } from './utils.js'
 import { createChatKeyControls } from './key-controls.js'
+import { createChatModelPicker } from './model-picker.js'
 import {
   buildActiveTabEditorContext,
   normalizeWorkspaceTabContext,
@@ -177,27 +172,36 @@ export const createChatDrawer = ({
     pendingAbortController = null
   }
 
-  const setModelSelectDisabled = isDisabled => {
-    if (!(modelSelect instanceof HTMLSelectElement)) {
-      return
-    }
-
-    modelSelect.disabled = isDisabled
-  }
-
   const keyControls = createChatKeyControls({
     root: keyRoot,
     input: keyInput,
     addButton: keyAddButton,
     deleteButton: keyDeleteButton,
     onKeyChange: nextKey => {
-      syncModelSelectionForKey(nextKey)
+      modelPicker.invalidateCatalogCache()
+      modelPicker.syncModelSelectionForKey(nextKey)
       syncComposerAvailability()
+
+      const keyPresent = typeof nextKey === 'string' && nextKey.trim().length > 0
+
+      if (open && keyPresent) {
+        void modelPicker.loadModelOptionsFromCatalog({ force: true })
+      }
     },
   })
 
   const getChatKey = () => keyControls.getKey()
   const hasChatKey = () => keyControls.hasKey()
+
+  const modelPicker = createChatModelPicker({
+    modelSelect,
+    getChatKey,
+    resetModelAccessStatus: () => {
+      if (isModelAccessStatusMessage(statusNode?.textContent)) {
+        setChatStatus('Idle', 'neutral')
+      }
+    },
+  })
 
   const syncComposerAvailability = () => {
     const keyPresent = hasChatKey()
@@ -211,57 +215,7 @@ export const createChatDrawer = ({
     }
   }
 
-  const replaceModelOptions = ({ modelIds, selectedModel }) => {
-    if (!(modelSelect instanceof HTMLSelectElement)) {
-      return
-    }
-
-    const nextSelectedModel = toModelId(selectedModel)
-    const nextModelIds = [...new Set([defaultChatModel, ...modelIds])]
-
-    modelSelect.replaceChildren()
-
-    for (const modelId of nextModelIds) {
-      const option = document.createElement('option')
-      option.value = modelId
-      option.textContent = modelId
-      option.selected = modelId === nextSelectedModel
-      modelSelect.append(option)
-    }
-
-    if (!nextModelIds.includes(nextSelectedModel)) {
-      modelSelect.value = defaultChatModel
-    }
-  }
-
-  const getSelectedModel = () => {
-    if (!(modelSelect instanceof HTMLSelectElement)) {
-      return defaultChatModel
-    }
-
-    return toModelId(modelSelect.value)
-  }
-
-  const initializeModelOptions = () => {
-    replaceModelOptions({
-      modelIds: chatModelOptions,
-      selectedModel: defaultChatModel,
-    })
-  }
-
-  const syncModelSelectionForKey = key => {
-    const keyPresent = typeof key === 'string' && key.trim().length > 0
-
-    setModelSelectDisabled(!keyPresent)
-
-    if (!keyPresent && modelSelect instanceof HTMLSelectElement) {
-      modelSelect.value = defaultChatModel
-    }
-
-    if (keyPresent && isModelAccessStatusMessage(statusNode?.textContent)) {
-      setChatStatus('Idle', 'neutral')
-    }
-  }
+  const getSelectedModel = () => modelPicker.getSelectedModel()
 
   const setOpen = nextOpen => {
     open = nextOpen === true
@@ -279,6 +233,10 @@ export const createChatDrawer = ({
 
     if (open && promptInput instanceof HTMLTextAreaElement) {
       promptInput.focus()
+    }
+
+    if (open && hasChatKey()) {
+      void modelPicker.loadModelOptionsFromCatalog()
     }
   }
 
@@ -989,8 +947,8 @@ export const createChatDrawer = ({
 
   toggleButton?.setAttribute('aria-expanded', 'false')
   drawer?.setAttribute('hidden', '')
-  initializeModelOptions()
-  syncModelSelectionForKey(getChatKey())
+  modelPicker.initializeModelOptions()
+  modelPicker.syncModelSelectionForKey(getChatKey())
   syncComposerAvailability()
   syncRepositoryLabel()
   ensureUndoActionsNode()

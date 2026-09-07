@@ -568,6 +568,7 @@ export const connectByotWithSingleRepo = async (
 
   const workspacesRepositoryFilter = page.getByLabel('Workspace repository filter')
   await expect(workspacesRepositoryFilter).toBeVisible()
+  await expect(workspacesRepositoryFilter).toBeEnabled()
   await workspacesRepositoryFilter.selectOption('knightedcodemonkey/develop')
   await expect(workspacesRepositoryFilter).toHaveValue('knightedcodemonkey/develop')
 
@@ -576,21 +577,42 @@ export const connectByotWithSingleRepo = async (
       name: 'Initialize',
       exact: true,
     })
+    const storedWorkspace = page.getByLabel('Stored workspace')
 
-    if (await initializeButton.isVisible()) {
+    await expect
+      .poll(async () => {
+        if (await initializeButton.isVisible()) {
+          return 'initialize'
+        }
+
+        if (await storedWorkspace.isVisible()) {
+          const workspaceValue = await storedWorkspace
+            .locator('option:not([value=""])')
+            .first()
+            .getAttribute('value')
+
+          if (workspaceValue) {
+            return 'stored'
+          }
+        }
+
+        return ''
+      })
+      .not.toBe('')
+
+    const autoOpenMode = (await initializeButton.isVisible()) ? 'initialize' : 'stored'
+
+    if (autoOpenMode === 'initialize') {
       await initializeButton.click()
     } else {
-      const storedWorkspace = page.getByLabel('Stored workspace')
-      if (await storedWorkspace.isVisible()) {
-        const workspaceValue = await storedWorkspace
-          .locator('option:not([value=""])')
-          .first()
-          .getAttribute('value')
+      const workspaceValue = await storedWorkspace
+        .locator('option:not([value=""])')
+        .first()
+        .getAttribute('value')
 
-        if (workspaceValue) {
-          await storedWorkspace.selectOption(workspaceValue)
-          await page.getByRole('button', { name: 'Open', exact: true }).click()
-        }
+      if (workspaceValue) {
+        await storedWorkspace.selectOption(workspaceValue)
+        await page.getByRole('button', { name: 'Open', exact: true }).click()
       }
     }
   }
