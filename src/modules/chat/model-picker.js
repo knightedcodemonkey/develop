@@ -18,35 +18,41 @@ export const createChatModelPicker = ({
     modelSelect.disabled = isDisabled
   }
 
-  const replaceModelOptions = ({ modelIds, selectedModel }) => {
+  const replaceModelOptions = ({ modelOptions, selectedModel }) => {
     if (!(modelSelect instanceof HTMLSelectElement)) {
       return
     }
 
     const nextSelectedModel = toModelId(selectedModel)
-    const nextModelIds = [...new Set([defaultChatModel, ...modelIds])]
-    const freeModelIds = []
-    const paidModelIds = []
+    const nextModelOptions = [
+      { id: defaultChatModel, isFree: true },
+      ...modelOptions.filter(option => option.id !== defaultChatModel),
+    ].filter(
+      (option, index, options) =>
+        options.findIndex(candidate => candidate.id === option.id) === index,
+    )
+    const freeModelOptions = []
+    const paidModelOptions = []
 
-    for (const modelId of nextModelIds) {
-      if (isFreeChatModel(modelId)) {
-        freeModelIds.push(modelId)
+    for (const modelOption of nextModelOptions) {
+      if (modelOption.isFree) {
+        freeModelOptions.push(modelOption)
       } else {
-        paidModelIds.push(modelId)
+        paidModelOptions.push(modelOption)
       }
     }
 
     modelSelect.replaceChildren()
 
-    const appendGroupedOptions = (label, ids) => {
-      if (ids.length === 0) {
+    const appendGroupedOptions = (label, options) => {
+      if (options.length === 0) {
         return
       }
 
       const group = document.createElement('optgroup')
       group.label = label
 
-      for (const modelId of ids) {
+      for (const { id: modelId } of options) {
         const option = document.createElement('option')
         option.value = modelId
         option.textContent = modelId
@@ -57,10 +63,10 @@ export const createChatModelPicker = ({
       modelSelect.append(group)
     }
 
-    appendGroupedOptions('Free', freeModelIds)
-    appendGroupedOptions('Paid', paidModelIds)
+    appendGroupedOptions('Free', freeModelOptions)
+    appendGroupedOptions('Paid', paidModelOptions)
 
-    if (!nextModelIds.includes(nextSelectedModel)) {
+    if (!nextModelOptions.some(option => option.id === nextSelectedModel)) {
       modelSelect.value = defaultChatModel
     }
   }
@@ -75,7 +81,10 @@ export const createChatModelPicker = ({
 
   const initializeModelOptions = () => {
     replaceModelOptions({
-      modelIds: chatModelOptions,
+      modelOptions: chatModelOptions.map(id => ({
+        id,
+        isFree: isFreeChatModel(id),
+      })),
       selectedModel: defaultChatModel,
     })
   }
@@ -103,10 +112,10 @@ export const createChatModelPicker = ({
 
     const loadCatalog = async () => {
       try {
-        const modelIds = await fetchChatModelOptions({ token: normalizedToken })
+        const modelOptions = await fetchChatModelOptions({ token: normalizedToken })
         const selectedModel = getSelectedModel()
         replaceModelOptions({
-          modelIds,
+          modelOptions,
           selectedModel,
         })
         loadedCatalogToken = normalizedToken

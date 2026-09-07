@@ -50,15 +50,19 @@ const normalizeModelOptions = models => {
     })
   }
 
-  const sortedModelIds = sortModelEntries(Array.from(byModelId.values())).map(
-    entry => entry.id,
-  )
+  const sortedModelOptions = sortModelEntries(Array.from(byModelId.values()))
 
-  if (sortedModelIds.length === 0) {
-    return chatModelOptions
+  if (sortedModelOptions.length === 0) {
+    return chatModelOptions.map(id => ({
+      id,
+      isFree: id === 'openrouter/free' || id.endsWith(':free'),
+    }))
   }
 
-  return [...new Set([defaultChatModel, ...sortedModelIds])]
+  return [
+    { id: defaultChatModel, isFree: true },
+    ...sortedModelOptions.filter(entry => entry.id !== defaultChatModel),
+  ]
 }
 
 const buildCatalogRequestHeaders = token => {
