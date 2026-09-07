@@ -1,14 +1,10 @@
-import {
-  defaultGitHubChatModel,
-  githubChatModelOptions,
-  githubModelsApiUrl,
-} from './constants.js'
+import { chatCompletionsUrl, defaultChatModel } from './constants.js'
 import {
   buildChatRequestHeaders,
   parseErrorResponse,
   parseRateMetadata,
   toApiError,
-} from './core.js'
+} from './request.js'
 
 const normalizeChatMessage = message => {
   if (!message || typeof message !== 'object') {
@@ -278,17 +274,17 @@ const parseSseDataLine = line => {
   }
 }
 
-const streamGitHubChatCompletion = async ({
+const streamChatCompletion = async ({
   token,
   messages,
   signal,
   onToken,
-  model = defaultGitHubChatModel,
+  model = defaultChatModel,
   tools,
   toolChoice,
 }) => {
   if (typeof token !== 'string' || token.trim().length === 0) {
-    throw new Error('A GitHub token is required to start a chat request.')
+    throw new Error('An API key is required to start a chat request.')
   }
 
   const normalizedMessages = normalizeChatMessages(messages)
@@ -296,7 +292,7 @@ const streamGitHubChatCompletion = async ({
     throw new Error('At least one message is required to start a chat request.')
   }
 
-  const response = await fetch(githubModelsApiUrl, {
+  const response = await fetch(chatCompletionsUrl, {
     method: 'POST',
     headers: buildChatRequestHeaders({ token, stream: true }),
     body: JSON.stringify(
@@ -312,8 +308,8 @@ const streamGitHubChatCompletion = async ({
   })
 
   if (!response.ok) {
-    const { message, rateLimit } = await parseErrorResponse(response)
-    throw toApiError({ message, rateLimit })
+    const { message, status, rateLimit } = await parseErrorResponse(response)
+    throw toApiError({ message, status, rateLimit })
   }
 
   if (!response.body) {
@@ -392,20 +388,20 @@ const streamGitHubChatCompletion = async ({
     content: combined,
     toolCalls: streamingToolCalls,
     model: responseModel || model,
-    rateLimit: parseRateMetadata({ headers: response.headers, body: null }),
+    rateLimit: parseRateMetadata(),
   }
 }
 
-const requestGitHubChatCompletion = async ({
+const requestChatCompletion = async ({
   token,
   messages,
   signal,
-  model = defaultGitHubChatModel,
+  model = defaultChatModel,
   tools,
   toolChoice,
 }) => {
   if (typeof token !== 'string' || token.trim().length === 0) {
-    throw new Error('A GitHub token is required to start a chat request.')
+    throw new Error('An API key is required to start a chat request.')
   }
 
   const normalizedMessages = normalizeChatMessages(messages)
@@ -413,7 +409,7 @@ const requestGitHubChatCompletion = async ({
     throw new Error('At least one message is required to start a chat request.')
   }
 
-  const response = await fetch(githubModelsApiUrl, {
+  const response = await fetch(chatCompletionsUrl, {
     method: 'POST',
     headers: buildChatRequestHeaders({ token, stream: false }),
     body: JSON.stringify(
@@ -429,8 +425,8 @@ const requestGitHubChatCompletion = async ({
   })
 
   if (!response.ok) {
-    const { message, rateLimit } = await parseErrorResponse(response)
-    throw toApiError({ message, rateLimit })
+    const { message, status, rateLimit } = await parseErrorResponse(response)
+    throw toApiError({ message, status, rateLimit })
   }
 
   const body = await response.json()
@@ -438,20 +434,15 @@ const requestGitHubChatCompletion = async ({
   const toolCalls = extractChatCompletionToolCalls(body)
 
   if (!content && toolCalls.length === 0) {
-    throw new Error('GitHub chat response did not include assistant content.')
+    throw new Error('Chat response did not include assistant content.')
   }
 
   return {
     content,
     toolCalls,
     model: typeof body?.model === 'string' && body.model ? body.model : model,
-    rateLimit: parseRateMetadata({ headers: response.headers, body }),
+    rateLimit: parseRateMetadata(),
   }
 }
 
-export {
-  defaultGitHubChatModel,
-  githubChatModelOptions,
-  requestGitHubChatCompletion,
-  streamGitHubChatCompletion,
-}
+export { defaultChatModel, requestChatCompletion, streamChatCompletion }

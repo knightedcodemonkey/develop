@@ -45,7 +45,7 @@ const isRetryableGotoError = (error: unknown) => {
     return false
   }
 
-  return /WebKit encountered an internal error|Test timeout/i.test(error.message)
+  return /WebKit encountered an internal error|page\.goto: Timeout/i.test(error.message)
 }
 
 const navigateToApp = async (page: Page, path: string) => {
@@ -408,8 +408,22 @@ export const ensureDiagnosticsDrawerClosed = async (page: Page) => {
   await expect(page.getByRole('complementary', { name: 'Diagnostics' })).toBeHidden()
 }
 
+export const openRouterTestKey = 'sk-or-v1-fake-chat-key-1234567890'
+
+export const connectOpenRouterKey = async (
+  page: Page,
+  key: string = openRouterTestKey,
+) => {
+  await ensureAiChatDrawerOpen(page)
+  await page.getByLabel('OpenRouter API key', { exact: true }).fill(key)
+  await page.getByRole('button', { name: 'Save OpenRouter API key' }).click()
+  await expect(
+    page.getByRole('button', { name: 'Remove OpenRouter API key' }),
+  ).toBeVisible()
+}
+
 export const ensureAiChatDrawerOpen = async (page: Page) => {
-  const toggle = page.getByRole('button', { name: 'Chat' })
+  const toggle = page.getByRole('button', { name: 'Chat', exact: true })
   const isExpanded = await toggle.getAttribute('aria-expanded')
 
   if (isExpanded !== 'true') {
@@ -554,6 +568,7 @@ export const connectByotWithSingleRepo = async (
 
   const workspacesRepositoryFilter = page.getByLabel('Workspace repository filter')
   await expect(workspacesRepositoryFilter).toBeVisible()
+  await expect(workspacesRepositoryFilter).toBeEnabled()
   await workspacesRepositoryFilter.selectOption('knightedcodemonkey/develop')
   await expect(workspacesRepositoryFilter).toHaveValue('knightedcodemonkey/develop')
 
@@ -562,21 +577,42 @@ export const connectByotWithSingleRepo = async (
       name: 'Initialize',
       exact: true,
     })
+    const storedWorkspace = page.getByLabel('Stored workspace')
 
-    if (await initializeButton.isVisible()) {
+    await expect
+      .poll(async () => {
+        if (await initializeButton.isVisible()) {
+          return 'initialize'
+        }
+
+        if (await storedWorkspace.isVisible()) {
+          const workspaceValue = await storedWorkspace
+            .locator('option:not([value=""])')
+            .first()
+            .getAttribute('value')
+
+          if (workspaceValue) {
+            return 'stored'
+          }
+        }
+
+        return ''
+      })
+      .not.toBe('')
+
+    const autoOpenMode = (await initializeButton.isVisible()) ? 'initialize' : 'stored'
+
+    if (autoOpenMode === 'initialize') {
       await initializeButton.click()
     } else {
-      const storedWorkspace = page.getByLabel('Stored workspace')
-      if (await storedWorkspace.isVisible()) {
-        const workspaceValue = await storedWorkspace
-          .locator('option:not([value=""])')
-          .first()
-          .getAttribute('value')
+      const workspaceValue = await storedWorkspace
+        .locator('option:not([value=""])')
+        .first()
+        .getAttribute('value')
 
-        if (workspaceValue) {
-          await storedWorkspace.selectOption(workspaceValue)
-          await page.getByRole('button', { name: 'Open', exact: true }).click()
-        }
+      if (workspaceValue) {
+        await storedWorkspace.selectOption(workspaceValue)
+        await page.getByRole('button', { name: 'Open', exact: true }).click()
       }
     }
   }

@@ -128,11 +128,18 @@ const extractEditorProposalsFromMarkdown = ({ content, fallbackTarget }) => {
   ]
 }
 
-export const toMessageEditorProposals = (message, { fallbackTarget = '' } = {}) => {
+export const toMessageEditorProposals = (
+  message,
+  { fallbackTarget = '', allowMarkdownFallback = true } = {},
+) => {
   const fromToolCalls = extractEditorProposalsFromToolCalls(message?.toolCalls)
 
   if (fromToolCalls.length > 0) {
     return fromToolCalls
+  }
+
+  if (!allowMarkdownFallback) {
+    return []
   }
 
   return extractEditorProposalsFromMarkdown({

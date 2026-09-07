@@ -2,7 +2,6 @@ import { toWorkspaceRecordKey } from '../workspace/workspace-tab-helpers.js'
 
 const initializeGitHubWorkflows = ({
   createGitHubPrEditorSyncController,
-  createGitHubChatDrawer,
   createGitHubPrDrawer,
   createWorkspacesDrawer,
   ensureJsxTransformSource,
@@ -13,17 +12,6 @@ const initializeGitHubWorkflows = ({
   byotControls,
   getCurrentGitHubToken,
   getCurrentSelectedRepository,
-  aiChatToggle,
-  aiChatDrawer,
-  aiChatClose,
-  aiChatPrompt,
-  aiChatModel,
-  aiChatIncludeEditors,
-  aiChatSend,
-  aiChatClear,
-  aiChatStatus,
-  aiChatRepository,
-  aiChatMessages,
   githubPrToggle,
   githubPrDrawer,
   githubPrClose,
@@ -71,7 +59,6 @@ const initializeGitHubWorkflows = ({
   getStyleMode,
   setCurrentSelectedRepository,
   clearCurrentSelectedRepository,
-  getPersistedActivePrContext,
   reconcileWorkspaceTabsWithPushUpdates,
   getActivePrContextSyncKey,
   prContextUi,
@@ -89,9 +76,6 @@ const initializeGitHubWorkflows = ({
   setStatus,
   showAppToast,
   shareCurrentLocalWorkspace,
-  getActiveWorkspaceTabContext,
-  getWorkspaceTabContexts,
-  applyWorkspaceTabContent,
   scheduleRender,
 }) => {
   const getCurrentWritableRepositories = () =>
@@ -190,32 +174,6 @@ const initializeGitHubWorkflows = ({
 
   const prEditorSyncController = createGitHubPrEditorSyncController({
     shouldApplySyncResult: shouldApplyActivePrEditorSync,
-  })
-
-  const chatDrawerController = createGitHubChatDrawer({
-    toggleButton: aiChatToggle,
-    drawer: aiChatDrawer,
-    closeButton: aiChatClose,
-    promptInput: aiChatPrompt,
-    modelSelect: aiChatModel,
-    includeEditorsContextToggle: aiChatIncludeEditors,
-    sendButton: aiChatSend,
-    clearButton: aiChatClear,
-    statusNode: aiChatStatus,
-    repositoryNode: aiChatRepository,
-    messagesNode: aiChatMessages,
-    getToken: getCurrentGitHubToken,
-    getSelectedRepository: getCurrentSelectedRepository,
-    getActiveWorkspaceTabContext,
-    getWorkspaceTabContexts,
-    applyWorkspaceTabContent,
-    scheduleRender,
-    getRenderMode,
-    getStyleMode,
-    getDrawerSide: () => {
-      return 'right'
-    },
-    getPersistedActivePrContext,
   })
 
   const prDrawerController = createGitHubPrDrawer({
@@ -378,7 +336,7 @@ const initializeGitHubWorkflows = ({
     },
     onActivePrContextChange: activeContext => {
       prContextUi.setActivePrContext(activeContext)
-      prContextUi.syncAiChatTokenVisibility(getTokenForVisibility())
+      prContextUi.syncPrSurfaceVisibility(getTokenForVisibility())
 
       if (typeof onPrContextStateChange === 'function') {
         onPrContextStateChange(activeContext)
@@ -792,7 +750,6 @@ const initializeGitHubWorkflows = ({
   })
 
   return {
-    chatDrawerController,
     prDrawerController,
     workspacesDrawerController,
   }

@@ -1,4 +1,4 @@
-import { defaultGitHubChatModel } from '../api/chat.js'
+import { defaultChatModel } from './api/completions.js'
 
 export const toChatText = value => {
   if (typeof value !== 'string') {
@@ -10,17 +10,26 @@ export const toChatText = value => {
 
 export const toModelId = value => {
   if (typeof value !== 'string') {
-    return defaultGitHubChatModel
+    return defaultChatModel
   }
 
   const model = value.trim()
-  return model || defaultGitHubChatModel
+  return model || defaultChatModel
 }
 
 export const isModelAccessError = error => {
+  if (error?.status === 404) {
+    return true
+  }
+
   const message = error instanceof Error ? error.message.toLowerCase() : ''
   if (!message) {
     return false
+  }
+
+  /* OpenRouter reports an unknown slug as 400 "... is not a valid model ID". */
+  if (error?.status === 400 && message.includes('not a valid model')) {
+    return true
   }
 
   return (
@@ -29,13 +38,17 @@ export const isModelAccessError = error => {
     (message.includes('model') && message.includes('not available')) ||
     (message.includes('model') && message.includes('not found')) ||
     (message.includes('model') && message.includes('not enabled')) ||
+    (message.includes('model') && message.includes('not a valid')) ||
     (message.includes('forbidden') && message.includes('model'))
   )
 }
 
+/* 401 means the key itself is bad, so retrying a non-stream request cannot help. */
+export const isCredentialError = error => error?.status === 401
+
 export const formatModelAccessErrorMessage = selectedModel => {
   const model = toModelId(selectedModel)
-  return `Selected model "${model}" is not available for this token. Choose a different model.`
+  return `Selected model "${model}" is not available for this key. Choose a different model.`
 }
 
 export const isModelAccessStatusMessage = value => {
@@ -44,7 +57,7 @@ export const isModelAccessStatusMessage = value => {
   }
 
   return (
-    value.startsWith('Selected model "') && value.includes('not available for this token')
+    value.startsWith('Selected model "') && value.includes('not available for this key')
   )
 }
 
