@@ -13,7 +13,7 @@ BYOT controls are available by default. The token is used to:
 
 AI chat no longer uses the GitHub PAT. Chat uses a separate OpenRouter API key.
 
-- OpenRouter key setup for chat: [docs/openrouter-byok.md](docs/openrouter-byok.md)
+- OpenRouter key setup for chat: [openrouter-byok.md](openrouter-byok.md)
 
 ## Privacy and storage behavior
 

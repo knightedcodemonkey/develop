@@ -13,9 +13,14 @@ const sanitizeAssistantContent = value => {
     return ''
   }
 
-  return value
-    .replace(/<\|tool_call_start\|>[\s\S]*?<\|tool_call_end\|>/g, '')
-    .replace(/<\|tool_call_start\|>|<\|tool_call_end\|>/g, '')
+  let sanitized = value.replace(/<\|tool_call_start\|>[\s\S]*?<\|tool_call_end\|>/g, '')
+
+  const openToolCallIndex = sanitized.indexOf('<|tool_call_start|>')
+  if (openToolCallIndex !== -1) {
+    sanitized = sanitized.slice(0, openToolCallIndex)
+  }
+
+  return sanitized.replace(/<\|tool_call_start\|>|<\|tool_call_end\|>/g, '')
 }
 
 export const createChatRequestRunner = ({

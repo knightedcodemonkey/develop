@@ -36,5 +36,5 @@ OpenRouter free models still require an API key.
 
 ## Related docs
 
-- GitHub PAT setup for PR/repository workflows: [docs/byot.md](docs/byot.md)
-- Local storage keys: [docs/localstorage-state.md](docs/localstorage-state.md)
+- GitHub PAT setup for PR/repository workflows: [byot.md](byot.md)
+- Local storage keys: [localstorage-state.md](localstorage-state.md)

@@ -45,7 +45,7 @@ const isRetryableGotoError = (error: unknown) => {
     return false
   }
 
-  return /WebKit encountered an internal error|Test timeout/i.test(error.message)
+  return /WebKit encountered an internal error|page\.goto: Timeout/i.test(error.message)
 }
 
 const navigateToApp = async (page: Page, path: string) => {
