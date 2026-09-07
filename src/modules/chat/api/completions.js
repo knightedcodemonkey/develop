@@ -1,4 +1,10 @@
-import { chatCompletionsUrl, chatModelOptions, defaultChatModel } from './constants.js'
+import {
+  chatCompletionsUrl,
+  chatModelOptions,
+  defaultChatModel,
+  isFreeChatModel,
+} from './constants.js'
+import { fetchChatModelOptions } from './models.js'
 import {
   buildChatRequestHeaders,
   parseErrorResponse,
@@ -445,4 +451,11 @@ const requestChatCompletion = async ({
   }
 }
 
-export { chatModelOptions, defaultChatModel, requestChatCompletion, streamChatCompletion }
+export {
+  chatModelOptions,
+  defaultChatModel,
+  fetchChatModelOptions,
+  isFreeChatModel,
+  requestChatCompletion,
+  streamChatCompletion,
+}
