@@ -177,7 +177,7 @@ Potential ideas:
 
 Current strategy has focused Playwright coverage for the chat drawer behavior and context policy assertions in:
 
-- playwright/github-byot-ai.spec.ts
+- playwright/chat/ai-chat.spec.ts
 
 ## Scope note
 

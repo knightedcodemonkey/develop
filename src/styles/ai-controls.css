@@ -913,10 +913,31 @@
 .ai-chat-drawer__status {
   color: var(--text-subtle);
   text-align: left;
+  display: inline-block;
 }
 
 .ai-chat-drawer__status[data-level='pending'] {
-  color: color-mix(in srgb, var(--panel-text) 72%, var(--accent));
+  --ai-chat-status-pending-base: color-mix(in srgb, var(--panel-text) 68%, var(--accent));
+  --ai-chat-status-pending-glint: color-mix(
+    in srgb,
+    var(--ai-chat-sparkle-color) 84%,
+    white 16%
+  );
+  color: var(--ai-chat-status-pending-base);
+  background-image: linear-gradient(
+    110deg,
+    var(--ai-chat-status-pending-base) 0%,
+    var(--ai-chat-status-pending-base) 36%,
+    var(--ai-chat-status-pending-glint) 50%,
+    var(--ai-chat-status-pending-base) 64%,
+    var(--ai-chat-status-pending-base) 100%
+  );
+  background-size: 230% 100%;
+  background-position: 0% 50%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: ai-chat-status-text-shimmer 1300ms linear infinite;
 }
 
 .ai-chat-drawer__status[data-level='ok'] {
@@ -925,6 +946,23 @@
 
 .ai-chat-drawer__status[data-level='error'] {
   color: color-mix(in srgb, rgb(var(--danger-rgb)) 85%, var(--panel-text));
+}
+
+@keyframes ai-chat-status-text-shimmer {
+  0% {
+    background-position: 200% 50%;
+  }
+
+  100% {
+    background-position: -40% 50%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ai-chat-drawer__status[data-level='pending'] {
+    animation: none;
+    background-position: 50% 50%;
+  }
 }
 
 .ai-chat-messages {

@@ -43,7 +43,7 @@ Chat no longer depends on a selected repository. Local-mode users can chat to up
 editor tab with no GitHub connection at all. A selected repository remains useful context
 when one is connected, but it is never a precondition.
 
-## Implementation status (updated 2026-09-06)
+## Implementation status (updated 2026-09-07)
 
 ### Done
 
@@ -67,20 +67,21 @@ when one is connected, but it is never a precondition.
 - Tests and checks completed for the implemented behaviors:
   - Focused Playwright coverage added for intent gating, tab-context sending, and apply behavior.
   - Lint checks are passing.
+  - Chat test coverage is split into `playwright/chat/ai-chat.spec.ts`, with PR/BYOT
+    coverage retained in `playwright/github-byot-ai.spec.ts`.
+  - OpenRouter migration docs are in place (`docs/openrouter-byok.md`) and cross-linked
+    from README/BYOT docs.
+- Phase 4 completed in runtime code:
+  - Live `/api/v1/models` catalog fetch is wired in `src/modules/chat/api/models.js`.
+  - Model picker groups models into Free and Paid sections.
+  - Model catalog entries are filtered to tool-capable models.
 
-### Remaining
+### Remaining (non-blocking)
 
-- Phase 4 model catalog work is not yet implemented in runtime code:
-  - No live `/api/v1/models` fetch integration yet.
-  - Free vs paid grouping in the model picker is still pending.
-  - Tool-support filtering from live model metadata is still pending.
-- Phase 5 remains partial:
-  - Chat tests still live inside `playwright/github-byot-ai.spec.ts` rather than a split chat spec path.
-  - Dedicated OpenRouter usage docs listed below are not fully completed.
-- Live production verification still pending for exhaustion states:
-  - 402 out-of-credits behavior.
-  - 429 rate-limit behavior.
-- Optional one-time migration notice behavior is still pending.
+- Optional follow-up coverage:
+  - Explicit targeted specs for 402/429 status messaging and catalog-fetch degradation.
+- Optional UX follow-up:
+  - One-time migration notice on first load after upgrade.
 
 ### Correction to a common assumption
 
