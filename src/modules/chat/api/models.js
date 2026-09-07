@@ -18,7 +18,10 @@ const isFreeModel = model => {
     return false
   }
 
-  return pricing.prompt === '0' && pricing.completion === '0'
+  return (
+    (pricing.prompt === 0 || pricing.prompt === '0') &&
+    (pricing.completion === 0 || pricing.completion === '0')
+  )
 }
 
 const sortModelEntries = entries => {

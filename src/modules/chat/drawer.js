@@ -182,7 +182,9 @@ export const createChatDrawer = ({
       modelPicker.syncModelSelectionForKey(nextKey)
       syncComposerAvailability()
 
-      if (open) {
+      const keyPresent = typeof nextKey === 'string' && nextKey.trim().length > 0
+
+      if (open && keyPresent) {
         void modelPicker.loadModelOptionsFromCatalog({ force: true })
       }
     },
@@ -233,7 +235,7 @@ export const createChatDrawer = ({
       promptInput.focus()
     }
 
-    if (open) {
+    if (open && hasChatKey()) {
       void modelPicker.loadModelOptionsFromCatalog()
     }
   }

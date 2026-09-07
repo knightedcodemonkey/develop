@@ -1,9 +1,5 @@
-import {
-  chatModelOptions,
-  defaultChatModel,
-  fetchChatModelOptions,
-  isFreeChatModel,
-} from './api/completions.js'
+import { chatModelOptions, defaultChatModel, isFreeChatModel } from './api/constants.js'
+import { fetchChatModelOptions } from './api/models.js'
 import { toModelId } from './utils.js'
 
 export const createChatModelPicker = ({
@@ -91,6 +87,10 @@ export const createChatModelPicker = ({
 
     const token = getChatKey()
     const normalizedToken = typeof token === 'string' ? token.trim() : ''
+
+    if (!normalizedToken) {
+      return
+    }
 
     if (!force && pendingCatalogLoadPromise) {
       await pendingCatalogLoadPromise
