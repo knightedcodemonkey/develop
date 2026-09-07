@@ -1,6 +1,6 @@
 # BYOT Setup for GitHub in @knighted/develop
 
-This guide explains how to create and use a fine-grained GitHub Personal Access Token (PAT) for the BYOT flow in `@knighted/develop`.
+This guide explains how to create and use a fine-grained GitHub Personal Access Token (PAT) for repository and pull-request workflows in `@knighted/develop`.
 
 ## What BYOT does in the app
 
@@ -11,7 +11,9 @@ BYOT controls are available by default. The token is used to:
 - let you choose which repository to work with
 - use PR context features (Open PR / Push Commit flows)
 
-The same token is also used for GitHub Models requests in AI chat flows.
+AI chat no longer uses the GitHub PAT. Chat uses a separate OpenRouter API key.
+
+- OpenRouter key setup for chat: [docs/openrouter-byok.md](docs/openrouter-byok.md)
 
 ## Privacy and storage behavior
 
@@ -24,20 +26,14 @@ The same token is also used for GitHub Models requests in AI chat flows.
 Create a fine-grained PAT in GitHub settings and grant the permissions below.
 
 - Repository permissions screenshot: [docs/media/byot-repo-perms.png](docs/media/byot-repo-perms.png)
-- Models permission screenshot: [docs/media/byot-model-perms.png](docs/media/byot-model-perms.png)
 
 <img src="media/byot-repo-perms.png" alt="Repository PAT permissions" width="560" />
-<img src="media/byot-model-perms.png" alt="Models PAT permission" width="560" />
 
 ### Repository permissions
 
 - Contents: Read and write
 - Pull requests: Read and write
 - Metadata: Read-only (required)
-
-### Account permissions
-
-- Models: Read-only
 
 ### Repository access scope
 
@@ -55,7 +51,7 @@ Use either of these scopes depending on your needs:
 3. Paste token into the BYOT input and click add.
 4. Verify repository list loads.
 5. Select your target repository.
-6. Use AI chat as needed after connecting your token.
+6. Use PR and repository workflows after connecting your token.
 
 ## Screenshots
 

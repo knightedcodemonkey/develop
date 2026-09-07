@@ -8,9 +8,11 @@ This document is the source of truth for what `@knighted/develop` stores in `loc
 
 1. `knighted:develop:github-pat`
    - GitHub personal access token used for API calls.
-2. `knighted-develop:render-mode`
+2. `knighted:develop:openrouter-key`
+   - OpenRouter API key used by AI chat requests.
+3. `knighted-develop:render-mode`
    - Last selected render mode (`dom` or `react`).
-3. Theme/UI preference keys managed by layout theme modules.
+4. Theme/UI preference keys managed by layout theme modules.
 
 ## Not Allowed In localStorage
 

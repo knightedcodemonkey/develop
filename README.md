@@ -72,15 +72,18 @@ in the same UI.
 ## BYOT Guide
 
 - GitHub PAT setup and usage: [docs/byot.md](docs/byot.md)
+- OpenRouter key setup for AI chat: [docs/openrouter-byok.md](docs/openrouter-byok.md)
 
 ## Fine-Grained PAT Quick Setup
 
-For PR/BYOT and AI chat flows, use a fine-grained GitHub PAT and follow the
-existing setup guide:
+For PR/BYOT flows, use a fine-grained GitHub PAT and follow the setup guide:
 
 - Full setup and behavior: [docs/byot.md](docs/byot.md)
 - Repository permissions screenshot: [docs/media/byot-repo-perms.png](docs/media/byot-repo-perms.png)
-- Models permission screenshot: [docs/media/byot-model-perms.png](docs/media/byot-model-perms.png)
+
+For AI chat, connect an OpenRouter key from the chat drawer:
+
+- OpenRouter setup and limits: [docs/openrouter-byok.md](docs/openrouter-byok.md)
 
 ## License
 

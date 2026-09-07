@@ -101,26 +101,31 @@ export const createChatModelPicker = ({
       return
     }
 
-    const selectedModel = getSelectedModel()
-    const catalogLoadPromise = fetchChatModelOptions({ token: normalizedToken })
-      .then(modelIds => {
+    const loadCatalog = async () => {
+      try {
+        const modelIds = await fetchChatModelOptions({ token: normalizedToken })
+        const selectedModel = getSelectedModel()
         replaceModelOptions({
           modelIds,
           selectedModel,
         })
         loadedCatalogToken = normalizedToken
-      })
-      .catch(() => {
+      } catch {
         /* Keep fallback options when catalog loading fails. */
-      })
-      .finally(() => {
-        if (pendingCatalogLoadPromise === catalogLoadPromise) {
-          pendingCatalogLoadPromise = null
-        }
-      })
+      }
+    }
+
+    const catalogLoadPromise = loadCatalog()
 
     pendingCatalogLoadPromise = catalogLoadPromise
-    await catalogLoadPromise
+
+    try {
+      await catalogLoadPromise
+    } finally {
+      if (pendingCatalogLoadPromise === catalogLoadPromise) {
+        pendingCatalogLoadPromise = null
+      }
+    }
   }
 
   const syncModelSelectionForKey = key => {

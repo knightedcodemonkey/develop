@@ -8,6 +8,16 @@ import {
   toChatText,
 } from './utils.js'
 
+const sanitizeAssistantContent = value => {
+  if (typeof value !== 'string' || !value) {
+    return ''
+  }
+
+  return value
+    .replace(/<\|tool_call_start\|>[\s\S]*?<\|tool_call_end\|>/g, '')
+    .replace(/<\|tool_call_start\|>|<\|tool_call_end\|>/g, '')
+}
+
 export const createChatRequestRunner = ({
   getPrompt,
   getToken,
@@ -78,16 +88,25 @@ export const createChatRequestRunner = ({
         signal: requestSignal,
         onToken: tokenChunk => {
           streamedContent += tokenChunk
-          updateLastAssistantMessage?.(streamedContent)
+          const sanitizedContent = sanitizeAssistantContent(streamedContent)
+          updateLastAssistantMessage?.(sanitizedContent)
         },
       })
 
       streamSucceeded = true
       const streamedModel = toChatText(streamResult?.model)
-      const streamContent = toChatText(streamResult?.content)
+      const streamContent = toChatText(sanitizeAssistantContent(streamResult?.content))
+      const streamToolCalls = Array.isArray(streamResult?.toolCalls)
+        ? streamResult.toolCalls
+        : []
+
+      if (!streamContent && streamToolCalls.length === 0) {
+        throw new Error('Streaming returned control syntax without assistant content.')
+      }
+
       attachAssistantResponseMetadata?.({
         content: streamContent,
-        toolCalls: streamResult?.toolCalls,
+        toolCalls: streamToolCalls,
         model: streamedModel,
       })
       setChatStatus?.('Response streamed.', 'ok')
@@ -167,9 +186,18 @@ export const createChatRequestRunner = ({
         signal: requestSignal,
       })
 
+      const fallbackContent = toChatText(sanitizeAssistantContent(fallbackResult.content))
+      const fallbackToolCalls = Array.isArray(fallbackResult?.toolCalls)
+        ? fallbackResult.toolCalls
+        : []
+
+      if (!fallbackContent && fallbackToolCalls.length === 0) {
+        throw new Error('Chat response did not include assistant content.')
+      }
+
       attachAssistantResponseMetadata?.({
-        content: toChatText(fallbackResult.content),
-        toolCalls: fallbackResult?.toolCalls,
+        content: fallbackContent,
+        toolCalls: fallbackToolCalls,
       })
       const fallbackModel = toChatText(fallbackResult.model)
       setLastAssistantModel?.(fallbackModel)

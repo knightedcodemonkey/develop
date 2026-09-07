@@ -290,7 +290,16 @@ export const createChatDrawer = ({
   }
 
   const setPendingState = isPending => {
+    const pending = isPending === true
     const composerEnabled = !isPending && hasChatKey()
+
+    if (drawer instanceof HTMLElement) {
+      drawer.dataset.chatPending = pending ? 'true' : 'false'
+    }
+
+    if (statusNode instanceof HTMLElement) {
+      statusNode.setAttribute('aria-busy', pending ? 'true' : 'false')
+    }
 
     if (sendButton instanceof HTMLButtonElement) {
       sendButton.disabled = !composerEnabled
@@ -301,7 +310,7 @@ export const createChatDrawer = ({
     }
 
     if (modelSelect instanceof HTMLSelectElement) {
-      if (isPending) {
+      if (pending) {
         modelSelect.disabled = true
       } else {
         modelSelect.disabled = !hasChatKey()
